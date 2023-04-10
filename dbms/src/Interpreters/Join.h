@@ -31,8 +31,49 @@
 
 namespace DB
 {
-struct ProbeProcessInfo;
-struct RestoreInfo;
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+using Joins = std::vector<JoinPtr>;
+
+struct RestoreInfo
+{
+    JoinPtr join;
+    BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr build_stream;
+    BlockInputStreamPtr probe_stream;
+
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && non_joined_data_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+        : join(join_)
+        , non_joined_stream(std::move(non_joined_data_stream_))
+        , build_stream(std::move(build_stream_))
+        , probe_stream(std::move(probe_stream_))
+    {}
+};
+
+struct PartitionBlock
+{
+    size_t partition_index;
+    Block block;
+
+    PartitionBlock()
+        : partition_index(0)
+        , block({})
+    {}
+
+    explicit PartitionBlock(Block && block_)
+        : partition_index(0)
+        , block(std::move(block_))
+    {}
+
+    PartitionBlock(size_t partition_index_, Block && block_)
+        : partition_index(partition_index_)
+        , block(std::move(block_))
+    {}
+
+    explicit operator bool() const { return static_cast<bool>(block); }
+    bool operator!() const { return !block; }
+};
+using PartitionBlocks = std::list<PartitionBlock>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -87,8 +128,6 @@ struct RestoreInfo;
   * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
-using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 class Join
 {
@@ -149,9 +188,9 @@ public:
 
     bool isSpilled() const { return is_spilled; }
 
-    RestoreInfo getOneRestoreStream(size_t max_block_size);
+    std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
@@ -376,21 +415,6 @@ private:
 
     void workAfterBuildFinish();
     void workAfterProbeFinish();
-};
-
-struct RestoreInfo
-{
-    JoinPtr join;
-    BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr build_stream;
-    BlockInputStreamPtr probe_stream;
-
-    RestoreInfo() = default;
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
-        : join(join_)
-        , non_joined_stream(non_joined_data_stream_)
-        , build_stream(build_stream_)
-        , probe_stream(probe_stream_){};
 };
 
 } // namespace DB

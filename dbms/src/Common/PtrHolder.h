@@ -15,6 +15,7 @@
 #pragma once
 
 #include <mutex>
+#include <optional>
 
 namespace DB
 {
@@ -26,7 +27,6 @@ public:
     {
         assert(obj_);
         std::lock_guard lock(mu);
-        assert(!obj);
         obj = std::move(obj_);
     }
 
@@ -39,11 +39,18 @@ public:
         return res;
     }
 
-    auto operator->()
+    auto * operator->()
     {
         std::lock_guard lock(mu);
         assert(obj != nullptr);
         return obj.get();
+    }
+
+    auto & operator*()
+    {
+        std::lock_guard lock(mu);
+        assert(obj != nullptr);
+        return *obj.get();
     }
 
 private:

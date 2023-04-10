@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <Interpreters/Join.h>
 
 namespace DB
@@ -47,6 +47,8 @@ public:
 
 protected:
     Block readImpl() override;
+
+    void readSuffixImpl() override;
 
 private:
     /*
@@ -112,33 +114,26 @@ private:
         FINISHED, /// the final state
     };
 
+    void switchStatus(ProbeStatus to);
     Block getOutputBlock();
     std::tuple<size_t, Block> getOneProbeBlock();
     void onCurrentProbeDone();
     void onAllProbeDone();
     void onCurrentReadNonJoinedDataDone();
     void tryGetRestoreJoin();
-    void readSuffixImpl() override;
+
+private:
     const LoggerPtr log;
-    /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
-    /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
-    /// read them, so need to protect the multi-threads access
-    std::mutex mutex;
     JoinPtr original_join;
-    JoinPtr join;
-    const bool need_output_non_joined_data;
-    size_t current_non_joined_stream_index;
-    BlockInputStreamPtr current_probe_stream;
-    UInt64 max_block_size;
-    ProbeProcessInfo probe_process_info;
-    BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr restore_build_stream;
-    BlockInputStreamPtr restore_probe_stream;
+    /// probe_exec can be modified during the runtime,
+    /// although read/write to those are almost only in 1 thread,
+    /// but an exception is cancel thread will read them,
+    /// so need to use HashJoinProbeExecHolder protect the multi-threads access.
+    HashJoinProbeExecHolder probe_exec;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
-    std::list<JoinPtr> parents;
-    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+
     Block header;
 };
 

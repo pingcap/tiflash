@@ -1437,19 +1437,20 @@ void Join::joinBlockNullAwareImpl(
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
 {
     size_t keys_size = key_names_left.size();
-
     for (size_t i = 0; i < keys_size; ++i)
     {
         /// Compare up to Nullability.
-
         DataTypePtr left_type = removeNullable(block_left.getByName(key_names_left[i]).type);
         DataTypePtr right_type = removeNullable(block_right.getByName(key_names_right[i]).type);
-
-        if (!left_type->equals(*right_type))
-            throw Exception("Type mismatch of columns to JOIN by: "
-                                + key_names_left[i] + " " + left_type->getName() + " at left, "
-                                + key_names_right[i] + " " + right_type->getName() + " at right",
-                            ErrorCodes::TYPE_MISMATCH);
+        if unlikely (!left_type->equals(*right_type))
+            throw Exception(
+                fmt::format(
+                    "Type mismatch of columns to JOIN by: {} {} at left, {} {} at right",
+                    key_names_left[i],
+                    left_type->getName(),
+                    key_names_right[i],
+                    right_type->getName()),
+                ErrorCodes::TYPE_MISMATCH);
     }
 }
 
@@ -1795,7 +1796,7 @@ bool Join::hasPartitionSpilled()
     return !spilled_partition_indexes.empty();
 }
 
-RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
+std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
 {
     std::unique_lock lock(build_probe_mutex);
     if (meet_error)
@@ -1818,7 +1819,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
             {
                 spilled_partition_indexes.pop_front();
             }
-            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+            return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -1856,7 +1857,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+        return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
@@ -1869,7 +1870,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
     }
 }
 
-void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list)
+void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list)
 {
     Blocks partition_blocks = dispatchBlock(key_names_left, block);
     for (size_t i = 0; i < partition_blocks.size(); ++i)
@@ -1892,7 +1893,9 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
             probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
         }
         else
-            partition_blocks_list.push_back({i, partition_blocks[i]});
+        {
+            partition_blocks_list.emplace_back(i, std::move(partition_blocks[i]));
+        }
     }
 }
 
