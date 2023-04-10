@@ -29,8 +29,14 @@ struct CPDataDumpStats
     size_t incremental_data_bytes = 0;
     size_t compact_data_bytes = 0;
 
+    // The number of keys uploaded in this checkpoint
     std::array<size_t, static_cast<size_t>(StorageType::_MAX_STORAGE_TYPE_)> num_keys{};
+    // The number of bytes uploaded in this checkpoint
     std::array<size_t, static_cast<size_t>(StorageType::_MAX_STORAGE_TYPE_)> num_bytes{};
+
+    // The number of bytes this checkpoint is holding. Some of the data are already uploaded
+    // in the previous checkpoint data file.
+    std::array<size_t, static_cast<size_t>(StorageType::_MAX_STORAGE_TYPE_)> num_existing_bytes{};
 
     // Total number of records in this checkpoint
     size_t num_records = 0;

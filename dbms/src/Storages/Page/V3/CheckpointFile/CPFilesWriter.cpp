@@ -93,8 +93,11 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         StorageType id_storage_type = StorageType::Unknown;
         {
             id_storage_type = UniversalPageIdFormat::getUniversalPageIdType(rec_edit.page_id);
+            // all keys are included in the manifest
             write_down_stats.num_keys[static_cast<size_t>(id_storage_type)] += 1;
-            write_down_stats.num_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
+            // this is the page data size of all latest version keys, including some uploaded in the
+            // previous checkpoint
+            write_down_stats.num_existing_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
         }
 
         if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
@@ -164,6 +167,8 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             rec_edit.version,
             page.data.begin(),
             page.data.size());
+        // the page data size uploaded in this checkpoint
+        write_down_stats.num_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
         current_write_size += data_location.size_in_file;
         RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
         bool is_local_data_reclaimed = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;

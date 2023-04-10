@@ -31,42 +31,49 @@ void SetMetrics(const CPDataDumpStats & stats)
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_unknown).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_unknown).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_unknown).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::RaftEngine:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_raftengine).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_raftengine).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_raftengine).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::KVEngine:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_kvengine).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_kvengine).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_kvengine).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::KVStore:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_kvstore).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_kvstore).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_kvstore).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::Data:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_data).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_data).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_data).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::Log:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_log).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_log).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_log).Set(stats.num_existing_bytes[i]);
             break;
         }
         case DB::StorageType::Meta:
         {
             GET_METRIC(tiflash_storage_checkpoint_keys_by_types, type_meta).Increment(stats.num_keys[i]);
             GET_METRIC(tiflash_storage_checkpoint_flow_by_types, type_meta).Increment(stats.num_bytes[i]);
+            GET_METRIC(tiflash_storage_page_data_by_types, type_meta).Set(stats.num_existing_bytes[i]);
             break;
         }
         default:

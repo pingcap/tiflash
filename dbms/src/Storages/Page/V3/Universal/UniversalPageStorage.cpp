@@ -469,7 +469,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
         file_ids_to_compact = options.compact_getter();
     }
     // get the remote file ids that need to be compacted
-    auto write_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
+    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
@@ -502,7 +502,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
-    if (write_stats.has_new_data)
+    if (checkpoint_dump_stats.has_new_data)
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
@@ -526,9 +526,9 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
              copy_checkpoint_info_seconds,
              sw.elapsedSeconds(),
              sequence,
-             write_stats);
-    SetMetrics(write_stats);
-    return write_stats;
+             checkpoint_dump_stats);
+    SetMetrics(checkpoint_dump_stats);
+    return checkpoint_dump_stats;
 }
 
 } // namespace DB

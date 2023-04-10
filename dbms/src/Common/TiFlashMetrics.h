@@ -319,6 +319,12 @@ namespace DB
     M(tiflash_storage_remote_stats, "The file stats on remote store", Gauge,                                                                        \
         F(type_total_size, {"type", "total_size"}), F(type_valid_size, {"type", "valid_size"}),                                                     \
         F(type_num_files, {"type", "num_files"}))                                                                                                   \
+    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time",                                                                    \
+        Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
+        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                                          \
+        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                                  \
+        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                                        \
+        F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))                                                  \
     M(tiflash_storage_checkpoint_flow, "The bytes flow cause by remote checkpoint", Counter,                                                        \
         F(type_incremental, {"type", "incremental"}), F(type_compaction, {"type", "compaction"}))                                                   \
     M(tiflash_storage_checkpoint_keys_by_types, "The keys flow cause by remote checkpoint", Counter,                                                \
@@ -326,6 +332,10 @@ namespace DB
         F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
         F(type_unknown, {"type", "unknown"}))                                                                                                       \
     M(tiflash_storage_checkpoint_flow_by_types, "The bytes flow cause by remote checkpoint", Counter,                                               \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
+    M(tiflash_storage_page_data_by_types, "The existing bytes stored in UniPageStorage", Gauge,                                                     \
         F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
         F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
         F(type_unknown, {"type", "unknown"}))                                                                                                       \
@@ -352,13 +362,7 @@ namespace DB
         F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets{0.5, 2, 20}),                                                                     \
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
-        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
-    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time",                                                                    \
-        Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
-        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                                          \
-        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                                  \
-        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                                        \
-        F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))
+        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))
 
 // clang-format on
 
