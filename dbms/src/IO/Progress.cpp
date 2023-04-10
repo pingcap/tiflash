@@ -46,24 +46,9 @@ void ProgressValues::write(WriteBuffer & out, UInt64 /*client_revision*/) const
 }
 
 
-void ProgressValues::writeJSON(WriteBuffer & out) const
-{
-    /// Numbers are written in double quotes (as strings) to avoid loss of precision
-    ///  of 64-bit integers after interpretation by JavaScript.
-
-    writeCString("{\"read_rows\":\"", out);
-    writeText(rows, out);
-    writeCString("\",\"read_bytes\":\"", out);
-    writeText(bytes, out);
-    writeCString("\",\"total_rows\":\"", out);
-    writeText(total_rows, out);
-    writeCString("\"}", out);
-}
-
-
 void Progress::read(ReadBuffer & in, UInt64 server_revision)
 {
-    ProgressValues values;
+    ProgressValues values{};
     values.read(in, server_revision);
 
     rows.store(values.rows, std::memory_order_relaxed);
@@ -75,12 +60,6 @@ void Progress::read(ReadBuffer & in, UInt64 server_revision)
 void Progress::write(WriteBuffer & out, UInt64 client_revision) const
 {
     getValues().write(out, client_revision);
-}
-
-
-void Progress::writeJSON(WriteBuffer & out) const
-{
-    getValues().writeJSON(out);
 }
 
 } // namespace DB

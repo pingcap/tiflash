@@ -28,7 +28,7 @@ namespace DB::S3
 class PocoHTTPClientFactory : public Aws::Http::HttpClientFactory
 {
 public:
-    explicit PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg);
+    explicit PocoHTTPClientFactory(const PocoHTTPClientConfiguration & http_cfg);
 
     ~PocoHTTPClientFactory() override = default;
     [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient>
