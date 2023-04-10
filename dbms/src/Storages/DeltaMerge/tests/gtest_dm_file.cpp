@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Common.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>

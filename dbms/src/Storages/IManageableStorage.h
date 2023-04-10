@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
@@ -85,7 +86,7 @@ public:
     virtual UInt64 onSyncGc(Int64 /*limit*/, const DM::GCOptions &) { throw Exception("Unsupported"); }
 
     /// Return true is data dir exist
-    virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
+    virtual bool initStoreIfDataDirExist(ThreadPool * /*thread_pool*/) { throw Exception("Unsupported"); }
 
     virtual ::TiDB::StorageEngine engineType() const = 0;
 
