@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Columns/ColumnNullable.h>
 #include <common/types.h>
 
 namespace DB
@@ -159,7 +159,7 @@ private:
         // get result's data container
         auto col_vec_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.assign(row_num, static_cast<ResultType>(0));
+        vec_res.resize_fill(row_num, static_cast<ResultType>(0));
 
         for (size_t i = 0; i < row_num; ++i)
         {
