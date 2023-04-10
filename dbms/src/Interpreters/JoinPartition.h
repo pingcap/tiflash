@@ -17,7 +17,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
-#include <Interpreters/JoinHashTable.h>
+#include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -73,7 +73,7 @@ using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
 {
 public:
-    JoinPartition(JoinType join_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_)
+    JoinPartition(JoinMapType join_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_)
         : kind(kind_)
         , strictness(strictness_)
         , join_type(join_type_)
@@ -131,7 +131,7 @@ public:
     }
     bool isSpill() const { return spill; }
     void markSpill() { spill = true; }
-    JoinType getJoinType() const { return join_type; }
+    JoinMapType getJoinType() const { return join_type; }
     ASTTableJoin::Kind getJoinKind() const { return kind; }
     Block * getLastBuildBlock() { return &build_partition.blocks.back(); }
     ArenaPtr & getPartitionPool()
@@ -212,7 +212,7 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
-    JoinType join_type;
+    JoinMapType join_type;
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN

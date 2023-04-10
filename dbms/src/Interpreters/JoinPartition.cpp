@@ -63,17 +63,17 @@ void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block,
 }
 
 template <typename Maps>
-static void initImpl(Maps & maps, JoinType type)
+static void initImpl(Maps & maps, JoinMapType type)
 {
     switch (type)
     {
-    case JoinType::EMPTY:
+    case JoinMapType::EMPTY:
         break;
-    case JoinType::CROSS:
+    case JoinMapType::CROSS:
         break;
 
 #define M(TYPE)                                                                     \
-    case JoinType::TYPE:                                                            \
+    case JoinMapType::TYPE:                                                         \
         maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(); \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
@@ -85,17 +85,17 @@ static void initImpl(Maps & maps, JoinType type)
 }
 
 template <typename Map, typename Maps>
-static Map & getMapImpl(Maps & maps, JoinType type)
+static Map & getMapImpl(Maps & maps, JoinMapType type)
 {
     void * ret = nullptr;
     switch (type)
     {
-    case JoinType::EMPTY:
-    case JoinType::CROSS:
+    case JoinMapType::EMPTY:
+    case JoinMapType::CROSS:
         throw Exception("Should not reach here");
 
 #define M(TYPE)                \
-    case JoinType::TYPE:       \
+    case JoinMapType::TYPE:    \
         ret = maps.TYPE.get(); \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
@@ -108,17 +108,17 @@ static Map & getMapImpl(Maps & maps, JoinType type)
 }
 
 template <typename Maps>
-static size_t getRowCountImpl(const Maps & maps, JoinType type)
+static size_t getRowCountImpl(const Maps & maps, JoinMapType type)
 {
     switch (type)
     {
-    case JoinType::EMPTY:
+    case JoinMapType::EMPTY:
         return 0;
-    case JoinType::CROSS:
+    case JoinMapType::CROSS:
         return 0;
 
-#define M(NAME)          \
-    case JoinType::NAME: \
+#define M(NAME)             \
+    case JoinMapType::NAME: \
         return maps.NAME ? maps.NAME->size() : 0;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -129,17 +129,17 @@ static size_t getRowCountImpl(const Maps & maps, JoinType type)
 }
 
 template <typename Maps>
-static size_t getByteCountImpl(const Maps & maps, JoinType type)
+static size_t getByteCountImpl(const Maps & maps, JoinMapType type)
 {
     switch (type)
     {
-    case JoinType::EMPTY:
+    case JoinMapType::EMPTY:
         return 0;
-    case JoinType::CROSS:
+    case JoinMapType::CROSS:
         return 0;
 
-#define M(NAME)          \
-    case JoinType::NAME: \
+#define M(NAME)             \
+    case JoinMapType::NAME: \
         return maps.NAME ? maps.NAME->getBufferSizeInBytes() : 0;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -150,17 +150,17 @@ static size_t getByteCountImpl(const Maps & maps, JoinType type)
 }
 
 template <typename Maps>
-static size_t clearMaps(Maps & maps, JoinType type)
+static size_t clearMaps(Maps & maps, JoinMapType type)
 {
     size_t ret = 0;
     switch (type)
     {
-    case JoinType::EMPTY:
-    case JoinType::CROSS:
+    case JoinMapType::EMPTY:
+    case JoinMapType::CROSS:
         ret = 0;
         break;
 #define M(NAME)                                      \
-    case JoinType::NAME:                             \
+    case JoinMapType::NAME:                          \
         if (maps.NAME)                               \
         {                                            \
             ret = maps.NAME->getBufferSizeInBytes(); \
@@ -308,67 +308,67 @@ Blocks JoinPartition::trySpillProbePartition(bool force, size_t max_cached_data_
 namespace
 {
 /// code for hash map insertion
-template <JoinType type, typename Value, typename Mapped>
+template <JoinMapType type, typename Value, typename Mapped>
 struct KeyGetterForTypeImpl;
 
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key8, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key8, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodOneNumber<Value, Mapped, UInt8, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key16, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key16, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodOneNumber<Value, Mapped, UInt16, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key32, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key32, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodOneNumber<Value, Mapped, UInt32, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key64, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key64, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodOneNumber<Value, Mapped, UInt64, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key_string, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key_string, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodString<Value, Mapped, true, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key_strbinpadding, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key_strbinpadding, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, true>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key_strbin, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key_strbin, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::key_fixed_string, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::key_fixed_string, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodFixedString<Value, Mapped, true, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::keys128, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::keys128, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt128, Mapped, false, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::keys256, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::keys256, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt256, Mapped, false, false>;
 };
 template <typename Value, typename Mapped>
-struct KeyGetterForTypeImpl<JoinType::serialized, Value, Mapped>
+struct KeyGetterForTypeImpl<JoinMapType::serialized, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodSerialized<Value, Mapped>;
 };
 
 
-template <JoinType type, typename Data>
+template <JoinMapType type, typename Data>
 struct KeyGetterForType
 {
     using Value = typename Data::value_type;
@@ -618,25 +618,25 @@ void insertBlockIntoMapsImpl(
 {
     switch (join_partitions[stream_index]->getJoinType())
     {
-    case JoinType::EMPTY:
+    case JoinMapType::EMPTY:
         break;
-    case JoinType::CROSS:
+    case JoinMapType::CROSS:
         break; /// Do nothing. We have already saved block, and it is enough.
 
-#define M(TYPE)                                                                                                                                         \
-    case JoinType::TYPE:                                                                                                                                \
-        insertBlockIntoMapsImplType<STRICTNESS, typename KeyGetterForType<JoinType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
-            join_partitions,                                                                                                                            \
-            rows,                                                                                                                                       \
-            key_columns,                                                                                                                                \
-            key_sizes,                                                                                                                                  \
-            collators,                                                                                                                                  \
-            stored_block,                                                                                                                               \
-            null_map,                                                                                                                                   \
-            stream_index,                                                                                                                               \
-            insert_concurrency,                                                                                                                         \
-            enable_fine_grained_shuffle,                                                                                                                \
-            enable_join_spill);                                                                                                                         \
+#define M(TYPE)                                                                                                                                            \
+    case JoinMapType::TYPE:                                                                                                                                \
+        insertBlockIntoMapsImplType<STRICTNESS, typename KeyGetterForType<JoinMapType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
+            join_partitions,                                                                                                                               \
+            rows,                                                                                                                                          \
+            key_columns,                                                                                                                                   \
+            key_sizes,                                                                                                                                     \
+            collators,                                                                                                                                     \
+            stored_block,                                                                                                                                  \
+            null_map,                                                                                                                                      \
+            stream_index,                                                                                                                                  \
+            insert_concurrency,                                                                                                                            \
+            enable_fine_grained_shuffle,                                                                                                                   \
+            enable_join_spill);                                                                                                                            \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -1357,22 +1357,22 @@ void JoinPartition::probeBlockImpl(
     auto type = current_join_partition->join_type;
     switch (type)
     {
-#define M(TYPE)                                                                                                                                      \
-    case JoinType::TYPE:                                                                                                                             \
-        probeBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<JoinType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
-            join_partitions,                                                                                                                         \
-            rows,                                                                                                                                    \
-            key_columns,                                                                                                                             \
-            key_sizes,                                                                                                                               \
-            added_columns,                                                                                                                           \
-            null_map,                                                                                                                                \
-            filter,                                                                                                                                  \
-            current_offset,                                                                                                                          \
-            offsets_to_replicate,                                                                                                                    \
-            right_indexes,                                                                                                                           \
-            collators,                                                                                                                               \
-            join_build_info,                                                                                                                         \
-            probe_process_info);                                                                                                                     \
+#define M(TYPE)                                                                                                                                         \
+    case JoinMapType::TYPE:                                                                                                                             \
+        probeBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<JoinMapType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
+            join_partitions,                                                                                                                            \
+            rows,                                                                                                                                       \
+            key_columns,                                                                                                                                \
+            key_sizes,                                                                                                                                  \
+            added_columns,                                                                                                                              \
+            null_map,                                                                                                                                   \
+            filter,                                                                                                                                     \
+            current_offset,                                                                                                                             \
+            offsets_to_replicate,                                                                                                                       \
+            right_indexes,                                                                                                                              \
+            collators,                                                                                                                                  \
+            join_build_info,                                                                                                                            \
+            probe_process_info);                                                                                                                        \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -1395,15 +1395,15 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     auto type = join_partitions[0]->join_type;
     switch (type)
     {
-#define M(TYPE)                                                                                                                                                  \
-    case JoinType::TYPE:                                                                                                                                         \
-        return probeBlockNullAwareType<KIND, STRICTNESS, typename KeyGetterForType<JoinType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
-            join_partitions,                                                                                                                                     \
-            block,                                                                                                                                               \
-            key_columns,                                                                                                                                         \
-            key_sizes,                                                                                                                                           \
-            collators,                                                                                                                                           \
-            left_side_info,                                                                                                                                      \
+#define M(TYPE)                                                                                                                                                     \
+    case JoinMapType::TYPE:                                                                                                                                         \
+        return probeBlockNullAwareType<KIND, STRICTNESS, typename KeyGetterForType<JoinMapType::TYPE, typename Maps::TYPE##Type>::Type, typename Maps::TYPE##Type>( \
+            join_partitions,                                                                                                                                        \
+            block,                                                                                                                                                  \
+            key_columns,                                                                                                                                            \
+            key_sizes,                                                                                                                                              \
+            collators,                                                                                                                                              \
+            left_side_info,                                                                                                                                         \
             right_side_info);
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M

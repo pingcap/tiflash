@@ -204,7 +204,7 @@ void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
         switch (parent.type)
         {
 #define M(TYPE)                                     \
-    case JoinType::TYPE:                            \
+    case JoinMapType::TYPE:                         \
         fillColumns<ASTTableJoin::Strictness::Any>( \
             *partition->maps_any_full.TYPE,         \
             num_columns_left,                       \
@@ -225,7 +225,7 @@ void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
         switch (parent.type)
         {
 #define M(TYPE)                                     \
-    case JoinType::TYPE:                            \
+    case JoinMapType::TYPE:                         \
         fillColumns<ASTTableJoin::Strictness::All>( \
             *partition->maps_all_full.TYPE,         \
             num_columns_left,                       \

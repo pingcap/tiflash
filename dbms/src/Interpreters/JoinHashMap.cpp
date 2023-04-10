@@ -16,7 +16,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/JoinHashTable.h>
+#include <Interpreters/JoinHashMap.h>
 
 namespace DB
 {
@@ -29,12 +29,12 @@ bool canAsColumnString(const IColumn * column)
 }
 } // namespace
 
-JoinType chooseJoinType(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators)
+JoinMapType chooseJoinMapType(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators)
 {
     const size_t keys_size = key_columns.size();
 
     if (keys_size == 0)
-        return JoinType::CROSS;
+        return JoinMapType::CROSS;
 
     bool all_fixed = true;
     size_t keys_bytes = 0;
@@ -55,29 +55,29 @@ JoinType chooseJoinType(const ColumnRawPtrs & key_columns, Sizes & key_sizes, co
     {
         size_t size_of_field = key_columns[0]->sizeOfValueIfFixed();
         if (size_of_field == 1)
-            return JoinType::key8;
+            return JoinMapType::key8;
         if (size_of_field == 2)
-            return JoinType::key16;
+            return JoinMapType::key16;
         if (size_of_field == 4)
-            return JoinType::key32;
+            return JoinMapType::key32;
         if (size_of_field == 8)
-            return JoinType::key64;
+            return JoinMapType::key64;
         if (size_of_field == 16)
-            return JoinType::keys128;
+            return JoinMapType::keys128;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
     }
 
     /// If the keys fit in N bits, we will use a hash table for N-bit-packed keys
     if (all_fixed && keys_bytes <= 16)
-        return JoinType::keys128;
+        return JoinMapType::keys128;
     if (all_fixed && keys_bytes <= 32)
-        return JoinType::keys256;
+        return JoinMapType::keys256;
 
     /// If there is single string key, use hash table of it's values.
     if (keys_size == 1 && canAsColumnString(key_columns[0]))
     {
         if (collators.empty() || !collators[0])
-            return JoinType::key_strbin;
+            return JoinMapType::key_strbin;
         else
         {
             switch (collators[0]->getCollatorType())
@@ -87,25 +87,25 @@ JoinType chooseJoinType(const ColumnRawPtrs & key_columns, Sizes & key_sizes, co
             case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
             case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
             {
-                return JoinType::key_strbinpadding;
+                return JoinMapType::key_strbinpadding;
             }
             case TiDB::ITiDBCollator::CollatorType::BINARY:
             {
-                return JoinType::key_strbin;
+                return JoinMapType::key_strbin;
             }
             default:
             {
                 // for CI COLLATION, use original way
-                return JoinType::key_string;
+                return JoinMapType::key_string;
             }
             }
         }
     }
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
-        return JoinType::key_fixed_string;
+        return JoinMapType::key_fixed_string;
 
     /// Otherwise, use serialized values as the key.
-    return JoinType::serialized;
+    return JoinMapType::serialized;
 }
 } // namespace DB

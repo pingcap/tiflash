@@ -23,7 +23,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/JoinHashTable.h>
+#include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/SettingsCommon.h>
 
@@ -291,7 +291,7 @@ private:
     bool has_build_data_in_memory = false;
 
 private:
-    JoinType type = JoinType::EMPTY;
+    JoinMapType type = JoinMapType::EMPTY;
 
     Sizes key_sizes;
 
