@@ -36,15 +36,7 @@ public:
     enum class Interface : UInt8
     {
         TCP = 1,
-        HTTP = 2,
-        GRPC = 3,
-    };
-
-    enum class HTTPMethod : UInt8
-    {
-        UNKNOWN = 0,
-        GET = 1,
-        POST = 2,
+        GRPC = 2,
     };
 
     enum class QueryKind : UInt8
@@ -81,10 +73,6 @@ public:
     UInt64 client_version_minor = 0;
     unsigned client_revision = 0;
 
-    /// For http
-    HTTPMethod http_method = HTTPMethod::UNKNOWN;
-    String http_user_agent;
-
     /// Common
     String quota_key;
 
@@ -94,8 +82,8 @@ public:
       * Only values that are not calculated automatically or passed separately are serialized.
       * Revisions are passed to use format that server will understand or client was used.
       */
-    void write(WriteBuffer & out, const UInt64 server_protocol_revision) const;
-    void read(ReadBuffer & in, const UInt64 client_protocol_revision);
+    void write(WriteBuffer & out, UInt64 server_protocol_revision) const;
+    void read(ReadBuffer & in, UInt64 client_protocol_revision);
 
     void fillOSUserHostNameAndVersionInfo();
 };
