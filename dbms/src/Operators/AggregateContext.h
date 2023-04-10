@@ -57,7 +57,7 @@ public:
 
     void spillData(size_t task_index);
 
-    LocalAggregateRestorerPtr buildLocalRestorer(std::function<bool()> && is_cancelled);
+    LocalAggregateRestorerPtr buildLocalRestorer();
 
     void initConvergent();
 
@@ -89,6 +89,10 @@ private:
         restore,
     };
     std::atomic<AggStatus> status{AggStatus::init};
+
+    Aggregator::CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;

@@ -19,28 +19,6 @@
 
 namespace DB
 {
-/**
- * build───┬─────────────►restore
- *         │                 ▲
- *         ├───►final_spill──┘
- *         │
- *         ▼
- *      convergent
- */
-enum class LocalAggStatus
-{
-    // Accept the block and build aggregate data.
-    build,
-    // spill the aggregate data into disk.
-    spill,
-    // convert the aggregate data to block and then output it.
-    convert,
-    // spill the rest remaining memory aggregate data.
-    final_spill,
-    // load the disk aggregate data to memory and then convert to block and output it.
-    restore,
-};
-
 /// Only do build and convert at the current operator, no sharing of objects with other operators.
 class LocalAggregateTransform : public TransformOp
 {
@@ -71,12 +49,31 @@ private:
 
     OperatorStatus fromBuildToFinalSpillOrRestore();
 
-    void switchStatus(LocalAggStatus to);
-
 private:
     Aggregator::Params params;
     AggregateContext agg_context;
 
+    /**
+     * build───┬─────────────►restore
+     *         │                 ▲
+     *         ├───►final_spill──┘
+     *         │
+     *         ▼
+     *      convergent
+     */
+    enum class LocalAggStatus
+    {
+        // Accept the block and build aggregate data.
+        build,
+        // spill the aggregate data into disk.
+        spill,
+        // convert the aggregate data to block and then output it.
+        convert,
+        // spill the rest remaining memory aggregate data.
+        final_spill,
+        // load the disk aggregate data to memory and then convert to block and output it.
+        restore,
+    };
     LocalAggStatus status{LocalAggStatus::build};
 
     LocalAggregateRestorerPtr restorer;

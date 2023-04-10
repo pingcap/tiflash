@@ -62,7 +62,7 @@ OperatorStatus LocalAggregateTransform::fromBuildToConvert(Block & block)
 {
     // status from build to convert.
     assert(status == LocalAggStatus::build);
-    switchStatus(LocalAggStatus::convert);
+    status = LocalAggStatus::convert;
     agg_context.initConvergent();
     RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
     block = agg_context.readForConvergent(task_index);
@@ -74,12 +74,12 @@ OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
     assert(status == LocalAggStatus::build);
     if (agg_context.needSpill(task_index, /*try_mark_need_spill=*/true))
     {
-        switchStatus(LocalAggStatus::final_spill);
+        status = LocalAggStatus::final_spill;
     }
     else
     {
-        restorer = agg_context.buildLocalRestorer([&]() { return exec_status.isCancelled(); });
-        switchStatus(LocalAggStatus::restore);
+        restorer = agg_context.buildLocalRestorer();
+        status = LocalAggStatus::restore;
     }
     return OperatorStatus::IO;
 }
@@ -89,7 +89,7 @@ OperatorStatus LocalAggregateTransform::tryFromBuildToSpill()
     assert(status == LocalAggStatus::build);
     if (agg_context.needSpill(task_index))
     {
-        switchStatus(LocalAggStatus::spill);
+        status = LocalAggStatus::spill;
         return OperatorStatus::IO;
     }
     return OperatorStatus::NEED_INPUT;
@@ -120,14 +120,14 @@ OperatorStatus LocalAggregateTransform::executeIOImpl()
     case LocalAggStatus::spill:
     {
         agg_context.spillData(task_index);
-        switchStatus(LocalAggStatus::build);
+        status = LocalAggStatus::build;
         return OperatorStatus::NEED_INPUT;
     }
     case LocalAggStatus::final_spill:
     {
         agg_context.spillData(task_index);
-        restorer = agg_context.buildLocalRestorer([&]() { return exec_status.isCancelled(); });
-        switchStatus(LocalAggStatus::restore);
+        restorer = agg_context.buildLocalRestorer();
+        status = LocalAggStatus::restore;
         return OperatorStatus::IO;
     }
     case LocalAggStatus::restore:
@@ -139,12 +139,6 @@ OperatorStatus LocalAggregateTransform::executeIOImpl()
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
-}
-
-void LocalAggregateTransform::switchStatus(LocalAggStatus to)
-{
-    LOG_TRACE(log, fmt::format("{} -> {}", magic_enum::enum_name(status), magic_enum::enum_name(to)));
-    status = to;
 }
 
 void LocalAggregateTransform::transformHeaderImpl(Block & header_)

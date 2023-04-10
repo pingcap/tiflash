@@ -19,6 +19,7 @@ namespace DB
 void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook)
 {
     assert(status.load() == AggStatus::init);
+    is_cancelled = std::move(hook);
     max_threads = max_threads_;
     empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
     keys_size = params.keys_size;
@@ -31,7 +32,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
     }
 
     aggregator = std::make_unique<Aggregator>(params, log->identifier());
-    aggregator->setCancellationHook(std::move(hook));
+    aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;
     build_watch.emplace();
@@ -67,14 +68,14 @@ void AggregateContext::spillData(size_t task_index)
     aggregator->spill(*many_data[task_index]);
 }
 
-LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer(std::function<bool()> && is_cancelled)
+LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
 {
     assert(status.load() == AggStatus::build);
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for local aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     status = AggStatus::restore;
-    return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, std::move(is_cancelled), log->identifier());
+    return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
 void AggregateContext::initConvergentPrefix()

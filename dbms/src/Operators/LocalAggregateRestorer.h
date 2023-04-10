@@ -29,7 +29,7 @@ public:
     LocalAggregateRestorer(
         const BlockInputStreams & bucket_streams,
         Aggregator & aggregator_,
-        std::function<bool()> && is_cancelled_,
+        std::function<bool()> is_cancelled_,
         const String & req_id);
 
     // load data from bucket_inputs to bucket_data.
