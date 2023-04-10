@@ -86,6 +86,7 @@ extern const Event S3WriteBytes;
 extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
 extern const Event S3CopyObject;
+extern const Event S3PutObjectRetry;
 } // namespace ProfileEvents
 
 namespace
@@ -510,6 +511,10 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
     auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -553,6 +558,10 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -653,7 +662,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
-void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
+bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
@@ -670,7 +679,13 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
             {
                 break;
             }
-            throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
+            LOG_WARNING(
+                client.log,
+                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+                ", bucket={} {}",
+                client.bucket(),
+                S3ErrorMessage(error));
+            return false;
         }
 
         auto res = outcome.GetResultWithOwnership();
@@ -703,17 +718,9 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     if (lifecycle_rule_has_been_set)
     {
         LOG_INFO(client.log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
-        return;
-    }
-    else
-    {
-        UNUSED(expire_days);
-        LOG_WARNING(client.log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
-        return;
+        return true;
     }
 
-#if 0
-    // Adding rule by AWS SDK is failed, don't know why
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(client.log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
@@ -737,16 +744,24 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         .WithRules(old_rules);
 
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
-    request.WithBucket(bucket)
+    request.WithBucket(client.bucket())
         .WithLifecycleConfiguration(lifecycle_config);
 
     auto outcome = client.PutBucketLifecycleConfiguration(request);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
+        const auto & error = outcome.GetError();
+        LOG_WARNING(
+            client.log,
+            "Create lifecycle rule with filter \"{}\" failed, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+            ", bucket={} {}",
+            TaggingObjectIsDeleted,
+            client.bucket(),
+            S3ErrorMessage(error));
+        return false;
     }
     LOG_INFO(client.log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
-#endif
+    return true;
 }
 
 void listPrefix(
