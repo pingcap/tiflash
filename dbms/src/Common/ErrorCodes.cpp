@@ -390,6 +390,9 @@ extern const int DECIMAL_OVERFLOW = 446;
 extern const int CANNOT_PARSE_BOOL = 447;
 extern const int CANNOT_FTRUNCATE = 448;
 extern const int UNKNOWN_WINDOW_FUNCTION = 449;
+extern const int UNSUPPORTED_URI_SCHEME = 450;
+extern const int UNACCEPTABLE_URL = 450;
+extern const int TOO_MANY_REDIRECTS = 450;
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;

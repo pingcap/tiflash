@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Flash/Executor/QueryExecutorHolder.h>
+#include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskScheduleEntry.h>

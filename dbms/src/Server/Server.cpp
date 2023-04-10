@@ -50,20 +50,19 @@
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
+#include <IO/UseSSL.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
-#include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
-#include <Server/HTTPHandlerFactory.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
@@ -363,20 +362,6 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
-struct HTTPServer : Poco::Net::HTTPServer
-{
-    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::HTTPServerParams::Ptr pParams)
-        : Poco::Net::HTTPServer(pFactory, threadPool, socket, pParams)
-    {}
-
-protected:
-    void run() override
-    {
-        setThreadName("HTTPServer");
-        Poco::Net::HTTPServer::run();
-    }
-};
-
 struct TCPServer : Poco::Net::TCPServer
 {
     TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::TCPServerParams::Ptr pParams)
@@ -520,7 +505,6 @@ private:
     const LoggerPtr & log;
 };
 
-
 class Server::TcpHttpServersHolder
 {
 public:
@@ -602,58 +586,6 @@ public:
             /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
             try
             {
-                /// HTTPS
-                if (config.has("https_port"))
-                {
-#if Poco_NetSSL_FOUND
-                    if (!security_config->hasTlsConfig())
-                    {
-                        LOG_ERROR(log, "https_port is set but tls config is not set");
-                    }
-                    auto [ca_path, cert_path, key_path] = security_config->getPaths();
-                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             key_path,
-                                                                             cert_path,
-                                                                             ca_path,
-                                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-                        return server.global_context->getSecurityConfig()->checkCommonName(cert);
-                    };
-                    context->setAdhocVerification(check_common_name);
-                    std::call_once(ssl_init_once, SSLInit);
-
-                    Poco::Net::SecureServerSocket socket(context);
-                    CertificateReloader::initSSLCallback(context, server.global_context.get());
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("https_port"), /* secure = */ true);
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(
-                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPSHandler-factory"), server_pool, socket, http_params));
-
-                    LOG_INFO(log, "Listening https://{}", address.toString());
-#else
-                    throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
-                                    ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-                }
-                else
-                {
-                    /// HTTP
-                    if (security_config->hasTlsConfig())
-                    {
-                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port", DEFAULT_HTTP_PORT));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(
-                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
-
-                    LOG_INFO(log, "Listening http://{}", address.toString());
-                }
-
-
                 /// TCP
                 if (config.has("tcp_port"))
                 {
@@ -661,7 +593,6 @@ public:
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
-                    std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -705,7 +636,7 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
-                /// At least one of TCP and HTTP servers must be created.
+                /// TCP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
             }
@@ -839,11 +770,10 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-
     // Note: Global Thread Pool must be larger than sub thread pools.
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 200);
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 400);
 
     if (RNPagePreparerPool::instance)
     {
@@ -919,6 +849,8 @@ void syncSchemaWithTiDB(
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
+
+    UseSSL ssl_holder;
 
     const auto log = Logger::get();
 #ifdef FIU_ENABLE
@@ -1557,7 +1489,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
-        TaskSchedulerConfig config{get_pool_size(settings.pipeline_task_thread_pool_size)};
+        TaskSchedulerConfig config{
+            get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+            get_pool_size(settings.pipeline_io_task_thread_pool_size),
+        };
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
