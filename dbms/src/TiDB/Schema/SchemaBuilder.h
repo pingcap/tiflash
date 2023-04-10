@@ -53,7 +53,8 @@ struct SchemaBuilder
 
     void dropAllSchema();
 
-private:
+    // private:
+public:
     void applyDropSchema(DatabaseID schema_id);
 
     /// Parameter db_name should be mapped.
@@ -69,6 +70,7 @@ private:
 
     void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
+    void applyDropTable(const DatabaseID & db_id, TableID table_id);
     void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     /// Parameter schema_name should be mapped.
@@ -95,6 +97,8 @@ private:
     void applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id);
     void applySetTiFlashReplicaOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
     void applySetTiFlashReplicaOnPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+
+    void applyVariousDiff(DatabaseID db_id, TableID table_id);
 };
 
 } // namespace DB

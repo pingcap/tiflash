@@ -26,6 +26,29 @@
 
 #include <ext/scope_guard.h>
 
+#include "Common/Exception.h"
+#include "Common/StackTrace.h"
+#include "Common/UniThreadPool.h"
+#include "Interpreters/Context.h"
+#include "Storages/Transaction/Types.h"
+#include "TiDB/Schema/SchemaGetter.h"
+#include "common/logger_useful.h"
+#include "common/types.h"
+
+namespace std
+{
+template <>
+struct hash<pair<DB::DatabaseID, DB::TableID>>
+{
+    size_t operator()(const pair<DB::DatabaseID, DB::TableID> & pair) const
+    {
+        size_t seed = 0;
+        boost::hash_combine(seed, boost::hash_value(pair.first));
+        boost::hash_combine(seed, boost::hash_value(pair.second));
+        return seed;
+    }
+};
+} // namespace std
 namespace DB
 {
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
@@ -191,6 +214,152 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
+    Int64 getDiffTables(std::vector<std::optional<SchemaDiff>> & diffs,
+                        std::unordered_map<std::pair<DatabaseID, TableID>, bool> & apply_tables,
+                        std::unordered_map<std::pair<DatabaseID, TableID>, bool> & drop_tables,
+                        std::vector<DatabaseID> & create_database_ids,
+                        std::vector<DatabaseID> & drop_database_ids)
+    {
+        // 我们可以先 create databases，然后 apply tables，随后 drop tables 和 drop databases ids
+        // 对于同一个table，如果出现了 drop table 的操作，我们就去除他原来在 apply tables 的操作，如果出现了 recover table 的操作，我们就去除他在 drop tables 的操作
+        for (const auto & diff : diffs)
+        {
+            if (diff.has_value())
+            {
+                if (diff->regenerate_schema_map)
+                {
+                    // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
+                    LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
+                    return -1;
+                }
+                switch (diff->type)
+                {
+                case SchemaActionType::CreateSchema:
+                {
+                    create_database_ids.push_back(diff->schema_id);
+                    break;
+                }
+                case SchemaActionType::DropSchema:
+                {
+                    drop_database_ids.push_back(diff->schema_id);
+                    break;
+                }
+                case SchemaActionType::CreateTables:
+                case SchemaActionType::RenameTables:
+                {
+                    for (auto && opt : diff->affected_opts)
+                    {
+                        std::pair<DatabaseID, TableID> pair(opt.schema_id, opt.table_id);
+                        if (apply_tables.find(pair) == apply_tables.end())
+                        {
+                            apply_tables[pair] = true;
+                        }
+                    }
+                    break;
+                }
+                case SchemaActionType::RecoverTable:
+                {
+                    std::pair<DatabaseID, TableID> pair(diff->schema_id, diff->table_id);
+                    if (drop_tables.find(pair) != drop_tables.end())
+                    {
+                        drop_tables.erase(pair);
+                    }
+                    if (apply_tables.find(pair) == apply_tables.end())
+                    {
+                        apply_tables[pair] = true;
+                    }
+                    break;
+                }
+                case SchemaActionType::DropTable: // TODO:话说我们这边要额外加判断么，比如不应该同个table出现两个drop？
+                case SchemaActionType::DropView:
+                {
+                    std::pair<DatabaseID, TableID> pair(diff->schema_id, diff->table_id);
+                    if (drop_tables.find(pair) == drop_tables.end())
+                    {
+                        drop_tables[pair] = true;
+                        // delete item in apply_tables
+                        if (apply_tables.find(pair) != apply_tables.end())
+                        {
+                            apply_tables.erase(pair);
+                        }
+                    }
+                    break;
+                }
+                case SchemaActionType::TruncateTable: // 等于先删了一个，再建了一个
+                {
+                    std::pair<DatabaseID, TableID> drop_pair(diff->schema_id, diff->old_table_id);
+                    std::pair<DatabaseID, TableID> create_pair(diff->schema_id, diff->table_id);
+                    if (drop_tables.find(drop_pair) == drop_tables.end())
+                    {
+                        drop_tables[drop_pair] = true;
+                        // delete item in apply_tables
+                        if (apply_tables.find(drop_pair) != apply_tables.end())
+                        {
+                            apply_tables.erase(drop_pair);
+                        }
+                    }
+                    if (apply_tables.find(create_pair) == apply_tables.end())
+                    {
+                        apply_tables[create_pair] = true;
+                    }
+                    break;
+                }
+                case SchemaActionType::CreateTable:
+                case SchemaActionType::AddColumn:
+                case SchemaActionType::AddColumns:
+                case SchemaActionType::DropColumn:
+                case SchemaActionType::DropColumns:
+                case SchemaActionType::ModifyColumn:
+                case SchemaActionType::SetDefaultValue:
+                // Add primary key change primary keys to not null, so it's equal to alter table for tiflash.
+                case SchemaActionType::AddPrimaryKey:
+                case SchemaActionType::RenameTable:
+                case SchemaActionType::AddTablePartition:
+                case SchemaActionType::DropTablePartition:
+                case SchemaActionType::TruncateTablePartition:
+                case SchemaActionType::ActionReorganizePartition:
+                case SchemaActionType::SetTiFlashReplica:
+                {
+                    std::pair<DatabaseID, TableID> pair(diff->schema_id, diff->table_id);
+                    if (apply_tables.find(pair) == apply_tables.end())
+                    {
+                        apply_tables[pair] = true;
+                    }
+                    break;
+                }
+                case SchemaActionType::ExchangeTablePartition:
+                {
+                    std::pair<DatabaseID, TableID> non_partition_pair(diff->schema_id, diff->old_table_id);
+                    std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->table_id);
+                    if (apply_tables.find(non_partition_pair) == apply_tables.end())
+                    {
+                        apply_tables[non_partition_pair] = true;
+                    }
+                    if (apply_tables.find(partition_pair) == apply_tables.end())
+                    {
+                        apply_tables[partition_pair] = true;
+                    }
+                    break;
+                }
+                default:
+                {
+                    if (diff->type < SchemaActionType::MaxRecognizedType)
+                    {
+                        LOG_INFO(log, "Ignore change type: {}", int(diff->type));
+                    }
+                    else
+                    { // >= SchemaActionType::MaxRecognizedType
+                        LOG_ERROR(log, "Unsupported change type: {}", int(diff->type));
+                    }
+
+                    break;
+                }
+                }
+            }
+        }
+
+        return 0;
+    }
     // Return Values
     // - if latest schema diff is not empty, return the (latest_version)
     // - if latest schema diff is empty, return the (latest_version - 1)
@@ -215,8 +384,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
         LOG_DEBUG(ks_log, "End load schema diffs with total {} entries.", diffs.size());
-
-
         if (diffs.empty())
         {
             LOG_WARNING(ks_log, "Schema Diff is empty.");
@@ -230,35 +397,64 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.pop_back();
         }
 
+        std::unordered_map<std::pair<DatabaseID, TableID>, bool> apply_tables;
+        std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables;
+        std::vector<DatabaseID> create_database_ids;
+        std::vector<DatabaseID> drop_database_ids;
+        // 根据 diffs 整理一波 database_id, table_id 的 pairs
+        auto ret = getDiffTables(diffs, apply_tables, drop_tables, create_database_ids, drop_database_ids);
+        if (ret == -1)
+        {
+            return ret;
+        }
+
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
+
+        size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
+
+        auto schema_apply_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+        auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
 
         try
         {
-            for (size_t diff_index = 0; diff_index < diffs.size(); ++diff_index)
+            // 并发做 create databases
+            // 并发处理 apply tables
+            // 并发处理 drop tables
+            // 并发处理 drop databases
+            // create databases
+            for (const auto & create_database_id : create_database_ids)
             {
-                const auto & schema_diff = diffs[diff_index];
-
-                if (!schema_diff)
-                {
-                    // If `schema diff` got empty `schema diff`(it's not the latest one, due to we check it before), we should just skip it.
-                    //
-                    // example:
-                    //  - `cur_version` is 1, `latest_version` is 10
-                    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
-                    LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
-                    continue;
-                }
-
-                if (schema_diff->regenerate_schema_map)
-                {
-                    // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
-                    LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
-                    return -1;
-                }
-
-                builder.applyDiff(*schema_diff);
+                schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
             }
+
+            schema_apply_wait_group->wait();
+
+            // apply tables
+            for (const auto & [key, value] : apply_tables)
+            {
+                const auto & database_id = key.first;
+                const auto & table_id = key.second;
+                schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
+            }
+            schema_apply_wait_group->wait();
+
+            // drop tables
+            for (const auto & [key, value] : drop_tables)
+            {
+                const auto & database_id = key.first;
+                const auto & table_id = key.second;
+                schema_apply_wait_group->schedule([&] { builder.applyDropTable(database_id, table_id); });
+            }
+
+            schema_apply_wait_group->wait();
+
+            // drop databases
+            for (const auto & drop_database_id : drop_database_ids)
+            {
+                schema_apply_wait_group->schedule([&] { builder.applyDropSchema(drop_database_id); });
+            }
+
+            schema_apply_wait_group->wait();
         }
         catch (TiFlashException & e)
         {

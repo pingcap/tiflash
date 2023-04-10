@@ -47,6 +47,8 @@
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
 
+#include "Storages/Transaction/Types.h"
+
 namespace DB
 {
 using namespace TiDB;
@@ -463,7 +465,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             new_diff.version = diff.version;
             new_diff.schema_id = opt.schema_id;
             new_diff.table_id = opt.table_id;
-            new_diff.old_schema_id = opt.old_schema_id;
+            new_diff.old_schema_id = opt.old_schema_id; // create table 还有什么 old_schema_id？？？？
             new_diff.old_table_id = opt.old_table_id;
             applyDiff(new_diff);
         }
@@ -1177,6 +1179,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 }
 
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DatabaseID & db_id, TableID table_id)
+{
+    auto db_info = getter.getDatabase(db_id);
+    if (db_info == nullptr)
+    {
+        throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
+    }
+    applyDropTable(db_info, table_id);
+}
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info, TableID table_id)
 {
@@ -1266,6 +1280,48 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
     LOG_INFO(log, "Updated replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, TableID table_id)
+{
+    auto db_info = getter.getDatabase(db_id);
+    if (db_info == nullptr)
+    {
+        throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
+    auto table_info = getter.getTableInfo(db_info->id, table_id);
+
+    LOG_DEBUG(log, "Table {} syncing during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
+    if (storage == nullptr)
+    {
+        /// Create if not exists.
+        applyCreateLogicalTable(db_info, table_info);
+        storage = tmt_context.getStorages().get(keyspace_id, table_id);
+        if (storage == nullptr)
+        {
+            /// This is abnormal as the storage shouldn't be null after creation, the underlying table must already be existing for unknown reason.
+            LOG_WARNING(log,
+                        "Table {} not synced because may have been dropped during sync all schemas",
+                        name_mapper.debugCanonicalName(*db_info, *table_info));
+            return;
+        }
+    }
+    if (table_info->isLogicalPartitionTable())
+    {
+        /// Apply partition diff if needed.
+        applyPartitionDiff(db_info, table_info, storage);
+    }
+    /// Rename if needed.
+    applyRenameLogicalTable(db_info, table_info, storage);
+    /// Update replica info if needed.
+    applySetTiFlashReplicaOnLogicalTable(db_info, table_info, storage);
+    /// Alter if needed.
+    applyAlterLogicalTable(db_info, table_info, storage);
+    LOG_DEBUG(log, "Table {} synced during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>
