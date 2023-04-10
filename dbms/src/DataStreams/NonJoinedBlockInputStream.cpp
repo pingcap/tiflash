@@ -201,12 +201,12 @@ void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
     }
     if (parent.strictness == ASTTableJoin::Strictness::Any)
     {
-        switch (parent.type)
+        switch (parent.join_map_method)
         {
-#define M(TYPE)                                     \
-    case JoinMapType::TYPE:                         \
+#define M(METHOD)                                   \
+    case JoinMapMethod::METHOD:                     \
         fillColumns<ASTTableJoin::Strictness::Any>( \
-            *partition->maps_any_full.TYPE,         \
+            *partition->maps_any_full.METHOD,       \
             num_columns_left,                       \
             mutable_columns_left,                   \
             num_columns_right,                      \
@@ -222,12 +222,12 @@ void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
     }
     else if (parent.strictness == ASTTableJoin::Strictness::All)
     {
-        switch (parent.type)
+        switch (parent.join_map_method)
         {
-#define M(TYPE)                                     \
-    case JoinMapType::TYPE:                         \
+#define M(METHOD)                                   \
+    case JoinMapMethod::METHOD:                     \
         fillColumns<ASTTableJoin::Strictness::All>( \
-            *partition->maps_all_full.TYPE,         \
+            *partition->maps_all_full.METHOD,       \
             num_columns_left,                       \
             mutable_columns_left,                   \
             num_columns_right,                      \

@@ -291,7 +291,7 @@ private:
     bool has_build_data_in_memory = false;
 
 private:
-    JoinMapType type = JoinMapType::EMPTY;
+    JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
 

@@ -85,7 +85,7 @@ struct WithUsedFlag<false, Base> : Base
     M(keys256)                     \
     M(serialized)
 
-enum class JoinMapType
+enum class JoinMapMethod
 {
     EMPTY,
     CROSS,
@@ -167,5 +167,5 @@ using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
 using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
 
-JoinMapType chooseJoinMapType(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
+JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
 } // namespace DB

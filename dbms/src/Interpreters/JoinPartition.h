@@ -73,10 +73,10 @@ using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
 {
 public:
-    JoinPartition(JoinMapType join_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_)
+    JoinPartition(JoinMapMethod join_map_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_)
         : kind(kind_)
         , strictness(strictness_)
-        , join_type(join_type_)
+        , join_map_method(join_map_type_)
         , pool(std::make_shared<Arena>())
         , spill(false)
         , log(log_)
@@ -131,7 +131,7 @@ public:
     }
     bool isSpill() const { return spill; }
     void markSpill() { spill = true; }
-    JoinMapType getJoinType() const { return join_type; }
+    JoinMapMethod getJoinMapMethod() const { return join_map_method; }
     ASTTableJoin::Kind getJoinKind() const { return kind; }
     Block * getLastBuildBlock() { return &build_partition.blocks.back(); }
     ArenaPtr & getPartitionPool()
@@ -212,7 +212,7 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
-    JoinMapType join_type;
+    JoinMapMethod join_map_method;
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN

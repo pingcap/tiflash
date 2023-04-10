@@ -185,7 +185,7 @@ size_t Join::getTotalRowCount() const
 {
     size_t res = 0;
 
-    if (type == JoinMapType::CROSS)
+    if (join_map_method == JoinMapMethod::CROSS)
     {
         res = total_input_build_rows;
     }
@@ -208,7 +208,7 @@ size_t Join::getTotalByteCount()
     }
     else
     {
-        if (type == JoinMapType::CROSS)
+        if (join_map_method == JoinMapMethod::CROSS)
         {
             for (const auto & block : blocks)
                 res += block.bytes();
@@ -248,7 +248,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     partitions.reserve(build_concurrency);
     for (size_t i = 0; i < getBuildConcurrency(); ++i)
     {
-        partitions.push_back(std::make_unique<JoinPartition>(type, kind, strictness, max_block_size, log));
+        partitions.push_back(std::make_unique<JoinPartition>(join_map_method, kind, strictness, max_block_size, log));
     }
 }
 
@@ -316,13 +316,13 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    type = chooseJoinMapType(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
+    join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
     build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     if (max_bytes_before_external_join > 0)
     {
-        if (type == JoinMapType::CROSS)
+        if (join_map_method == JoinMapMethod::CROSS)
         {
             /// todo support spill for cross join
             max_bytes_before_external_join = 0;
