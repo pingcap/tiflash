@@ -74,13 +74,20 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
         {
             throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
         }
-        if (mode == DupCheck::AllowSame && getTiKVValue(it->second) != getTiKVValue(kv_pair.second))
+        else if (mode == DupCheck::AllowSame)
         {
-            throw Exception("Found existing key in hex and val differs: "
-                                + getTiKVKey(it->second).toDebugString()
-                                + " prev_val: " + getTiKVValue(it->second).toDebugString()
-                                + " new_val: " + getTiKVValue(kv_pair.second).toDebugString(),
-                            ErrorCodes::LOGICAL_ERROR);
+            if (getTiKVValue(it->second) != getTiKVValue(kv_pair.second))
+            {
+                throw Exception("Found existing key in hex and val differs: "
+                                    + getTiKVKey(it->second).toDebugString()
+                                    + " prev_val: " + getTiKVValue(it->second).toDebugString()
+                                    + " new_val: " + getTiKVValue(kv_pair.second).toDebugString(),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        else
+        {
+            throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
         }
     }
 
