@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
@@ -87,6 +88,7 @@ public:
         pingcap::pd::ClientPtr pd_client_,
         OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client_,
+        DM::Remote::IDataStorePtr remote_data_store_,
         S3GCConfig config_);
 
     ~S3GCManager() = default;
@@ -115,10 +117,11 @@ public:
         const String & datafile_key,
         const String & delmark_key,
         const Aws::Utils::DateTime & timepoint,
-        const Aws::Utils::DateTime & delmark_mtime);
+        const Aws::Utils::DateTime & delmark_mtime,
+        const LoggerPtr & sub_logger) const;
 
-    void lifecycleMarkDataFileDeleted(const String & datafile_key);
-    void physicalRemoveDataFile(const String & datafile_key);
+    void lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger);
+    void physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const;
 
     static std::vector<UInt64> getAllStoreIds();
 
@@ -131,6 +134,8 @@ private:
 
     const OwnerManagerPtr gc_owner_manager;
     const S3LockClientPtr lock_client;
+
+    DM::Remote::IDataStorePtr remote_data_store;
 
     std::atomic<bool> shutdown_called;
 

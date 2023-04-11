@@ -30,12 +30,14 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>
+#include <common/logger_useful.h>
 
 #include <memory>
 
 namespace DB::tests
 {
 std::vector<ContextPtr> TiFlashTestEnv::global_contexts = {};
+bool TiFlashTestEnv::is_mocked_s3_client = true;
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
@@ -208,7 +210,7 @@ void TiFlashTestEnv::shutdown()
 void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
-    Poco::AutoPtr<UnifiedLogFormatter> formatter(new UnifiedLogFormatter());
+    Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<true>());
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
@@ -262,9 +264,32 @@ bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_clien
 
 void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
 {
+    TiFlashTestEnv::createBucketIfNotExist(s3_client);
+    if (!is_mocked_s3_client)
+    {
+        // All objects (including all object versions and delete markers)
+        // in the bucket must be deleted before the bucket itself can be
+        // deleted.
+        LOG_INFO(s3_client.log, "DeleteBucket, clean all existing objects begin");
+        S3::rawListPrefix(s3_client, s3_client.bucket(), s3_client.root(), "", [&](const Aws::S3::Model::ListObjectsV2Result & r) -> S3::PageResult {
+            for (const auto & obj : r.GetContents())
+            {
+                const auto & key = obj.GetKey();
+                LOG_INFO(s3_client.log, "DeleteBucket, clean existing object, key={}", key);
+                S3::rawDeleteObject(s3_client, s3_client.bucket(), key);
+            }
+            return S3::PageResult{.num_keys = r.GetContents().size(), .more = true};
+        });
+        LOG_INFO(s3_client.log, "DeleteBucket, clean all existing objects done");
+    }
     Aws::S3::Model::DeleteBucketRequest request;
     request.SetBucket(s3_client.bucket());
-    s3_client.DeleteBucket(request);
+    auto outcome = s3_client.DeleteBucket(request);
+    if (!outcome.IsSuccess())
+    {
+        const auto & err = outcome.GetError();
+        LOG_WARNING(s3_client.log, "DeleteBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+    }
 }
 
 } // namespace DB::tests

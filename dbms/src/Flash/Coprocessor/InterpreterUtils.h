@@ -25,6 +25,9 @@ namespace DB
 {
 class Context;
 
+class PipelineExecutorStatus;
+struct PipelineExecGroupBuilder;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
@@ -53,12 +56,26 @@ void executeExpression(
     const LoggerPtr & log,
     const String & extra_info = "");
 
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log);
+
 void orderStreams(
     DAGPipeline & pipeline,
     size_t max_streams,
     const SortDescription & order_descr,
     Int64 limit,
     bool enable_fine_grained_shuffle,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
     const Context & context,
     const LoggerPtr & log);
 

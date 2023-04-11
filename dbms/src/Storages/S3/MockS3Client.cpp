@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
@@ -44,6 +44,7 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fiu.h>
 
@@ -51,10 +52,6 @@
 #include <mutex>
 #include <string_view>
 
-namespace DB::FailPoints
-{
-extern const char force_set_mocked_s3_object_mtime[];
-} // namespace DB::FailPoints
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
@@ -89,7 +86,10 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
         boost::algorithm::split(v, request.GetRange().substr(prefix.size()), boost::algorithm::is_any_of("-"));
         RUNTIME_CHECK(v.size() == 2, request.GetRange());
         left = std::stoul(v[0]);
-        right = std::stoul(v[1]);
+        if (!v[1].empty())
+        {
+            right = std::stoul(v[1]);
+        }
     }
     auto size = right - left + 1;
     Model::GetObjectResult result;
@@ -251,18 +251,6 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
     if (itr_obj != bucket_storage.end())
     {
         auto r = Model::HeadObjectResult{};
-        auto try_set_mtime = [&] {
-            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
-            {
-                auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
-                if (auto iter_m = m.find(normalizedKey(request.GetKey())); iter_m != m.end())
-                {
-                    r.SetLastModified(iter_m->second);
-                }
-            }
-        };
-        UNUSED(try_set_mtime);
-        fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
         r.SetContentLength(itr_obj->second.size());
         return r;
     }

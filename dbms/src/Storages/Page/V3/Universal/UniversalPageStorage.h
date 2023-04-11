@@ -25,6 +25,7 @@
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
+#include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -193,18 +194,21 @@ public:
         /**
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
+
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
+        UInt64 max_edit_records_per_part = 100000;
     };
 
-    PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    PS::V3::CPDataDumpStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
     {
         return remote_data_files_stat_cache.getCopy();
     }
 
-    void updateRemoteFilesTotalSizes(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
+    void updateRemoteFilesStatCache(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
     {
-        remote_data_files_stat_cache.updateTotalSize(updated_stat);
+        remote_data_files_stat_cache.updateCache(updated_stat);
     }
 
     PageIdU64 getMaxIdAfterRestart() const;

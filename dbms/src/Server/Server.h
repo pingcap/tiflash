@@ -19,9 +19,8 @@
 #include <Server/ServerInfo.h>
 #include <daemon/BaseDaemon.h>
 
-/** Server provides three interfaces:
-  * 1. HTTP - simple interface for any applications.
-  * 2. TCP - interface for native clickhouse-client and for server to server internal communications.
+/** Server provides the following interfaces:
+  * 1. TCP - interface for native clickhouse-client and for server to server internal communications.
   *    More rich and efficient, but less compatible
   *     - data is transferred by columns;
   *     - data is transferred compressed;
@@ -35,6 +34,8 @@ class Server : public BaseDaemon
     , public IServer
 {
 public:
+    using ServerApplication::run;
+
     Poco::Util::LayeredConfiguration & config() const override
     {
         return BaseDaemon::config();
@@ -55,7 +56,11 @@ public:
         return BaseDaemon::isCancelled();
     }
 
+    void defineOptions(Poco::Util::OptionSet & _options) override;
+
 protected:
+    int run() override;
+
     void initialize(Application & self) override;
 
     void uninitialize() override;

@@ -14,10 +14,14 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
@@ -35,7 +39,9 @@
 #include <pingcap/pd/IClient.h>
 
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <limits>
+#include <magic_enum.hpp>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -53,10 +59,12 @@ S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
     OwnerManagerPtr gc_owner_manager_,
     S3LockClientPtr lock_client_,
+    DM::Remote::IDataStorePtr remote_data_store_,
     S3GCConfig config_)
     : pd_client(std::move(pd_client_))
     , gc_owner_manager(std::move(gc_owner_manager_))
     , lock_client(std::move(lock_client_))
+    , remote_data_store(std::move(remote_data_store_))
     , shutdown_called(false)
     , config(config_)
     , log(Logger::get())
@@ -84,13 +92,31 @@ bool S3GCManager::runOnAllStores()
         return false;
     }
 
+    GET_METRIC(tiflash_storage_s3_gc_status, type_running).Set(1.0);
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_s3_gc_status, type_running).Set(0.0);
+    });
+
     if (config.method == S3GCMethod::Lifecycle && !lifecycle_has_been_set)
     {
         auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-        ensureLifecycleRuleExist(*client, /*expire_days*/ 1);
-        lifecycle_has_been_set = true;
+        lifecycle_has_been_set = ensureLifecycleRuleExist(*client, /*expire_days*/ 1);
+        if (lifecycle_has_been_set)
+        {
+            GET_METRIC(tiflash_storage_s3_gc_status, type_lifecycle_added).Set(1.0);
+            GET_METRIC(tiflash_storage_s3_gc_status, type_lifecycle_failed).Set(0.0);
+        }
+        else
+        {
+            GET_METRIC(tiflash_storage_s3_gc_status, type_lifecycle_added).Set(0.0);
+            GET_METRIC(tiflash_storage_s3_gc_status, type_lifecycle_failed).Set(1.0);
+        }
     }
 
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_s3_gc_seconds, type_total).Observe(watch.elapsedSeconds());
+    });
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
     // Get all store status from pd after getting the store ids from S3.
@@ -108,6 +134,10 @@ bool S3GCManager::runOnAllStores()
             break;
         }
 
+        Stopwatch store_gc_watch;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_storage_s3_gc_seconds, type_one_store).Observe(store_gc_watch.elapsedSeconds());
+        });
         std::optional<metapb::StoreState> s = std::nullopt;
         if (auto iter = stores_from_pd.find(gc_store_id); iter != stores_from_pd.end())
         {
@@ -138,6 +168,7 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
+    Stopwatch watch;
     // Get the latest manifest
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     if (manifests.empty())
@@ -154,13 +185,16 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
         config.manifest_expired_hour,
         gc_timepoint));
     LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
+    GET_METRIC(tiflash_storage_s3_gc_seconds, type_read_locks).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     // Scan and remove the expired locks
     const auto lock_prefix = S3Filename::getLockPrefix();
     cleanUnusedLocks(gc_store_id, lock_prefix, manifests.latestUploadSequence(), valid_lock_files, gc_timepoint);
+    GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_locks).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     // clean the outdated manifest objects
     removeOutdatedManifest(manifests, &gc_timepoint);
+    GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_manifests).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     switch (config.method)
     {
@@ -175,6 +209,7 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
         // After removing the expired lock, we need to scan the data files
         // with expired delmark
         tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        GET_METRIC(tiflash_storage_s3_gc_seconds, type_scan_then_clean_data_files).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
         break;
     }
     }
@@ -187,6 +222,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
+    Stopwatch watch;
     // If the store id is tombstone, then run gc on the store as if no locks.
     // Scan and remove all expired locks
     LOG_INFO(log, "store is tombstone, clean all locks");
@@ -194,11 +230,13 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     // clean all by setting `safe_sequence` to MaxUInt64 and empty `valid_lock_files`
     std::unordered_set<String> valid_lock_files;
     cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
+    GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_locks).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     // clean all manifest objects
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     removeOutdatedManifest(manifests, nullptr);
+    GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_manifests).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     switch (config.method)
     {
@@ -216,6 +254,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
         // After all the locks removed, the data files may still being locked by another
         // store id, we need to scan the data files with expired delmark
         tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        GET_METRIC(tiflash_storage_s3_gc_seconds, type_scan_then_clean_data_files).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
         break;
     }
     }
@@ -268,14 +307,20 @@ void S3GCManager::cleanUnusedLocks(
 
 void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_one_lock).Observe(watch.elapsedSeconds());
+    });
     const auto unlocked_datafilename_view = lock_filename_view.asDataFile();
     RUNTIME_CHECK(unlocked_datafilename_view.isDataFile());
     const auto unlocked_datafile_key = unlocked_datafilename_view.toFullKey();
     const auto unlocked_datafile_delmark_key = unlocked_datafilename_view.getDelMarkKey();
+    auto sub_logger = log->getChild(fmt::format("remove_key={}", unlocked_datafile_key));
 
     // delete S3 lock file
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     deleteObject(*client, lock_key);
+    const auto elapsed_remove_lock = watch.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // TODO: If `lock_key` is the only lock to datafile and GCManager crashes
     //       after the lock deleted but before delmark uploaded, then the
@@ -283,6 +328,9 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     //       Need another logic to cover this corner case.
 
     const auto delmark_object_info = S3::tryGetObjectInfo(*client, unlocked_datafile_delmark_key);
+    const auto elapsed_try_get_delmark = watch.elapsedMillisecondsFromLastTime() / 1000.0;
+    double elapsed_try_mark_delete = 0.0;
+    double elapsed_lifecycle_mark_delete = 0.0;
     if (!delmark_object_info.exist)
     {
         bool ok;
@@ -291,6 +339,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         {
             // delmark not exist, lets try create a delmark through S3LockService
             std::tie(ok, err_msg) = lock_client->sendTryMarkDeleteRequest(unlocked_datafile_key, config.mark_delete_timeout_seconds);
+            elapsed_try_mark_delete = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         }
         catch (DB::Exception & e)
         {
@@ -306,7 +355,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         }
         if (ok)
         {
-            LOG_INFO(log, "delmark created, key={}", unlocked_datafile_key);
+            LOG_INFO(sub_logger, "delmark created, key={}", unlocked_datafile_key);
             switch (config.method)
             {
             case S3GCMethod::Lifecycle:
@@ -318,7 +367,17 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
                 // However, After the lock key is not seen in the manifest file after
                 // 1 day, we consider it is long enough for no other write node try
                 // access to the data file.
-                lifecycleMarkDataFileDeleted(unlocked_datafile_key);
+                lifecycleMarkDataFileDeleted(unlocked_datafile_key, sub_logger);
+                elapsed_lifecycle_mark_delete = watch.elapsedMillisecondsFromLastTime() / 1000.0;
+                LOG_INFO(
+                    sub_logger,
+                    "cleanOneLock done, method={} key={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} lifecycle_mark_delete={:.3f}",
+                    magic_enum::enum_name(config.method),
+                    unlocked_datafile_key,
+                    elapsed_remove_lock,
+                    elapsed_try_get_delmark,
+                    elapsed_try_mark_delete,
+                    elapsed_lifecycle_mark_delete);
                 return;
             }
             case S3GCMethod::ScanThenDelete:
@@ -327,7 +386,16 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         }
         else
         {
-            LOG_INFO(log, "delmark create failed, key={} reason={}", unlocked_datafile_key, err_msg);
+            LOG_INFO(
+                sub_logger,
+                "delmark create failed, method={} key={} reason={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} lifecycle_mark_delete={:.3f}",
+                magic_enum::enum_name(config.method),
+                unlocked_datafile_key,
+                err_msg,
+                elapsed_remove_lock,
+                elapsed_try_get_delmark,
+                elapsed_try_mark_delete,
+                elapsed_lifecycle_mark_delete);
         }
         // no matter delmark create success or not, leave it to later GC round.
         return;
@@ -342,8 +410,18 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     }
     case S3GCMethod::ScanThenDelete:
     {
+        const auto elapsed_scan_try_remove_datafile = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         // delmark exist, check whether we need to physical remove the datafile
-        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, delmark_object_info.last_modification_time);
+        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, delmark_object_info.last_modification_time, sub_logger);
+        LOG_INFO(
+            sub_logger,
+            "cleanOneLock done, method={} key={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} scan_try_physical_remove={:.3f}",
+            magic_enum::enum_name(config.method),
+            unlocked_datafile_key,
+            elapsed_remove_lock,
+            elapsed_try_get_delmark,
+            elapsed_try_mark_delete,
+            elapsed_scan_try_remove_datafile);
         return;
     }
     }
@@ -353,7 +431,8 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     const String & datafile_key,
     const String & delmark_key,
     const Aws::Utils::DateTime & timepoint,
-    const Aws::Utils::DateTime & delmark_mtime)
+    const Aws::Utils::DateTime & delmark_mtime,
+    const LoggerPtr & sub_logger) const
 {
     // delmark exist
     bool expired = false;
@@ -365,7 +444,7 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
             expired = true;
         }
         LOG_INFO(
-            log,
+            sub_logger,
             "delmark exist, datafile={} mark_mtime={} now={} diff_sec={:.3f} expired={}",
             datafile_key,
             delmark_mtime.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
@@ -381,11 +460,11 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     // physical delete.
     // It is safe to ignore if datafile_key not exist and S3 won't report
     // error when the key is not exist
-    physicalRemoveDataFile(datafile_key);
+    physicalRemoveDataFile(datafile_key, sub_logger);
 
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     deleteObject(*client, delmark_key);
-    LOG_INFO(log, "datafile delmark deleted, key={}", delmark_key);
+    LOG_INFO(sub_logger, "datafile delmark deleted, key={}", delmark_key);
 }
 
 void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime & timepoint)
@@ -411,26 +490,26 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
             // Only remove the data file with expired delmark
             if (!filename_view.isDelMark())
                 break;
-            auto datafile_key = filename_view.asDataFile().toFullKey();
-            removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified());
+            const auto datafile_key = filename_view.asDataFile().toFullKey();
+            auto sub_logger = log->getChild(fmt::format("remove_key={}", datafile_key));
+            removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified(), sub_logger);
         } while (false);
         return PageResult{.num_keys = 1, .more = true};
     });
 }
 
-void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
+void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger)
 {
     assert(config.method == S3GCMethod::Lifecycle);
 
     auto view = S3FilenameView::fromKey(datafile_key);
     RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-    auto sub_logger = log->getChild(fmt::format("remove_key={}", datafile_key));
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, add tagging for it and update its mtime
         rewriteObjectWithTagging(*client, datafile_key, String(TaggingObjectIsDeleted));
-        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging");
     }
     else
     {
@@ -439,29 +518,36 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         // scanning only the sub objects of given key of this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
-            const auto & sub_key = object.GetKey();
-            rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
-            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", datafile_key, sub_key);
+        std::vector<String> sub_keys;
+        S3::listPrefix(*client, datafile_key + "/", [&sub_keys](const Aws::S3::Model::Object & object) {
+            sub_keys.emplace_back(object.GetKey());
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, all sub keys are deleted", datafile_key);
+        // set tagging for all subkeys in parallel
+        remote_data_store->setTaggingsForKeys(sub_keys, TaggingObjectIsDeleted);
+        for (const auto & sub_key : sub_keys)
+        {
+            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", sub_key);
+        }
+        LOG_INFO(
+            sub_logger,
+            "datafile deleted by lifecycle tagging, all sub keys are deleted, n_sub_keys={}",
+            sub_keys.size());
     }
 }
 
-void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
+void S3GCManager::physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const
 {
     assert(config.method == S3GCMethod::ScanThenDelete);
 
     auto view = S3FilenameView::fromKey(datafile_key);
     RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-    auto sub_logger = log->getChild(fmt::format("remove_key={}", datafile_key));
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, remove it.
         deleteObject(*client, datafile_key);
-        LOG_INFO(sub_logger, "datafile deleted, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted");
     }
     else
     {
@@ -470,13 +556,14 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
         // only the sub objects of given key of this DMFile.
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
+        std::vector<String> sub_keys;
+        S3::listPrefix(*client, datafile_key + "/", [&client, &sub_logger](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             deleteObject(*client, sub_key);
-            LOG_INFO(sub_logger, "datafile deleted, sub_key={}", datafile_key, sub_key);
+            LOG_INFO(sub_logger, "datafile deleted, sub_key={}", sub_key);
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted");
     }
 }
 
@@ -577,7 +664,12 @@ S3GCManagerService::S3GCManagerService(
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(gc_owner_manager_), std::move(lock_client), config);
+    manager = std::make_unique<S3GCManager>(
+        std::move(pd_client),
+        std::move(gc_owner_manager_),
+        std::move(lock_client),
+        context.getSharedContextDisagg()->remote_data_store,
+        config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {

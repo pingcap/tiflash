@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/Block.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
@@ -57,4 +58,39 @@ inline bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
         || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
 }
+struct ProbeProcessInfo
+{
+    Block block;
+    size_t partition_index;
+    UInt64 max_block_size;
+    size_t start_row;
+    size_t end_row;
+    bool all_rows_joined_finish;
+
+    explicit ProbeProcessInfo(UInt64 max_block_size_)
+        : max_block_size(max_block_size_)
+        , all_rows_joined_finish(true){};
+
+    void resetBlock(Block && block_, size_t partition_index_ = 0);
+    void updateStartRow();
+};
+struct JoinBuildInfo
+{
+    bool enable_fine_grained_shuffle;
+    size_t fine_grained_shuffle_count;
+    bool enable_spill;
+    bool is_spilled;
+    size_t build_concurrency;
+    size_t restore_round;
+    bool needVirtualDispatchForProbeBlock() const
+    {
+        return enable_fine_grained_shuffle || (enable_spill && !is_spilled);
+    }
+};
+void computeDispatchHash(size_t rows,
+                         const ColumnRawPtrs & key_columns,
+                         const TiDB::TiDBCollators & collators,
+                         std::vector<String> & partition_key_containers,
+                         size_t join_restore_round,
+                         WeakHash32 & hash);
 } // namespace DB
