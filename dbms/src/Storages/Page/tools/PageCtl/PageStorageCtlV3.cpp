@@ -176,7 +176,7 @@ public:
     using PageIdAndEntries = std::vector<PageIdAndEntry>;
 
 public:
-    explicit PageStorageControlV3T(const ControlOptions & options_)
+    explicit PageStorageControlV3(const ControlOptions & options_)
         : options(options_)
     {
     }
