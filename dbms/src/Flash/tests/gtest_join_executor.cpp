@@ -800,6 +800,47 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, MergeAfterSplit)
+try
+{
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
+    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1}), toVec<Int32>("c", {1, 2, 3, 4, 5})});
+
+    auto request = context
+                       .scan("split_test", "t1")
+                       .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")}, {}, {}, {gt(col("b"), col("c"))}, {})
+                       .build(context);
+
+    std::vector<size_t> block_sizes{
+        1,
+        2,
+        7,
+        25,
+        49,
+        50,
+        51,
+        DEFAULT_BLOCK_SIZE};
+    std::vector<std::vector<size_t>> expect{
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+        {4, 3, 2, 1},
+        {5, 5},
+        {9, 1},
+        {10},
+        {10},
+        {10}};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        auto blocks = getExecuteStreamsReturnBlocks(request);
+        ASSERT_EQ(expect[i].size(), blocks.size());
+        for (size_t j = 0; j < blocks.size(); ++j)
+        {
+            ASSERT_EQ(expect[i][j], blocks[j].rows());
+        }
+    }
+}
+CATCH
 
 TEST_F(JoinExecutorTestRunner, SpillToDisk)
 try

@@ -26,6 +26,8 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     all_rows_joined_finish = false;
     // If the probe block size is greater than max_block_size, we will set max_block_size to the probe block size to avoid some unnecessary split.
     max_block_size = std::max(max_block_size, block.rows());
+    // min_result_block_size is use to avoid generating too many small block, use 50% of the block size as the default value
+    min_result_block_size = std::max(1, (std::min(block.rows(), max_block_size) + 1) / 2);
 }
 
 void ProbeProcessInfo::updateStartRow()
