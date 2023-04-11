@@ -17,8 +17,8 @@ mysql> create table test.ts (a int);
 
 # empty set
 mysql> select * from information_schema.tiflash_replica;
-mysql> select * from information_schema.tiflash_segments;
-mysql> select * from information_schema.tiflash_tables;
+mysql> select * from information_schema.tiflash_segments where tidb_table = 'ts';
+mysql> select * from information_schema.tiflash_tables where tidb_table = 'ts';
 
 # add tiflash replica
 mysql> alter table test.ts set tiflash replica 1;
@@ -31,14 +31,14 @@ mysql> select * from information_schema.tiflash_replica;
 | test         | ts         |       88 |             1 |                 |         1 |        1 |
 +--------------+------------+----------+---------------+-----------------+-----------+----------+
 
-mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
 | test          | ts         |    0 |
 +---------------+------------+------+
 
-mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables where tidb_table = 'ts';
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
@@ -49,14 +49,14 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 mysql> insert into test.ts values (1), (2), (3);
 func> wait_table test ts
 
-mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
 | test          | ts         |    3 |
 +---------------+------------+------+
 
-mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables where tidb_table = 'ts';
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
@@ -67,14 +67,14 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 mysql> delete from test.ts where a = 1;
 func> wait_table test ts
 
-mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
 | test          | ts         |    4 |
 +---------------+------------+------+
 
-mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables where tidb_table = 'ts';
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
