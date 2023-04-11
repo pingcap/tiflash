@@ -185,7 +185,7 @@ grpc::Status FlashService::Coprocessor(
 
     const auto & settings = context->getSettingsRef();
     auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
-    auto max_queued_duration_seconds = std::min(settings.cop_pool_max_queued_seconds, 20);
+    auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
 
     if (handle_limit > 0)
     {
@@ -200,14 +200,17 @@ grpc::Status FlashService::Coprocessor(
 
 
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
-        if (max_queued_duration_seconds > 0)
+        auto wait_ms = watch.elapsedMilliseconds();
+        if (max_queued_duration_ms > 0)
         {
-            if (auto current = watch.elapsedSeconds(); current > max_queued_duration_seconds)
+            if (wait_ms > static_cast<UInt64>(max_queued_duration_ms))
             {
-                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
+                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {} ms, limit = {} ms", wait_ms, max_queued_duration_ms));
                 return grpc::Status::OK;
             }
         }
+        auto log_level = wait_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_TRACE;
+        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -231,7 +234,7 @@ grpc::Status FlashService::Coprocessor(
 grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_INFO(log, "Handling batch coprocessor request, start ts: {}, region info: {}, region epoch: {}", request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+    LOG_INFO(log, "Handling batch coprocessor request, start ts: {}", request->start_ts());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -247,6 +250,9 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
     });
 
     grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
+        auto wait_ms = watch.elapsedMilliseconds();
+        auto log_level = wait_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_TRACE;
+        LOG_IMPL(log, log_level, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
