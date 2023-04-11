@@ -68,6 +68,25 @@ std::vector<ExecutorStatisticsPtr> ExecutorStatisticsCollector::getTableScanProf
     return res;
 }
 
+std::pair<bool, double> ExecutorStatisticsCollector::getTableScanThroughput() const
+{
+    bool has_table_scan = false;
+    UInt64 execution_time_ns = 0;
+    UInt64 num_produced_bytes = 0;
+    for (const auto & map_entry : profiles)
+    {
+        has_table_scan = true;
+        if (auto * table_scan_statistic = dynamic_cast<TableScanStatistics *>(map_entry.second.get()))
+        {
+            const auto & base = table_scan_statistic->getBaseRuntimeStatistics();
+            execution_time_ns = std::max(execution_time_ns, base.execution_time_ns);
+            num_produced_bytes += base.bytes;
+        }
+    }
+
+    return {has_table_scan, num_produced_bytes / (static_cast<double>(execution_time_ns) / 1000000000ULL)};
+}
+
 void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 {
     dag_context = dag_context_;

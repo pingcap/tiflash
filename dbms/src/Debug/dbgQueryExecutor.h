@@ -21,8 +21,8 @@ using MockServerConfig = tests::MockServerConfig;
 struct DecodedTiKVKey;
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
-BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
+BlockInputStreamPtr executeQuery(DAGContext & dag_context, Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeMPPQuery(DAGContext & dag_context, Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(DAGContext & dag_context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 

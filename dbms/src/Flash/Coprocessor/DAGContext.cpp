@@ -322,34 +322,6 @@ bool DAGContext::shouldClipToZero() const
     return flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_LOAD_DATA_STMT;
 }
 
-std::pair<bool, double> DAGContext::getTableScanThroughput()
-{
-    if (table_scan_executor_id.empty())
-        return std::make_pair(false, 0.0);
-
-    // collect table scan metrics
-    UInt64 time_processed_ns = 0;
-    UInt64 num_produced_bytes = 0;
-    for (auto & p : getProfileStreamsMap())
-    {
-        if (p.first == table_scan_executor_id)
-        {
-            for (auto & stream_ptr : p.second)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
-                {
-                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                    num_produced_bytes += p_stream->getProfileInfo().bytes;
-                }
-            }
-            break;
-        }
-    }
-
-    // convert to bytes per second
-    return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
-}
-
 ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())

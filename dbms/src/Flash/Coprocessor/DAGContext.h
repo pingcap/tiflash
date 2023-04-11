@@ -217,8 +217,6 @@ public:
         return disaggregated_id;
     }
 
-    std::pair<bool, double> getTableScanThroughput();
-
     const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
 
     bool containsRegionsInfoForTable(Int64 table_id) const;

@@ -50,6 +50,8 @@ public:
 
     std::vector<ExecutorStatisticsPtr> getTableScanProfiles() const;
 
+    std::pair<bool, double> getTableScanThroughput() const;
+
 private:
     void collectRuntimeDetails();
 

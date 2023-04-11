@@ -58,8 +58,8 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
             return managed_storage->getTableInfo();
         },
         properties);
-
-    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
+    auto dag_context = std::make_unique<DAGContext>(1024);
+    return executeQuery(*dag_context, context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
@@ -88,8 +88,8 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         properties);
-
-    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
+    auto dag_context = std::make_unique<DAGContext>(1024);
+    return executeQuery(*dag_context, context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 

@@ -450,7 +450,7 @@ void MPPTask::runImpl()
         if (status == FINISHED)
         {
             // todo when error happens, should try to update the metrics if it is available
-            if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
+            if (auto throughput = mpp_task_statistics.getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
             auto process_info = context->getProcessListElement()->getInfo();
             auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;

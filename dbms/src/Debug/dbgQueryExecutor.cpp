@@ -83,7 +83,7 @@ BlockInputStreamPtr constructExchangeReceiverStream(DAGContext & dag_context, Co
     return ret;
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
+BlockInputStreamPtr prepareRootExchangeReceiver(DAGContext & dag_context, Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
@@ -99,8 +99,8 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
         tm.AppendToString(tm_string);
     }
-    auto dag_context = std::make_unique<DAGContext>(1024);
-    return constructExchangeReceiverStream(*dag_context, context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
+
+    return constructExchangeReceiverStream(dag_context, context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
 }
 
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
@@ -171,7 +171,7 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
 
 
 // execute MPP Query in one service
-BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks)
+BlockInputStreamPtr executeMPPQuery(DAGContext & dag_context, Context & context, const DAGProperties & properties, QueryTasks & query_tasks)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
@@ -229,7 +229,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         if (call.getResp()->has_error())
             throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
     }
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
+    return prepareRootExchangeReceiver(dag_context, context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
@@ -295,11 +295,11 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(DAGContext &
     return res;
 }
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
+BlockInputStreamPtr executeQuery(DAGContext & dag_context, Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
     {
-        return executeMPPQuery(context, properties, query_tasks);
+        return executeMPPQuery(dag_context, context, properties, query_tasks);
     }
     else
     {

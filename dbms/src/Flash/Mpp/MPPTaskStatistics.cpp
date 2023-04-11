@@ -155,4 +155,10 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
     for (const auto & statistic : executor_statistics_collector.getTableScanProfiles())
         local_input_bytes += statistic->getBaseRuntimeStatistics().bytes;
 }
+
+std::pair<bool, double> MPPTaskStatistics::getTableScanThroughput() const
+{
+    return executor_statistics_collector.getTableScanThroughput();
+}
+
 } // namespace DB

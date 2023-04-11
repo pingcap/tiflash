@@ -54,6 +54,8 @@ public:
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
+    std::pair<bool, double> getTableScanThroughput() const;
+
 private:
     void recordInputBytes(DAGContext & dag_context);
     void recordInputBytesForPipeline(DAGContext & dag_context);

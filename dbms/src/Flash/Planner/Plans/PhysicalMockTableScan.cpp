@@ -124,7 +124,7 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::move(source_ops[i]));
+            builder.setSourceOp(std::move(source_ops[i++]));
         });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }

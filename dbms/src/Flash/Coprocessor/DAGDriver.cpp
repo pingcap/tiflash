@@ -102,6 +102,7 @@ try
     LOG_DEBUG(log, "Compile dag request cost {} ms", compile_time_ns / 1000000);
 
     BlockOutputStreamPtr dag_output_stream = nullptr;
+    std::pair<bool, double> table_scan_throughput;
     if constexpr (!batch)
     {
         auto response_writer = std::make_unique<UnaryDAGResponseWriter>(
@@ -111,11 +112,11 @@ try
         response_writer->prepare(query_executor->getSampleBlock());
         query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
         response_writer->flush();
-
+        ExecutorStatisticsCollector statistics_collector(log->identifier());
+        statistics_collector.initialize(&dag_context);
+        table_scan_throughput = statistics_collector.getTableScanThroughput();
         if (dag_context.collect_execution_summaries)
         {
-            ExecutorStatisticsCollector statistics_collector(log->identifier());
-            statistics_collector.initialize(&dag_context);
             statistics_collector.fillExecuteSummaries(*dag_response);
         }
     }
@@ -145,10 +146,11 @@ try
         query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
         response_writer->flush();
 
+        ExecutorStatisticsCollector statistics_collector(log->identifier());
+        statistics_collector.initialize(&dag_context);
+        table_scan_throughput = statistics_collector.getTableScanThroughput();
         if (dag_context.collect_execution_summaries)
         {
-            ExecutorStatisticsCollector statistics_collector(log->identifier());
-            statistics_collector.initialize(&dag_context);
             auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
@@ -166,8 +168,8 @@ try
         GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(ru);
     }
 
-    if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)
-        GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+    if (table_scan_throughput.first)
+        GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(table_scan_throughput.second);
 
     if (context.getProcessListElement())
     {
