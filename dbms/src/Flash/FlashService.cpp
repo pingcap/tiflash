@@ -158,7 +158,7 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    LOG_INFO(log, "Handling coprocessor request, start ts: {}, region info: {}, region epoch: {}", request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -231,7 +231,7 @@ grpc::Status FlashService::Coprocessor(
 grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    LOG_INFO(log, "Handling batch coprocessor request, start ts: {}, region info: {}, region epoch: {}", request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -267,7 +267,7 @@ grpc::Status FlashService::DispatchMPPTask(
     mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    LOG_INFO(log, "Handling mpp dispatch request, task meta: {}", request->meta().DebugString());
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
@@ -357,7 +357,7 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext 
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -382,7 +382,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -442,7 +442,7 @@ grpc::Status FlashService::CancelMPPTask(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -497,7 +497,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
     auto [context, status] = createDBContextForTest();
     if (!status.ok())
     {

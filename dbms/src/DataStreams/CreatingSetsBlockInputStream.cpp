@@ -150,7 +150,7 @@ void CreatingSetsBlockInputStream::createAll()
                 exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Creating all tasks takes {} sec. ",
             watch.elapsedSeconds());

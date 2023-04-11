@@ -499,7 +499,7 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
         }
         else
         {
-            LOG_INFO(exc_log, "refined local tunnel is enabled");
+            LOG_DEBUG(exc_log, "refined local tunnel is enabled");
             String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
             LocalRequestHandler local_request_handler(

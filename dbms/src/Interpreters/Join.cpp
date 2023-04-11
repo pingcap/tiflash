@@ -162,7 +162,7 @@ Join::Join(
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
 
-    LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
+    LOG_DEBUG(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
 void Join::meetError(const String & error_message_)

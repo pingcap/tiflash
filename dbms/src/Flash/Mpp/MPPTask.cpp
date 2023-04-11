@@ -361,7 +361,6 @@ void MPPTask::preprocess()
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
     mpp_task_statistics.recordReadWaitIndex(*dag_context);
-    LOG_INFO(log, "MPPTask preprocess done");
 }
 
 void MPPTask::runImpl()
@@ -386,8 +385,9 @@ void MPPTask::runImpl()
     String err_msg;
     try
     {
-        LOG_INFO(log, "task starts preprocessing");
+        LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
+        LOG_INFO(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
@@ -445,7 +445,7 @@ void MPPTask::runImpl()
     if (err_msg.empty())
     {
         if (switchStatus(RUNNING, FINISHED))
-            LOG_INFO(log, "finish task");
+            LOG_DEBUG(log, "finish task");
         else
             LOG_WARNING(log, "finish task which is in {} state", magic_enum::enum_name(status.load()));
         if (status == FINISHED)
