@@ -39,7 +39,7 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr, bool enable_local_tunnel)
+BlockInputStreamPtr constructExchangeReceiverStream(DAGContext & dag_context, Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr, bool enable_local_tunnel)
 {
     for (auto & field : root_task_schema)
     {
@@ -73,12 +73,14 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
             /*executor_id=*/"",
             /*fine_grained_shuffle_stream_count=*/0,
             context.getSettings().local_tunnel_version);
+
+
     BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(
         exchange_receiver,
         /*req_id=*/"",
         /*executor_id=*/"",
         /*stream_id*/ 0,
-        *context.getDAGContext());
+        dag_context);
     return ret;
 }
 
@@ -98,7 +100,9 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
         tm.AppendToString(tm_string);
     }
-    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
+    auto dag_context = std::make_unique<DAGContext>(1024);
+    // todo
+    return constructExchangeReceiverStream(*dag_context, context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
 }
 
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
@@ -115,13 +119,13 @@ void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tip
     tm.AppendToString(tm_string);
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiverWithMultipleContext(Context & context, const DAGProperties & properties, Int64 task_id, DAGSchema & root_task_schema, String & addr, String & root_addr)
+BlockInputStreamPtr prepareRootExchangeReceiverWithMultipleContext(DAGContext & dag_context, Context & context, const DAGProperties & properties, Int64 task_id, DAGSchema & root_task_schema, String & addr, String & root_addr)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
 
     prepareExchangeReceiverMetaWithMultipleContext(tipb_exchange_receiver, properties, task_id, addr);
 
-    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr, true);
+    return constructExchangeReceiverStream(dag_context, context, tipb_exchange_receiver, properties, root_task_schema, root_addr, true);
 }
 
 void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
@@ -266,7 +270,7 @@ BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, co
     return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
 }
 
-std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(DAGContext & dag_context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
@@ -288,7 +292,7 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
     {
         auto id = root_task_ids[i];
         auto partition_id = root_task_partition_ids[i];
-        res.emplace_back(prepareRootExchangeReceiverWithMultipleContext(TiFlashTestEnv::getGlobalContext(TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
+        res.emplace_back(prepareRootExchangeReceiverWithMultipleContext(dag_context, TiFlashTestEnv::getGlobalContext(TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
     }
     return res;
 }
