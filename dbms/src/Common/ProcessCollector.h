@@ -22,6 +22,13 @@
 namespace DB
 {
 
+// Why not use async_metrics for cpu/mem metric:
+// 1. ProcessCollector will collect cpu/mem metric when ProcessCollector::Collect() is called, so it's synchronous.
+//    Just like the original tiflash-proxy logic.
+// 2. Current implentation of async_metrics interval is 15s, it's too large. And this interval also affect pushgateway interval.
+//    So better not to mix cpu/mem metrics with async_metrics.
+// The difference between ProcessCollector and prometheus::Registry:
+// 1. ProcessCollector will **update** Gauge then collect. prometheus::Registry only collect Gauge.
 class ProcessCollector : public prometheus::Collectable
 {
 public:
