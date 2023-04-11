@@ -1,12 +1,33 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
   "name": "TiFlash",
-  "dockerComposeFile": [
-    "docker-compose.yml",
-    "docker-compose.vscode.yml"
+  "build": {
+    "dockerfile": "Dockerfile",
+  },
+  // "init": true,
+  "capAdd": [
+    "SYS_PTRACE",
   ],
-  "service": "shell",
-  "workspaceFolder": "/workspace",
+  "securityOpt": [
+    "seccomp=unconfined",
+  ],
+  "mounts": [
+    // Cache Cargo downloaded deps
+    "source=tiflash-cargo-registry,target=/home/dev/.cargo/registry,type=volume",
+    "source=tiflash-cargo-git,target=/home/dev/.cargo/git,type=volume",
+    // Cache Rust toolchain
+    // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
+    "source=tiflash-rustup,target=/home/dev/.rustup,type=volume",
+    // Cache ccache results
+    "source=tiflash-ccache,target=/home/dev/.cache/ccache,type=volume",
+    // Persist GitHub CLI Config locally
+    "source=${localWorkspaceFolder}/.devcontainer/.local_persist/gh,target=/home/dev/.config/gh,type=bind",
+    // VSCode Extensions
+    "source=vscode-extensions,target=/home/dev/.vscode-server/extensions,type=volume",
+  ],
+  "remoteUser": "dev",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/dev/workspace,type=bind",
+  "workspaceFolder": "/home/dev/workspace",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -37,7 +58,7 @@
         "cmake.generator": "Ninja",
         "cmake.configureOnOpen": true,
         "testMate.cpp.test.executables": "cmake-build-*/**/gtests_*",
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh",
       }
     }
   }
