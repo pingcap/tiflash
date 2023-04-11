@@ -287,13 +287,13 @@ class EventTestRunner : public ::testing::Test
 public:
     void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
-        Events without_input_events;
+        Events sources;
         for (const auto & event : events)
         {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
+            if (event->prepareForSource())
+                sources.push_back(event);
         }
-        for (const auto & event : without_input_events)
+        for (const auto & event : sources)
         {
             if (thread_manager)
                 thread_manager->schedule(false, "event", [event]() { event->schedule(); });
@@ -320,7 +320,7 @@ protected:
 
     void SetUp() override
     {
-        TaskSchedulerConfig config{thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
@@ -436,8 +436,8 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            assert(on_err_event->withoutInput());
-            on_err_event->schedule();
+            if (on_err_event->prepareForSource())
+                on_err_event->schedule();
         }
         wait(exec_status);
         auto err_msg = exec_status.getExceptionMsg();
@@ -458,7 +458,8 @@ try
     PipelineExecutorStatus exec_status;
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
-    event->schedule();
+    if (event->prepareForSource())
+        event->schedule();
     wait(exec_status);
     assertNoErr(exec_status);
 }
@@ -499,7 +500,8 @@ try
     {
         PipelineExecutorStatus exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
-        event->schedule();
+        if (event->prepareForSource())
+            event->schedule();
         wait(exec_status);
         assertNoErr(exec_status);
     }
