@@ -46,8 +46,10 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 +---------------+------------+------------+
 
 # insert data
+mysql> alter table test.ts set tiflash replica 0;
 mysql> insert into test.ts values (1), (2), (3);
-mysql> alter table test.ts compact;
+mysql> alter table test.ts set tiflash replica 1;
+func> wait_table test ts
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
@@ -64,8 +66,10 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 +---------------+------------+------------+
 
 # delete data
+mysql> alter table test.ts set tiflash replica 0;
 mysql> delete from test.ts where a = 1;
-mysql> alter table test.ts compact;
+mysql> alter table test.ts set tiflash replica 1;
+func> wait_table test ts
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
