@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Client/Connection.h>
-#include <Common/HTMLForm.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromFile.h>
@@ -195,7 +194,7 @@ public:
         , params(params_)
     {}
 
-    void handlePart(const Poco::Net::MessageHeader & header, std::istream & stream)
+    void handlePart(const Poco::Net::MessageHeader & header, std::istream & stream) override
     {
         /// The buffer is initialized here, not in the virtual function initReadBuffer
         read_buffer = std::make_unique<ReadBufferFromIStream>(stream);
