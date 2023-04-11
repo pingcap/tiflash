@@ -45,6 +45,4 @@ using DataStoreS3Pool = IOThreadPool<io_pool_details::DataStoreS3Trait>;
 using S3FileCachePool = IOThreadPool<io_pool_details::S3FileCacheTrait>;
 using RNRemoteReadTaskPool = IOThreadPool<io_pool_details::RemoteReadTaskTrait>;
 using RNPagePreparerPool = IOThreadPool<io_pool_details::RNPreparerTrait>;
-
-
 } // namespace DB

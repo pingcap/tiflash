@@ -12,39 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Dictionaries/DictionarySourceFactory.h>
-
-#include <Core/Block.h>
-#include <Dictionaries/DictionaryStructure.h>
-#include <Dictionaries/FileDictionarySource.h>
-#include <Dictionaries/ClickHouseDictionarySource.h>
-#include <Dictionaries/ExecutableDictionarySource.h>
-#include <Dictionaries/HTTPDictionarySource.h>
-#include <Dictionaries/LibraryDictionarySource.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeDate.h>
-#include <Common/FieldVisitors.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/FieldVisitors.h>
+#include <Common/config.h>
+#include <Core/Block.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Dictionaries/ClickHouseDictionarySource.h>
+#include <Dictionaries/DictionarySourceFactory.h>
+#include <Dictionaries/DictionaryStructure.h>
+#include <Dictionaries/ExecutableDictionarySource.h>
+#include <Dictionaries/FileDictionarySource.h>
+#include <Dictionaries/LibraryDictionarySource.h>
 #include <IO/HTTPCommon.h>
+#include <Poco/Logger.h>
+#include <common/logger_useful.h>
+
 #include <memory>
 #include <mutex>
-
-#include <Common/config.h>
-
-#include <Poco/Logger.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_ELEMENT_IN_CONFIG;
-    extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
-    extern const int LOGICAL_ERROR;
-    extern const int SUPPORT_IS_DISABLED;
-}
+extern const int UNKNOWN_ELEMENT_IN_CONFIG;
+extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
+extern const int LOGICAL_ERROR;
+extern const int SUPPORT_IS_DISABLED;
+} // namespace ErrorCodes
 
 namespace
 {
@@ -55,7 +51,9 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
 
     if (dict_struct.id)
         block.insert(ColumnWithTypeAndName{
-            ColumnUInt64::create(1, 0), std::make_shared<DataTypeUInt64>(), dict_struct.id->name});
+            ColumnUInt64::create(1, 0),
+            std::make_shared<DataTypeUInt64>(),
+            dict_struct.id->name});
 
     if (dict_struct.key)
     {
@@ -69,9 +67,11 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
     }
 
     if (dict_struct.range_min)
-        for (const auto & attribute : { dict_struct.range_min, dict_struct.range_max })
+        for (const auto & attribute : {dict_struct.range_min, dict_struct.range_max})
             block.insert(ColumnWithTypeAndName{
-                ColumnUInt16::create(1, 0), std::make_shared<DataTypeDate>(), attribute->name});
+                ColumnUInt16::create(1, 0),
+                std::make_shared<DataTypeDate>(),
+                attribute->name});
 
     for (const auto & attribute : dict_struct.attributes)
     {
@@ -84,7 +84,7 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
     return block;
 }
 
-}
+} // namespace
 
 
 DictionarySourceFactory::DictionarySourceFactory()
@@ -97,20 +97,22 @@ void DictionarySourceFactory::registerSource(const std::string & source_type, Cr
     LOG_DEBUG(log, "Register dictionary source type `" + source_type + "`");
     if (!registered_sources.emplace(source_type, std::move(create_source)).second)
         throw Exception("DictionarySourceFactory: the source name '" + source_type + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
 }
 
 DictionarySourcePtr DictionarySourceFactory::create(
-    const std::string & name, const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix,
-    const DictionaryStructure & dict_struct, Context & context) const
+    const std::string & name,
+    const Poco::Util::AbstractConfiguration & config,
+    const std::string & config_prefix,
+    const DictionaryStructure & dict_struct,
+    Context & context) const
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix, keys);
     if (keys.size() != 1)
         throw Exception{
-            name +": element dictionary.source should have exactly one child element",
-            ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG
-        };
+            name + ": element dictionary.source should have exactly one child element",
+            ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG};
 
     auto sample_block = createSampleBlock(dict_struct);
 
@@ -129,8 +131,7 @@ DictionarySourcePtr DictionarySourceFactory::create(
     }
     else if ("clickhouse" == source_type)
     {
-        return std::make_unique<ClickHouseDictionarySource>(dict_struct, config, config_prefix + ".clickhouse",
-            sample_block, context);
+        return std::make_unique<ClickHouseDictionarySource>(dict_struct, config, config_prefix + ".clickhouse", sample_block, context);
     }
     else if ("executable" == source_type)
     {
@@ -140,21 +141,6 @@ DictionarySourcePtr DictionarySourceFactory::create(
                 ErrorCodes::LOGICAL_ERROR};
 
         return std::make_unique<ExecutableDictionarySource>(dict_struct, config, config_prefix + ".executable", sample_block, context);
-    }
-    else if ("http" == source_type)
-    {
-
-        if (dict_struct.has_expressions)
-            throw Exception{
-                "Dictionary source of type `http` does not support attribute expressions",
-                ErrorCodes::LOGICAL_ERROR};
-
-#if Poco_NetSSL_FOUND
-        // Used for https queries
-        std::call_once(ssl_init_once, SSLInit);
-#endif
-
-        return std::make_unique<HTTPDictionarySource>(dict_struct, config, config_prefix + ".http", sample_block, context);
     }
     else if ("library" == source_type)
     {
@@ -175,4 +161,4 @@ DictionarySourcePtr DictionarySourceFactory::create(
         ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG};
 }
 
-}
+} // namespace DB

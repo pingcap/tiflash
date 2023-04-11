@@ -51,6 +51,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_owner_mgr_state[];
+extern const char force_fail_to_create_etcd_session[];
 } // namespace FailPoints
 
 static constexpr std::string_view S3GCOwnerKey = "/tiflash/s3gc/owner";
@@ -455,6 +456,13 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
 
     keep_alive_ctx = std::make_unique<grpc::ClientContext>();
     auto session = client->createSession(keep_alive_ctx.get(), leader_ttl);
+    fiu_do_on(FailPoints::force_fail_to_create_etcd_session, { session = nullptr; });
+    if (!session)
+    {
+        // create failed, skip adding keep alive tasks
+        return {};
+    }
+
     keep_alive_handle = bkg_pool.addTask(
         [this, s = session] {
             if (!s->keepAliveOne())

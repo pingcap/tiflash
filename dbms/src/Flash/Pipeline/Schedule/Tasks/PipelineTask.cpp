@@ -48,6 +48,10 @@ void PipelineTask::finalizeImpl()
     {                                     \
         return ExecTaskStatus::CANCELLED; \
     }                                     \
+    case OperatorStatus::IO:              \
+    {                                     \
+        return ExecTaskStatus::IO;        \
+    }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \
         return ExecTaskStatus::WAITING;   \
@@ -66,6 +70,25 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
     // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
     case OperatorStatus::NEED_INPUT:
+        return ExecTaskStatus::RUNNING;
+    default:
+        UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");
+    }
+}
+
+ExecTaskStatus PipelineTask::doExecuteIOImpl()
+{
+    assert(pipeline_exec);
+    auto op_status = pipeline_exec->executeIO();
+    switch (op_status)
+    {
+        HANDLE_NOT_RUNNING_STATUS
+    // After `pipeline_exec->executeIO`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
+    case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:
         UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");
