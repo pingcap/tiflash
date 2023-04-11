@@ -47,9 +47,9 @@ struct SchemaBuilder
         , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
     {}
 
-    void applyDiff(const SchemaDiff & diff);
+    // void applyDiff(const SchemaDiff & diff);
 
-    void syncAllSchema();
+    // void syncAllSchema();
 
     void dropAllSchema();
 

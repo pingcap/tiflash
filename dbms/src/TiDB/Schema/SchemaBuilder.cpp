@@ -441,6 +441,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(const DBInfoPtr &
     }
 }
 
+/*
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 {
@@ -577,6 +578,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applyCreateTable(db_info, new_table_id);
     }
 }
+*/
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id)
@@ -1323,7 +1325,7 @@ void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, Table
     applyAlterLogicalTable(db_info, table_info, storage);
     LOG_DEBUG(log, "Table {} synced during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
-
+/*
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
@@ -1434,7 +1436,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
     LOG_INFO(log, "Loaded all schemas.");
 }
-
+*/
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 {

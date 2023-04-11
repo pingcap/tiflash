@@ -83,7 +83,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         , log(Logger::get())
     {}
 
-    bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
+    // bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
+    bool isTooOldSchema(Int64 cur_ver) { return cur_ver == 0;}
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
@@ -180,10 +181,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
             Int64 version_after_load_diff = 0;
-            if (version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); version_after_load_diff == -1)
+            version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); 
+            while (version_after_load_diff == -1)
             {
-                GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-                version_after_load_diff = loadAllSchema(getter, version, context);
+                version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); 
+                LOG_ERROR(log, "tryLoadSchemaDiffs Failed");
             }
             cur_versions[keyspace_id] = version_after_load_diff;
         }
@@ -367,10 +369,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if error happens, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
-        if (isTooOldSchema(cur_version, latest_version))
-        {
-            return -1;
-        }
+        // if (isTooOldSchema(cur_version))
+        // {
+        //     return -1;
+        // }
 
         LOG_DEBUG(ks_log, "Try load schema diffs.");
 
@@ -491,16 +493,16 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return used_version;
     }
 
-    Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
-    {
-        if (!getter.checkSchemaDiffExists(version))
-        {
-            --version;
-        }
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
-        builder.syncAllSchema();
-        return version;
-    }
+    // Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
+    // {
+    //     if (!getter.checkSchemaDiffExists(version))
+    //     {
+    //         --version;
+    //     }
+    //     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+    //     builder.syncAllSchema();
+    //     return version;
+    // }
 
     void dropAllSchema(Getter & getter, Context & context)
     {
