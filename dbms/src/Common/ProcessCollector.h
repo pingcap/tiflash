@@ -19,8 +19,6 @@
 #include <prometheus/metric_family.h>
 #include <prometheus/registry.h>
 
-#include <mutex>
-
 namespace DB
 {
 
