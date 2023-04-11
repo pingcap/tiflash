@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -51,6 +52,8 @@ struct ControlOptions
     UInt64 page_id = UINT64_MAX;
     UInt32 blob_id = UINT32_MAX;
     UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
+    StorageType storage_type = StorageType::Unknown; // only useful for universal page storage
+    UInt32 keyspace_id = NullspaceID; // only useful for universal page storage
     bool enable_fo_check = true;
     bool is_imitative = true;
     String config_file_path;
@@ -75,6 +78,13 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
 )") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
+        ("storage_type,S", value<int>()->default_value(0), R"(Storage Type(Only useful for UniversalPageStorage):
+ 1 is Log
+ 2 is Data
+ 3 is Meta
+ 4 is KVStore
+)") //
+        ("keyspace_id,K", value<UInt32>()->default_value(NullspaceID), "Query a page under a specific keyspace.") //
         ("namespace_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
         ("page_id", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
         ("blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
@@ -108,6 +118,8 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<UInt32>();
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
+    auto storage_type_int = options["storage_type"].as<int>();
+    opt.keyspace_id = options["keyspace_id"].as<UInt32>();
     opt.namespace_id = options["namespace_id"].as<UInt64>();
     opt.is_imitative = options["imitative"].as<bool>();
     if (opt.is_imitative && options.count("config_file_path") != 0)
@@ -134,6 +146,17 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     else
     {
         opt.mode = mode.value();
+    }
+
+    if (auto storage_type = magic_enum::enum_cast<StorageType>(storage_type_int); !storage_type)
+    {
+        std::cerr << "Invalid storage type: " << storage_type_int << std::endl;
+        std::cerr << desc << std::endl;
+        exit(0);
+    }
+    else
+    {
+        opt.storage_type = storage_type.value();
     }
 
     return opt;
@@ -249,7 +272,7 @@ private:
             }
             case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
             {
-                std::cout << getDirectoryInfo(mvcc_table_directory, opts.namespace_id, opts.page_id) << std::endl;
+                std::cout << getDirectoryInfo(mvcc_table_directory, opts.storage_type, opts.keyspace_id, opts.namespace_id, opts.page_id) << std::endl;
                 break;
             }
             case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
@@ -261,7 +284,7 @@ private:
             {
                 if (opts.page_id != UINT64_MAX)
                 {
-                    std::cout << checkSinglePage(mvcc_table_directory, blob_store, opts.namespace_id, opts.page_id) << std::endl;
+                    std::cout << checkSinglePage(mvcc_table_directory, blob_store, opts.storage_type, opts.keyspace_id, opts.namespace_id, opts.page_id) << std::endl;
                 }
                 else
                 {
@@ -286,7 +309,6 @@ private:
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
             auto ps = UniversalPageStorage::create(String(NAME), delegator, config, provider);
-            std::cout << "Universal Page Storage restore" << std::endl;
             ps->restore();
             auto & mvcc_table_directory = ps->page_directory->mvcc_table_directory;
             auto & blobstore = ps->blob_store;
@@ -346,7 +368,7 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, StorageType storage_type, KeyspaceID keyspace_id, UInt64 ns_id, UInt64 page_id)
     {
         auto page_info = [](const auto & page_internal_id_, const auto & versioned_entries) {
             FmtBuffer page_str;
@@ -404,7 +426,14 @@ private:
                 }
                 else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
-                    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                    RUNTIME_CHECK_MSG(storage_type == StorageType::Log || storage_type == StorageType::Data || storage_type == StorageType::Meta || storage_type == StorageType::KVStore, "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
+                    auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
+                    auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
+                    if (full_page_id == internal_id)
+                    {
+                        directory_info.append(page_info(internal_id, versioned_entries));
+                        return directory_info.toString();
+                    }
                 }
                 continue;
             }
@@ -425,7 +454,6 @@ private:
         FmtBuffer dir_summary_info;
 
         dir_summary_info.append("  Directory summary info: \n");
-        std::cout << "begin to get summary info" << std::endl;
 
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
@@ -466,30 +494,34 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, StorageType storage_type, KeyspaceID keyspace_id, UInt64 ns_id, UInt64 page_id)
     {
-        if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
-        {
-            const auto & page_internal_id = buildV3Id(ns_id, page_id);
-            const auto & it = mvcc_table_directory.find(page_internal_id);
+        auto check = [&](auto & full_page_id) {
+            const auto & it = mvcc_table_directory.find(full_page_id);
             if (it == mvcc_table_directory.end())
             {
-                return fmt::format("Can't find {}", page_internal_id);
+                return fmt::format("Can't find {}", full_page_id);
             }
 
             FmtBuffer error_msg;
             size_t error_count = 0;
+            size_t ignore_count = 0;
             for (const auto & [version, entry_or_del] : it->second->entries)
             {
                 if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
                 {
-                    (void)blob_store;
+                    const PageEntryV3 & entry = entry_or_del.entry;
+                    if (entry.checkpoint_info.has_value() && entry.checkpoint_info.is_local_data_reclaimed)
+                    {
+                        error_msg.fmtAppend("  page {} version {} local data is reclaimed\n", full_page_id, version);
+                        ++ignore_count;
+                        continue;
+                    }
                     try
                     {
-                        PageIDAndEntryV3 to_read_entry;
-                        const PageEntryV3 & entry = entry_or_del.entry;
-                        PageIDAndEntriesV3 to_read;
-                        to_read_entry.first = page_internal_id;
+                        PageIdAndEntry to_read_entry;
+                        PageIdAndEntries to_read;
+                        to_read_entry.first = full_page_id;
                         to_read_entry.second = entry;
 
                         to_read.emplace_back(to_read_entry);
@@ -500,8 +532,8 @@ private:
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
-                            BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
-                            BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(page_internal_id, entry, indices);
+                            typename Trait::BlobStore::FieldReadInfos infos;
+                            typename Trait::BlobStore::FieldReadInfo info(full_page_id, entry, indices);
                             infos.emplace_back(info);
                             blob_store.read(infos);
                         }
@@ -515,18 +547,28 @@ private:
                 }
             }
 
-            if (error_count == 0)
+            if (error_count == 0 && ignore_count == 0)
             {
-                return fmt::format("Checked {} without any error.", page_internal_id);
+                return fmt::format("Checked {} without any error.", full_page_id);
             }
 
-            error_msg.fmtAppend("Check {} meet {} errors!", page_internal_id, error_count);
+            error_msg.fmtAppend("Check {} meet {} errors {} ignores!", full_page_id, error_count, ignore_count);
             return error_msg.toString();
+        };
+
+        if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+        {
+            const auto & page_internal_id = buildV3Id(ns_id, page_id);
+            return check(page_internal_id);
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
-            throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+            RUNTIME_CHECK_MSG(storage_type == StorageType::Log || storage_type == StorageType::Data || storage_type == StorageType::Meta || storage_type == StorageType::KVStore, "Unsupported storage type"); // NOLINT(readability-simplify-boolean-expr)
+            auto prefix = UniversalPageIdFormat::toFullPrefix(keyspace_id, storage_type, ns_id);
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(prefix, page_id);
+            return check(full_page_id);
         }
+        __builtin_unreachable();
     }
 
     static String checkAllDataCrc(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, bool enable_fo_check)
