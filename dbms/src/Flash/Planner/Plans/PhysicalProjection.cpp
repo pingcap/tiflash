@@ -151,8 +151,9 @@ void PhysicalProjection::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
     executeExpression(exec_status, group_builder, executor_profile, project_actions, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)

@@ -117,16 +117,14 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
     Context & context,
     size_t concurrency)
 {
-    auto & dag_context = *context.getDAGContext();
-    auto & executor_profile = dag_context.getPipelineProfilesMap()[executor_id];
-
+    ExecutorProfile executor_profile;
     if (context.mockStorage()->useDeltaMerge())
     {
         auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(source_ops[i]);
+            builder.setSourceOp(std::move(source_ops[i]));
         });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
@@ -135,11 +133,14 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
         group_builder.init(mock_streams.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
-            auto source_op = std::make_shared<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]);
-            builder.setSourceOp(source_op);
+            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(
+                exec_status,
+                log->identifier(),
+                mock_streams[i++]));
         });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)

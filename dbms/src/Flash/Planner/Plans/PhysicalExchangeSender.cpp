@@ -93,7 +93,7 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
 
     if (fine_grained_shuffle.enable())
     {
@@ -120,6 +120,7 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
         builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(exec_status, log->identifier(), std::move(response_writer)));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalExchangeSender::finalize(const Names & parent_require)

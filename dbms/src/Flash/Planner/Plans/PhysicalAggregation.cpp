@@ -171,10 +171,8 @@ void PhysicalAggregation::buildPipelineExecGroup(
     // For non fine grained shuffle, PhysicalAggregation will be broken into AggregateBuild and AggregateConvergent.
     // So only fine grained shuffle is considered here.
     assert(fine_grained_shuffle.enable());
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
-
+    ExecutorProfile executor_profile;
     executeExpression(exec_status, group_builder, executor_profile, before_agg_actions, log);
-
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
@@ -200,6 +198,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
     });
 
     executeExpression(exec_status, group_builder, executor_profile, expr_after_agg, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)

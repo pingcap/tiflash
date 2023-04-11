@@ -32,8 +32,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
     // So only non fine grained shuffle is considered here.
     assert(!fine_grained_shuffle.enable());
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
-
+    ExecutorProfile executor_profile;
     executeExpression(exec_status, group_builder, executor_profile, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
@@ -63,5 +62,6 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
         builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 } // namespace DB

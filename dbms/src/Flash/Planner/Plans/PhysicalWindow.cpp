@@ -97,7 +97,7 @@ void PhysicalWindow::buildPipelineExecGroup(
 {
     // TODO support non fine grained shuffle.
     assert(fine_grained_shuffle.enable());
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
 
     executeExpression(exec_status, group_builder, executor_profile, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
@@ -108,6 +108,7 @@ void PhysicalWindow::buildPipelineExecGroup(
     });
 
     executeExpression(exec_status, group_builder, executor_profile, window_description.after_window, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

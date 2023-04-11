@@ -66,10 +66,6 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
 
-class SourceOp;
-using SourceOpPtr = std::shared_ptr<SourceOp>;
-using SourceOps = std::vector<SourceOpPtr>;
-
 // a group of profile for same operator
 using OperatorProfiles = std::vector<OperatorProfilePtr>;
 
@@ -158,7 +154,9 @@ public:
     std::unique_lock<std::recursive_mutex> getLock() const;
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
-    std::unordered_map<String, ExecutorProfile> & getPipelineProfilesMap();
+
+    void addPipelineProfile(const String & executor_id, ExecutorProfile & executor_profile);
+    const std::unordered_map<String, ExecutorProfile> & getPipelineProfilesMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 

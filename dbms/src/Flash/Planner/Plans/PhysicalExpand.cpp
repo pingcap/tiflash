@@ -16,6 +16,7 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -82,8 +83,9 @@ void PhysicalExpand::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
     executeExpression(exec_status, group_builder, executor_profile, expand_actions, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

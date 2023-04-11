@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -64,13 +65,13 @@ void PhysicalFilter::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
-
+    ExecutorProfile executor_profile;
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalFilter::finalize(const Names & parent_require)

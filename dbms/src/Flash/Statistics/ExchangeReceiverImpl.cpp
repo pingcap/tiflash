@@ -60,31 +60,6 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
     }
 }
 
-// // ywq todo fine
-// void ExchangeReceiverStatistics::collectExtraRuntimeDetailForPipeline()
-// {
-//     // ywq todo
-//     const auto & io_sources_map = dag_context.getIOSourcesMap();
-//     auto it = io_sources_map.find(executor_id);
-//     if (it != io_sources_map.end())
-//     {
-//         for (const auto & io_source : it->second)
-//         {
-//             /// SourceOp of ExchangeReceiver should be ExchangeReceiverSourceOp
-//             if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(io_source.get()); exchange_receiver_source_op_ptr)
-//             {
-//                 const auto & connection_profile_infos = exchange_receiver_source_op_ptr->getConnectionProfileInfos();
-//                 RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
-//                 for (size_t i = 0; i < partition_num; ++i)
-//                 {
-//                     exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-//                     exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
-//                 }
-//             }
-//         }
-//     }
-// }
-
 ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
     : ExchangeReceiverStatisticsBase(executor, dag_context_)
 {

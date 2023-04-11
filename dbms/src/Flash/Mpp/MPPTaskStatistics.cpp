@@ -155,27 +155,4 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
     for (const auto & statistic : executor_statistics_collector.getTableScanProfiles())
         local_input_bytes += statistic->getBaseRuntimeStatistics().bytes;
 }
-
-// /// TODO: Fully support remote input bytes for pipeline model
-// void MPPTaskStatistics::recordInputBytesForPipeline(DAGContext & dag_context)
-// {
-//     for (const auto & map_entry : dag_context.getIOSourcesMap())
-//     {
-//         for (const auto & io_source : map_entry.second)
-//         {
-//             if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
-//             {
-//                 const auto & profile = source_ptr->getProfile();
-//                 if (dynamic_cast<ExchangeReceiverSourceOp *>(source_ptr))
-//                 {
-//                     remote_input_bytes += profile->bytes;
-//                 }
-//                 else
-//                 {
-//                     local_input_bytes += profile->bytes;
-//                 }
-//             }
-//         }
-//     }
-// }
 } // namespace DB

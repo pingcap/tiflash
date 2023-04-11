@@ -66,9 +66,10 @@ void PhysicalWindowSort::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
     assert(fine_grained_shuffle.enable());
     executeLocalSort(exec_status, group_builder, executor_profile, order_descr, {}, context, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalWindowSort::finalize(const Names & parent_require)

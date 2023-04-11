@@ -98,7 +98,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     size_t concurrency)
 {
     auto & dag_context = *context.getDAGContext();
-    auto & executor_profile = dag_context.getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
 
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
@@ -106,16 +106,16 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     group_builder.init(concurrency);
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
-        auto source_op = std::make_shared<ExchangeReceiverSourceOp>(
+        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
             exec_status,
             log->identifier(),
             mpp_exchange_receiver,
             dag_context,
             executor_id,
-            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0);
-        builder.setSourceOp(source_op);
+            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

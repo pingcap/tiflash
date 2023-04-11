@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
+#include <Interpreters/Context.h>
 #include <Operators/AggregateConvergentSourceOp.h>
 #include <Operators/NullSourceOp.h>
 
@@ -27,7 +29,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
     // So only non fine grained shuffle is considered here.
     assert(!fine_grained_shuffle.enable());
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
     aggregate_context->initConvergent();
 
     if (unlikely(aggregate_context->useNullSource()))
@@ -56,5 +58,6 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     }
 
     executeExpression(exec_status, group_builder, executor_profile, expr_after_agg, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 } // namespace DB

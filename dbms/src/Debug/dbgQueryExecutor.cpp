@@ -101,7 +101,6 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         tm.AppendToString(tm_string);
     }
     auto dag_context = std::make_unique<DAGContext>(1024);
-    // todo
     return constructExchangeReceiverStream(*dag_context, context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
 }
 

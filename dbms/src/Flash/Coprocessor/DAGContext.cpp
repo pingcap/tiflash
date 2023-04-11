@@ -184,7 +184,12 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
-std::unordered_map<String, ExecutorProfile> & DAGContext::getPipelineProfilesMap()
+void DAGContext::addPipelineProfile(const String & executor_id, ExecutorProfile & executor_profile)
+{
+    pipeline_profiles_map[executor_id] = executor_profile;
+}
+
+const std::unordered_map<String, ExecutorProfile> & DAGContext::getPipelineProfilesMap()
 {
     auto lock = getLock();
     return pipeline_profiles_map;
@@ -234,7 +239,6 @@ void DAGContext::addConnectionProfile(const String & executor_id, ConnectionProf
 {
     auto lock = getLock();
     auto & connection_profile_for_executor = connection_profiles_for_executor_map[executor_id];
-    std::cout << "ywq test add connection profile" << std::endl;
     connection_profile_for_executor.emplace_back(connection_profiles);
 }
 

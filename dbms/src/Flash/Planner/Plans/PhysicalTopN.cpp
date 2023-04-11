@@ -74,10 +74,11 @@ void PhysicalTopN::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
     executeExpression(exec_status, group_builder, executor_profile, before_sort_actions, log);
 
     executeLocalSort(exec_status, group_builder, executor_profile, order_descr, limit, context, log);
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

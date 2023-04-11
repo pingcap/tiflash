@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
+#include <Interpreters/Context.h>
 #include <Operators/GetResultSinkOp.h>
 
 namespace DB
@@ -38,12 +40,13 @@ void PhysicalGetResultSink::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    ExecutorProfile executor_profile;
 
     auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), this_shared_ptr));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
+    context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);
 }
 } // namespace DB

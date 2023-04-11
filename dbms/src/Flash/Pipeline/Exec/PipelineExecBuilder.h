@@ -14,10 +14,8 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
