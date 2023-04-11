@@ -20,12 +20,15 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <boost/program_options.hpp>
 #include <magic_enum.hpp>
+
+#include "Common/Exception.h"
 
 namespace DB::PS::V3
 {
@@ -136,10 +139,44 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     return opt;
 }
 
+template <typename Trait>
+class PageStorageControlV3;
+
+namespace u128
+{
+struct PageStorageControlV3Trait
+{
+    using PageId = PageIdV3Internal;
+    using PageIdTrait = PageIdTrait;
+    using PageDirectory = PageDirectoryType;
+    using BlobStore = BlobStoreType;
+    using PageDirectoryFactory = PageDirectoryFactory;
+};
+using PageStorageControlV3 = DB::PS::V3::PageStorageControlV3<PageStorageControlV3Trait>;
+} // namespace u128
+namespace universal
+{
+struct PageStorageControlV3Trait
+{
+    using PageId = UniversalPageId;
+    using PageIdTrait = PageIdTrait;
+    using PageDirectory = PageDirectoryType;
+    using BlobStore = BlobStoreType;
+    using PageDirectoryFactory = PageDirectoryFactory;
+};
+using PageStorageControlV3 = DB::PS::V3::PageStorageControlV3<PageStorageControlV3Trait>;
+} // namespace universal
+
+template <typename Trait>
 class PageStorageControlV3
 {
 public:
-    explicit PageStorageControlV3(const ControlOptions & options_)
+    using PageId = typename Trait::PageId;
+    using PageIdAndEntry = std::pair<PageId, PageEntryV3>;
+    using PageIdAndEntries = std::vector<PageIdAndEntry>;
+
+public:
+    explicit PageStorageControlV3T(const ControlOptions & options_)
         : options(options_)
     {
     }
@@ -195,54 +232,71 @@ private:
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
             // Only restore the PageDirectory
-            PageDirectoryFactory<u128::FactoryTrait> factory;
+            typename Trait::PageDirectoryFactory factory;
             factory.dump_entries = true;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
             return 0;
         }
 
         // Other display mode need to restore ps instance
-        PageStorageImpl ps(String(NAME), delegator, config, provider);
-        ps.restore();
-        PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
+        auto display = [](auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
+            switch (opts.mode)
+            {
+            case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+            {
+                std::cout << getSummaryInfo(mvcc_table_directory, blob_store) << std::endl;
+                break;
+            }
+            case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
+            {
+                std::cout << getDirectoryInfo(mvcc_table_directory, opts.namespace_id, opts.page_id) << std::endl;
+                break;
+            }
+            case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
+            {
+                std::cout << getBlobsInfo(blob_store, opts.blob_id) << std::endl;
+                break;
+            }
+            case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
+            {
+                if (opts.page_id != UINT64_MAX)
+                {
+                    std::cout << checkSinglePage(mvcc_table_directory, blob_store, opts.namespace_id, opts.page_id) << std::endl;
+                }
+                else
+                {
+                    std::cout << checkAllDataCrc(mvcc_table_directory, blob_store, opts.enable_fo_check) << std::endl;
+                }
+                break;
+            }
+            default:
+                std::cout << "Invalid display mode." << std::endl;
+                break;
+            }
+        };
 
-        switch (options.mode)
+        if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
         {
-        case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+            PageStorageImpl ps(String(NAME), delegator, config, provider);
+            ps.restore();
+            auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
+            auto & blobstore = ps.blob_store;
+            display(mvcc_table_directory, blobstore, options);
+        }
+        else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
-            std::cout << getSummaryInfo(mvcc_table_directory, ps.blob_store) << std::endl;
-            break;
+            auto ps = UniversalPageStorage::create(String(NAME), delegator, config, provider);
+            std::cout << "Universal Page Storage restore" << std::endl;
+            ps->restore();
+            auto & mvcc_table_directory = ps->page_directory->mvcc_table_directory;
+            auto & blobstore = ps->blob_store;
+            display(mvcc_table_directory, *blobstore, options);
         }
-        case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
-        {
-            std::cout << getDirectoryInfo(mvcc_table_directory, options.namespace_id, options.page_id) << std::endl;
-            break;
-        }
-        case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
-        {
-            std::cout << getBlobsInfo(ps.blob_store, options.blob_id) << std::endl;
-            break;
-        }
-        case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
-        {
-            if (options.page_id != UINT64_MAX)
-            {
-                std::cout << checkSinglePage(mvcc_table_directory, ps.blob_store, options.namespace_id, options.page_id) << std::endl;
-            }
-            else
-            {
-                std::cout << checkAllDataCrc(mvcc_table_directory, ps.blob_store, options.enable_fo_check) << std::endl;
-            }
-            break;
-        }
-        default:
-            std::cout << "Invalid display mode." << std::endl;
-            break;
-        }
+
         return 0;
     }
 
-    static String getBlobsInfo(BlobStore<u128::BlobStoreTrait> & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(typename Trait::BlobStore & blob_store, UInt32 blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -292,9 +346,9 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        auto page_info = [](UInt128 page_internal_id_, const u128::VersionedPageEntriesPtr & versioned_entries) {
+        auto page_info = [](const auto & page_internal_id_, const auto & versioned_entries) {
             FmtBuffer page_str;
             page_str.fmtAppend("    page id {}\n", page_internal_id_);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
@@ -340,10 +394,17 @@ private:
         {
             if (page_id != UINT64_MAX)
             {
-                if (internal_id.low == page_id && internal_id.high == ns_id)
+                if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
                 {
-                    directory_info.append(page_info(internal_id, versioned_entries));
-                    return directory_info.toString();
+                    if (internal_id.low == page_id && internal_id.high == ns_id)
+                    {
+                        directory_info.append(page_info(internal_id, versioned_entries));
+                        return directory_info.toString();
+                    }
+                }
+                else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+                {
+                    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
                 }
                 continue;
             }
@@ -357,13 +418,14 @@ private:
         return directory_info.toString();
     }
 
-    static String getSummaryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store)
+    static String getSummaryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store)
     {
         UInt64 longest_version_chaim = 0;
         UInt64 shortest_version_chaim = UINT64_MAX;
         FmtBuffer dir_summary_info;
 
         dir_summary_info.append("  Directory summary info: \n");
+        std::cout << "begin to get summary info" << std::endl;
 
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
@@ -404,70 +466,77 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
     {
-        const auto & page_internal_id = buildV3Id(ns_id, page_id);
-        const auto & it = mvcc_table_directory.find(page_internal_id);
-        if (it == mvcc_table_directory.end())
+        if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
         {
-            return fmt::format("Can't find {}", page_internal_id);
-        }
-
-        FmtBuffer error_msg;
-        size_t error_count = 0;
-        for (const auto & [version, entry_or_del] : it->second->entries)
-        {
-            if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
+            const auto & page_internal_id = buildV3Id(ns_id, page_id);
+            const auto & it = mvcc_table_directory.find(page_internal_id);
+            if (it == mvcc_table_directory.end())
             {
-                (void)blob_store;
-                try
+                return fmt::format("Can't find {}", page_internal_id);
+            }
+
+            FmtBuffer error_msg;
+            size_t error_count = 0;
+            for (const auto & [version, entry_or_del] : it->second->entries)
+            {
+                if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
                 {
-                    PageIDAndEntryV3 to_read_entry;
-                    const PageEntryV3 & entry = entry_or_del.entry;
-                    PageIDAndEntriesV3 to_read;
-                    to_read_entry.first = page_internal_id;
-                    to_read_entry.second = entry;
-
-                    to_read.emplace_back(to_read_entry);
-                    blob_store.read(to_read);
-
-                    if (!entry.field_offsets.empty())
+                    (void)blob_store;
+                    try
                     {
-                        DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
-                        std::iota(std::begin(indices), std::end(indices), 0);
+                        PageIDAndEntryV3 to_read_entry;
+                        const PageEntryV3 & entry = entry_or_del.entry;
+                        PageIDAndEntriesV3 to_read;
+                        to_read_entry.first = page_internal_id;
+                        to_read_entry.second = entry;
 
-                        BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
-                        BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(page_internal_id, entry, indices);
-                        infos.emplace_back(info);
-                        blob_store.read(infos);
+                        to_read.emplace_back(to_read_entry);
+                        blob_store.read(to_read);
+
+                        if (!entry.field_offsets.empty())
+                        {
+                            DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
+                            std::iota(std::begin(indices), std::end(indices), 0);
+
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(page_internal_id, entry, indices);
+                            infos.emplace_back(info);
+                            blob_store.read(infos);
+                        }
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        error_count++;
+                        error_msg.append(e.displayText());
+                        error_msg.append("\n");
                     }
                 }
-                catch (DB::Exception & e)
-                {
-                    error_count++;
-                    error_msg.append(e.displayText());
-                    error_msg.append("\n");
-                }
             }
-        }
 
-        if (error_count == 0)
+            if (error_count == 0)
+            {
+                return fmt::format("Checked {} without any error.", page_internal_id);
+            }
+
+            error_msg.fmtAppend("Check {} meet {} errors!", page_internal_id, error_count);
+            return error_msg.toString();
+        }
+        else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
-            return fmt::format("Checked {} without any error.", page_internal_id);
+            throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
         }
-
-        error_msg.fmtAppend("Check {} meet {} errors!", page_internal_id, error_count);
-        return error_msg.toString();
     }
 
-    static String checkAllDataCrc(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
         size_t index = 0;
         std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
 
-        std::list<std::pair<UInt128, PageVersion>> error_versioned_pages;
+        std::list<std::pair<typename Trait::PageId, PageVersion>> error_versioned_pages;
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
             if (index == total_pages / 10 * cut_index)
@@ -484,9 +553,9 @@ private:
                     (void)blob_store;
                     try
                     {
-                        PageIDAndEntryV3 to_read_entry;
+                        PageIdAndEntry to_read_entry;
                         const PageEntryV3 & entry = entry_or_del.entry;
-                        PageIDAndEntriesV3 to_read;
+                        PageIdAndEntries to_read;
                         to_read_entry.first = internal_id;
                         to_read_entry.second = entry;
 
@@ -498,8 +567,8 @@ private:
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
-                            BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
-                            BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(internal_id, entry, indices);
+                            typename Trait::BlobStore::FieldReadInfos infos;
+                            typename Trait::BlobStore::FieldReadInfo info(internal_id, entry, indices);
                             infos.emplace_back(info);
                             blob_store.read(infos);
                         }
@@ -533,7 +602,8 @@ private:
     ControlOptions options;
 };
 
-
+template class PageStorageControlV3<u128::PageStorageControlV3Trait>;
+template class PageStorageControlV3<universal::PageStorageControlV3Trait>;
 } // namespace DB::PS::V3
 
 using namespace DB::PS::V3;
@@ -542,5 +612,12 @@ void pageStorageV3CtlEntry(int argc, char ** argv)
 {
     DB::tests::TiFlashTestEnv::setupLogger();
     const auto & options = ControlOptions::parse(argc, argv);
-    PageStorageControlV3(options).run();
+    u128::PageStorageControlV3(options).run();
+}
+
+void universalpageStorageCtlEntry(int argc, char ** argv)
+{
+    DB::tests::TiFlashTestEnv::setupLogger();
+    const auto & options = ControlOptions::parse(argc, argv);
+    universal::PageStorageControlV3(options).run();
 }
