@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-mysql> drop table if exists test.t;
-mysql> create table test.t (a int);
+mysql> drop table if exists test.ts;
+mysql> create table test.ts (a int);
 
 # empty set
 mysql> select * from information_schema.tiflash_replica;
@@ -21,65 +21,65 @@ mysql> select * from information_schema.tiflash_segments;
 mysql> select * from information_schema.tiflash_tables;
 
 # add tiflash replica
-mysql> alter table test.t set tiflash replica 1;
-func> wait_table test t
+mysql> alter table test.ts set tiflash replica 1;
+func> wait_table test ts
 
 mysql> select * from information_schema.tiflash_replica;
 +--------------+------------+----------+---------------+-----------------+-----------+----------+
 | TABLE_SCHEMA | TABLE_NAME | TABLE_ID | REPLICA_COUNT | LOCATION_LABELS | AVAILABLE | PROGRESS |
 +--------------+------------+----------+---------------+-----------------+-----------+----------+
-| test         | t          |       88 |             1 |                 |         1 |        1 |
+| test         | ts         |       88 |             1 |                 |         1 |        1 |
 +--------------+------------+----------+---------------+-----------------+-----------+----------+
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
-| test          | t          |    0 |
+| test          | ts         |    0 |
 +---------------+------------+------+
 
 mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
-| test          | t          |          0 |
+| test          | ts         |          0 |
 +---------------+------------+------------+
 
 # insert data
-mysql> insert into test.t values (1), (2), (3);
-func> wait_table test t
+mysql> insert into test.ts values (1), (2), (3);
+func> wait_table test ts
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
-| test          | t          |    3 |
+| test          | ts         |    3 |
 +---------------+------------+------+
 
 mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
-| test          | t          |          3 |
+| test          | ts         |          3 |
 +---------------+------------+------------+
 
 # delete data
-mysql> delete from test.t where a = 1;
-func> wait_table test t
+mysql> delete from test.ts where a = 1;
+func> wait_table test ts
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
 +---------------+------------+------+
 | tidb_database | tidb_table | rows |
 +---------------+------------+------+
-| test          | t          |    2 |
+| test          | ts         |    4 |
 +---------------+------------+------+
 
 mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
 +---------------+------------+------------+
 | tidb_database | tidb_table | total_rows |
 +---------------+------------+------------+
-| test          | t          |          2 |
+| test          | ts         |          4 |
 +---------------+------------+------------+
 
 # drop table
-mysql> drop table test.t;
+mysql> drop table test.ts;
