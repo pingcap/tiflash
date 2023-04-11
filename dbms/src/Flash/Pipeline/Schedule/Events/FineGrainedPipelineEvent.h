@@ -25,10 +25,8 @@ public:
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        Context & context_,
-        size_t concurrency_,
         PipelineExecPtr && pipeline_exec_)
-        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id, context_, concurrency_)
+        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id)
         , pipeline_exec(std::move(pipeline_exec_))
     {
         assert(pipeline_exec);

@@ -208,7 +208,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, concurrency, std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
     }
     else

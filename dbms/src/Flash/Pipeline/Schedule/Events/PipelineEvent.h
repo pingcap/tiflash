@@ -26,16 +26,13 @@ public:
     PipelineEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
-        const String & req_id,
-        Context & context_,
-        size_t concurrency_)
+        const String & req_id)
         : Event(exec_status_, std::move(mem_tracker_), req_id)
-        , context(context_)
-        , concurrency(concurrency_)
-    {}
+    {
+        stop_watch.start();
+    }
 
 protected:
-    Context & context [[maybe_unused]];
-    size_t concurrency [[maybe_unused]];
+    Stopwatch stop_watch;
 };
 } // namespace DB

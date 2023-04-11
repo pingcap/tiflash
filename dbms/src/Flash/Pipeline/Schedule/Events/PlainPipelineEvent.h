@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Events/PipelineEvent.h>
 
 namespace DB
 {
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
+class Context;
 
 class PlainPipelineEvent : public PipelineEvent
 {
@@ -32,7 +32,9 @@ public:
         Context & context_,
         size_t concurrency_,
         const PipelinePtr & pipeline_)
-        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id, context_, concurrency_)
+        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id)
+        , context(context_)
+        , concurrency(concurrency_)
         , pipeline(pipeline_)
     {}
 
@@ -42,6 +44,8 @@ protected:
     void finishImpl() override;
 
 private:
+    Context & context;
+    size_t concurrency;
     PipelinePtr pipeline;
 };
 } // namespace DB

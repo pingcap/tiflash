@@ -74,7 +74,6 @@ BlockInputStreamPtr constructExchangeReceiverStream(DAGContext & dag_context, Co
             /*fine_grained_shuffle_stream_count=*/0,
             context.getSettings().local_tunnel_version);
 
-
     BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(
         exchange_receiver,
         /*req_id=*/"",
