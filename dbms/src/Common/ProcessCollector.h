@@ -41,7 +41,6 @@ public:
     std::vector<prometheus::MetricFamily> Collect() const override;
 
 private:
-    mutable std::mutex mu;
     mutable prometheus::Gauge cpu_total;
     mutable prometheus::Gauge vsize;
     mutable prometheus::Gauge rss;

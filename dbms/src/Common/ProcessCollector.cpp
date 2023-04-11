@@ -28,13 +28,11 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
 {
     auto new_info = get_process_metrics();
 
-    {
-        std::lock_guard<std::mutex> lock(mu);
-        auto past_cpu_total = cpu_total.Value();
-        cpu_total.Increment(new_info.cpu_total - past_cpu_total);
-        vsize.Set(new_info.vsize);
-        rss.Set(new_info.rss);
-    }
+    // Gauge is thread safe, no need to lock.
+    auto past_cpu_total = cpu_total.Value();
+    cpu_total.Increment(new_info.cpu_total - past_cpu_total);
+    vsize.Set(new_info.vsize);
+    rss.Set(new_info.rss);
 
     std::vector<prometheus::MetricFamily> familes;
     familes.reserve(4);
