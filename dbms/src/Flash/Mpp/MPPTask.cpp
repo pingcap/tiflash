@@ -389,16 +389,15 @@ void MPPTask::runImpl()
         LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
         auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
-        auto log_level = time_cost_in_preprocess_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
-        LOG_IMPL(log, log_level, "task preprocess done, time cost: {} ms", time_cost_in_preprocess_ms);
+        LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
         auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
-        log_level = time_cost_in_schedule_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
-        LOG_IMPL(log, log_level, "task starts running, time cost in schedule: {} ms", time_cost_in_schedule_ms);
+        auto log_level = time_cost_in_schedule_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+        LOG_IMPL(log, log_level, "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
