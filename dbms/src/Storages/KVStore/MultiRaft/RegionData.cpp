@@ -246,11 +246,12 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
     }
     else
     {
-        LOG_WARNING(&Poco::Logger::get(__FUNCTION__),
-                    "Failed to get lock by key {} in region data, map size {}, count {}",
-                    key.toDebugString(),
-                    map.size(),
-                    map.count(lock_key));
+        LOG_WARNING(
+            &Poco::Logger::get(__FUNCTION__),
+            "Failed to get lock by key {} in region data, map size {}, count {}",
+            key.toDebugString(),
+            map.size(),
+            map.count(lock_key));
         throw Exception("Failed to get lock");
     }
 }

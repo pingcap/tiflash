@@ -26,6 +26,7 @@
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
+#include <Storages/KVStore/Types.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -181,6 +182,10 @@ private:
     DAGContext * dag_context = nullptr;
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
+
+    std::unordered_set<KeyspaceID> keyspace_blacklist;
+    std::unordered_set<RegionID> region_blacklist;
+
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -528,6 +533,15 @@ public:
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
     void mockConfigLoaded() { is_config_loaded = true; }
+
+    void initKeyspaceBlacklist(const std::unordered_set<KeyspaceID> & keyspace_ids)
+    {
+        keyspace_blacklist = keyspace_ids;
+    }
+    bool isKeyspaceInBlacklist(const KeyspaceID keyspace_id);
+    void initRegionBlacklist(const std::unordered_set<RegionID> & region_ids) { region_blacklist = region_ids; }
+    bool isRegionInBlacklist(const RegionID region_id);
+    bool isRegionsContainsInBlacklist(const std::vector<RegionID> regions);
 
 private:
     /** Check if the current client has access to the specified database.

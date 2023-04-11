@@ -963,10 +963,7 @@ BaseBuffView cppStringAsBuff(const std::string & s)
     return BaseBuffView{.data = s.data(), .len = s.size()};
 }
 
-BaseBuffView GetLockByKey(
-    const EngineStoreServerWrap * server,
-    uint64_t region_id,
-    BaseBuffView key)
+BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key)
 {
     auto tikv_key = TiKVKey(key.data, key.len);
     try
@@ -978,7 +975,11 @@ BaseBuffView GetLockByKey(
     }
     catch (...)
     {
-        LOG_WARNING(&Poco::Logger::get(__FUNCTION__), "Failed to get lock by key {}, region id {}", tikv_key.toDebugString(), region_id);
+        LOG_WARNING(
+            &Poco::Logger::get(__FUNCTION__),
+            "Failed to get lock by key {}, region id {}",
+            tikv_key.toDebugString(),
+            region_id);
         return BaseBuffView{};
     }
 }

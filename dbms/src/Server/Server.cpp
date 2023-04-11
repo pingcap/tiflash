@@ -103,6 +103,7 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
+#include <iterator>
 #include <limits>
 #include <magic_enum.hpp>
 #include <memory>
@@ -323,6 +324,8 @@ struct TiFlashProxyConfig
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+            if (config.has("blacklist_file"))
+                args_map["blacklist_file"] = config.getString("blacklist_file");
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
@@ -1457,6 +1460,61 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
     format_schema_path.createDirectories();
+
+    /// Load keyspace blacklist json file
+    LOG_INFO(log, "Loading blacklist file.");
+    auto blacklist_file_path = config().getString("blacklist_file", "");
+    if (blacklist_file_path.length() == 0)
+    {
+        LOG_INFO(log, "blacklist file not enabled, ignore it.");
+    }
+    else
+    {
+        auto blacklist_file = Poco::File(blacklist_file_path);
+        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
+        {
+            // Read the json file
+            std::ifstream ifs(blacklist_file_path);
+            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var json_var = parser.parse(json_content);
+            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+            // load keyspace list
+            auto keyspace_arr = json_obj->getArray("keyspace_ids");
+            if (!keyspace_arr.isNull())
+            {
+                std::unordered_set<KeyspaceID> keyspace_blacklist;
+                for (size_t i = 0; i < keyspace_arr->size(); i++)
+                {
+                    keyspace_blacklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+                }
+                global_context->initKeyspaceBlacklist(keyspace_blacklist);
+            }
+
+            // load region list
+            auto region_arr = json_obj->getArray("region_ids");
+            if (!region_arr.isNull())
+            {
+                std::unordered_set<RegionID> region_blacklist;
+                for (size_t i = 0; i < region_arr->size(); i++)
+                {
+                    region_blacklist.emplace(region_arr->getElement<RegionID>(i));
+                }
+                global_context->initRegionBlacklist(region_blacklist);
+            }
+
+            LOG_INFO(
+                log,
+                "Load blacklist file done, total {} keyspaces and {} regions in blacklist.",
+                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+                region_arr.isNull() ? 0 : region_arr->size());
+        }
+        else
+        {
+            LOG_INFO(log, "blacklist file not exists or non-readble, ignore it.");
+        }
+    }
 
     LOG_INFO(log, "Loading metadata.");
     loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.

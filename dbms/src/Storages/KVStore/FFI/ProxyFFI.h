@@ -255,4 +255,5 @@ private:
     void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType);
 };
 
+
 } // namespace DB

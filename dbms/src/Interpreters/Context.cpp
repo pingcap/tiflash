@@ -1476,6 +1476,27 @@ BackgroundProcessingPool & Context::getPSBackgroundPool()
     return *shared->ps_compact_background_pool;
 }
 
+bool Context::isKeyspaceInBlacklist(const KeyspaceID keyspace_id)
+{
+    return keyspace_blacklist.count(keyspace_id) > 0;
+}
+
+bool Context::isRegionInBlacklist(const RegionID region_id)
+{
+    return region_blacklist.count(region_id) > 0;
+}
+
+bool Context::isRegionsContainsInBlacklist(const std::vector<RegionID> regions)
+{
+    for (const auto region : regions)
+    {
+        if (isRegionInBlacklist(region))
+            return true;
+    }
+
+    return false;
+}
+
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();

@@ -77,6 +77,18 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
+            if (cop_context.db_context.isKeyspaceInBlacklist(cop_request->context().keyspace_id())
+                || cop_context.db_context.isRegionsContainsInBlacklist(tables_regions_info.getAllRegionID()))
+            {
+                LOG_DEBUG(
+                    log,
+                    "cop request disabled for keyspace or regions in keyspace {}",
+                    cop_request->context().keyspace_id());
+                return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
+            }
+
+            const String & resource_group_name
+                = cop_request->context().resource_control_context().resource_group_name();
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),

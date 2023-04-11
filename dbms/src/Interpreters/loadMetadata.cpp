@@ -123,6 +123,14 @@ void loadMetadata(Context & context)
         if (db_name == SYSTEM_DATABASE)
             continue;
 
+        // Ignore database owned by keyspace in blacklist
+        auto keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name);
+        if (context.isKeyspaceInBlacklist(keyspace_id))
+        {
+            LOG_WARNING(log, "database {} ignored because keyspace {} in blacklist", db_name, keyspace_id);
+            continue;
+        }
+
         databases.emplace(db_name, path + file);
     }
 

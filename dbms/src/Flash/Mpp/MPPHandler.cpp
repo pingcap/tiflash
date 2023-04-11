@@ -80,6 +80,19 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         task = MPPTask::newTask(task_request.meta(), context);
         task->prepare(task_request);
 
+        if (context->isKeyspaceInBlacklist(task_request.meta().keyspace_id())
+            || context->isRegionsContainsInBlacklist(context->getDAGContext()->tables_regions_info.getAllRegionID()))
+        {
+            LOG_DEBUG(
+                log,
+                "mpp request disabled for keyspace or regions in keyspace {}",
+                task_request.meta().keyspace_id());
+            auto * err = response->mutable_error();
+            err->set_msg("mpp request disabled");
+            handleError(task, "mpp request disabled");
+            return grpc::Status::OK;
+        }
+
         addRetryRegion(context, response);
 
 #ifndef NDEBUG

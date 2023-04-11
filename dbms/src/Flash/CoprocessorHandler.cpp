@@ -131,6 +131,16 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
+            if (cop_context.db_context.isKeyspaceInBlacklist(cop_request->context().keyspace_id())
+                || cop_context.db_context.isRegionInBlacklist(cop_context.kv_context.region_id()))
+            {
+                LOG_DEBUG(
+                    log,
+                    "cop request disabled for keyspace or regions in keyspace {}",
+                    cop_request->context().keyspace_id());
+                return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
+            }
+
             const std::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
