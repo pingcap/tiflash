@@ -111,10 +111,13 @@ inline String addMatchTypeForPattern(const String & pattern, const String & matc
     return fmt::format("{}{}", mode, pattern);
 }
 
-inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
+inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator, int flags = 0)
 {
     String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
-    return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
+    if (flags == 0)
+        return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
+    else
+        return Regexps::createRegexp<false>(final_pattern, flags);
 }
 
 // Only int types used in ColumnsNumber.h can be valid
@@ -819,7 +822,7 @@ public:
     //  - only pattern column is provided and it's a constant column
     //  - pattern and match type columns are provided and they are both constant columns
     template <bool need_subpattern, typename ExprT, typename MatchTypeT>
-    std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
+    std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator, int flags = 0) const
     {
         if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
             return nullptr;
@@ -834,8 +837,10 @@ public:
         String match_type = match_type_param.getString(0);
         final_pattern = FunctionsRegexp::addMatchTypeForPattern(final_pattern, match_type, collator);
 
-        int flags = FunctionsRegexp::getDefaultFlags();
-        return std::make_unique<Regexps::Regexp>(final_pattern, flags);
+        if (flags == 0)
+            return std::make_unique<Regexps::Regexp>(final_pattern, FunctionsRegexp::getDefaultFlags());
+        else
+            return std::make_unique<Regexps::Regexp>(final_pattern, flags);
     }
 
     // Check if we can memorize the regexp

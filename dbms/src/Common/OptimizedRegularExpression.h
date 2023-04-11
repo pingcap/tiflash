@@ -58,6 +58,26 @@ struct Match
 };
 } // namespace OptimizedRegularExpressionDetails
 
+struct Instruction
+{
+    explicit Instruction(int substitution_num_)
+        : substitution_num(substitution_num_)
+    {}
+    explicit Instruction(String literal_)
+        : literal(std::move(literal_))
+    {}
+
+    // If not negative, perform substitution of n-th subpattern from the regexp match.
+    Int32 substitution_num = -1;
+
+    // Otherwise, paste this literal string verbatim.
+    String literal;
+};
+
+/// Decomposes the replacement string into a sequence of substitutions and literals.
+/// E.g. "abc\1de\2fg\1\2" --> inst("abc"), inst(1), inst("de"), inst(2), inst("fg"), inst(1), inst(2)
+using Instructions = std::vector<Instruction>;
+
 template <bool thread_safe>
 class OptimizedRegularExpressionImpl
 {
@@ -127,10 +147,13 @@ private:
     std::optional<StringRef> processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
     std::optional<StringRef> substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur);
 
-    void processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
-    void replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
-    void replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos, Int64 occur);
-    void replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, const StringRef & repl, Int64 byte_pos);
+    void processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, int num_captures, const Instructions & instructions);
+    void replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, int num_captures, const Instructions & instructions);
+    void replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, int num_captures, const Instructions & instructions);
+    void replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, int num_captures, const Instructions & instructions);
+
+    Instructions getInstructions(const StringRef & repl, int num_captures);
+    void replaceMatchedStringWithInstructions(DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, StringPieceType * matches, const Instructions & instructions);
 
     bool is_trivial;
     bool required_substring_is_prefix;
@@ -138,6 +161,8 @@ private:
     std::string required_substring;
     std::unique_ptr<RegexType> re2;
     unsigned number_of_subpatterns;
+
+    static constexpr int max_captures = 10;
 };
 
 using OptimizedRegularExpression = OptimizedRegularExpressionImpl<true>;

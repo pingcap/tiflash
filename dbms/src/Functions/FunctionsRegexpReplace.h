@@ -156,6 +156,8 @@ public:
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
         Int64 occur_const_val = OccurT::isConst() ? occur_param.template getInt<Int64>(0) : -1;
 
+        int replace_default_flag = OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE;
+
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && ReplT::isConst() && PosT::isConst() && OccurT::isConst() && MatchTypeT::isConst())
         {
@@ -169,7 +171,6 @@ public:
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            pat = fmt::format("({})", pat);
             StringRef expr_ref;
             StringRef repl_ref;
             expr_param.getStringRef(0, expr_ref);
@@ -179,7 +180,7 @@ public:
             ColumnString::Chars_t res_data;
             IColumn::Offset offset = 0;
 
-            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), FunctionsRegexp::getDefaultFlags());
+            Regexps::Regexp regexp(FunctionsRegexp::addMatchTypeForPattern(pat, match_type, collator), replace_default_flag);
             regexp.replace(expr_ref.data, expr_ref.size, res_data, offset, repl_ref, pos_const_val, occur_const_val);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(String(reinterpret_cast<const char *>(&res_data[0]), offset - 1)));
             return;
@@ -220,7 +221,7 @@ public:
             std::unique_ptr<Regexps::Regexp> regexp;
             if (col_size > 0)
             {
-                regexp = memorize<true>(pat_param, match_type_param, collator);
+                regexp = memorize<true>(pat_param, match_type_param, collator, replace_default_flag);
                 if (regexp == nullptr)
                 {
                     auto null_map_col = ColumnUInt8::create();
@@ -314,14 +315,13 @@ public:
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
                     null_map[i] = 0;
-                    pat = fmt::format("({})", pat);
                     expr_param.getStringRef(i, expr_ref);
                     repl_param.getStringRef(i, repl_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator, replace_default_flag);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
                     res_offsets[i] = res_offset;
                 }
@@ -335,14 +335,13 @@ public:
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
 
-                    pat = fmt::format("({})", pat);
                     expr_param.getStringRef(i, expr_ref);
                     repl_param.getStringRef(i, repl_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     match_type = match_type_param.getString(i);
 
-                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator);
+                    auto regexp = FunctionsRegexp::createRegexpWithMatchType(pat, match_type, collator, replace_default_flag);
                     regexp.replace(expr_ref.data, expr_ref.size, res_data, res_offset, repl_ref, pos, occur);
                     res_offsets[i] = res_offset;
                 }
