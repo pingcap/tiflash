@@ -47,7 +47,7 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 
 # insert data
 mysql> insert into test.ts values (1), (2), (3);
-func> wait_table test ts
+mysql> alter table test.ts compact;
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
@@ -65,7 +65,7 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 
 # delete data
 mysql> delete from test.ts where a = 1;
-func> wait_table test ts
+mysql> alter table test.ts compact;
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts';
 +---------------+------------+------+
