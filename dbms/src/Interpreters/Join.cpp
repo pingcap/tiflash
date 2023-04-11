@@ -989,15 +989,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         result_blocks.push_back(std::move(block));
     }
     assert(!result_blocks.empty());
-    if (result_blocks.size() == 1)
-    {
-        return result_blocks[0];
-    }
-    else
-    {
-        return vstackBlocks(std::move(result_blocks));
-    }
-}
+    vstackBlocks(std::move(result_blocks));
 
 namespace
 {
