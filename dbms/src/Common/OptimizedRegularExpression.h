@@ -75,7 +75,7 @@ struct Instruction
 };
 
 /// Decomposes the replacement string into a sequence of substitutions and literals.
-/// E.g. "abc\1de\2fg\1\2" --> inst("abc"), inst(1), inst("de"), inst(2), inst("fg"), inst(1), inst(2)
+/// E.g. "abc$1de$2fg$1$2" --> inst("abc"), inst(1), inst("de"), inst(2), inst("fg"), inst(1), inst(2)
 using Instructions = std::vector<Instruction>;
 
 template <bool thread_safe>
