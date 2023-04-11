@@ -234,7 +234,14 @@ bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPQueryTas
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
-        LOG_INFO(log, "threads are unavailable for the query {} or active set is full (size =  {}), need {}, but used {} of the thread soft limit {},{} waiting set size = {}", query_id.toString(), active_set.size(), needed_threads, estimated_thread_usage, thread_soft_limit, isWaiting ? "" : " put into", waiting_set.size());
+        LOG_INFO(log, "Resource temporary not available for query {}(first schedule: {}), available threads are {}, available active set size are {}, "
+                      "required threads are {}, waiting set size = {}",
+                 query_id.toString(),
+                 !isWaiting,
+                 thread_soft_limit - estimated_thread_usage,
+                 active_set_soft_limit - active_set.size(),
+                 needed_threads,
+                 waiting_set.size());
         return false;
     }
 }
