@@ -43,7 +43,11 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     }
     else
     {
-        RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_);
+        // Unrecognized xx:// protocol.
+        RUNTIME_CHECK_MSG(
+            file_path_.find("://") == std::string::npos,
+            "Unsupported protocol in path {}",
+            file_path_);
         file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     }
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
@@ -70,7 +74,11 @@ WritableFilePtr FileProvider::newWritableFile(
     }
     else
     {
-        RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_);
+        // Unrecognized xx:// protocol.
+        RUNTIME_CHECK_MSG(
+            file_path_.find("://") == std::string::npos,
+            "Unsupported protocol in path {}",
+            file_path_);
         file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     }
     if (encryption_enabled && create_new_encryption_info_)
