@@ -957,7 +957,8 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 
     if (meet_error || copy_live_connections == 0)
     {
-        LOG_INFO(exc_log, "receiver channels finished, meet error: {}, error message: {}", meet_error, first_err_msg);
+        auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
 }
