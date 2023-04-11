@@ -14,40 +14,47 @@
 
 #pragma once
 
-#include <Flash/Executor/QueryExecutor.h>
-
 #include <mutex>
+#include <optional>
 
 namespace DB
 {
-class QueryExecutorHolder
+template <typename Ptr>
+class PtrHolder
 {
 public:
-    void set(QueryExecutorPtr && query_executor_)
+    void set(Ptr && obj_)
     {
+        assert(obj_);
         std::lock_guard lock(mu);
-        assert(!query_executor);
-        query_executor = std::move(query_executor_);
+        obj = std::move(obj_);
     }
 
-    std::optional<QueryExecutor *> tryGet()
+    auto tryGet()
     {
-        std::optional<QueryExecutor *> res;
+        std::optional<decltype(obj.get())> res;
         std::lock_guard lock(mu);
-        if (query_executor != nullptr)
-            res.emplace(query_executor.get());
+        if (obj != nullptr)
+            res.emplace(obj.get());
         return res;
     }
 
-    QueryExecutor * operator->()
+    auto * operator->()
     {
         std::lock_guard lock(mu);
-        assert(query_executor != nullptr);
-        return query_executor.get();
+        assert(obj != nullptr);
+        return obj.get();
+    }
+
+    auto & operator*()
+    {
+        std::lock_guard lock(mu);
+        assert(obj != nullptr);
+        return *obj.get();
     }
 
 private:
     std::mutex mu;
-    QueryExecutorPtr query_executor;
+    Ptr obj;
 };
 } // namespace DB

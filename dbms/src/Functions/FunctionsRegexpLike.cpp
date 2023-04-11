@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsRegexp.h>
-#include <Functions/Regexps.h>
-#include <fmt/core.h>
+#include <Functions/FunctionsRegexpLike.h>
 
 namespace DB
 {
 using FunctionTiDBRegexp = FunctionStringRegexp<NameTiDBRegexp>;
 using FunctionRegexpLike = FunctionStringRegexp<NameRegexpLike>;
-using FunctionRegexpInstr = FunctionStringRegexpInstr<NameRegexpInstr>;
-using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
-using FunctionRegexpReplace = FunctionStringRegexpReplace<NameRegexpReplace>;
 
-void registerFunctionsRegexp(FunctionFactory & factory)
+void registerFunctionsRegexpLike(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBRegexp>();
     factory.registerFunction<FunctionRegexpLike>();
-    factory.registerFunction<FunctionRegexpInstr>();
-    factory.registerFunction<FunctionRegexpSubstr>();
-    factory.registerFunction<FunctionRegexpReplace>();
 }
 } // namespace DB

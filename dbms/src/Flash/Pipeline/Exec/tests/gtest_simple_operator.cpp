@@ -23,6 +23,41 @@
 
 namespace DB::tests
 {
+namespace
+{
+class SimpleGetResultSinkOp : public SinkOp
+{
+public:
+    SimpleGetResultSinkOp(
+        PipelineExecutorStatus & exec_status_,
+        const String & req_id,
+        ResultHandler result_handler_)
+        : SinkOp(exec_status_, req_id)
+        , result_handler(std::move(result_handler_))
+    {
+        assert(!result_handler.isIgnored());
+    }
+
+    String getName() const override
+    {
+        return "SimpleGetResultSinkOp";
+    }
+
+protected:
+    OperatorStatus writeImpl(Block && block) override
+    {
+        if (!block)
+            return OperatorStatus::FINISHED;
+
+        result_handler(block);
+        return OperatorStatus::NEED_INPUT;
+    }
+
+private:
+    ResultHandler result_handler;
+};
+} // namespace
+
 class SimpleOperatorTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -59,13 +94,16 @@ public:
 
         PhysicalPlan physical_plan{*context.context, ""};
         physical_plan.build(request.get());
-        assert(!result_handler.isIgnored());
-        auto plan_tree = PhysicalGetResultSink::build(std::move(result_handler), Logger::get(), physical_plan.outputAndOptimize());
+        auto plan_tree = physical_plan.outputAndOptimize();
 
         PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
             plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
+        });
+        assert(group_builder.concurrency == 1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_status, "", result_handler));
         });
         auto result = group_builder.build();
         assert(result.size() == 1);

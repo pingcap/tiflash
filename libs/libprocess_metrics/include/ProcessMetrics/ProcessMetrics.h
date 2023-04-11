@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,19 +14,22 @@
 
 #pragma once
 
-#include <Poco/Net/HTTPRequestHandler.h>
+#include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace DB
+struct ProcessMetricsInfo
 {
-
-/// Response with 404 and verbose description.
-class NotFoundHandler : public Poco::Net::HTTPRequestHandler
-{
-public:
-    void handleRequest(
-        Poco::Net::HTTPServerRequest & request,
-        Poco::Net::HTTPServerResponse & response) override;
+    uint64_t cpu_total;
+    int64_t vsize;
+    int64_t rss;
+    int64_t start_time;
 };
 
+ProcessMetricsInfo get_process_metrics();
+
+#ifdef __cplusplus
 }
+#endif

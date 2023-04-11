@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
 
@@ -23,25 +24,31 @@ namespace DB
 {
 struct TaskSchedulerConfig
 {
-    size_t task_thread_pool_size;
+    size_t cpu_task_thread_pool_size;
+    size_t io_task_thread_pool_size;
 };
 
 /**
- * ┌─────────────────────┐
- * │  task scheduler     │
- * │                     │
- * │ ┌────────────────┐  │
- * │ │task thread pool│  │
- * │ └──────▲──┬──────┘  │
- * │        │  │         │
- * │   ┌────┴──▼────┐    │
- * │   │wait reactor│    │
- * │   └────────────┘    │
- * │                     │
- * └─────────────────────┘
+ * ┌────────────────────────────┐
+ * │      task scheduler        │
+ * │                            │
+ * │    ┌───────────────────┐   │
+ * │ ┌──┤io task thread pool◄─┐ │
+ * │ │  └──────▲──┬─────────┘ │ │
+ * │ │         │  │           │ │
+ * │ │ ┌───────┴──▼─────────┐ │ │
+ * │ │ │cpu task thread pool│ │ │
+ * │ │ └───────▲──┬─────────┘ │ │
+ * │ │         │  │           │ │
+ * │ │    ┌────┴──▼────┐      │ │
+ * │ └────►wait reactor├──────┘ │
+ * │      └────────────┘        │
+ * │                            │
+ * └────────────────────────────┘
  * 
  * A globally shared execution scheduler, used by pipeline executor.
- * - task thread pool: for operator compute.
+ * - cpu task thread pool: for operator cpu intensive compute.
+ * - io task thread pool: for operator io intensive block.
  * - wait reactor: for polling asynchronous io status, etc.
  */
 class TaskScheduler
@@ -53,16 +60,24 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks) noexcept;
 
+    void submitToWaitReactor(TaskPtr && task);
+    void submitToCPUTaskThreadPool(TaskPtr && task);
+    void submitToCPUTaskThreadPool(std::vector<TaskPtr> & tasks);
+    void submitToIOTaskThreadPool(TaskPtr && task);
+    void submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks);
+
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
-    TaskThreadPool task_thread_pool;
+    TaskThreadPool<CPUImpl> cpu_task_thread_pool;
+
+    TaskThreadPool<IOImpl> io_task_thread_pool;
 
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
 
-    friend class TaskThreadPool;
+    friend class TaskThreadPool<CPUImpl>;
     friend class WaitReactor;
 };
 } // namespace DB

@@ -12,30 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include "IServer.h"
-
-#include <Poco/Net/HTTPRequestHandler.h>
-
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsRegexpReplace.h>
 
 namespace DB
 {
+using FunctionRegexpReplace = FunctionStringRegexpReplace<NameRegexpReplace>;
 
-/// Response with "Ok.\n". Used for availability checks.
-class PingRequestHandler : public Poco::Net::HTTPRequestHandler
+void registerFunctionsRegexpReplace(FunctionFactory & factory)
 {
-private:
-    IServer & server;
-
-public:
-    explicit PingRequestHandler(IServer & server_) : server(server_)
-    {
-    }
-
-    void handleRequest(
-        Poco::Net::HTTPServerRequest & request,
-        Poco::Net::HTTPServerResponse & response) override;
-};
-
+    factory.registerFunction<FunctionRegexpReplace>();
 }
+} // namespace DB

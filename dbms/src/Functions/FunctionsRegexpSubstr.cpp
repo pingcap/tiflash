@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include "IServer.h"
-
-#include <Poco/Net/HTTPRequestHandler.h>
-
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsRegexpSubstr.h>
 
 namespace DB
 {
+using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
 
-/// Response with custom string. Can be used for browser.
-class RootRequestHandler : public Poco::Net::HTTPRequestHandler
+void registerFunctionsRegexpSubstr(FunctionFactory & factory)
 {
-private:
-    IServer & server;
-
-public:
-    explicit RootRequestHandler(IServer & server_) : server(server_)
-    {
-    }
-
-    void handleRequest(
-        Poco::Net::HTTPServerRequest & request,
-        Poco::Net::HTTPServerResponse & response) override;
-};
-
+    factory.registerFunction<FunctionRegexpSubstr>();
 }
+} // namespace DB
