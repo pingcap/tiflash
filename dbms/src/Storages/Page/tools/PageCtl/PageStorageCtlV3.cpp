@@ -29,8 +29,6 @@
 #include <boost/program_options.hpp>
 #include <magic_enum.hpp>
 
-#include "Common/Exception.h"
-
 namespace DB::PS::V3
 {
 extern "C" {
@@ -84,7 +82,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  3 is Meta
  4 is KVStore
 )") //
-        ("keyspace_id,K", value<UInt32>()->default_value(NullspaceID), "Query a page under a specific keyspace.") //
+        ("keyspace_id,K", value<UInt32>()->default_value(NullspaceID), "Specify keyspace id.") //
         ("namespace_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
         ("page_id", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
         ("blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
