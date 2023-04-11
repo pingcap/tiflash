@@ -44,6 +44,18 @@ OperatorStatus Operator::await()
     return op_status;
 }
 
+OperatorStatus Operator::executeIO()
+{
+    CHECK_IS_CANCELLED
+    // TODO collect operator profile info here.
+    auto op_status = executeIOImpl();
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+#endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
+    return op_status;
+}
+
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED

@@ -31,35 +31,70 @@ PipelineExecutor::PipelineExecutor(
     assert(root_pipeline);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    // TODO Now the result handler for batch cop introduces io blocking, we should find a better implementation of get result sink.
-    if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(std::move(result_handler));
-
+    auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+    Events sources;
+    for (const auto & event : events)
     {
-        auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-        Events without_input_events;
-        for (const auto & event : events)
-        {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
-        }
-        for (const auto & event : without_input_events)
-            event->schedule();
+        if (event->prepareForSource())
+            sources.push_back(event);
     }
+    for (const auto & event : sources)
+        event->schedule();
+}
 
+void PipelineExecutor::wait()
+{
     if (unlikely(context.isTest()))
     {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        std::chrono::seconds timeout(15);
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
         status.waitFor(timeout);
     }
     else
     {
         status.wait();
+    }
+}
+
+void PipelineExecutor::consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler)
+{
+    Block ret;
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+        while (result_queue->popTimeout(ret, timeout) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+    else
+    {
+        while (result_queue->pop(ret) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+}
+
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+{
+    if (result_handler.isIgnored())
+    {
+        scheduleEvents();
+        wait();
+    }
+    else
+    {
+        ///                                 ┌──get_result_sink
+        /// result_handler◄──result_queue◄──┼──get_result_sink
+        ///                                 └──get_result_sink
+
+        // The queue size is same as UnionBlockInputStream = concurrency * 5.
+        auto result_queue = status.registerResultQueue(/*queue_size=*/context.getMaxStreams() * 5);
+        assert(root_pipeline);
+        root_pipeline->addGetResultSink(result_queue);
+        scheduleEvents();
+        consume(result_queue, std::move(result_handler));
     }
     return status.toExecutionResult();
 }

@@ -15,8 +15,10 @@
 #include <Common/Allocator.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -125,27 +127,62 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 
 FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 {
-    RUNTIME_ASSERT(!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler));
-    // Get from RegionPersister
-    auto & tmt = context.getTMTContext();
-    auto & kvstore = tmt.getKVStore();
-    FileUsageStatistics usage = kvstore->getFileUsageStatistics();
-
-    // Get the blob file status from all PS V3 instances
-    if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
+    FileUsageStatistics usage;
+    switch (context.getSharedContextDisagg()->disaggregated_mode)
     {
-        const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
-        const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
-        const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
+    case DisaggregatedMode::None:
+    {
+        if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
+        {
+            /// When format_version=5 is enabled, then all data are stored in the `uni_ps`
+            usage.merge(uni_ps->getFileUsageStatistics());
+        }
+        else
+        {
+            /// When format_version < 5, then there are multiple PageStorage instances
 
-        usage.merge(log_usage)
-            .merge(meta_usage)
-            .merge(data_usage);
+            // Get from RegionPersister
+            auto & tmt = context.getTMTContext();
+            auto & kvstore = tmt.getKVStore();
+            usage = kvstore->getFileUsageStatistics();
+
+            // Get the blob file status from all PS V3 instances
+            if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
+            {
+                const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
+                const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
+                const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
+
+                usage.merge(log_usage)
+                    .merge(meta_usage)
+                    .merge(data_usage);
+            }
+        }
+        break;
     }
-
-    if (auto ps_cache = context.getSharedContextDisagg()->rn_page_cache_storage; ps_cache != nullptr)
+    case DisaggregatedMode::Storage:
     {
-        usage.merge(ps_cache->getUniversalPageStorage()->getFileUsageStatistics());
+        // disagg write node, all data are stored in the `uni_ps`
+        if (auto uni_ps = context.getWriteNodePageStorage(); uni_ps != nullptr)
+        {
+            usage.merge(uni_ps->getFileUsageStatistics());
+        }
+        break;
+    }
+    case DisaggregatedMode::Compute:
+    {
+        // disagg compute node without auto-scaler, the proxy data are stored in the `uni_ps`
+        if (auto uni_ps = context.getWriteNodePageStorage(); uni_ps != nullptr)
+        {
+            usage.merge(uni_ps->getFileUsageStatistics());
+        }
+        // disagg compute node, all cache page data are stored in the `ps_cache`
+        if (auto ps_cache = context.getSharedContextDisagg()->rn_page_cache_storage; ps_cache != nullptr)
+        {
+            usage.merge(ps_cache->getUniversalPageStorage()->getFileUsageStatistics());
+        }
+        break;
+    }
     }
 
     return usage;
@@ -206,7 +243,6 @@ void AsynchronousMetrics::update()
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
-    if (!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler))
     {
         const FileUsageStatistics usage = getPageStorageFileUsage();
         set("BlobFileNums", usage.total_file_num);
@@ -215,6 +251,15 @@ void AsynchronousMetrics::update()
         set("LogNums", usage.total_log_file_num);
         set("LogDiskBytes", usage.total_log_disk_size);
         set("PagesInMem", usage.num_pages);
+    }
+
+    if (context.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto & tmt = context.getTMTContext();
+        if (auto s3_gc_owner = tmt.getS3GCOwnerManager(); s3_gc_owner->isOwner())
+        {
+            GET_METRIC(tiflash_storage_s3_gc_status, type_owner).Set(1.0);
+        }
     }
 
 #if USE_MIMALLOC
@@ -256,7 +301,7 @@ void AsynchronousMetrics::update()
     M("background_thread.num_runs", uint64_t)  \
     M("background_thread.run_interval", uint64_t)
 
-#define GET_METRIC(NAME, TYPE)                             \
+#define GET_JEMALLOC_METRIC(NAME, TYPE)                    \
     do                                                     \
     {                                                      \
         TYPE value{};                                      \
@@ -265,9 +310,9 @@ void AsynchronousMetrics::update()
         set("jemalloc." NAME, value);                      \
     } while (0);
 
-        FOR_EACH_METRIC(GET_METRIC);
+        FOR_EACH_METRIC(GET_JEMALLOC_METRIC);
 
-#undef GET_METRIC
+#undef GET_JEMALLOC_METRIC
 #undef FOR_EACH_METRIC
     }
 #endif

@@ -21,7 +21,7 @@
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalGetResultSink::build(
-    ResultHandler && result_handler,
+    const ResultQueuePtr & result_queue,
     const LoggerPtr & log,
     const PhysicalPlanNodePtr & child)
 {
@@ -31,7 +31,7 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
         child->getFineGrainedShuffle(),
         log->identifier(),
         child,
-        std::move(result_handler));
+        result_queue);
 }
 
 void PhysicalGetResultSink::buildPipelineExecGroup(
@@ -41,10 +41,8 @@ void PhysicalGetResultSink::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     ExecutorProfile executor_profile;
-
-    auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), this_shared_ptr));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), result_queue));
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
     context.getDAGContext()->addPipelineProfile(executor_id, executor_profile);

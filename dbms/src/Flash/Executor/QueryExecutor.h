@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
+#include <Common/PtrHolder.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/toRU.h>
@@ -69,4 +70,5 @@ protected:
 };
 
 using QueryExecutorPtr = std::unique_ptr<QueryExecutor>;
+using QueryExecutorHolder = PtrHolder<QueryExecutorPtr>;
 } // namespace DB

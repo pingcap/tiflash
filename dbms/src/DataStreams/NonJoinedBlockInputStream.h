@@ -41,8 +41,17 @@ private:
     size_t index;
     size_t step;
     size_t max_block_size;
-    bool add_not_mapped_rows;
-    size_t next_index;
+    size_t current_partition_index;
+
+    bool not_mapped_row_pos_inited = false;
+    /// point to the next row that to be added for rows that is not added to the map during build stage
+    RowRefList * not_mapped_row_pos = nullptr;
+
+    bool pos_in_hashmap_inited = false;
+    /// point to the next row that to be checked in the hash map
+    std::unique_ptr<void, std::function<void(void *)>> pos_in_hashmap = nullptr; /// type erasure
+    const void * next_element_in_row_list = nullptr;
+
 
     Block result_sample_block;
     /// Indices of columns in result_sample_block that come from the left-side table (except key columns).
@@ -55,22 +64,28 @@ private:
     /// Columns of the current output block corresponding to column_indices_right.
     MutableColumns columns_right;
 
-    std::unique_ptr<void, std::function<void(void *)>> position; /// type erasure
-    const void * next_element_in_row_list = nullptr;
-    size_t current_segment = 0;
-    Join::RowRefList * current_not_mapped_row = nullptr;
-
-    void setNextCurrentNotMappedRow();
-
-    template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    Block createBlock(const Maps & maps);
-
+    void advancedToNextPartition()
+    {
+        current_partition_index += step;
+        pos_in_hashmap_inited = false;
+        pos_in_hashmap = nullptr;
+        not_mapped_row_pos_inited = false;
+        not_mapped_row_pos = nullptr;
+    }
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Map>
-    size_t fillColumns(const Map & map,
-                       size_t num_columns_left,
-                       MutableColumns & mutable_columns_left,
-                       size_t num_columns_right,
-                       MutableColumns & mutable_columns_right);
+    void fillColumns(const Map & map,
+                     size_t num_columns_left,
+                     MutableColumns & mutable_columns_left,
+                     size_t num_columns_right,
+                     MutableColumns & mutable_columns_right,
+                     IColumn * row_counter_column);
+
+    void fillColumnsUsingCurrentPartition(
+        size_t num_columns_left,
+        MutableColumns & mutable_columns_left,
+        size_t num_columns_right,
+        MutableColumns & mutable_columns_right,
+        IColumn * row_counter_column);
 };
 } // namespace DB
