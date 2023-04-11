@@ -13,18 +13,20 @@
   ],
   "mounts": [
     // Cache Cargo downloaded deps
-    "source=tiflash-cargo-registry,target=/home/dev/.cargo/registry,type=volume",
-    "source=tiflash-cargo-git,target=/home/dev/.cargo/git,type=volume",
+    "source=${localEnv:HOME}/.cargo/registry,target=/home/dev/.cargo/registry,type=bind",
+    "source=${localEnv:HOME}/.cargo/git,target=/home/dev/.cargo/git,type=bind",
     // Cache Rust toolchain
     // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
-    "source=tiflash-rustup,target=/home/dev/.rustup,type=volume",
+    "source=${localEnv:HOME}/.rustup,target=/home/dev/.rustup,type=bind",
     // Cache ccache results
-    "source=tiflash-ccache,target=/home/dev/.cache/ccache,type=volume",
+    "source=${localEnv:HOME}/.cache/ccache,target=/home/dev/.cache/ccache,type=bind",
     // Persist GitHub CLI Config locally
-    "source=${localWorkspaceFolder}/.devcontainer/.local_persist/gh,target=/home/dev/.config/gh,type=bind",
+    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind",
     // VSCode Extensions
-    "source=vscode-extensions,target=/home/dev/.vscode-server/extensions,type=volume",
+    "source=${localEnv:HOME}/.vscode-server/extensions,target=/home/dev/.vscode-server/extensions,type=bind",
   ],
+  // Ensure mount source directories exist.
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.cargo/registry ${localEnv:HOME}/.cargo/git ${localEnv:HOME}/.rustup ${localEnv:HOME}/.cache/ccache ${localEnv:HOME}/.config/gh ${localEnv:HOME}/.vscode-server/extensions",
   "remoteUser": "dev",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/dev/workspace,type=bind",
   "workspaceFolder": "/home/dev/workspace",
