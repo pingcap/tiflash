@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Columns/ColumnNullable.h>
 #include <common/types.h>
 
 namespace DB
@@ -30,18 +30,12 @@ extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 } // namespace ErrorCodes
 
-struct NameGrouping
-{
-    static constexpr auto name = "grouping";
-};
-
-template <typename Name>
 class FunctionGrouping : public IFunction
 {
 public:
     using ResultType = UInt8;
     using ArgType = UInt64; // arg type should always be UInt64
-    static constexpr auto name = Name::name;
+    static constexpr auto name = "grouping";
 
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionGrouping>(); }
     String getName() const override { return name; }
@@ -130,7 +124,7 @@ private:
 
     void processVectorGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
-        switch (getVersion())
+        switch (version)
         {
         case 1:
             groupingVec<1>(col_grouping_ids, col_res, row_num);
@@ -142,7 +136,7 @@ private:
             groupingVec<3>(col_grouping_ids, col_res, row_num);
             break;
         default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", getVersion()));
+            throw Exception(fmt::format("Invalid version {} in grouping function", version));
         };
     }
 
@@ -164,11 +158,11 @@ private:
         for (size_t i = 0; i < row_num; ++i)
         {
             if constexpr (version == 1)
-                vec_res[i] = groupingImplV1(grouping_container[i], getMetaGroupingID());
+                vec_res[i] = groupingImplV1(grouping_container[i]);
             else if constexpr (version == 2)
-                vec_res[i] = groupingImplV2(grouping_container[i], getMetaGroupingID());
+                vec_res[i] = groupingImplV2(grouping_container[i]);
             else if constexpr (version == 3)
-                vec_res[i] = groupingImplV3(grouping_container[i], getMetaGroupingIDs());
+                vec_res[i] = groupingImplV3(grouping_container[i]);
             else
                 throw Exception("Invalid version in grouping function");
         }
@@ -177,48 +171,33 @@ private:
 
     ResultType grouping(UInt64 grouping_id) const
     {
-        switch (getVersion())
+        switch (version)
         {
         case 1:
-            return groupingImplV1(grouping_id, getMetaGroupingID());
+            return groupingImplV1(grouping_id);
         case 2:
-            return groupingImplV2(grouping_id, getMetaGroupingID());
+            return groupingImplV2(grouping_id);
         case 3:
-            return groupingImplV3(grouping_id, getMetaGroupingIDs());
+            return groupingImplV3(grouping_id);
         default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", getVersion()));
+            throw Exception(fmt::format("Invalid version {} in grouping function", version));
         }
     }
 
-    ResultType groupingImplV1(UInt64 grouping_id, UInt64 meta_grouping_id) const
+    ResultType groupingImplV1(UInt64 grouping_id) const
     {
         return (grouping_id & meta_grouping_id) != 0;
     }
 
-    ResultType groupingImplV2(UInt64 grouping_id, UInt64 meta_grouping_id) const
+    ResultType groupingImplV2(UInt64 grouping_id) const
     {
         return grouping_id > meta_grouping_id;
     }
 
-    ResultType groupingImplV3(UInt64 grouping_id, const std::set<UInt64> & meta_grouping_ids) const
+    ResultType groupingImplV3(UInt64 grouping_id) const
     {
         auto iter = meta_grouping_ids.find(grouping_id);
         return iter == meta_grouping_ids.end();
-    }
-
-    UInt32 getVersion() const
-    {
-        return version;
-    }
-
-    UInt64 getMetaGroupingID() const
-    {
-        return meta_grouping_id;
-    }
-
-    const std::set<UInt64> & getMetaGroupingIDs() const
-    {
-        return meta_grouping_ids;
     }
 
 private:

@@ -49,7 +49,7 @@ void registerFunctionsRegexpLike(FunctionFactory &);
 void registerFunctionsRegexpInstr(FunctionFactory &);
 void registerFunctionsRegexpSubstr(FunctionFactory &);
 void registerFunctionsRegexpReplace(FunctionFactory &);
-void registerFunctionsGrouping(FunctionFactory & factory);
+void registerFunctionsGrouping(FunctionFactory &);
 
 void registerFunctions()
 {

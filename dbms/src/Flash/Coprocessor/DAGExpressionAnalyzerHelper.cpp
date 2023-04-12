@@ -475,6 +475,4 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction},
      {"grouping", DAGExpressionAnalyzerHelper::buildGroupingFunction}});
 
-DAGExpressionAnalyzerHelper::FunctionNeedMetaData DAGExpressionAnalyzerHelper::function_need_meta_data{"grouping"};
-
 } // namespace DB

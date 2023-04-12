@@ -102,6 +102,5 @@ public:
     using FunctionNeedMetaData = std::set<String>;
 
     static FunctionBuilderMap function_builder_map;
-    static FunctionNeedMetaData function_need_meta_data;
 };
 } // namespace DB
