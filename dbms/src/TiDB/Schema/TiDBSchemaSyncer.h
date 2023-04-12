@@ -226,6 +226,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // 对于同一个table，如果出现了 drop table 的操作，我们就去除他原来在 apply tables 的操作，如果出现了 recover table 的操作，我们就去除他在 drop tables 的操作
         for (const auto & diff : diffs)
         {
+            LOG_INFO(DB::Logger::get("hyy"), "diff info is {} with schema_id is {}", static_cast<int>(diff->type), diff->schema_id);
             if (diff.has_value())
             {
                 if (diff->regenerate_schema_map)
@@ -331,15 +332,29 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 }
                 case SchemaActionType::ExchangeTablePartition:
                 {
-                    std::pair<DatabaseID, TableID> non_partition_pair(diff->schema_id, diff->old_table_id);
-                    std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->table_id);
-                    if (apply_tables.find(non_partition_pair) == apply_tables.end())
+                    // 两问题，一个是 throw exception 跟 log error 在这里有什么本质区别么，2. 为什么会拿不到 table_info??看起来跟同一个 database 有一点关系，不知道具体是什么关系。
+                    LOG_INFO(log, "ExchangeTablePartition info diff->schema_id is {}, diff->table_id is {}, diff->affected_opts[0].schema_id is {}, diff->old_table_id is {}, diff->affected_opts[0].table_id is {}", diff->schema_id, diff->table_id, diff->affected_opts[0].schema_id, diff->old_table_id, diff->affected_opts[0].table_id);
+                    /// Table_id in diff is the partition id of which will be exchanged,
+                    /// Schema_id in diff is the non-partition table's schema id
+                    /// Old_table_id in diff is the non-partition table's table id
+                    /// Table_id in diff.affected_opts[0] is the table id of the partition table
+                    /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
+                    //std::pair<DatabaseID, TableID> new_non_partition_pair(diff->schema_id, diff->table_id);
+                    std::pair<DatabaseID, TableID> new_non_partition_pair(diff->schema_id, diff->table_id); // 这个就会出问题？？？？（2，89）
+                    std::pair<DatabaseID, TableID> new_partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
+                    std::pair<DatabaseID, TableID> new_partition_belongs_pair(diff->affected_opts[0].schema_id, diff->affected_opts[0].table_id);
+                    //std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
+                    if (apply_tables.find(new_non_partition_pair) == apply_tables.end())
                     {
-                        apply_tables[non_partition_pair] = true;
+                        apply_tables[new_non_partition_pair] = true;
                     }
-                    if (apply_tables.find(partition_pair) == apply_tables.end())
+                    if (apply_tables.find(new_partition_pair) == apply_tables.end())
                     {
-                        apply_tables[partition_pair] = true;
+                        apply_tables[new_partition_pair] = true;
+                    }
+                    if (apply_tables.find(new_partition_belongs_pair) == apply_tables.end())
+                    {
+                        apply_tables[new_partition_belongs_pair] = true;
                     }
                     break;
                 }
@@ -369,10 +384,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if error happens, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
-        // if (isTooOldSchema(cur_version))
-        // {
-        //     return -1;
-        // }
+        if (cur_version == 0)
+        {
+            loadAllSchema(getter, cur_version, context);
+        }
 
         LOG_DEBUG(ks_log, "Try load schema diffs.");
 
@@ -410,12 +425,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return ret;
         }
 
+        LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}",
+            apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
+
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
 
-        size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
+        // size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
 
-        auto schema_apply_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
-        auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+        // auto schema_apply_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
         try
         {
@@ -424,39 +441,58 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // 并发处理 drop tables
             // 并发处理 drop databases
             // create databases
-            for (const auto & create_database_id : create_database_ids)
             {
-                schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
+                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                for (const auto & create_database_id : create_database_ids)
+                {
+                    LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
+                    //schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
+                    builder.applyCreateSchema(create_database_id); 
+                }
+
+                //schema_apply_wait_group->wait();
             }
 
-            schema_apply_wait_group->wait();
-
-            // apply tables
-            for (const auto & [key, value] : apply_tables)
             {
-                const auto & database_id = key.first;
-                const auto & table_id = key.second;
-                schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
+                // apply tables
+                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                for (const auto & [key, value] : apply_tables)
+                {
+                    const auto & database_id = key.first;
+                    const auto & table_id = key.second;
+                    LOG_INFO(DB::Logger::get("hyy"), "apply tables with database_id:{}, table_id:{}", database_id, table_id);
+                    //schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
+                    builder.applyVariousDiff(database_id, table_id);
+                }
+                //schema_apply_wait_group->wait();
             }
-            schema_apply_wait_group->wait();
-
-            // drop tables
-            for (const auto & [key, value] : drop_tables)
+            
             {
-                const auto & database_id = key.first;
-                const auto & table_id = key.second;
-                schema_apply_wait_group->schedule([&] { builder.applyDropTable(database_id, table_id); });
+                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                // drop tables
+                for (const auto & [key, value] : drop_tables)
+                {
+                    const auto & database_id = key.first;
+                    const auto & table_id = key.second;
+                    //schema_apply_wait_group->schedule([&] { builder.applyDropTable(database_id, table_id); });
+                    builder.applyDropTable(database_id, table_id);
+                }
+
+                //schema_apply_wait_group->wait();
             }
-
-            schema_apply_wait_group->wait();
-
-            // drop databases
-            for (const auto & drop_database_id : drop_database_ids)
+            
             {
-                schema_apply_wait_group->schedule([&] { builder.applyDropSchema(drop_database_id); });
-            }
+                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                // drop databases
+                for (const auto & drop_database_id : drop_database_ids)
+                {
+                    //schema_apply_wait_group->schedule([&] { builder.applyDropSchema(drop_database_id); });
+                    builder.applyDropSchema(drop_database_id);
+                }
 
-            schema_apply_wait_group->wait();
+                //schema_apply_wait_group->wait();
+            }
+            
         }
         catch (TiFlashException & e)
         {
@@ -464,7 +500,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             }
-            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_ERROR(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Exception & e)
@@ -474,35 +510,35 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 throw;
             }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(ks_log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_ERROR(ks_log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Poco::Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(ks_log, "apply diff meets exception : {}", e.displayText());
+            LOG_ERROR(ks_log, "apply diff meets exception : {}", e.displayText());
             return -1;
         }
         catch (std::exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(ks_log, "apply diff meets exception : {}", e.what());
+            LOG_ERROR(ks_log, "apply diff meets exception : {}", e.what());
             return -1;
         }
 
         return used_version;
     }
 
-    // Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
-    // {
-    //     if (!getter.checkSchemaDiffExists(version))
-    //     {
-    //         --version;
-    //     }
-    //     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
-    //     builder.syncAllSchema();
-    //     return version;
-    // }
+    Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
+    {
+        if (!getter.checkSchemaDiffExists(version))
+        {
+            --version;
+        }
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+        builder.syncAllSchema();
+        return version;
+    }
 
     void dropAllSchema(Getter & getter, Context & context)
     {

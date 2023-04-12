@@ -49,7 +49,7 @@ struct SchemaBuilder
 
     // void applyDiff(const SchemaDiff & diff);
 
-    // void syncAllSchema();
+    void syncAllSchema();
 
     void dropAllSchema();
 

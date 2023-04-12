@@ -47,6 +47,8 @@
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
 
+#include "Common/Exception.h"
+#include "Common/Logger.h"
 #include "Storages/Transaction/Types.h"
 
 namespace DB
@@ -403,14 +405,18 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(const DBInfoPtr & db_inf
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+        //throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table in TiKV : {}", table_id);
+        return;
     }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
-                               Errors::DDL::MissingTable);
+        //throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
+                            //    Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *table_info));
+        return;
     }
 
     applyAlterLogicalTable(db_info, table_info, storage);
@@ -433,8 +439,10 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(const DBInfoPtr &
             auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
             if (part_storage == nullptr)
             {
-                throw TiFlashException(fmt::format("miss table in TiFlash : {},  partition: {}.", name_mapper.debugCanonicalName(*db_info, *table_info), part_def.id),
-                                       Errors::DDL::MissingTable);
+                // throw TiFlashException(fmt::format("miss table in TiFlash : {},  partition: {}.", name_mapper.debugCanonicalName(*db_info, *table_info), part_def.id),
+                //                        Errors::DDL::MissingTable);
+                LOG_WARNING(log, "miss table in TiFlash : {},  partition: {}.", name_mapper.debugCanonicalName(*db_info, *table_info), part_def.id);
+                return;
             }
             applyAlterPhysicalTable(db_info, part_table_info, part_storage);
         }
@@ -586,19 +594,25 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss old table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss old table in TiKV : {}", table_id);
+        return;
+        //throw TiFlashException(fmt::format("miss old table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
     }
     if (!table_info->isLogicalPartitionTable())
     {
-        throw TiFlashException(fmt::format("new table in TiKV not partition table {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
-                               Errors::DDL::TableTypeNotMatch);
+        // throw TiFlashException(fmt::format("new table in TiKV not partition table {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
+        //                        Errors::DDL::TableTypeNotMatch);
+        LOG_WARNING(log, "new table in TiKV not partition table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
+        return;
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table in TiFlash {}", table_id), Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", table_id);
+        return;
+        //throw TiFlashException(fmt::format("miss table in TiFlash {}", table_id), Errors::DDL::MissingTable);
     }
 
     applyPartitionDiff(db_info, table_info, storage);
@@ -610,8 +624,10 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     const auto & orig_table_info = storage->getTableInfo();
     if (!orig_table_info.isLogicalPartitionTable())
     {
-        throw TiFlashException(fmt::format("old table in TiFlash not partition table {}", name_mapper.debugCanonicalName(*db_info, orig_table_info)),
-                               Errors::DDL::TableTypeNotMatch);
+        // throw TiFlashException(fmt::format("old table in TiFlash not partition table {}", name_mapper.debugCanonicalName(*db_info, orig_table_info)),
+        //                        Errors::DDL::TableTypeNotMatch);
+        LOG_WARNING(log, "old table in TiFlash not partition table {}", name_mapper.debugCanonicalName(*db_info, orig_table_info));
+        return;
     }
 
     const auto & orig_defs = orig_table_info.partition.definitions;
@@ -676,14 +692,18 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(const DBInfoPtr & new_d
     auto new_table_info = getter.getTableInfo(new_db_info->id, table_id);
     if (new_table_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
+        //throw TiFlashException(fmt::format("miss table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table id in TiKV {}", table_id);
+        return;
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        throw TiFlashException(fmt::format("miss table id in TiFlash {}", table_id), Errors::DDL::MissingTable);
+        //throw TiFlashException(fmt::format("miss table id in TiFlash {}", table_id), Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table id in TiFlash {}", table_id);
+        return;
     }
 
     applyRenameLogicalTable(new_db_info, new_table_info, storage);
@@ -705,7 +725,9 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
             auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
             if (part_storage == nullptr)
             {
-                throw Exception(fmt::format("miss old table id in Flash {}", part_def.id));
+                //throw Exception(fmt::format("miss old table id in Flash {}", part_def.id));
+                LOG_WARNING(log, "miss old table id in Flash {}", part_def.id);
+                return;
             }
             auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
             applyRenamePhysicalTable(new_db_info, *part_table_info, part_storage);
@@ -773,27 +795,45 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// Table_id in diff.affected_opts[0] is the table id of the partition table
     /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
     GET_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition).Increment();
-    if (diff.affected_opts.empty())
-        throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
+    if (diff.affected_opts.empty()){
+        //throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
+        LOG_WARNING(log, "Incorrect schema diff, no affected_opts for alter table exchange partition schema diff");
+        return;
+    }
+        
     auto npt_db_info = getter.getDatabase(diff.schema_id);
-    if (npt_db_info == nullptr)
-        throw TiFlashException(fmt::format("miss database: {}", diff.schema_id), Errors::DDL::StaleSchema);
+    if (npt_db_info == nullptr){
+        //throw TiFlashException(fmt::format("miss database: {}", diff.schema_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss database: {}", diff.schema_id);
+        return;
+    }
+        
     auto pt_db_info = getter.getDatabase(diff.affected_opts[0].schema_id);
-    if (pt_db_info == nullptr)
-        throw TiFlashException(fmt::format("miss database: {}", diff.affected_opts[0].schema_id), Errors::DDL::StaleSchema);
+    if (pt_db_info == nullptr){
+        //throw TiFlashException(fmt::format("miss database: {}", diff.affected_opts[0].schema_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss database: {}", diff.affected_opts[0].schema_id);
+        return;
+    }
+        
     auto npt_table_id = diff.old_table_id;
     auto pt_partition_id = diff.table_id;
     auto pt_table_info = diff.affected_opts[0].table_id;
     /// step 1 change the mete data of partition table
     auto table_info = getter.getTableInfo(pt_db_info->id, pt_table_info);
-    if (table_info == nullptr)
-        throw TiFlashException(fmt::format("miss table in TiKV : {}", pt_table_info), Errors::DDL::StaleSchema);
+    if (table_info == nullptr) {
+        //throw TiFlashException(fmt::format("miss table in TiKV : {}", pt_table_info), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table in TiKV : {}", pt_table_info);
+        return;
+    }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
-    if (storage == nullptr)
-        throw TiFlashException(
-            fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
-            Errors::DDL::MissingTable);
+    if (storage == nullptr){
+        //throw TiFlashException(
+            // fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
+            // Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info));
+        return;
+    }   
 
     LOG_INFO(log, "Exchange partition for table {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info));
     auto orig_table_info = storage->getTableInfo();
@@ -812,9 +852,12 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
 
     /// step 2 change non partition table to a partition of the partition table
     storage = tmt_context.getStorages().get(keyspace_id, npt_table_id);
-    if (storage == nullptr)
-        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*npt_db_info, *table_info)),
-                               Errors::DDL::MissingTable);
+    if (storage == nullptr){
+        //throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*npt_db_info, *table_info)),
+                            //    Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*npt_db_info, *table_info));
+        return;
+    }
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = pt_table_info;
     orig_table_info.is_partition_table = true;
@@ -838,13 +881,20 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
 
     /// step 3 change partition of the partition table to non partition table
     table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
-    if (table_info == nullptr)
-        throw TiFlashException(fmt::format("miss table in TiKV : {}", pt_partition_id), Errors::DDL::StaleSchema);
+    if (table_info == nullptr){
+        //throw TiFlashException(fmt::format("miss table in TiKV : {}", pt_partition_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table in TiKV : {}", pt_partition_id);
+        return;
+    }   
     storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
-    if (storage == nullptr)
-        throw TiFlashException(
-            fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
-            Errors::DDL::MissingTable);
+    if (storage == nullptr){
+        // throw TiFlashException(
+        //     fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info)),
+        //     Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*pt_db_info, *table_info));
+        return;
+    }
+    
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = DB::InvalidTableID;
     orig_table_info.is_partition_table = false;
@@ -891,16 +941,23 @@ static ASTPtr parseCreateStatement(const String & statement)
                              String("in ") + __PRETTY_FUNCTION__,
                              /*allow_multi_statements=*/false,
                              0);
-    if (!ast)
-        throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
+    if (!ast) {
+        //throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
+        LOG_WARNING(DB::Logger::get("SchemaBuilder"), "error_msg is {}", error_msg);
+        return nullptr;
+    }
+        
     return ast;
 }
 
 String createDatabaseStmt(Context & context, const DBInfo & db_info, const SchemaNameMapper & name_mapper)
 {
     auto mapped = name_mapper.mapDatabaseName(db_info);
-    if (isReservedDatabase(context, mapped))
-        throw TiFlashException(fmt::format("Database {} is reserved", name_mapper.debugDatabaseName(db_info)), Errors::DDL::Internal);
+    if (isReservedDatabase(context, mapped)){
+        LOG_WARNING(DB::Logger::get("SchemaBuilder"), "Database {} is reserved", name_mapper.debugDatabaseName(db_info));
+        return "";
+        //throw TiFlashException(fmt::format("Database {} is reserved", name_mapper.debugDatabaseName(db_info)), Errors::DDL::Internal);
+    }
 
     // R"raw(
     // CREATE DATABASE IF NOT EXISTS `db_xx`
@@ -926,8 +983,14 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     LOG_INFO(log, "Creating database {}", name_mapper.debugDatabaseName(*db_info));
 
     auto statement = createDatabaseStmt(context, *db_info, name_mapper);
+    if (statement == ""){
+        return;
+    }
 
     ASTPtr ast = parseCreateStatement(statement);
+    if (ast == nullptr){
+        return;
+    }
 
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
@@ -1053,8 +1116,13 @@ String createTableStmt(
     }
     else
     {
+        // LOG_INFO(log, "hyy into");
         throw TiFlashException(fmt::format("Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type)), Errors::DDL::Internal);
+        // LOG_WARNING(log, "Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type));
+        // return "";
     }
+    // LOG_INFO(log, "before finish createTableStmt");
+    // LOG_INFO(log, "create table stmt : {}", stmt);
 
     return stmt;
 }
@@ -1103,6 +1171,9 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
     }
 
     String stmt = createTableStmt(*db_info, *table_info, name_mapper, log);
+    if (stmt.empty()){
+        return;
+    }
 
     LOG_INFO(log, "Creating table {} with statement: {}", name_mapper.debugCanonicalName(*db_info, *table_info), stmt);
 
@@ -1188,7 +1259,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DatabaseID & db_id,
     auto db_info = getter.getDatabase(db_id);
     if (db_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
+        // throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss database: {}", db_id);
+        return;
     }
     applyDropTable(db_info, table_id);
 }
@@ -1223,15 +1296,19 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
     auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
     if (unlikely(latest_table_info == nullptr))
     {
-        throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+        //throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table in TiKV : {}", table_id);
+        return;
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, latest_table_info->id);
     if (unlikely(storage == nullptr))
     {
-        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info)),
-                               Errors::DDL::MissingTable);
+        //throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info)),
+                            //    Errors::DDL::MissingTable);
+        LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info));
+        return;
     }
 
     applySetTiFlashReplicaOnLogicalTable(db_info, latest_table_info, storage);
@@ -1252,8 +1329,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnLogicalTable(con
             auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
             if (unlikely(part_storage == nullptr))
             {
-                throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info)),
-                                       Errors::DDL::MissingTable);
+                //throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info)),
+                                    //    Errors::DDL::MissingTable);
+                LOG_WARNING(log, "miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info));
+                return;
             }
             applySetTiFlashReplicaOnPhysicalTable(db_info, new_part_table_info, part_storage);
         }
@@ -1287,15 +1366,25 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, TableID table_id)
 {
+    LOG_INFO(log, "INTO applyVariousDiff");
     auto db_info = getter.getDatabase(db_id);
     if (db_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss database: {}", db_id);
+        return;
+        //throw TiFlashException(fmt::format("miss database: {}", db_id), Errors::DDL::StaleSchema);
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     auto table_info = getter.getTableInfo(db_info->id, table_id);
+
+    if (table_info == nullptr)
+    {
+        //throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+        LOG_WARNING(log, "miss table in TiKV: {}", table_id);
+        return;
+    }
 
     LOG_DEBUG(log, "Table {} syncing during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
     if (storage == nullptr)
@@ -1325,7 +1414,7 @@ void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, Table
     applyAlterLogicalTable(db_info, table_info, storage);
     LOG_DEBUG(log, "Table {} synced during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
-/*
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
@@ -1436,7 +1525,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
     LOG_INFO(log, "Loaded all schemas.");
 }
-*/
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 {
