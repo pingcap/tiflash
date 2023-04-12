@@ -975,21 +975,18 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     while (true)
     {
         auto block = doJoinBlockHash(probe_process_info);
+        assert(block);
         result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
         /// exit the while loop if
         /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
         /// 2. result_rows exceeds the min_result_block_size
         if (probe_process_info.all_rows_joined_finish || result_rows >= probe_process_info.min_result_block_size)
-        {
-            if (result_blocks.empty())
-                return block;
-            result_blocks.push_back(std::move(block));
             break;
-        }
-        result_blocks.push_back(std::move(block));
     }
     assert(!result_blocks.empty());
-    vstackBlocks(std::move(result_blocks));
+    return vstackBlocks(std::move(result_blocks));
+}
 
 namespace
 {
