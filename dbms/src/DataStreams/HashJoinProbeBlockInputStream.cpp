@@ -14,7 +14,7 @@
 
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
 
 #include <magic_enum.hpp>
 

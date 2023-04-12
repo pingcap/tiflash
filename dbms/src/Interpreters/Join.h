@@ -264,7 +264,7 @@ public:
     SpillerPtr probe_spiller;
 
 private:
-    friend class NonJoinedBlockInputStream;
+    friend class ScanHashMapAfterProbBlockInputStream;
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;

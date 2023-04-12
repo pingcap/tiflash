@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 
 
@@ -111,7 +111,7 @@ struct AdderNonJoinedRightSemi
     }
 };
 
-NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
+ScanHashMapAfterProbBlockInputStream::ScanHashMapAfterProbBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
     : parent(parent_)
     , index(index_)
     , step(step_)
@@ -165,7 +165,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
     current_partition_index = index;
 }
 
-Block NonJoinedBlockInputStream::readImpl()
+Block ScanHashMapAfterProbBlockInputStream::readImpl()
 {
     /// If build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
@@ -236,7 +236,7 @@ Block NonJoinedBlockInputStream::readImpl()
 }
 
 template <bool row_flagged, bool output_joined_rows>
-void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
+void ScanHashMapAfterProbBlockInputStream::fillColumnsUsingCurrentPartition(
     size_t num_columns_left,
     MutableColumns & mutable_columns_left,
     size_t num_columns_right,
@@ -347,7 +347,7 @@ private:
 };
 
 template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
-void NonJoinedBlockInputStream::fillColumns(const Map & map,
+void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
                                             size_t num_columns_left,
                                             MutableColumns & mutable_columns_left,
                                             size_t num_columns_right,

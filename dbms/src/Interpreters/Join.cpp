@@ -18,7 +18,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -558,10 +558,10 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
-    if (needReturnNonJoinedData(kind))
+    if (needScanHashMapAfterProb(kind))
     {
         /** Move the key columns to the beginning of the block.
-          * This is where NonJoinedBlockInputStream will expect.
+          * This is where ScanHashMapAfterProbBlockInputStream will expect.
           */
         size_t key_num = 0;
         for (const auto & name : key_names_right)
@@ -876,7 +876,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
       *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
       */
     size_t num_columns_to_skip = 0;
-    if (needReturnNonJoinedData(kind))
+    if (needScanHashMapAfterProb(kind))
         num_columns_to_skip = keys_size;
 
     /// Add new columns to the block.
@@ -1568,7 +1568,7 @@ void Join::workAfterProbeFinish()
         {
             spillAllProbePartitions();
             probe_spiller->finishSpill();
-            if (!needReturnNonJoinedData(kind))
+            if (!needScanHashMapAfterProb(kind))
             {
                 releaseAllPartitions();
             }
@@ -1680,7 +1680,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
 {
-    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
+    return std::make_shared<ScanHashMapAfterProbBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
 }
 
 Blocks Join::dispatchBlock(const Strings & key_columns_names, const Block & from_block)
@@ -1887,7 +1887,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         {
             spilled_partition_indexes.pop_front();
         }
-        if (needReturnNonJoinedData(kind))
+        if (needScanHashMapAfterProb(kind))
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);

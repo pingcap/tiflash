@@ -69,7 +69,7 @@ inline bool needRecordNotInsertRows(ASTTableJoin::Kind kind)
 {
     return getFullness(kind) || (kind == ASTTableJoin::Kind::RightAnti) || isNullAwareSemiFamily(kind);
 }
-inline bool needReturnNonJoinedData(ASTTableJoin::Kind kind)
+inline bool needScanHashMapAfterProb(ASTTableJoin::Kind kind)
 {
     return getFullness(kind) || isRightSemiFamily(kind);
 }

@@ -20,13 +20,13 @@
 
 namespace DB
 {
-/// Stream from not joined earlier rows of the right table.
-class NonJoinedBlockInputStream : public IProfilingBlockInputStream
+/// Stream from scanning the right table after prob
+class ScanHashMapAfterProbBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
+    ScanHashMapAfterProbBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
 
-    String getName() const override { return "NonJoined"; }
+    String getName() const override { return "ScanHashMapAfterProb"; }
 
     Block getHeader() const override { return result_sample_block; };
 
