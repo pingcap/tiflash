@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/CachedSpillHandler.h>
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -20,7 +21,6 @@
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
-
 
 namespace DB
 {

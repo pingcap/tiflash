@@ -62,30 +62,4 @@ private:
     SpillDetails prev_spill_details;
     static const Int64 INVALID_CURRENT_SPILLED_FILE_INDEX = -10;
 };
-
-class CachedSpillHandler
-{
-public:
-    CachedSpillHandler(
-        Spiller * spiller,
-        UInt64 partition_id,
-        const BlockInputStreamPtr & from_,
-        size_t bytes_threshold_,
-        const std::function<bool()> & is_cancelled_);
-
-    bool batchRead();
-
-    void spill();
-
-private:
-    SpillHandler handler;
-    BlockInputStreamPtr from;
-    size_t bytes_threshold;
-    std::function<bool()> is_cancelled;
-
-    Blocks batch;
-    bool finished = false;
-};
-using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
-
 } // namespace DB

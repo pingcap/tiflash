@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/CachedSpillHandler.h>
 #include <Core/SpillHandler.h>
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
@@ -77,10 +78,9 @@ OperatorStatus LocalSortTransformOp::fromPartialToRestore()
     // convert to restore phase.
     status = LocalSortStatus::RESTORE;
 
-    /// If spill happens
     LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
-    /// Create sorted streams to merge.
+    /// Create spilled sorted streams to merge.
     spiller->finishSpill();
     auto inputs_to_merge = spiller->restoreBlocks(0, 0);
 
@@ -93,7 +93,7 @@ OperatorStatus LocalSortTransformOp::fromPartialToRestore()
             max_block_size,
             limit));
 
-    /// Will merge that sorted streams.
+    /// merge the spilled data and memory data.
     merge_impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, order_desc, max_block_size, limit);
     merge_impl->readPrefix();
     return OperatorStatus::IO;

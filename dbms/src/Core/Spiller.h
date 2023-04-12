@@ -88,11 +88,11 @@ public:
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
-    /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     CachedSpillHandlerPtr createCachedSpillHandler(
         const BlockInputStreamPtr & from,
         UInt64 partition_id,
         const std::function<bool()> & is_cancelled);
+    /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     void spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
     BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
