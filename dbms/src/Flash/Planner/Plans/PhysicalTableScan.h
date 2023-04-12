@@ -57,8 +57,7 @@ private:
     void buildProjection(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
-        const NamesAndTypes & storage_schema,
-        Context & context);
+        const NamesAndTypes & storage_schema);
 
 private:
     FilterConditions filter_conditions;

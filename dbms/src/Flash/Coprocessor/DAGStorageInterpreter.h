@@ -113,7 +113,8 @@ private:
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
-    SourceOps buildRemoteSourceOps(
+    void buildRemoteSourceOps(
+        SourceOps & source_ops,
         PipelineExecutorStatus & exec_status,
         const std::vector<RemoteRequest> & remote_requests);
 

@@ -334,28 +334,16 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    /// TODO: consider remote read
-    size_t remote_read_streams_start_index = source_ops.size();
+    size_t remote_read_sources_start_index = source_ops.size();
 
-    SourceOps remote_source_ops;
     if (!remote_requests.empty())
-        remote_source_ops = buildRemoteSourceOps(exec_status, remote_requests);
+        buildRemoteSourceOps(source_ops, exec_status, remote_requests);
 
     /// build pipeline
-    size_t local_source_size = source_ops.size();
-    group_builder.init(source_ops.size() + remote_source_ops.size());
+    group_builder.init(source_ops.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        if (i >= local_source_size)
-        {
-            auto idx = i - local_source_size;
-            builder.setSourceOp(std::move(remote_source_ops[idx]));
-            i++;
-        }
-        else
-        {
-            builder.setSourceOp(std::move(source_ops[i++]));
-        }
+        builder.setSourceOp(std::move(source_ops[i++]));
     });
 
     for (const auto & lock : drop_locks)
@@ -365,14 +353,14 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local table scan.
-    executeCastAfterTableScan(exec_status, group_builder, remote_read_streams_start_index);
+    executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
 
-    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_streams_start_index, generated_column_infos, log);
+    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_streams_start_index, filter_conditions, *analyzer, log);
+        ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_sources_start_index, filter_conditions, *analyzer, log);
         /// TODO: record profile
     }
 }
@@ -609,7 +597,8 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     }
 }
 
-SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
+void DAGStorageInterpreter::buildRemoteSourceOps(
+    SourceOps & source_ops,
     PipelineExecutorStatus & exec_status,
     const std::vector<RemoteRequest> & remote_requests)
 {
@@ -622,7 +611,6 @@ SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
     size_t rest_task = all_tasks.size() % concurrent_num;
     pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
     /// TODO: support S3
-    SourceOps remote_source_ops;
     for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
     {
         size_t task_end = task_start + task_per_thread;
@@ -635,14 +623,11 @@ SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
-        remote_source_ops.emplace_back(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
+        source_ops.emplace_back(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
         task_start = task_end;
     }
 
-    LOG_DEBUG(
-        log,
-        "remote sourceOps built");
-    return remote_source_ops;
+    LOG_DEBUG(log, "remote sourceOps built");
 }
 
 DAGContext & DAGStorageInterpreter::dagContext() const

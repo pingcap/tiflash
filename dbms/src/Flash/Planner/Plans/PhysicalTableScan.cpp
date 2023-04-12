@@ -81,7 +81,7 @@ void PhysicalTableScan::buildPipelineExecGroup(
     DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, concurrency);
     storage_interpreter.execute(exec_status, group_builder);
 
-    buildProjection(exec_status, group_builder, storage_interpreter.analyzer->getCurrentInputColumns(), context);
+    buildProjection(exec_status, group_builder, storage_interpreter.analyzer->getCurrentInputColumns());
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
@@ -96,8 +96,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
 void PhysicalTableScan::buildProjection(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    const NamesAndTypes & storage_schema,
-    Context &)
+    const NamesAndTypes & storage_schema)
 {
     auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
 
