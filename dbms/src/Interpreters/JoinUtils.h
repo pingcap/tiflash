@@ -58,6 +58,9 @@ inline bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
         || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
 }
+
+bool mayBlockExpandedAfterJoinBlock(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+
 struct ProbeProcessInfo
 {
     Block block;

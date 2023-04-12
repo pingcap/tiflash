@@ -265,6 +265,8 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    ASTTableJoin::Strictness original_strictness;
+    const bool may_block_expanded_after_join_block;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     const Names key_names_left;
@@ -290,7 +292,6 @@ private:
 
     const JoinNonEqualConditions non_equal_conditions;
 
-    ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
     /** Blocks of "right" table.
       */

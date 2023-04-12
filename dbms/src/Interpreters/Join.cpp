@@ -130,6 +130,8 @@ Join::Join(
     , match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
+    , original_strictness(strictness)
+    , may_block_expanded_after_join_block(mayBlockExpandedAfterJoinBlock(kind, strictness))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
@@ -138,7 +140,6 @@ Join::Join(
     , active_probe_threads(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
-    , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
@@ -980,8 +981,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         result_blocks.push_back(std::move(block));
         /// exit the while loop if
         /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
-        /// 2. result_rows exceeds the min_result_block_size
-        if (probe_process_info.all_rows_joined_finish || result_rows >= probe_process_info.min_result_block_size)
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (probe_process_info.all_rows_joined_finish || (may_block_expanded_after_join_block && result_rows >= probe_process_info.min_result_block_size))
             break;
     }
     assert(!result_blocks.empty());

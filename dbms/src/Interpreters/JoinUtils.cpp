@@ -66,4 +66,20 @@ void computeDispatchHash(size_t rows,
             data[i] = updateHashValue(join_restore_round, data[i]);
     }
 }
+
+bool mayBlockExpandedAfterJoinBlock(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+{
+    /// null aware semi/left semi/anti join never expand the block
+    if (isNullAwareSemiFamily(kind))
+        return false;
+    if (isLeftSemiFamily(kind))
+        return false;
+    if (isAntiJoin(kind))
+        return false;
+    /// strictness == Any means semi join, it never expand the block
+    if (strictness == ASTTableJoin::Strictness::Any)
+        return false;
+    /// for all the other cases, return true by default
+    return true;
+}
 } // namespace DB
