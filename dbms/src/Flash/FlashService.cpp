@@ -158,13 +158,14 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_INFO(log, "Handling coprocessor request, start ts: {}, region info: {}, region epoch: {}", request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
+    auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "Handling coprocessor request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}", is_remote_read, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
 
-    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
     if (is_remote_read)
@@ -209,7 +210,9 @@ grpc::Status FlashService::Coprocessor(
                 return grpc::Status::OK;
             }
         }
-        LOG_INFO(log, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+        if (wait_ms > 1000)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -226,7 +229,7 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_INFO(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_IMPL(log, log_level, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -261,7 +264,7 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
         return cop_handler.execute();
     });
 
-    LOG_INFO(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_INFO(log, "Handle batch coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 

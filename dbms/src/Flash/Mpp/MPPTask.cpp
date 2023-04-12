@@ -366,7 +366,6 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    LOG_INFO(log, "task starts runImpl");
     RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
@@ -389,14 +388,14 @@ void MPPTask::runImpl()
         LOG_DEBUG(log, "task starts preprocessing");
         preprocess();
         auto time_cost_in_preprocess_ms = stopwatch.elapsedMilliseconds();
-        LOG_DEBUG(log, "task preprocess done");
+        LOG_INFO(log, "task preprocess done, time cost: {}", time_cost_in_preprocess_ms);
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
         LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getExternalThreadCnt(), new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
         auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
-        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
+        LOG_INFO(log, "task starts running, time cost in schedule: {} ms", time_cost_in_schedule_ms);
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
@@ -407,6 +406,7 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
 
         auto result = query_executor_holder->execute();
+        LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
         if (likely(result.is_success))
         {
             /// Need to finish writing before closing the receiver.
