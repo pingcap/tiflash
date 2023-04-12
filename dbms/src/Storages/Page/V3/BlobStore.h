@@ -121,6 +121,7 @@ private:
 
     template <typename>
     friend class PageDirectoryFactory;
+    template <typename>
     friend class PageStorageControlV3;
 
 #ifndef DBMS_PUBLIC_GTEST
