@@ -767,6 +767,15 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         const auto & table_infos = tidb_table_info.columns;
         for (const auto & col : columns_to_read)
         {
+            // table_infos does not contain handle column
+            if (col.id == -1)
+            {
+                auto handle = ColumnInfo();
+                handle.id = EXTRA_HANDLE_COLUMN_ID;
+                handle.name = EXTRA_HANDLE_COLUMN_NAME;
+                table_scan_column_info.push_back(handle);
+                continue;
+            }
             auto iter = std::find_if(
                 table_infos.begin(),
                 table_infos.end(),
