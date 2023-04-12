@@ -1134,7 +1134,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
-        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
     }
     return input_col[column_index].name;
 }
@@ -1144,7 +1144,7 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<Col
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
-        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
     }
     return input_col[column_index].id;
 }
