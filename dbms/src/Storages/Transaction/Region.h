@@ -120,8 +120,8 @@ public:
     explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
-    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
+    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
@@ -213,7 +213,7 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
+    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
