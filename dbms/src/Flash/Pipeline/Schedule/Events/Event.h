@@ -88,8 +88,6 @@ protected:
 
     LoggerPtr log;
 
-    Stopwatch stop_watch;
-
 private:
     Events outputs;
 
