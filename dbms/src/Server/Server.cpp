@@ -676,7 +676,7 @@ public:
                     throw;
             }
         }
-            
+
         for (auto & server : servers)
             server->start();
     }
