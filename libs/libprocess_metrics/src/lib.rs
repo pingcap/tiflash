@@ -53,6 +53,7 @@ pub fn ticks_per_second() -> i64 {
 #[cfg(not(target_os = "linux"))]
 #[no_mangle]
 pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
+    return ProcessMetricsInfo::default();
 }
 
 #[cfg(target_os = "linux")]
