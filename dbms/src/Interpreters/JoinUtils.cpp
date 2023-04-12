@@ -67,7 +67,7 @@ void computeDispatchHash(size_t rows,
     }
 }
 
-bool mayBlockExpandedAfterJoinBlock(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
     /// null aware semi/left semi/anti join never expand the block
     if (isNullAwareSemiFamily(kind))

@@ -131,7 +131,7 @@ Join::Join(
     , kind(kind_)
     , strictness(strictness_)
     , original_strictness(strictness)
-    , may_block_expanded_after_join_block(mayBlockExpandedAfterJoinBlock(kind, strictness))
+    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind, strictness))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
@@ -982,7 +982,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         /// exit the while loop if
         /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
         /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
-        if (probe_process_info.all_rows_joined_finish || (may_block_expanded_after_join_block && result_rows >= probe_process_info.min_result_block_size))
+        if (probe_process_info.all_rows_joined_finish || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
             break;
     }
     assert(!result_blocks.empty());
