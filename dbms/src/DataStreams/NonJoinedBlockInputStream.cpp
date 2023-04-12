@@ -126,7 +126,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
           */
 
     size_t num_columns_left = left_sample_block.columns();
-    if (isReverseJoin(parent.getKind()))
+    if (isRightSemiFamily(parent.getKind()))
         num_columns_left = 0;
     else
         result_sample_block = materializeBlock(left_sample_block);

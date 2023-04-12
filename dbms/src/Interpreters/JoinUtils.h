@@ -26,7 +26,8 @@ inline bool getFullness(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
 }
-inline bool isReverseJoin(ASTTableJoin::Kind kind)
+/// For semi and anti join A semi/anti join B, that uses A as build table
+inline bool isRightSemiFamily(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::RightSemi || kind == ASTTableJoin::Kind::RightAnti;
 }
@@ -70,7 +71,7 @@ inline bool needRecordNotInsertRows(ASTTableJoin::Kind kind)
 }
 inline bool needReturnNonJoinedData(ASTTableJoin::Kind kind)
 {
-    return getFullness(kind) || isReverseJoin(kind);
+    return getFullness(kind) || isRightSemiFamily(kind);
 }
 
 struct ProbeProcessInfo

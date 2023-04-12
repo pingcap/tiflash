@@ -755,7 +755,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
-    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isReverseJoin(kind))
+    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isRightSemiFamily(kind))
     {
         /// inner | rightSemi | rightAnti join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
@@ -908,7 +908,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
-    if (isReverseJoin(kind) && non_equal_conditions.other_cond_expr != nullptr)
+    if (isRightSemiFamily(kind) && non_equal_conditions.other_cond_expr != nullptr)
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
         flag_mapped_entry_helper_column->reserve(rows);
@@ -933,7 +933,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     JoinPartition::probeBlock(partitions, rows, key_columns, key_sizes, added_columns, null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info, flag_mapped_entry_helper_column);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
-    if (isReverseJoin(kind) && !flag_mapped_entry_helper_column)
+    if (isRightSemiFamily(kind) && !flag_mapped_entry_helper_column)
     {
         return sample_block_with_columns_to_add;
     }
@@ -987,7 +987,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (isReverseJoin(kind))
+        if (isRightSemiFamily(kind))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;

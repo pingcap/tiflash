@@ -206,7 +206,7 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    strictness = (isSemiJoin() && !isReverseJoin(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+    strictness = (isSemiJoin() && !isRightSemiFamily(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
@@ -227,7 +227,7 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
 
 String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, bool has_other_condition) const
 {
-    if (!isReverseJoin(kind) || !has_other_condition)
+    if (!isRightSemiFamily(kind) || !has_other_condition)
     {
         return "";
     }

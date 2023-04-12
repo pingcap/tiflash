@@ -112,8 +112,8 @@ struct ASTTableJoin : public IAST
         /// For left (anti) semi join, the exact result must be given, so both of them need to be null-aware.
         NullAware_LeftSemi, /// null-aware version of left semi join, used by TiFlash.
         NullAware_LeftAnti, /// null-aware version of left anti semi join, used by TiFlash.
-        RightSemi, /// semi join, while using left table to build hash table.
-        RightAnti, /// anti semi join, while using left table to build hash table.
+        RightSemi, /// semi join, A semi join B, while using table A to build hash table.
+        RightAnti, /// anti semi join, A anti semi join B, while using table A to build hash table.
     };
 
     Locality locality = Locality::Unspecified;
