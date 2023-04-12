@@ -51,8 +51,6 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
-#include "Storages/Transaction/TypeMapping.h"
-
 
 namespace DB
 {
