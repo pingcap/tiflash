@@ -69,14 +69,14 @@ void computeDispatchHash(size_t rows,
 
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
-    /// null aware semi/left semi/anti join never expand the block
+    /// null aware semi/left semi/anti join never expand the probe side
     if (isNullAwareSemiFamily(kind))
         return false;
     if (isLeftSemiFamily(kind))
         return false;
     if (isAntiJoin(kind))
         return false;
-    /// strictness == Any means semi join, it never expand the block
+    /// strictness == Any means semi join, it never expand the probe side
     if (strictness == ASTTableJoin::Strictness::Any)
         return false;
     /// for all the other cases, return true by default
