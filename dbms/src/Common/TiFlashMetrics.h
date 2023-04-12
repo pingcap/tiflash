@@ -381,7 +381,26 @@ namespace DB
         F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets{0.5, 2, 20}),                                                                     \
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
-        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))
+        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
+    M(tiflash_storage_remote_cache, "Operations of remote cache", Counter,                                                                          \
+        F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                                 \
+        F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                               \
+        F(type_dtfile_evict, {"type", "dtfile_evict"}),                                                                                             \
+        F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                               \
+        F(type_dtfile_download, {"type", "dtfile_download"}),                                                                                       \
+        F(type_dtfile_download_failed, {"type", "dtfile_download_failed"}),                                                                         \
+        F(type_page_hit, {"type", "page_hit"}),                                                                                                     \
+        F(type_page_miss, {"type", "page_miss"}),                                                                                                   \
+        F(type_page_evict, {"type", "page_evict"}),                                                                                                 \
+        F(type_page_full, {"type", "page_full"}),                                                                                                   \
+        F(type_page_download, {"type", "page_download"}))                                                                                           \
+    M(tiflash_storage_remote_cache_bytes, "Flow of remote cache", Counter,                                                                          \
+        F(type_dtfile_evict_bytes, {"type", "dtfile_evict_bytes"}),                                                                                 \
+        F(type_dtfile_download_bytes, {"type", "dtfile_download_bytes"}),                                                                           \
+        F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
+        F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
+        F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))
 
 // clang-format on
 
