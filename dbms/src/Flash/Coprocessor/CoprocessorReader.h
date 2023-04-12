@@ -161,7 +161,12 @@ public:
             return {nullptr, true, result.error.message(), false};
 
         if (!has_next)
-            return {nullptr, false, "", true};
+        {
+            if (result.finished)
+                return {nullptr, false, "", true};
+            else
+                return {nullptr, false, "", false};
+        }
 
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))

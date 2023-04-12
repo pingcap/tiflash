@@ -62,7 +62,7 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
         if (await_status == OperatorStatus::HAS_OUTPUT)
         {
             assert(reader_res);
-            assert(reader_res->second);
+            assert(reader_res->second || reader_res->first.finished);
             auto result = coprocessor_reader->toResult(
                 *reader_res,
                 block_queue,
@@ -109,7 +109,7 @@ OperatorStatus CoprocessorReaderSourceOp::awaitImpl()
     if (!block_queue.empty() || reader_res)
         return OperatorStatus::HAS_OUTPUT;
     reader_res.emplace(coprocessor_reader->nonBlockingNext());
-    if (reader_res->second)
+    if (reader_res->second || reader_res->first.finished)
     {
         return OperatorStatus::HAS_OUTPUT;
     }
