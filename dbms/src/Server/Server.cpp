@@ -673,7 +673,7 @@ public:
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
-                /// TCP with SSL
+                /// TCP with SSL (Not supported yet)
                 if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
                 {
 #if Poco_NetSSL_FOUND
@@ -703,9 +703,8 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
-                /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
-                    throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+                    LOG_WARNING(log, "No TCP and HTTP servers are created");
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -725,11 +724,7 @@ public:
                     throw;
             }
         }
-
-        if (servers.empty())
-            throw Exception("No servers started (add valid listen_host and 'tcp_port' or 'http_port' to configuration file.)",
-                            ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
+            
         for (auto & server : servers)
             server->start();
     }
