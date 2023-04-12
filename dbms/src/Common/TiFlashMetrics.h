@@ -364,10 +364,6 @@ namespace DB
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
         F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
-    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
-        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
-        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.001, 2, 20}))                                                       \
     M(tiflash_storage_remote_cache, "Operations of remote cache", Counter,                                                                          \
         F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                                 \
         F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                               \
