@@ -101,7 +101,7 @@ public:
         else
         {
             for (size_t i = 0; i < num; ++i)
-                meta_grouping_ids.insert(meta_data.grouping_ids()[0]);
+                meta_grouping_ids.insert(meta_data.grouping_ids()[i]);
         }
     }
 
