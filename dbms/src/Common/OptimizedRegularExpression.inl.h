@@ -625,7 +625,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
 
     while (true)
     {
-        // bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         bool success = re2->Match(expr_sp, start_pos, expr_len, re2_st::RE2::Anchor::UNANCHORED, matches, num_captures);
         if (!success)
             break;
