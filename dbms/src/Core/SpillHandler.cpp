@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
@@ -171,5 +172,4 @@ void SpillHandler::finish()
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
-
 } // namespace DB
