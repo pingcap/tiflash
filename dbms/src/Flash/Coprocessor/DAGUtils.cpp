@@ -23,8 +23,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 namespace DB
@@ -1141,20 +1139,48 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_name_set)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col)
+{
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
+    {
+        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+    }
+    return input_col[column_index].id;
+}
+
+void getColumnIDsFromExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col, std::unordered_set<ColumnID> & col_id_set)
 {
     if (expr.children_size() == 0)
     {
         if (isColumnExpr(expr))
         {
-            col_name_set.insert(getColumnNameForColumnExpr(expr, input_col));
+            col_id_set.insert(getColumnIDForColumnExpr(expr, input_col));
         }
     }
     else
     {
         for (const auto & child : expr.children())
         {
-            getColumnNamesFromExpr(child, input_col, col_name_set);
+            getColumnIDsFromExpr(child, input_col, col_id_set);
+        }
+    }
+}
+
+void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_id_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (isColumnExpr(expr))
+        {
+            col_id_set.insert(getColumnNameForColumnExpr(expr, input_col));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            getColumnNamesFromExpr(child, input_col, col_id_set);
         }
     }
 }

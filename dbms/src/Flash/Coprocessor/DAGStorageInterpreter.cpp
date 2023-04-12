@@ -51,6 +51,8 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
+#include "Storages/Transaction/TypeMapping.h"
+
 
 namespace DB
 {
@@ -1038,14 +1040,14 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         required_columns_tmp.emplace_back(std::move(name));
     }
 
-    std::unordered_set<String> col_name_set;
+    std::unordered_set<ColumnID> col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
     {
-        getColumnNamesFromExpr(expr, source_columns_tmp, col_name_set);
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
     }
     for (const auto & col : table_scan.getColumns())
     {
-        if (col_name_set.contains(col.name))
+        if (col_id_set.contains(col.id))
         {
             need_cast_column.push_back(ExtraCastAfterTSMode::None);
         }
