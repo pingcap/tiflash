@@ -209,8 +209,7 @@ grpc::Status FlashService::Coprocessor(
                 return grpc::Status::OK;
             }
         }
-        auto log_level = wait_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_TRACE;
-        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
+        LOG_INFO(log, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -227,7 +226,7 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_INFO(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -251,8 +250,7 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
 
     grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
         auto wait_ms = watch.elapsedMilliseconds();
-        auto log_level = wait_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_TRACE;
-        LOG_IMPL(log, log_level, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
+        LOG_INFO(log, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -263,7 +261,7 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
         return cop_handler.execute();
     });
 
-    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_INFO(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
