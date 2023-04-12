@@ -56,9 +56,11 @@ try
                        .topN(order_by_items, limit_size)
                        .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+    enablePipeline(false);
     /// disable spill
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
-    auto ref_columns = executeStreams(request, original_max_streams);
+    auto ref_columns = executeStreams(request, 1);
     /// enable spill
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
@@ -67,6 +69,13 @@ try
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+
+    // The implementation of topN in the pipeline model is LocalSort, and the result of using multiple threads is unstable. Therefore, a single thread is used here instead.
+    enablePipeline(true);
+    context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, 1));
+    context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
+    ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, 1));
 }
 CATCH
 
@@ -98,6 +107,8 @@ try
                            .topN(order_by_items, limit_size)
                            .build(context);
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+        enablePipeline(false);
         /// disable spill
         context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
         auto ref_columns = executeStreams(request, original_max_streams);
@@ -109,8 +120,17 @@ try
         /// enable spill and use small max_cached_data_bytes_in_spiller
         context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+
+        // The implementation of topN in the pipeline model is LocalSort, and the result of using multiple threads is unstable. Therefore, a single thread is used here instead.
+        // Because `UTF8MB4_GENERAL_CI` ignores case sensitivity, leading to unstable results, `ASSERT_COLUMNS_EQ_UR` is still used here.
+        enablePipeline(true);
+        context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
+        ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
+        context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
+        ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     }
 }
 CATCH
+
 } // namespace tests
 } // namespace DB
