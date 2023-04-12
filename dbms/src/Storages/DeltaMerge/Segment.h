@@ -142,6 +142,7 @@ public:
         PageIdU64 next_segment_id);
 
     static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageIdU64 segment_id);
+    static std::vector<PageIdU64> getAllSegmentIds(const DMContext & context, PageIdU64 segment_id);
 
     struct SegmentMetaInfo
     {

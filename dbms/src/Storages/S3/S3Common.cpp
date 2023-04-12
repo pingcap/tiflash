@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/RemoteHostFilter.h>
@@ -64,6 +65,7 @@
 #include <pingcap/kv/internal/type_traits.h>
 #include <re2/re2.h>
 
+#include <any>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <filesystem>
@@ -84,6 +86,7 @@ extern const Event S3WriteBytes;
 extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
 extern const Event S3CopyObject;
+extern const Event S3PutObjectRetry;
 } // namespace ProfileEvents
 
 namespace
@@ -153,6 +156,10 @@ namespace pingcap::kv
 PINGCAP_DEFINE_TRAITS(disaggregated, GetDisaggConfig, GetDisaggConfig);
 }
 
+namespace DB::FailPoints
+{
+extern const char force_set_mocked_s3_object_mtime[];
+} // namespace DB::FailPoints
 namespace DB::S3
 {
 
@@ -276,7 +283,10 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     // Override the HTTP client, use PocoHTTPClient instead
     aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
         // TODO: do we need the remote host filter?
-        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        PocoHTTPClientConfiguration poco_cfg(
+            std::make_shared<RemoteHostFilter>(),
+            config_.max_redirections,
+            /*enable_s3_requests_logging_*/ config_.verbose);
         return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
     };
     Aws::InitAPI(aws_options);
@@ -501,6 +511,10 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
     auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -544,6 +558,10 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -597,6 +615,29 @@ void downloadFile(const TiFlashS3Client & client, const String & local_fname, co
     RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
 }
 
+
+void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname)
+{
+    Stopwatch sw;
+    S3RandomAccessFile file(client, remote_fname);
+    Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
+    RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+
+    char buf[8192];
+    while (true)
+    {
+        auto n = file.read(buf, sizeof(buf));
+        RUNTIME_CHECK(n >= 0, remote_fname);
+        if (n == 0)
+        {
+            break;
+        }
+
+        ostr.write(buf, n);
+        RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+    }
+}
+
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging)
 {
     Stopwatch sw;
@@ -621,7 +662,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
-void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
+bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
@@ -638,7 +679,13 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
             {
                 break;
             }
-            throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
+            LOG_WARNING(
+                client.log,
+                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+                ", bucket={} {}",
+                client.bucket(),
+                S3ErrorMessage(error));
+            return false;
         }
 
         auto res = outcome.GetResultWithOwnership();
@@ -671,17 +718,9 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     if (lifecycle_rule_has_been_set)
     {
         LOG_INFO(client.log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
-        return;
-    }
-    else
-    {
-        UNUSED(expire_days);
-        LOG_WARNING(client.log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
-        return;
+        return true;
     }
 
-#if 0
-    // Adding rule by AWS SDK is failed, don't know why
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(client.log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
@@ -705,16 +744,24 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         .WithRules(old_rules);
 
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
-    request.WithBucket(bucket)
+    request.WithBucket(client.bucket())
         .WithLifecycleConfiguration(lifecycle_config);
 
     auto outcome = client.PutBucketLifecycleConfiguration(request);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
+        const auto & error = outcome.GetError();
+        LOG_WARNING(
+            client.log,
+            "Create lifecycle rule with filter \"{}\" failed, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+            ", bucket={} {}",
+            TaggingObjectIsDeleted,
+            client.bucket(),
+            S3ErrorMessage(error));
+        return false;
     }
     LOG_INFO(client.log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
-#endif
+    return true;
 }
 
 void listPrefix(
@@ -886,7 +933,30 @@ ObjectInfo tryGetObjectInfo(
         throw fromS3Error(o.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     // Else the object still exist
+#ifndef FIU_ENABLE
     const auto & res = o.GetResult();
+#else
+    // handle the failpoint for hijacking the last modified time of returned object
+    auto & res = o.GetResult();
+    auto try_set_mtime = [&] {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
+        {
+            auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
+            const auto & req_key = key;
+            if (auto iter_m = m.find(req_key); iter_m != m.end())
+            {
+                res.SetLastModified(iter_m->second);
+                LOG_WARNING(Logger::get(), "failpoint set mtime, key={} mtime={}", req_key, iter_m->second.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+            }
+            else
+            {
+                LOG_WARNING(Logger::get(), "failpoint set mtime failed, key={}", req_key);
+            }
+        }
+    };
+    UNUSED(try_set_mtime);
+    fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
+#endif
     // "DeleteMark" of S3 service, don't know what will lead to this
     RUNTIME_CHECK(!res.GetDeleteMarker(), client.bucket(), key);
     return ObjectInfo{.exist = true, .size = res.GetContentLength(), .last_modification_time = res.GetLastModified()};
@@ -952,6 +1022,22 @@ void rawListPrefix(
         }
     }
     LOG_DEBUG(log, "rawListPrefix bucket={} prefix={} delimiter={} total_keys={} cost={:.2f}s", bucket, prefix, delimiter, num_keys, sw.elapsedSeconds());
+}
+
+void rawDeleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key)
+{
+    Stopwatch sw;
+    Aws::S3::Model::DeleteObjectRequest req;
+    req.WithBucket(bucket).WithKey(key);
+    ProfileEvents::increment(ProfileEvents::S3DeleteObject);
+    auto o = client.DeleteObject(req);
+    if (!o.IsSuccess())
+    {
+        throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} key={}", bucket, key);
+    }
+    const auto & res = o.GetResult();
+    UNUSED(res);
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
 }
 
 } // namespace DB::S3
