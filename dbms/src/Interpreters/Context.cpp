@@ -620,7 +620,6 @@ ConfigurationPtr Context::getUsersConfig()
 
 void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
-    LOG_INFO(log, "Setting secuirty config.");
     auto lock = getLock();
     shared->security_config = std::make_shared<TiFlashSecurityConfig>(log);
     shared->security_config->init(config);

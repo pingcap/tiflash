@@ -223,7 +223,7 @@ try
 
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime, log);
 
         // removed
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, df_key));
@@ -238,7 +238,7 @@ try
 
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime, log);
 
         // not removed
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df_key));
@@ -269,7 +269,7 @@ try
 
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime, log);
 
         // removed
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, df2_key + "/meta"));
@@ -290,7 +290,7 @@ try
 
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime, log);
 
         // not removed
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df2_key + "/meta"));
@@ -355,11 +355,10 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
+        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
         SCOPE_EXIT({
             FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
         });
-        // mock_s3_client->head_result_mtime = delmark_mtime;
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted, datafile and delmark remain
@@ -373,7 +372,7 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
+        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
         SCOPE_EXIT({
             FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
         });

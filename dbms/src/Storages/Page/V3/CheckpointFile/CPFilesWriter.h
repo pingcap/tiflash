@@ -17,6 +17,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileWriter.h>
+#include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/common.pb.h>
@@ -80,7 +81,7 @@ public:
      *
      * You must call `writeSuffix` finally, if you don't plan to write edits anymore.
      */
-    CPDataWriteStats writeEditsAndApplyCheckpointInfo(
+    CPDataDumpStats writeEditsAndApplyCheckpointInfo(
         universal::PageEntriesEdit & edit,
         const std::unordered_set<String> & file_ids_to_compact = {});
 
