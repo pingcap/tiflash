@@ -767,8 +767,8 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         const auto & table_infos = tidb_table_info.columns;
         for (const auto & col : columns_to_read)
         {
-            // table_infos does not contain handle column
-            if (col.id == -1)
+            // table_infos does not contain EXTRA_HANDLE_COLUMN and EXTRA_TABLE_ID_COLUMN
+            if (col.id == EXTRA_HANDLE_COLUMN_ID)
             {
                 auto handle = ColumnInfo();
                 handle.id = EXTRA_HANDLE_COLUMN_ID;
@@ -776,11 +776,19 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
                 table_scan_column_info.push_back(handle);
                 continue;
             }
+            else if (col.id == ExtraTableIDColumnID)
+            {
+                auto col = ColumnInfo();
+                col.id = ExtraTableIDColumnID;
+                col.name = EXTRA_TABLE_ID_COLUMN_NAME;
+                table_scan_column_info.push_back(col);
+                continue;
+            }
             auto iter = std::find_if(
                 table_infos.begin(),
                 table_infos.end(),
                 [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
+            RUNTIME_CHECK_MSG(iter != table_infos.end(), "column: [id: {}, name: {}] not found in table info", col.id, col.name);
             table_scan_column_info.push_back(*iter);
         }
 
