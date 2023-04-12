@@ -36,7 +36,7 @@ enum class AsyncRequestStage
     FINISHED,
 };
 
-using SteadyClock = std::chrono::steady_clock;
+using SystemClock = std::chrono::system_clock;
 
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
@@ -288,7 +288,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, SteadyClock::now() + std::chrono::seconds(retry_interval_time), this);
+            alarm.Set(cq, SystemClock::now() + std::chrono::seconds(retry_interval_time), this);
             return true;
         }
         else

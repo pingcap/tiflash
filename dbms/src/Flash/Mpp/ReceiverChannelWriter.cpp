@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <Common/Exception.h>
 
 #include <utility>
 
