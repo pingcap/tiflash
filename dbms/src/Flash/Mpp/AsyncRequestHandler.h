@@ -125,7 +125,7 @@ private:
     void processWaitMakeReader(bool ok)
     {
         // Use lock to ensure reader is created already in reactor thread
-        std::lock_guard lock(mu);
+        std::lock_guard lock(make_reader_mu);
         if (!ok)
         {
             reader.reset();
@@ -275,7 +275,7 @@ private:
         stage = AsyncRequestStage::WAIT_MAKE_READER;
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
-        std::lock_guard lock(mu);
+        std::lock_guard lock(make_reader_mu);
         rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
     }
 
