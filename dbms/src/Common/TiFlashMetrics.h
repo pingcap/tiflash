@@ -350,6 +350,24 @@ namespace DB
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
+        F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
+        F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \
+        F(type_cpu_executing_tasks_count, {"type", "cpu_executing_tasks_count"}),                                                                   \
+        F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                                         \
+        F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
+        F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
+        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
+        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
+        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
+    M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
+        F(type_to_init, {"type", "to_init"}),                                                                                                       \
+        F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
+        F(type_to_running, {"type", "to_running"}),                                                                                                 \
+        F(type_to_io, {"type", "to_io"}),                                                                                                           \
+        F(type_to_finished, {"type", "to_finished"}),                                                                                               \
+        F(type_to_error, {"type", "to_error"}),                                                                                                     \
+        F(type_to_cancelled, {"type", "to_cancelled"}))                                                                                             \
     M(tiflash_storage_s3_gc_status, "S3 GC status", Gauge,                                                                                          \
         F(type_lifecycle_added, {{"type", "lifecycle_added"}}),                                                                                     \
         F(type_lifecycle_failed, {{"type", "lifecycle_failed"}}),                                                                                   \
