@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use procfs;
-
 #[repr(C)]
 pub struct ProcessMetricsInfo {
     pub cpu_total: u64,
@@ -52,8 +50,15 @@ pub fn ticks_per_second() -> i64 {
     1
 }
 
+#[cfg(not(target_os = "linux"))]
 #[no_mangle]
 pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
+}
+
+#[cfg(target_os = "linux")]
+#[no_mangle]
+pub extern "C" fn get_process_metrics() -> ProcessMetricsInfo {
+    use procfs;
     let p = match procfs::process::Process::myself() {
         Ok(p) => p,
         Err(..) => {
