@@ -113,8 +113,12 @@ private:
     DISALLOW_COPY_AND_MOVE(ClientFactory);
     std::unique_ptr<Aws::S3::S3Client> create() const;
 
+<<<<<<< HEAD
     static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_);
     static Aws::Http::Scheme parseScheme(std::string_view endpoint);
+=======
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
+>>>>>>> 9642ad7165 (Disable virtual addressing when the endpoint contains port (#7286))
 
     Aws::SDKOptions aws_options;
     StorageS3Config config;
