@@ -14,10 +14,9 @@
 
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Common/Exception.h>
 
 #include <utility>
-
-#include "Common/Exception.h"
 
 namespace DB
 {

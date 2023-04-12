@@ -29,7 +29,7 @@ inline bool loopJudge(GRPCReceiveQueueRes res)
 // result can not be changed from FULL to OK
 inline void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
 {
-    if (likely(!(dst == GRPCReceiveQueueRes::FULL && src == GRPCReceiveQueueRes::OK)))
+    if (unlikely(src != GRPCReceiveQueueRes::OK))
         dst = src;
 }
 } // namespace

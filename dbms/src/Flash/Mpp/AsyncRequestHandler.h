@@ -116,7 +116,7 @@ public:
         }
         catch (...)
         {
-            // TODO log error here
+            LOG_ERROR(log, "Some errors happen in the AsyncRequestHandler.execute()");
             closeConnection("Exception is thrown in AsyncRequestHandler");
         }
     }
@@ -377,7 +377,7 @@ private:
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
     KickReceiveTag kick_recv_tag;
 
-    std::mutex mu;
+    std::mutex make_reader_mu;
 
     // Do not use any variable in AsyncRequestHandler after close_conn is called,
     // because AsyncRequestHandler may have been destructed by ExchangeReceiver after close_conn is called.
