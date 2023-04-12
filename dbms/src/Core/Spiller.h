@@ -24,6 +24,8 @@ class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 class SpillHandler;
+class CachedSpillHandler;
+using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
 struct SpillDetails
 {
@@ -85,8 +87,13 @@ class Spiller
 public:
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
+    SpillHandler createSpillHandler(UInt64 partition_id);
+    CachedSpillHandlerPtr createCachedSpillHandler(
+        const BlockInputStreamPtr & from,
+        UInt64 partition_id,
+        const std::function<bool()> & is_cancelled);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
-    void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
+    void spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
     BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
@@ -98,7 +105,6 @@ public:
 private:
     friend class SpillHandler;
     String nextSpillFileName(UInt64 partition_id);
-    SpillHandler createSpillHandler(UInt64 partition_id);
     std::pair<std::unique_ptr<SpilledFile>, bool> getOrCreateSpilledFile(UInt64 partition_id);
     bool isSpillFinished()
     {
