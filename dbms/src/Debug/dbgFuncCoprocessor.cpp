@@ -29,6 +29,9 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+// For root exchangeReceiver which will use DAGContext to collect profile.
+std::unique_ptr<DAGContext> dag_context_ptr = std::make_unique<DAGContext>(1024);
+
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
 {
     if (args.empty() || args.size() > 3)
@@ -58,8 +61,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
             return managed_storage->getTableInfo();
         },
         properties);
-    auto dag_context = std::make_unique<DAGContext>(1024);
-    return executeQuery(*dag_context, context, region_id, properties, query_tasks, func_wrap_output_stream);
+    return executeQuery(*dag_context_ptr, context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
@@ -88,8 +90,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         properties);
-    auto dag_context = std::make_unique<DAGContext>(1024);
-    return executeQuery(*dag_context, context, region_id, properties, query_tasks, func_wrap_output_stream);
+    return executeQuery(*dag_context_ptr, context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 

@@ -18,12 +18,14 @@
 namespace DB
 {
 class Context;
+class DAGContext;
 
 // Coprocessor debug tools
 
 // Run a DAG request using given query that will be compiled to DAG request, with the given (optional) region ID.
 // Usage:
 //   ./storages-client.sh "DBGInvoke dag(query[, region_id])"
+//   ./storages-client.sh "DBGInvoke tidb_query(query[, region_id])"
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args);
 
 // Mock a DAG request using given query that will be compiled (with the metadata from MockTiDB) to DAG request, with the given region ID and (optional) start ts.
