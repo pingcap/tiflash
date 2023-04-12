@@ -298,7 +298,7 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
         else
         {
             LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI read page {} fail", UniversalPageId(page_id.data, page_id.len)));
-            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
     catch (...)
@@ -361,7 +361,7 @@ CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuf
         else
         {
             LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI get lower bound for page {} fail", UniversalPageId(raw_page_id.data, raw_page_id.len)));
-            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
     }
     catch (...)
@@ -779,7 +779,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
         config_file_path = server->tmt->getContext().getConfigRef().getString("config-file");
         std::ifstream stream(config_file_path);
         if (!stream)
-            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)),
                                      std::istreambuf_iterator<char>());
         stream.close();
@@ -793,7 +793,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
     }
     catch (...)
     {
-        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
     }
 }
 

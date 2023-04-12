@@ -85,7 +85,9 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         }
     }
 
-    if (force || new_files.isDifferOrNewerThan(files) || config_object_updated)
+    if (force
+        || (new_files.valid() && new_files.isDifferOrNewerThan(files))
+        || config_object_updated)
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;
@@ -102,8 +104,6 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
             tryLogCurrentException(log, fmt::format("Error loading config from `{}`", path));
             return;
         }
-
-        config_processor.savePreprocessedConfig(loaded_config);
 
         /** We should remember last modification time if and only if config was sucessfully loaded
          * Otherwise a race condition could occur during config files update:
