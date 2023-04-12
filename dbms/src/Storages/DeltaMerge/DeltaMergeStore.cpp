@@ -195,7 +195,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_)
+                                 const Settings & settings_,
+                                 ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
     , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
@@ -276,13 +277,35 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         else
         {
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-            while (segment_id)
-            {
-                auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                segments.emplace(segment->getRowKeyRange().getEnd(), segment);
-                id_to_segment.emplace(segment_id, segment);
 
-                segment_id = segment->nextSegmentId();
+            // parallel restore segment to speed up
+            if (thread_pool)
+            {
+                auto wait_group = thread_pool->waitGroup();
+                auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
+                for (auto & segment_id : segment_ids)
+                {
+                    auto task = [this, dm_context, segment_id] {
+                        auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                        std::lock_guard lock(read_write_mutex);
+                        segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                        id_to_segment.emplace(segment_id, segment);
+                    };
+                    wait_group->schedule(task);
+                }
+
+                wait_group->wait();
+            }
+            else
+            {
+                while (segment_id != 0)
+                {
+                    auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                    segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                    id_to_segment.emplace(segment_id, segment);
+
+                    segment_id = segment->nextSegmentId();
+                }
             }
         }
     }

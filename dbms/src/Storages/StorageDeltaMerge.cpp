@@ -1781,7 +1781,7 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
     return desc;
 }
 
-DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
+DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
 {
     if (storeInited())
     {
@@ -1802,14 +1802,15 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings());
+            DeltaMergeStore::Settings(),
+            thread_pool);
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
     return _store;
 }
 
-bool StorageDeltaMerge::initStoreIfDataDirExist()
+bool StorageDeltaMerge::initStoreIfDataDirExist(ThreadPool * thread_pool)
 {
     if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
     {
@@ -1824,7 +1825,7 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
     {
         return false;
     }
-    getAndMaybeInitStore();
+    getAndMaybeInitStore(thread_pool);
     return true;
 }
 
