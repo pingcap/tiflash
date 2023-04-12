@@ -854,8 +854,13 @@ public:
                     LOG_FMT_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
+<<<<<<< HEAD
                 /// TCP with SSL
                 if (config.has("tcp_port_secure") && !security_config.has_tls_config)
+=======
+                /// TCP with SSL (Not supported yet)
+                if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
+>>>>>>> d993276831 (*: fix exception when no tcp and http server created (#7281))
                 {
 #if Poco_NetSSL_FOUND
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
@@ -882,9 +887,12 @@ public:
                     LOG_FMT_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
+<<<<<<< HEAD
                 /// At least one of TCP and HTTP servers must be created.
+=======
+>>>>>>> d993276831 (*: fix exception when no tcp and http server created (#7281))
                 if (servers.empty())
-                    throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+                    LOG_WARNING(log, "No TCP and HTTP servers are created");
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -904,10 +912,6 @@ public:
                     throw;
             }
         }
-
-        if (servers.empty())
-            throw Exception("No servers started (add valid listen_host and 'tcp_port' or 'http_port' to configuration file.)",
-                            ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
         for (auto & server : servers)
             server->start();
