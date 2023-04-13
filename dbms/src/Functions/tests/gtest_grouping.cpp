@@ -17,6 +17,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <tipb/expression.pb.h>
+#include <tipb/metadata.pb.h>
 
 namespace DB
 {
@@ -25,7 +26,7 @@ namespace tests
 
 struct MetaData
 {
-    UInt32 version{};
+    tipb::GroupingMode mode{};
     UInt64 grouping_id{};
     std::set<UInt64> grouping_ids;
 };
@@ -33,17 +34,19 @@ struct MetaData
 tipb::Expr buildTiPBExpr(const MetaData & meta_data)
 {
     tipb::Expr expr;
-    auto * grouping_meta = expr.mutable_groupingmeta();
-    grouping_meta->set_version(meta_data.version);
-    if (meta_data.version == 1 || meta_data.version == 2)
+    tipb::GroupingFunctionMetadata grouping_meta;
+    grouping_meta.set_mode(meta_data.mode);
+    if (meta_data.mode == tipb::GroupingMode::ModeBitAnd || meta_data.mode == tipb::GroupingMode::ModeNumericCmp)
     {
-        grouping_meta->add_grouping_ids(meta_data.grouping_id);
+        grouping_meta.add_grouping_marks(meta_data.grouping_id);
     }
     else
     {
         for (auto grouping_id : meta_data.grouping_ids)
-            grouping_meta->add_grouping_ids(grouping_id);
+            grouping_meta.add_grouping_marks(grouping_id);
     }
+
+    expr.set_val(grouping_meta.SerializeAsString());
     return expr;
 }
 
@@ -57,7 +60,7 @@ TEST_F(TestGrouping, TestVersion1)
 try
 {
     MetaData meta_data;
-    meta_data.version = 1;
+    meta_data.mode = tipb::GroupingMode::ModeBitAnd;
     const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const
@@ -116,7 +119,7 @@ TEST_F(TestGrouping, TestVersion2)
 try
 {
     MetaData meta_data;
-    meta_data.version = 2;
+    meta_data.mode = tipb::GroupingMode::ModeNumericCmp;
     const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const
@@ -175,7 +178,7 @@ TEST_F(TestGrouping, TestVersion3)
 try
 {
     MetaData meta_data;
-    meta_data.version = 3;
+    meta_data.mode = tipb::GroupingMode::ModeNumericSet;
     const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const

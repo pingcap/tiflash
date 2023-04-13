@@ -20,6 +20,9 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <common/types.h>
+#include <tipb/metadata.pb.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -89,19 +92,22 @@ public:
 
     void setMetaData(const tipb::Expr & expr) override
     {
-        const auto & meta_data = expr.groupingmeta();
-        version = meta_data.version();
-        size_t num = meta_data.grouping_ids_size();
+        tipb::GroupingFunctionMetadata meta;
+        if (!meta.ParseFromString(expr.val()))
+            throw Exception("Grouping function decodes meta data fail");
+
+        mode = static_cast<tipb::GroupingMode>(meta.mode());
+        size_t num = meta.grouping_marks_size();
 
         if (num <= 0)
             throw Exception("number of grouping_ids should be greater than 0");
 
-        if (version == 1 || version == 2)
-            meta_grouping_id = meta_data.grouping_ids()[0];
+        if (mode == 1 || mode == 2)
+            meta_grouping_id = meta.grouping_marks()[0];
         else
         {
             for (size_t i = 0; i < num; ++i)
-                meta_grouping_ids.insert(meta_data.grouping_ids()[0]);
+                meta_grouping_marks.insert(meta.grouping_marks()[i]);
         }
     }
 
@@ -124,19 +130,19 @@ private:
 
     void processVectorGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
-        switch (version)
+        switch (mode)
         {
-        case 1:
+        case tipb::GroupingMode::ModeBitAnd:
             groupingVec<1>(col_grouping_ids, col_res, row_num);
             break;
-        case 2:
+        case tipb::GroupingMode::ModeNumericCmp:
             groupingVec<2>(col_grouping_ids, col_res, row_num);
             break;
-        case 3:
+        case tipb::GroupingMode::ModeNumericSet:
             groupingVec<3>(col_grouping_ids, col_res, row_num);
             break;
         default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", version));
+            throw Exception(fmt::format("Invalid version {} in grouping function", magic_enum::enum_name(mode)));
         };
     }
 
@@ -158,11 +164,11 @@ private:
         for (size_t i = 0; i < row_num; ++i)
         {
             if constexpr (version == 1)
-                vec_res[i] = groupingImplV1(grouping_container[i]);
+                vec_res[i] = groupingImplModeAndBit(grouping_container[i]);
             else if constexpr (version == 2)
-                vec_res[i] = groupingImplV2(grouping_container[i]);
+                vec_res[i] = groupingImplModeNumericCmp(grouping_container[i]);
             else if constexpr (version == 3)
-                vec_res[i] = groupingImplV3(grouping_container[i]);
+                vec_res[i] = groupingImplModeNumericSet(grouping_container[i]);
             else
                 throw Exception("Invalid version in grouping function");
         }
@@ -171,41 +177,41 @@ private:
 
     ResultType grouping(UInt64 grouping_id) const
     {
-        switch (version)
+        switch (mode)
         {
-        case 1:
-            return groupingImplV1(grouping_id);
-        case 2:
-            return groupingImplV2(grouping_id);
-        case 3:
-            return groupingImplV3(grouping_id);
+        case tipb::GroupingMode::ModeBitAnd:
+            return groupingImplModeAndBit(grouping_id);
+        case tipb::GroupingMode::ModeNumericCmp:
+            return groupingImplModeNumericCmp(grouping_id);
+        case tipb::GroupingMode::ModeNumericSet:
+            return groupingImplModeNumericSet(grouping_id);
         default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", version));
+            throw Exception(fmt::format("Invalid version {} in grouping function", magic_enum::enum_name(mode)));
         }
     }
 
-    ResultType groupingImplV1(UInt64 grouping_id) const
+    ResultType groupingImplModeAndBit(UInt64 grouping_id) const
     {
         return (grouping_id & meta_grouping_id) != 0;
     }
 
-    ResultType groupingImplV2(UInt64 grouping_id) const
+    ResultType groupingImplModeNumericCmp(UInt64 grouping_id) const
     {
         return grouping_id > meta_grouping_id;
     }
 
-    ResultType groupingImplV3(UInt64 grouping_id) const
+    ResultType groupingImplModeNumericSet(UInt64 grouping_id) const
     {
-        auto iter = meta_grouping_ids.find(grouping_id);
-        return iter == meta_grouping_ids.end();
+        auto iter = meta_grouping_marks.find(grouping_id);
+        return iter == meta_grouping_marks.end();
     }
 
 private:
     TiDB::TiDBCollatorPtr collator = nullptr;
 
-    UInt32 version = 0;
+    tipb::GroupingMode mode;
     UInt64 meta_grouping_id = 0;
-    std::set<UInt64> meta_grouping_ids = {};
+    std::set<UInt64> meta_grouping_marks = {};
 };
 
 } // namespace DB
