@@ -15,3 +15,5 @@
 #pragma once
 
 void pageStorageV3CtlEntry(int argc, char ** argv);
+
+void universalpageStorageCtlEntry(int argc, char ** argv);

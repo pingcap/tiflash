@@ -424,7 +424,7 @@ void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in)
         in->dumpTree(log_buffer);
         return log_buffer.toString();
     };
-    LOG_DEBUG(logger, pipeline_log_str());
+    LOG_INFO(logger, pipeline_log_str());
 }
 
 BlockIO executeQuery(

@@ -72,7 +72,7 @@ public:
     void SetUp(const ::benchmark::State & /*state*/)
     {
         Poco::AutoPtr<Poco::Channel> channel(new TestChannel());
-        Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter());
+        Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<false>());
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
         Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);

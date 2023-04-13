@@ -58,7 +58,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char region_exception_after_read_from_storage_some_error[];
@@ -1198,26 +1197,26 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context, dagContext().getKeyspaceID());
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_INFO(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
+        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.
     auto [storages, locks, storage_schema_versions, ok] = get_and_lock_storages(false);
     if (ok)
     {
-        LOG_INFO(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
+        LOG_DEBUG(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
     }
     else
     /// If first try failed, sync schema and try again.
     {
-        LOG_INFO(log, "not OK, syncing schemas.");
+        LOG_DEBUG(log, "not OK, syncing schemas.");
 
         sync_schema();
 
         std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
         if (ok)
         {
-            LOG_INFO(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
+            LOG_DEBUG(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
@@ -1277,14 +1276,14 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         required_columns_tmp.emplace_back(std::move(name));
     }
 
-    std::unordered_set<String> col_name_set;
+    std::unordered_set<ColumnID> col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
     {
-        getColumnNamesFromExpr(expr, source_columns_tmp, col_name_set);
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
     }
     for (const auto & col : table_scan.getColumns())
     {
-        if (col_name_set.contains(col.name))
+        if (col_id_set.contains(col.id))
         {
             need_cast_column.push_back(ExtraCastAfterTSMode::None);
         }

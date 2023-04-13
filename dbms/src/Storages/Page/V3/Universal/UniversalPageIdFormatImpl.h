@@ -18,6 +18,7 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <fmt/format.h>
@@ -92,12 +93,15 @@ public:
         return toFullPageId(getSubPrefix(StorageType::KVStore), region_id);
     }
 
+    static constexpr char RAFT_PREFIX = 0x01;
+    static constexpr char KV_PREFIX = 0x02;
+
     // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
     static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x02, buff);
+        writeChar(KV_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
@@ -110,7 +114,7 @@ public:
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x02, buff);
+        writeChar(KV_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x03, buff);
         encodeUInt64(region_id, buff);
@@ -122,7 +126,7 @@ public:
     static String toFullRaftLogPrefix(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x01, buff);
+        writeChar(RAFT_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
@@ -134,7 +138,7 @@ public:
     static String toFullRaftLogScanEnd(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x01, buff);
+        writeChar(RAFT_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
@@ -148,7 +152,7 @@ public:
     static String getStoreIdentIdInKVEngine()
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x02, buff);
+        writeChar(KV_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x01, buff);
         return buff.releaseStr();
@@ -158,7 +162,7 @@ public:
     static String getStoreIdentId()
     {
         WriteBufferFromOwnString buff;
-        writeChar(0x01, buff);
+        writeChar(RAFT_PREFIX, buff);
         writeChar(0x01, buff);
         writeChar(0x01, buff);
         return buff.releaseStr();
@@ -188,6 +192,43 @@ public:
         const auto & page_id_str = page_id.asStr();
         auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
         return page_id_without_keyspace.starts_with(getSubPrefix(type));
+    }
+
+    static inline StorageType getUniversalPageIdType(const UniversalPageId & page_id)
+    {
+        if (page_id.empty())
+            return StorageType::Unknown;
+
+        const auto & page_id_str = page_id.asStr();
+        if (page_id_str[0] == RAFT_PREFIX)
+        {
+            return StorageType::RaftEngine;
+        }
+        else if (page_id_str[0] == KV_PREFIX)
+        {
+            return StorageType::KVEngine;
+        }
+        else
+        {
+            auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+            if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::Log)))
+            {
+                return StorageType::Log;
+            }
+            if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::Data)))
+            {
+                return StorageType::Data;
+            }
+            if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::Meta)))
+            {
+                return StorageType::Meta;
+            }
+            if (page_id_without_keyspace.starts_with(getSubPrefix(StorageType::KVStore)))
+            {
+                return StorageType::KVStore;
+            }
+        }
+        return StorageType::Unknown;
     }
 
 private:

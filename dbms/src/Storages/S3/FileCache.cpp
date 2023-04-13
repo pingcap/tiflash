@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
@@ -36,10 +37,13 @@ namespace ProfileEvents
 {
 extern const Event S3GetObject;
 extern const Event S3ReadBytes;
-extern const Event FileCacheHit;
-extern const Event FileCacheMiss;
-extern const Event FileCacheEvict;
 } // namespace ProfileEvents
+
+namespace CurrentMetrics
+{
+extern const Metric DTFileCacheCapacity;
+extern const Metric DTFileCacheUsed;
+} // namespace CurrentMetrics
 
 namespace DB::ErrorCodes
 {
@@ -59,6 +63,7 @@ FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemo
     , cache_used(0)
     , log(Logger::get("FileCache"))
 {
+    CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
     prepareDir(cache_dir);
     restore();
 }
@@ -108,23 +113,23 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
         f->setLastAccessTime(std::chrono::system_clock::now());
         if (f->isReadyToRead())
         {
-            ProfileEvents::increment(ProfileEvents::FileCacheHit);
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
             return f;
         }
         else
         {
-            ProfileEvents::increment(ProfileEvents::FileCacheMiss);
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
             return nullptr;
         }
     }
 
+    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
     if (!canCache(file_type))
     {
         // Don't cache this file type or too many downloading task.
         return nullptr;
     }
 
-    ProfileEvents::increment(ProfileEvents::FileCacheMiss);
     // File not exists, try to download and cache it in backgroud.
 
     // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
@@ -132,8 +137,9 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     auto estimzted_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
     if (!reserveSpaceImpl(file_type, estimzted_size, /*try_evict*/ true))
     {
-        LOG_DEBUG(log, "s3_key={} space not enough, skip cache", s3_key);
         // Space not enough.
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
+        LOG_DEBUG(log, "s3_key={} space not enough(capacity={} used={} estimzted_size={}), skip cache", s3_key, cache_capacity, cache_used, estimzted_size);
         return nullptr;
     }
 
@@ -205,13 +211,14 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable
     {
         return {-1, {}};
     }
-    ProfileEvents::increment(ProfileEvents::FileCacheEvict);
     const auto & local_fname = f->getLocalFileName();
     removeDiskFile(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
     removeDiskFile(temp_fname);
 
     auto release_size = f->getSize();
+    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_evict_bytes).Increment(release_size);
     releaseSpaceImpl(release_size);
     return {release_size, table.remove(s3_key)};
 }
@@ -221,6 +228,7 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, bool try_evi
     if (cache_used + size <= cache_capacity)
     {
         cache_used += size;
+        CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
         return true;
     }
     if (try_evict)
@@ -317,6 +325,7 @@ bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, bool try_evict)
 void FileCache::releaseSpaceImpl(UInt64 size)
 {
     cache_used -= size;
+    CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
 }
 
 void FileCache::releaseSpace(UInt64 size)
@@ -436,6 +445,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
         if (content_length > 0)
         {
+            GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
             ostr << result.GetBody().rdbuf();
             // If content_length == 0, ostr.good() is false. Does not know the reason.
             RUNTIME_CHECK_MSG(ostr.good(), "Write {} content_length {} failed: {}", temp_fname, content_length, strerror(errno));
@@ -454,6 +464,7 @@ void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
 {
     try
     {
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
         downloadImpl(s3_key, file_seg);
     }
     catch (...)
@@ -463,6 +474,7 @@ void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
 
     if (!file_seg->isReadyToRead())
     {
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
         file_seg.reset();
         remove(s3_key);
@@ -539,10 +551,24 @@ void FileCache::prepareParentDir(const String & local_fname)
 
 void FileCache::restore()
 {
+    Stopwatch sw;
     for (const auto & wn_entry : std::filesystem::directory_iterator(cache_dir))
     {
         restoreWriteNode(wn_entry);
     }
+
+    size_t total_count = 0;
+    for (const auto & t : tables)
+    {
+        total_count += t.size();
+    }
+    LOG_INFO(
+        log,
+        "restore: cost={:.3f}s used={} capacity={} total_count={}",
+        sw.elapsedSeconds(),
+        cache_used,
+        cache_capacity,
+        total_count);
 }
 
 void FileCache::restoreWriteNode(const std::filesystem::directory_entry & write_node_entry)
@@ -583,7 +609,9 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
             if (canCache(file_type) && cache_capacity - cache_used >= size)
             {
                 table.set(toS3Key(fname), std::make_shared<FileSegment>(fname, FileSegment::Status::Complete, size, file_type));
+                capacity_metrics->addUsedSize(fname, size);
                 cache_used += size;
+                CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
             }
             else
             {

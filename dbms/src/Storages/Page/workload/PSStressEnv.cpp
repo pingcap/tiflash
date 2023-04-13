@@ -35,7 +35,7 @@ Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Poco::AutoPtr<Poco::Formatter> formatter(new DB::UnifiedLogFormatter);
+    Poco::AutoPtr<Poco::Formatter> formatter(new DB::UnifiedLogFormatter<true>());
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel("trace");
