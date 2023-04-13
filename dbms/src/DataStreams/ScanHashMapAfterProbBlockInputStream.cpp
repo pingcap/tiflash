@@ -259,15 +259,15 @@ void ScanHashMapAfterProbBlockInputStream::fillColumnsUsingCurrentPartition(
     {
         switch (parent.join_map_method)
         {
-#define M(METHOD)                                                              \
-    case JoinMapMethod::METHOD:                                                \
-        fillColumns<ASTTableJoin::Strictness::All, true, output_joined_rows>(  \
-            *partition->maps_all_full_with_row_flag.METHOD,                    \
-            num_columns_left,                                                  \
-            mutable_columns_left,                                              \
-            num_columns_right,                                                 \
-            mutable_columns_right,                                             \
-            row_counter_column);                                               \
+#define M(METHOD)                                                             \
+    case JoinMapMethod::METHOD:                                               \
+        fillColumns<ASTTableJoin::Strictness::All, true, output_joined_rows>( \
+            *partition->maps_all_full_with_row_flag.METHOD,                   \
+            num_columns_left,                                                 \
+            mutable_columns_left,                                             \
+            num_columns_right,                                                \
+            mutable_columns_right,                                            \
+            row_counter_column);                                              \
         break;
             APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -302,15 +302,15 @@ void ScanHashMapAfterProbBlockInputStream::fillColumnsUsingCurrentPartition(
     {
         switch (parent.join_map_method)
         {
-#define M(METHOD)                                                               \
-    case JoinMapMethod::METHOD:                                                 \
-        fillColumns<ASTTableJoin::Strictness::All, false, output_joined_rows>(  \
-            *partition->maps_all_full.METHOD,                                   \
-            num_columns_left,                                                   \
-            mutable_columns_left,                                               \
-            num_columns_right,                                                  \
-            mutable_columns_right,                                              \
-            row_counter_column);                                                \
+#define M(METHOD)                                                              \
+    case JoinMapMethod::METHOD:                                                \
+        fillColumns<ASTTableJoin::Strictness::All, false, output_joined_rows>( \
+            *partition->maps_all_full.METHOD,                                  \
+            num_columns_left,                                                  \
+            mutable_columns_left,                                              \
+            num_columns_right,                                                 \
+            mutable_columns_right,                                             \
+            row_counter_column);                                               \
         break;
             APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -348,11 +348,11 @@ private:
 
 template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
 void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
-                                            size_t num_columns_left,
-                                            MutableColumns & mutable_columns_left,
-                                            size_t num_columns_right,
-                                            MutableColumns & mutable_columns_right,
-                                            IColumn * row_counter_column)
+                                                       size_t num_columns_left,
+                                                       MutableColumns & mutable_columns_left,
+                                                       size_t num_columns_right,
+                                                       MutableColumns & mutable_columns_right,
+                                                       IColumn * row_counter_column)
 {
     size_t key_num = parent.key_names_right.size();
     /// first add rows that is not in the hash table

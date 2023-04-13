@@ -183,7 +183,7 @@ using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
 using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
-using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>;  // With flag for every row ref
+using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 
 JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
 } // namespace DB

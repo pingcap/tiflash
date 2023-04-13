@@ -1554,8 +1554,7 @@ try
             {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
             {toNullableVec<Int32>("a", {3, 2, {}, 7})},
             {toNullableVec<Int32>("a", {{}, {}, 1, 5, 5})},
-        }
-    };
+        }};
 
     for (const auto & [type, left, right, res] : t1)
     {
@@ -1615,8 +1614,7 @@ try
             {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
             {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
             {toNullableVec<Int32>("a", {{}, {}, 1, 2, 2, 4, 5}), toNullableVec<Int32>("c", {5, 6, 2, 3, 4, 7, 8})},
-        }
-    };
+        }};
 
     for (const auto & [type, left, right, res] : t2)
     {
