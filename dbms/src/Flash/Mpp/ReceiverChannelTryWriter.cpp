@@ -25,13 +25,6 @@ inline bool loopJudge(GRPCReceiveQueueRes res)
 {
     return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL);
 }
-
-// result can not be changed from FULL to OK
-inline void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
-{
-    if (unlikely(src != GRPCReceiveQueueRes::OK))
-        dst = src;
-}
 } // namespace
 
 template <bool enable_fine_grained_shuffle>
@@ -76,8 +69,9 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteFineGrain(size_t source_in
             std::move(chunks[i]));
 
         GRPCReceiveQueueRes write_res = tryWriteImpl(i, std::move(recv_msg));
+        if (write_res != GRPCReceiveQueueRes::OK)
+            res = write_res;
 
-        updateResult(res, write_res);
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
 
         // Only the first ExchangeReceiverInputStream need to handle resp.
@@ -127,9 +121,11 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
             rewrite_msgs.erase(tmp_iter);
         }
         else
+        {
             ++iter;
+            res = write_res;
+        }
 
-        updateResult(res, write_res);
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
     }
 
