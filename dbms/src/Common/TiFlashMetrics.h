@@ -64,6 +64,7 @@ namespace DB
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
         F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
         F(type_expand, {"type", "expand"}))                                                                                                         \
+    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                               \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
@@ -400,8 +401,7 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
-    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))
 
 // clang-format on
 
