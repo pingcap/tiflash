@@ -767,11 +767,28 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         const auto & table_infos = tidb_table_info.columns;
         for (const auto & col : columns_to_read)
         {
+            // table_infos does not contain EXTRA_HANDLE_COLUMN and EXTRA_TABLE_ID_COLUMN
+            if (col.id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                auto handle = ColumnInfo();
+                handle.id = EXTRA_HANDLE_COLUMN_ID;
+                handle.name = EXTRA_HANDLE_COLUMN_NAME;
+                table_scan_column_info.push_back(handle);
+                continue;
+            }
+            else if (col.id == ExtraTableIDColumnID)
+            {
+                auto col = ColumnInfo();
+                col.id = ExtraTableIDColumnID;
+                col.name = EXTRA_TABLE_ID_COLUMN_NAME;
+                table_scan_column_info.push_back(col);
+                continue;
+            }
             auto iter = std::find_if(
                 table_infos.begin(),
                 table_infos.end(),
                 [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
+            RUNTIME_CHECK_MSG(iter != table_infos.end(), "column: [id: {}, name: {}] not found in table info", col.id, col.name);
             table_scan_column_info.push_back(*iter);
         }
 
@@ -1781,7 +1798,7 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
     return desc;
 }
 
-DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
+DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
 {
     if (storeInited())
     {
@@ -1802,14 +1819,15 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings());
+            DeltaMergeStore::Settings(),
+            thread_pool);
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
     return _store;
 }
 
-bool StorageDeltaMerge::initStoreIfDataDirExist()
+bool StorageDeltaMerge::initStoreIfDataDirExist(ThreadPool * thread_pool)
 {
     if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
     {
@@ -1824,7 +1842,7 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
     {
         return false;
     }
-    getAndMaybeInitStore();
+    getAndMaybeInitStore(thread_pool);
     return true;
 }
 

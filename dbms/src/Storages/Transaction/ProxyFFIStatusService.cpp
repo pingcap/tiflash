@@ -47,7 +47,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
             status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
+            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
         }
 
 
@@ -69,7 +69,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         }
 
         if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
+            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
     }
 
     std::stringstream ss;
@@ -168,7 +168,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             return method(server, path, str, std::string_view(query.data, query.len), std::string_view(body.data, body.len));
         }
     }
-    return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
+    return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
 }
 
 } // namespace DB

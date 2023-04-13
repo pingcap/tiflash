@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
@@ -29,8 +30,8 @@ namespace
 class Spinner
 {
 public:
-    Spinner(TaskThreadPool & task_thread_pool_, const LoggerPtr & logger_)
-        : task_thread_pool(task_thread_pool_)
+    Spinner(TaskScheduler & task_scheduler_, const LoggerPtr & logger_)
+        : task_scheduler(task_scheduler_)
         , logger(logger_->getChild("Spinner"))
     {}
 
@@ -45,6 +46,9 @@ public:
         case ExecTaskStatus::RUNNING:
             running_tasks.push_back(std::move(task));
             return true;
+        case ExecTaskStatus::IO:
+            io_tasks.push_back(std::move(task));
+            return true;
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
@@ -58,11 +62,15 @@ public:
     // return false if there are no ready task to submit.
     bool submitReadyTasks()
     {
-        if (running_tasks.empty())
+        if (running_tasks.empty() && io_tasks.empty())
             return false;
 
-        task_thread_pool.submit(running_tasks);
+        task_scheduler.submitToCPUTaskThreadPool(running_tasks);
         running_tasks.clear();
+
+        task_scheduler.submitToIOTaskThreadPool(io_tasks);
+        io_tasks.clear();
+
         spin_count = 0;
         return true;
     }
@@ -84,19 +92,21 @@ public:
     }
 
 private:
-    TaskThreadPool & task_thread_pool;
+    TaskScheduler & task_scheduler;
 
     LoggerPtr logger;
 
     int16_t spin_count = 0;
 
     std::vector<TaskPtr> running_tasks;
+    std::vector<TaskPtr> io_tasks;
 };
 } // namespace
 
 WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 
@@ -127,7 +137,7 @@ void WaitReactor::loop() noexcept
     LOG_INFO(logger, "start wait reactor loop");
     ASSERT_MEMORY_TRACKER
 
-    Spinner spinner{scheduler.task_thread_pool, logger};
+    Spinner spinner{scheduler, logger};
     std::list<TaskPtr> local_waiting_tasks;
     // Get the incremental tasks from waiting_task_list.
     // return false if waiting_task_list has been closed.
@@ -150,6 +160,8 @@ void WaitReactor::loop() noexcept
                 ++task_it;
             ASSERT_MEMORY_TRACKER
         }
+
+        GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
         if (!spinner.submitReadyTasks())
             spinner.tryYield();

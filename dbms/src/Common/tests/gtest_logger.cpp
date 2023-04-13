@@ -33,7 +33,7 @@ public:
     void SetUp() override
     {
         RUNTIME_CHECK(channel_backup == nullptr);
-        Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter());
+        Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<false>());
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         channel_backup = Poco::Logger::root().getChannel();
         Poco::Logger::root().setChannel(formatting_channel);

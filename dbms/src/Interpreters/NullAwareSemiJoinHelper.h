@@ -16,12 +16,13 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
-#include <Interpreters/Join.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 
 namespace DB
 {
+struct RowsNotInsertToMap;
 enum class NASemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
@@ -45,6 +46,32 @@ enum class NASemiJoinResultType : UInt8
     FALSE_VALUE,
     TRUE_VALUE,
     NULL_VALUE,
+};
+
+struct NARightSideInfo
+{
+    NARightSideInfo(bool has_all_key_null_row_, bool is_empty_, bool null_key_check_all_blocks_directly_, std::vector<RowsNotInsertToMap *> & null_rows_)
+        : has_all_key_null_row(has_all_key_null_row_)
+        , is_empty(is_empty_)
+        , null_key_check_all_blocks_directly(null_key_check_all_blocks_directly_)
+        , null_rows(null_rows_)
+    {}
+    const bool has_all_key_null_row;
+    const bool is_empty;
+    const bool null_key_check_all_blocks_directly;
+    const std::vector<RowsNotInsertToMap *> & null_rows;
+};
+
+struct NALeftSideInfo
+{
+    NALeftSideInfo(const ConstNullMapPtr & null_map_, const ConstNullMapPtr & filter_map_, const ConstNullMapPtr & all_key_null_map_)
+        : null_map(null_map_)
+        , filter_map(filter_map_)
+        , all_key_null_map(all_key_null_map_)
+    {}
+    const ConstNullMapPtr & null_map;
+    const ConstNullMapPtr & filter_map;
+    const ConstNullMapPtr & all_key_null_map;
 };
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -91,7 +118,7 @@ public:
     }
 
     template <typename Mapped, NASemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<Join::RowsNotInsertToMap> & null_rows, size_t & current_offset, size_t min_pace);
+    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<RowsNotInsertToMap *> & null_rows, size_t & current_offset, size_t min_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
@@ -132,7 +159,7 @@ public:
         size_t left_columns,
         size_t right_columns,
         const BlocksList & right_blocks,
-        const std::vector<Join::RowsNotInsertToMap> & null_rows,
+        const std::vector<RowsNotInsertToMap *> & null_rows,
         size_t max_block_size,
         const JoinNonEqualConditions & non_equal_conditions);
 
@@ -152,10 +179,18 @@ private:
     size_t left_columns;
     size_t right_columns;
     const BlocksList & right_blocks;
-    const std::vector<Join::RowsNotInsertToMap> & null_rows;
+    const std::vector<RowsNotInsertToMap *> & null_rows;
     size_t max_block_size;
 
     const JoinNonEqualConditions & non_equal_conditions;
 };
+
+#define APPLY_FOR_NULL_AWARE_JOIN(M)                                                              \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftSemi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftSemi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftAnti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftAnti, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
+    M(DB::ASTTableJoin::Kind::NullAware_Anti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)     \
+    M(DB::ASTTableJoin::Kind::NullAware_Anti, DB::ASTTableJoin::Strictness::All, DB::MapsAll)
 
 } // namespace DB

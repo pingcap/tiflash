@@ -63,8 +63,6 @@ public:
 
     LoadedConfig loadConfig();
 
-    void savePreprocessedConfig(const LoadedConfig & loaded_config);
-
 public:
     /// Is the file named as result of config preprocessing, not as original files.
     static bool isPreprocessedFile(const std::string & config_path);

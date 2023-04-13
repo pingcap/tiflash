@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
 #include <Storages/S3/FileCache.h>
@@ -106,6 +107,10 @@ ssize_t PosixRandomAccessFile::read(char * buf, size_t size)
     {
         read_limiter->request(size);
     }
+    if (file_seg != nullptr)
+    {
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_read_bytes).Increment(size);
+    }
     return ::read(fd, buf, size);
 }
 
@@ -114,6 +119,10 @@ ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) cons
     if (read_limiter != nullptr)
     {
         read_limiter->request(size);
+    }
+    if (file_seg != nullptr)
+    {
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_read_bytes).Increment(size);
     }
     return ::pread(fd, buf, size, offset);
 }

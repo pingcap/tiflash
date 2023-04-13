@@ -14,27 +14,21 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
-#include <common/logger_useful.h>
 #include <memory.h>
-
-#include <magic_enum.hpp>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_pipeline_model_task_construct_failpoint[];
-} // namespace FailPoints
-
 /**
  *    CANCELLED/ERROR/FINISHED
  *               ▲
  *               │
  *  ┌────────────────────────┐
- *  │ WATITING◄─────►RUNNING │
+ *  │     ┌──►RUNNING◄──┐    │
+ *  │     │             │    │
+ *  │     ▼             ▼    │
+ *  │ WATITING◄────────►IO   │
  *  └────────────────────────┘
  */
 enum class ExecTaskStatus
@@ -42,6 +36,7 @@ enum class ExecTaskStatus
     INIT,
     WAITING,
     RUNNING,
+    IO,
     FINISHED,
     ERROR,
     CANCELLED,
@@ -50,19 +45,9 @@ enum class ExecTaskStatus
 class Task
 {
 public:
-    Task()
-        : mem_tracker(nullptr)
-        , log(Logger::get())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    }
+    Task();
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
-        : mem_tracker(std::move(mem_tracker_))
-        , log(Logger::get(req_id))
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    }
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
     virtual ~Task() = default;
 
@@ -71,34 +56,20 @@ public:
         return mem_tracker;
     }
 
-    ExecTaskStatus execute() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        switchStatus(executeImpl());
-        return exec_status;
-    }
+    ExecTaskStatus execute() noexcept;
 
-    ExecTaskStatus await() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        switchStatus(awaitImpl());
-        return exec_status;
-    }
+    ExecTaskStatus executeIO() noexcept;
+
+    ExecTaskStatus await() noexcept;
 
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
+    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:
-    void switchStatus(ExecTaskStatus to) noexcept
-    {
-        if (exec_status != to)
-        {
-            LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
-            exec_status = to;
-        }
-    }
+    void switchStatus(ExecTaskStatus to) noexcept;
 
 protected:
     MemoryTrackerPtr mem_tracker;

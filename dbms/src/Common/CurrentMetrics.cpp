@@ -69,11 +69,16 @@
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
+    M(S3Requests)                               \
     M(GlobalStorageRunMode)                     \
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \
     M(LocalThread)                              \
-    M(LocalThreadActive)
+    M(LocalThreadActive)                        \
+    M(DTFileCacheCapacity)                      \
+    M(DTFileCacheUsed)                          \
+    M(PageCacheCapacity)                        \
+    M(PageCacheUsed)
 
 namespace CurrentMetrics
 {

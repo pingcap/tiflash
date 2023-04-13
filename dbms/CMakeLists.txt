@@ -120,7 +120,8 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
-target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
+target_link_libraries(tiflash_common_io PUBLIC process_metrics)
+target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
 
 if (OS_FREEBSD)
     target_compile_definitions (tiflash_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
@@ -182,13 +183,13 @@ target_link_libraries (tiflash_common_io
     cpptoml
     magic_enum
     libsymbolization
+    ${RE2_LIBRARY}
+    ${RE2_ST_LIBRARY}
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
-    ${RE2_LIBRARY}
-    ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
@@ -214,6 +215,7 @@ if (USE_GM_SSL)
 endif ()
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
+    target_include_directories (tiflash_common_io BEFORE PRIVATE ${RE2_INCLUDE_DIR})
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
 

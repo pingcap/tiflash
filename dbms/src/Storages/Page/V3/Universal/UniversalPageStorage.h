@@ -25,6 +25,7 @@
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
+#include <Storages/Page/V3/CheckpointFile/CPDumpStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -198,7 +199,7 @@ public:
         UInt64 max_edit_records_per_part = 100000;
     };
 
-    PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    PS::V3::CPDataDumpStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
     {

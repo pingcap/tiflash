@@ -319,6 +319,24 @@ inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & seg
     readIntBinary(segment_info.stable_id, buf);
 }
 
+
+std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, PageIdU64 segment_id)
+{
+    std::vector<PageIdU64> segment_ids = {};
+    PageIdU64 current_segment_id = segment_id;
+    while (current_segment_id != 0)
+    {
+        segment_ids.push_back(current_segment_id);
+        Page page = context.storage_pool->metaReader()->read(current_segment_id); // not limit restore
+
+        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+        Segment::SegmentMetaInfo segment_info;
+        readSegmentMetaInfo(buf, segment_info);
+        current_segment_id = segment_info.next_segment_id;
+    }
+    return segment_ids;
+}
+
 SegmentPtr Segment::restoreSegment( //
     const LoggerPtr & parent_log,
     DMContext & context,
@@ -2540,7 +2558,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(const D
             dm_context.db_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id);
-        const auto & use_packs = pack_filter.getUsePacks();
+        const auto & use_packs = pack_filter.getUsePacksConst();
         const auto & handle_res = pack_filter.getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
 

@@ -40,19 +40,20 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
+RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (!kv_pair)
         return 0;
 
-    return insert(std::move(*kv_pair));
+    return insert(std::move(*kv_pair), mode);
 }
 
 template <>
-RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value)
+RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    UNUSED(mode);
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     // according to the process of pessimistic lock, just overwrite.
     data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
@@ -60,12 +61,40 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
+RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, DupCheck mode)
 {
     auto & map = data;
+    TiKVValue prev_value;
+    if (mode == DupCheck::AllowSame)
+    {
+        prev_value = TiKVValue::copyFrom(getTiKVValue(kv_pair.second));
+    }
     auto [it, ok] = map.emplace(std::move(kv_pair));
+    // We support duplicated kv pairs if they are the same in snapshot.
+    // This is because kvs in raftstore v2's snapshot may be overlapped.
+    // However, we still not permit duplicated kvs from raft cmd.
     if (!ok)
-        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
+    {
+        if (mode == DupCheck::Deny)
+        {
+            throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
+        }
+        else if (mode == DupCheck::AllowSame)
+        {
+            if (prev_value != getTiKVValue(it->second))
+            {
+                throw Exception("Found existing key in hex and val differs: "
+                                    + getTiKVKey(it->second).toDebugString()
+                                    + " prev_val: " + getTiKVValue(it->second).toDebugString()
+                                    + " new_val: " + prev_value.toDebugString(),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        else
+        {
+            throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
 
     return calcTiKVKeyValueSize(it->second);
 }
@@ -353,6 +382,13 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 UInt64 versions_to_last_change = readVarUInt(data, len);
                 UNUSED(last_change_ts);
                 UNUSED(versions_to_last_change);
+                break;
+            }
+            case TXN_SOURCE_PREFIX_FOR_LOCK:
+            {
+                // Used for CDC, useless for TiFlash.
+                UInt64 txn_source_prefic = readVarUInt(data, len);
+                UNUSED(txn_source_prefic);
                 break;
             }
             default:

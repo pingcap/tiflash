@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolMetrics.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <thread>
@@ -25,6 +26,7 @@ namespace DB
 {
 class TaskScheduler;
 
+template <typename Impl>
 class TaskThreadPool
 {
 public:
@@ -44,12 +46,14 @@ private:
     void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
 
 private:
-    TaskQueuePtr task_queue;
+    typename Impl::QueueType task_queue;
 
-    LoggerPtr logger = Logger::get();
+    LoggerPtr logger = Logger::get(Impl::NAME);
 
     TaskScheduler & scheduler;
 
     std::vector<std::thread> threads;
+
+    TaskThreadPoolMetrics<Impl::is_cpu> metrics;
 };
 } // namespace DB

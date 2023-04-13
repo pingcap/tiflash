@@ -391,6 +391,6 @@ include (cmake/print_include_directories.cmake)
 # Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
 # with a large number of threads.
 include (cmake/sequential.cmake)
-build_sequentially (symbolization tiflash_proxy)
+build_sequentially (process_metrics symbolization tiflash_proxy)
 
 print_flags ()

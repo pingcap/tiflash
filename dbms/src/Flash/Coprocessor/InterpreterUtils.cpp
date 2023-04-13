@@ -180,8 +180,8 @@ void executeLocalSort(
         // For order by const col and has limit, we will generate LimitOperator directly.
         if (limit)
         {
-            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
             group_builder.transform([&](auto & builder) {
+                auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
                 builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
         }
@@ -189,13 +189,24 @@ void executeLocalSort(
     }
     else
     {
+        const Settings & settings = context.getSettingsRef();
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency);
+        SpillConfig spill_config{
+            context.getTemporaryPath(),
+            fmt::format("{}_sort", log->identifier()),
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
+            context.getFileProvider()};
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(
                 exec_status,
                 log->identifier(),
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
-                context.getSettingsRef().max_block_size));
+                settings.max_block_size,
+                max_bytes_before_external_sort,
+                spill_config));
         });
     }
 }
