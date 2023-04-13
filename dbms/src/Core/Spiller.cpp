@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/CachedSpillHandler.h>
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -20,7 +21,6 @@
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
-
 
 namespace DB
 {
@@ -104,47 +104,25 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     }
 }
 
-namespace
+CachedSpillHandlerPtr Spiller::createCachedSpillHandler(
+    const BlockInputStreamPtr & from,
+    UInt64 partition_id,
+    const std::function<bool()> & is_cancelled)
 {
-/// bytes_threshold == 0 means no limit, and will read all data
-std::vector<Block> readDataForSpill(IBlockInputStream & from, size_t bytes_threshold, const std::function<bool()> & is_cancelled)
-{
-    std::vector<Block> ret;
-    size_t current_return_size = 0;
-
-    while (Block block = from.read())
-    {
-        if unlikely (is_cancelled())
-            return {};
-        ret.push_back(std::move(block));
-        current_return_size += ret.back().estimateBytesForSpill();
-        if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
-            break;
-    }
-
-    if unlikely (is_cancelled())
-        return {};
-
-    return ret;
+    return std::make_shared<CachedSpillHandler>(
+        this,
+        partition_id,
+        from,
+        config.max_cached_data_bytes_in_spiller,
+        is_cancelled);
 }
-} // namespace
 
-void Spiller::spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
+void Spiller::spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
 {
-    auto spill_handler = createSpillHandler(partition_id);
-    block_in.readPrefix();
-    while (true)
-    {
-        auto spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
-        if (spill_blocks.empty())
-            break;
-        spill_handler.spillBlocks(std::move(spill_blocks));
-    }
-    if (is_cancelled())
-        return;
-    block_in.readSuffix();
-    /// submit the spilled data
-    spill_handler.finish();
+    assert(block_in);
+    auto cached_handler = createCachedSpillHandler(block_in, partition_id, is_cancelled);
+    while (cached_handler->batchRead())
+        cached_handler->spill();
 }
 
 std::pair<std::unique_ptr<SpilledFile>, bool> Spiller::getOrCreateSpilledFile(UInt64 partition_id)

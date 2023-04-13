@@ -350,6 +350,24 @@ namespace DB
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
+        F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
+        F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \
+        F(type_cpu_executing_tasks_count, {"type", "cpu_executing_tasks_count"}),                                                                   \
+        F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                                         \
+        F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
+        F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
+        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
+        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
+        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
+    M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
+        F(type_to_init, {"type", "to_init"}),                                                                                                       \
+        F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
+        F(type_to_running, {"type", "to_running"}),                                                                                                 \
+        F(type_to_io, {"type", "to_io"}),                                                                                                           \
+        F(type_to_finished, {"type", "to_finished"}),                                                                                               \
+        F(type_to_error, {"type", "to_error"}),                                                                                                     \
+        F(type_to_cancelled, {"type", "to_cancelled"}))                                                                                             \
     M(tiflash_storage_s3_gc_status, "S3 GC status", Gauge,                                                                                          \
         F(type_lifecycle_added, {{"type", "lifecycle_added"}}),                                                                                     \
         F(type_lifecycle_failed, {{"type", "lifecycle_failed"}}),                                                                                   \
@@ -363,7 +381,26 @@ namespace DB
         F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets{0.5, 2, 20}),                                                                     \
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
-        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))
+        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
+    M(tiflash_storage_remote_cache, "Operations of remote cache", Counter,                                                                          \
+        F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                                 \
+        F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                               \
+        F(type_dtfile_evict, {"type", "dtfile_evict"}),                                                                                             \
+        F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                               \
+        F(type_dtfile_download, {"type", "dtfile_download"}),                                                                                       \
+        F(type_dtfile_download_failed, {"type", "dtfile_download_failed"}),                                                                         \
+        F(type_page_hit, {"type", "page_hit"}),                                                                                                     \
+        F(type_page_miss, {"type", "page_miss"}),                                                                                                   \
+        F(type_page_evict, {"type", "page_evict"}),                                                                                                 \
+        F(type_page_full, {"type", "page_full"}),                                                                                                   \
+        F(type_page_download, {"type", "page_download"}))                                                                                           \
+    M(tiflash_storage_remote_cache_bytes, "Flow of remote cache", Counter,                                                                          \
+        F(type_dtfile_evict_bytes, {"type", "dtfile_evict_bytes"}),                                                                                 \
+        F(type_dtfile_download_bytes, {"type", "dtfile_download_bytes"}),                                                                           \
+        F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
+        F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
+        F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))
 
 // clang-format on
 

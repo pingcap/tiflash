@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,33 @@
 
 #pragma once
 
-void pageStorageV3CtlEntry(int argc, char ** argv);
+#include <atomic>
 
-void universalpageStorageCtlEntry(int argc, char ** argv);
+namespace DB
+{
+// TODO support more metrics after profile info of task has supported.
+template <bool is_cpu>
+class TaskThreadPoolMetrics
+{
+public:
+    TaskThreadPoolMetrics();
+
+    void incPendingTask(size_t task_count);
+
+    void decPendingTask();
+
+    void incExecutingTask();
+
+    void decExecutingTask();
+
+    void incThreadCnt();
+
+    void decThreadCnt();
+
+    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+
+private:
+    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
+};
+
+} // namespace DB
