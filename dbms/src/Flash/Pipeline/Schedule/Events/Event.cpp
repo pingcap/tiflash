@@ -140,7 +140,6 @@ void Event::finish() noexcept
     // If query has already been cancelled, it will not trigger outputs.
     if (likely(!exec_status.isCancelled()))
     {
-        std::cout << fmt::format("schedule {} outputs", outputs.size()) << std::endl;
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {
