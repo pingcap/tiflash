@@ -24,6 +24,7 @@
 #include <sys/statvfs.h>
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,9 @@ namespace CurrentMetrics
 extern const Metric StoreSizeCapacity;
 extern const Metric StoreSizeAvailable;
 extern const Metric StoreSizeUsed;
+extern const Metric StoreSizeCapacityLocal;
+extern const Metric StoreSizeAvailableLocal;
+extern const Metric StoreSizeUsedLocal;
 } // namespace CurrentMetrics
 
 
@@ -119,6 +123,52 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
+void PathCapacityMetrics::addRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes)
+{
+    if (used_bytes == 0)
+        return;
+
+    std::unique_lock<std::mutex> lock(mutex);
+    auto iter = keyspace_id_to_used_bytes.emplace(keyspace_id, 0);
+    iter.first->second += used_bytes;
+}
+
+void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes)
+{
+    std::unique_lock<std::mutex> lock(mutex);
+    auto iter = keyspace_id_to_used_bytes.find(keyspace_id);
+    RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end());
+    iter->second -= used_bytes;
+    if (iter->second == 0)
+        keyspace_id_to_used_bytes.erase(iter);
+}
+
+std::unordered_map<KeyspaceID, UInt64> PathCapacityMetrics::getKeyspaceUsedSizes()
+{
+    size_t local_toal_size = 0;
+    for (auto & path_info : path_infos)
+    {
+        local_toal_size += path_info.used_bytes;
+    }
+
+    std::unordered_map<KeyspaceID, UInt64> keyspace_id_to_total_size;
+
+    std::unique_lock<std::mutex> lock(mutex);
+
+    size_t remote_total_size = 0;
+    for (auto & [keyspace_id, size] : keyspace_id_to_used_bytes)
+    {
+        remote_total_size += size;
+    }
+
+    for (auto & [keyspace_id, size] : keyspace_id_to_used_bytes)
+    {
+        // cannot get accurate local used size for each keyspace, so we use a simple way to estimate it.
+        keyspace_id_to_total_size.emplace(keyspace_id, size + static_cast<size_t>(size * 1.0 / remote_total_size * local_toal_size));
+    }
+    return keyspace_id_to_total_size;
+}
+
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
 {
     std::map<FSID, DiskCapacity> disk_stats_map;
@@ -188,8 +238,29 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
         total_stat.avail_size = std::min(total_stat.avail_size, total_stat.capacity_size - total_stat.used_size);
     }
 
+    CurrentMetrics::set(CurrentMetrics::StoreSizeCapacityLocal, total_stat.capacity_size);
+    CurrentMetrics::set(CurrentMetrics::StoreSizeAvailableLocal, total_stat.avail_size);
+    CurrentMetrics::set(CurrentMetrics::StoreSizeUsedLocal, total_stat.used_size);
+
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
+
+    if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
+    {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            for (const auto & [keyspace_id, used_bytes] : keyspace_id_to_used_bytes)
+            {
+                UNUSED(keyspace_id);
+                total_stat.used_size += used_bytes;
+            }
+        }
+
+        // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
+        // EiB is not supported by TiUP now. https://github.com/pingcap/tiup/issues/2139
+        total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
+        total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
+    }
 
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
@@ -206,14 +277,6 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
-
-    if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
-    {
-        // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
-        // EiB is not supported by TiUP now. https://github.com/pingcap/tiup/issues/2139
-        total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
-        total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
-    }
 
     return total_stat;
 }

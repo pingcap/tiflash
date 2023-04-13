@@ -35,6 +35,9 @@
     M(StoreSizeCapacity)                        \
     M(StoreSizeAvailable)                       \
     M(StoreSizeUsed)                            \
+    M(StoreSizeCapacityLocal)                   \
+    M(StoreSizeAvailableLocal)                  \
+    M(StoreSizeUsedLocal)                       \
     M(DT_DeltaMerge)                            \
     M(DT_DeltaCompact)                          \
     M(DT_DeltaFlush)                            \

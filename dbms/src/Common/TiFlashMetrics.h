@@ -17,6 +17,7 @@
 #include <Common/ComputeLabelHolder.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -472,6 +473,11 @@ private:
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
+
+    std::shared_ptr<prometheus::Family<prometheus::Gauge>> registered_keypace_store_used_family;
+    using KeyspaceID = UInt32;
+    std::unordered_map<KeyspaceID, std::shared_ptr<prometheus::Gauge>> registered_keypace_store_used_metrics;
+    std::shared_ptr<prometheus::Gauge> store_used_total_metric;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

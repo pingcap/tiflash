@@ -207,6 +207,7 @@ StableValueSpacePtr createNewStable( //
             .offset_in_file = 0,
             .size_in_file = 0,
         };
+        delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
         wbs.data.putRemoteExternal(dtfile_id, loc);
     }
 
@@ -265,7 +266,7 @@ SegmentPtr Segment::newSegment( //
     segment->serialize(wbs.meta);
 
     wbs.writeAll();
-    stable->enableDMFilesGC();
+    stable->enableDMFilesGC(context);
 
     return segment;
 }
@@ -998,7 +999,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     auto new_stable = prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
 
     wbs.writeLogAndData();
-    new_stable->enableDMFilesGC();
+    new_stable->enableDMFilesGC(dm_context);
 
     SYNC_FOR("before_Segment::applyMergeDelta"); // pause without holding the lock on the segment
 
@@ -1239,8 +1240,8 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
-    split_info.my_stable->enableDMFilesGC();
-    split_info.other_stable->enableDMFilesGC();
+    split_info.my_stable->enableDMFilesGC(dm_context);
+    split_info.other_stable->enableDMFilesGC(dm_context);
 
     SYNC_FOR("before_Segment::applySplit"); // pause without holding the lock on the segment
 
@@ -1582,7 +1583,6 @@ Segment::prepareSplitLogical( //
             /* page_id= */ other_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
-
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);
     }
@@ -1806,7 +1806,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     auto merged_stable = prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
 
     wbs.writeLogAndData();
-    merged_stable->enableDMFilesGC();
+    merged_stable->enableDMFilesGC(dm_context);
 
     SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
 
