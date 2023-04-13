@@ -103,8 +103,7 @@ public:
 TEST_F(ExecutorsWithDMTestRunner, Basic)
 try
 {
-    // table scan
-    std::vector<bool> keep_order_opt{true};
+    std::vector<bool> keep_order_opt{false, true};
 
     for (auto keep_order : keep_order_opt)
     {
@@ -194,7 +193,6 @@ try
     }
 }
 CATCH
-
 
 } // namespace tests
 } // namespace DB
