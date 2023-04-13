@@ -66,8 +66,8 @@ struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     void insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool);
 };
 
-void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block, size_t index);
-void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem, Block * stored_block, size_t index);
+void insertRowToList(RowRefList * list, RowRefList * elem);
+void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem);
 
 class JoinPartition;
 using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
@@ -157,8 +157,7 @@ public:
         size_t stream_index,
         size_t insert_concurrency,
         bool enable_fine_grained_shuffle,
-        bool enable_join_spill,
-        bool has_other_condition);
+        bool enable_join_spill);
 
     /// probe the block using hash maps in `JoinPartitions`
     static void probeBlock(

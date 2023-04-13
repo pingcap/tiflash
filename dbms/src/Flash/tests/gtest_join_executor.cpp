@@ -1556,7 +1556,7 @@ try
             {toNullableVec<Int32>("a", {{}, {}, 1, 5, 5})},
         }
     };
-    
+
     for (const auto & [type, left, right, res] : t1)
     {
         context.addMockTable("right_semi_family", "t", {{"a", TiDB::TP::TypeLong}}, left);

@@ -606,7 +606,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         if (enable_join_spill)
             assert(partitions[stream_index]->getPartitionPool() != nullptr);
         /// Fill the hash table.
-        JoinPartition::insertBlockIntoMaps(partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, getBuildConcurrency(), enable_fine_grained_shuffle, enable_join_spill, has_other_condition);
+        JoinPartition::insertBlockIntoMaps(partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, getBuildConcurrency(), enable_fine_grained_shuffle, enable_join_spill);
     }
 }
 
@@ -999,7 +999,6 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
-
             // Return build table header for right semi/anti join
             block = sample_block_with_columns_to_add;
         }

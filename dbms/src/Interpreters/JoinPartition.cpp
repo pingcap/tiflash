@@ -51,25 +51,22 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
     else
     {
         auto * elem = reinterpret_cast<RowRefList *>(pool.alloc(sizeof(RowRefList)));
-        insertRowToList(&head, elem, stored_block, index);
+        new (elem) RowRefList(stored_block, index);
+        insertRowToList(&head, elem);
     }
     ++total_size;
 }
 
-void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block, size_t index)
+void insertRowToList(RowRefList * list, RowRefList * elem)
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
-    elem->block = stored_block;
-    elem->row_num = index;
 }
 
-void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem, Block * stored_block, size_t index)
+void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem)
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
-    elem->block = stored_block;
-    elem->row_num = index;
 }
 
 template <typename Maps>
@@ -433,7 +430,8 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
             auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
-            insertRowToList(&emplace_result.getMapped(), elem, stored_block, i);
+            new (elem) typename Map::mapped_type(stored_block, i);
+            insertRowToList(&emplace_result.getMapped(), elem);
         }
     }
 };
@@ -705,8 +703,7 @@ void JoinPartition::insertBlockIntoMaps(
     size_t stream_index,
     size_t insert_concurrency,
     bool enable_fine_grained_shuffle,
-    bool enable_join_spill,
-    bool has_other_condition)
+    bool enable_join_spill)
 {
     auto & current_join_partition = join_partitions[stream_index];
     assert(!current_join_partition->spill);
@@ -720,7 +717,7 @@ void JoinPartition::insertBlockIntoMaps(
     }
     else if (isRightSemiFamily(current_kind))
     {
-        if (has_other_condition)
+        if (current_join_partition->has_other_condition)
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);

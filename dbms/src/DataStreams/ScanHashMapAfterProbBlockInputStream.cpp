@@ -26,13 +26,13 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-struct AdderNonJoined;
+struct AdderMapEntry;
 
-template <bool add_non_joined, typename Mapped>
-struct AdderNonJoinedRightSemi;
+template <bool add_joined, typename Mapped>
+struct AdderMapEntryRightSemi;
 
 template <typename Mapped>
-struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
+struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
 {
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *&, const size_t)
     {
@@ -50,7 +50,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 };
 
 template <typename Mapped>
-struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
+struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
 {
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
     {
@@ -78,7 +78,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 };
 
 template <bool add_joined, typename Mapped>
-struct AdderNonJoinedRightSemi
+struct AdderMapEntryRightSemi
 {
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
     {
@@ -119,7 +119,7 @@ ScanHashMapAfterProbBlockInputStream::ScanHashMapAfterProbBlockInputStream(const
 {
     size_t build_concurrency = parent.getBuildConcurrency();
     if (unlikely(step > build_concurrency || index >= build_concurrency))
-        LOG_WARNING(parent.log, "The concurrency of NonJoinedBlockInputStream is larger than join build concurrency");
+        LOG_WARNING(parent.log, "The concurrency of ScanHashMapAfterProbBlockInputStream is larger than join build concurrency");
 
     /** left_sample_block contains keys and "left" columns.
           * result_sample_block - keys, "left" columns, and "right" columns.
@@ -174,11 +174,11 @@ Block ScanHashMapAfterProbBlockInputStream::readImpl()
     if unlikely (parent.active_build_threads != 0 || parent.active_probe_threads != 0)
     {
         /// build/probe is not finished yet, the query must be cancelled, so just return {}
-        LOG_WARNING(parent.log, "NonJoinedBlock read without non zero active_build_threads/active_probe_threads, return empty block");
+        LOG_WARNING(parent.log, "ScanHashMapAfterProb read without non zero active_build_threads/active_probe_threads, return empty block");
         return {};
     }
     if (!parent.has_build_data_in_memory)
-        /// no build data in memory, the non joined result must be empty
+        /// no build data in memory, the scan hash map result must be empty
         return {};
 
     size_t num_columns_left = column_indices_left.size();
@@ -396,9 +396,9 @@ void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
     for (; *it != end;)
     {
         if constexpr (row_flagged && output_joined_rows)
-            row_count_info.inc(AdderNonJoinedRightSemi<true, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+            row_count_info.inc(AdderMapEntryRightSemi<true, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
         else if constexpr (row_flagged && !output_joined_rows)
-            row_count_info.inc(AdderNonJoinedRightSemi<false, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+            row_count_info.inc(AdderMapEntryRightSemi<false, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
         else
         {
             bool mapped = (*it)->getMapped().getUsed();
@@ -408,7 +408,7 @@ void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
                 continue;
             }
 
-            row_count_info.inc(AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add(
+            row_count_info.inc(AdderMapEntry<STRICTNESS, typename Map::mapped_type>::add(
                 (*it)->getMapped(),
                 key_num,
                 num_columns_left,
