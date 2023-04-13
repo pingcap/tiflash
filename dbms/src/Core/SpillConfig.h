@@ -27,7 +27,7 @@ public:
     String spill_dir;
     String spill_id;
     String spill_id_as_file_name_prefix;
-    /// soft limit of the max cached data bytes in spiller(used in Spiller::spillBlocksUsingBlockInputStream)
+    /// soft limit of the max cached data bytes in spiller(used in CachedSpillHandler)
     size_t max_cached_data_bytes_in_spiller;
     /// soft limit of the max rows per spilled file
     UInt64 max_spilled_rows_per_file;

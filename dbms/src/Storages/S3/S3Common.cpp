@@ -74,6 +74,7 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 
 namespace ProfileEvents
@@ -379,16 +380,18 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
+namespace
+{
+bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
     {
-        return;
+        return true;
     }
 
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
-    Poco::URI uri(cfg.endpointOverride);
+    const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
@@ -399,7 +402,41 @@ void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
         cfg.region = Aws::Region::AWS_GLOBAL;
     }
+
+    if (uri.getScheme() == "https")
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTPS;
+    }
+    else
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTP;
+    }
+    cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
+
+    bool use_virtual_address = true;
+    {
+        std::string_view view(cfg.endpointOverride);
+        if (auto pos = view.find("://"); pos != std::string_view::npos)
+        {
+            view.remove_prefix(pos + 3); // remove the "<Scheme>://" prefix
+        }
+        // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
+        // the service need virtual addressing to do load balancing.
+        // For deployed with local minio, the address contains fix port, we should disable virtual addressing
+        use_virtual_address = (view.find(':') == std::string_view::npos);
+    }
+
+    LOG_INFO(
+        log,
+        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} useVirtualAddressing={}}}",
+        cfg.endpointOverride,
+        cfg.region,
+        magic_enum::enum_name(cfg.scheme),
+        cfg.verifySSL,
+        use_virtual_address);
+    return use_virtual_address;
 }
+} // namespace
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
@@ -412,11 +449,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;
-        auto scheme = parseScheme(config_.endpoint);
-        cfg.scheme = scheme;
-        cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
-    updateRegionByEndpoint(cfg);
+    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
         Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
@@ -447,7 +481,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             provider,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ true);
+            /*userVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
@@ -459,16 +493,12 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ true);
+            /*useVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
 }
 
-Aws::Http::Scheme ClientFactory::parseScheme(std::string_view endpoint)
-{
-    return boost::algorithm::starts_with(endpoint, "https://") ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
-}
 
 bool isNotFoundError(Aws::S3::S3Errors error)
 {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -19,6 +21,12 @@
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+
+namespace CurrentMetrics
+{
+extern const Metric PageCacheCapacity;
+extern const Metric PageCacheUsed;
+} // namespace CurrentMetrics
 
 namespace DB::DM::Remote
 {
@@ -33,6 +41,7 @@ RNLocalPageCache::RNLocalPageCache(const RNLocalPageCacheOptions & options)
 
     if (max_size > 0)
     {
+        CurrentMetrics::set(CurrentMetrics::PageCacheCapacity, max_size);
         // Initially all PS entries are evictable.
         storage->traverseEntries("", [&](UniversalPageId page_id, DB::PageEntry entry) {
             evictable_keys.put(page_id, entry.size);
@@ -72,6 +81,8 @@ void RNLocalPageCache::write(
 
     UniversalWriteBatch cache_wb;
     cache_wb.putPage(key, 0, read_buffer, size, field_sizes);
+    GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment();
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(size);
     storage->write(std::move(cache_wb));
 }
 
@@ -103,7 +114,7 @@ Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & 
     auto page = page_map.at(key);
 
     RUNTIME_CHECK(page.isValid());
-
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_read_bytes).Increment(page.data.size());
     return page;
 }
 
@@ -284,7 +295,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
             while (true)
             {
                 using namespace std::chrono_literals;
-
+                GET_METRIC(tiflash_storage_remote_cache, type_page_full).Increment();
                 auto cv_status = cv.wait_for(lock, 30s);
                 if (cv_status == std::cv_status::timeout)
                     LOG_WARNING(
@@ -342,6 +353,8 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
             continue;
         missing_ids.push_back(pages[i]);
     }
+    GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
+    GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());
     return OccupySpaceResult{
         .pages_not_in_cache = missing_ids,
         .pages_guard = guard,
@@ -370,6 +383,7 @@ bool RNLocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
     }
 
     LOG_TRACE(log, "LRU put {} size={} lru={}", key, size, statistics());
+    CurrentMetrics::set(CurrentMetrics::PageCacheUsed, current_total_size);
 
     return inserted;
 }
@@ -383,6 +397,7 @@ bool RNLocalPageCacheLRU::remove(const UniversalPageId & key)
     current_total_size -= it->second.size;
     queue.erase(it->second.queue_iter);
     index.erase(it);
+    CurrentMetrics::set(CurrentMetrics::PageCacheUsed, current_total_size);
 
     return true;
 }
@@ -393,6 +408,7 @@ std::vector<UniversalPageId> RNLocalPageCacheLRU::evict()
         return {};
 
     std::vector<UniversalPageId> evicted;
+    size_t evicted_bytes = 0;
     while (current_total_size > max_size && queue.size() > 1)
     {
         const auto & key = queue.front();
@@ -404,9 +420,13 @@ std::vector<UniversalPageId> RNLocalPageCacheLRU::evict()
         LOG_TRACE(log, "LRU evict, key={} size={}", key, it->second.size);
 
         current_total_size -= it->second.size;
+        evicted_bytes += it->second.size;
         queue.pop_front();
         index.erase(it);
     }
+    GET_METRIC(tiflash_storage_remote_cache, type_page_evict).Increment(evicted.size());
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_evict_bytes).Increment(evicted_bytes);
+    CurrentMetrics::set(CurrentMetrics::PageCacheUsed, current_total_size);
 
     LOG_DEBUG(log, "LRU evict finished, lru={}", statistics());
 
