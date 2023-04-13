@@ -400,7 +400,8 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
+    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)
 
 // clang-format on
 
