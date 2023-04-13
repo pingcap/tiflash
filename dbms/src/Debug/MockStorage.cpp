@@ -141,7 +141,7 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
     return table_id;
 }
 
-std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareForRead(Context & context, Int64 table_id)
+std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareForRead(Context & context, Int64 table_id, bool keep_order)
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
@@ -155,15 +155,16 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     auto scan_context = std::make_shared<DM::ScanContext>();
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
-    query_info.keep_order = false;
+    query_info.keep_order = keep_order;
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    std::cout << "shit keep order: " << keep_order << std::endl;
     return {storage, column_names, query_info};
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order)
 {
     QueryProcessingStage::Enum stage;
-    auto [storage, column_names, query_info] = prepareForRead(context, table_id);
+    auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
@@ -193,11 +194,22 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
 }
 
 
-SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus & exec_status_, Context & context, Int64 table_id, size_t concurrency)
+SourceOps MockStorage::getSourceOpsFromDeltaMerge(
+    PipelineExecutorStatus & exec_status_,
+    Context & context,
+    Int64 table_id,
+    size_t concurrency,
+    bool keep_order)
 {
-    auto [storage, column_names, query_info] = prepareForRead(context, table_id);
+    auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     // Currently don't support test for late materialization
-    return storage->readSourceOps(exec_status_, column_names, query_info, context, context.getSettingsRef().max_block_size, concurrency);
+    return storage->readSourceOps(
+        exec_status_,
+        column_names,
+        query_info,
+        context,
+        context.getSettingsRef().max_block_size,
+        concurrency);
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)

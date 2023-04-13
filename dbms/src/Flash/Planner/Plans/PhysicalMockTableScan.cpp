@@ -79,11 +79,13 @@ PhysicalMockTableScan::PhysicalMockTableScan(
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
-    Int64 table_id_)
+    Int64 table_id_,
+    bool keep_order_)
     : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
+    , keep_order(keep_order_)
 {}
 
 PhysicalPlanNodePtr PhysicalMockTableScan::build(
@@ -94,14 +96,15 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 {
     assert(context.isTest());
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
-
+    std::cout << "ywq test keep order: " << table_scan.keepOrder() << std::endl;
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
         log->identifier(),
         Block(schema),
         mock_streams,
-        table_scan.getLogicalTableID());
+        table_scan.getLogicalTableID(),
+        table_scan.keepOrder());
     return physical_mock_table_scan;
 }
 
@@ -119,7 +122,12 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
 {
     if (context.mockStorage()->useDeltaMerge())
     {
-        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
+        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(
+            exec_status,
+            context,
+            table_id,
+            concurrency,
+            keep_order);
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
@@ -131,7 +139,11 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
         group_builder.init(mock_streams.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
+            builder.setSourceOp(
+                std::make_unique<BlockInputStreamSourceOp>(
+                    exec_status,
+                    log->identifier(),
+                    mock_streams[i++]));
         });
     }
 }

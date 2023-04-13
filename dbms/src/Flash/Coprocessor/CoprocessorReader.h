@@ -81,13 +81,13 @@ public:
         pingcap::kv::Cluster * cluster,
         std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
-        int concurrency,
+        int concurrency_,
         const pingcap::kv::LabelFilter & tiflash_label_filter_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
+        , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
-        , concurrency(concurrency)
+        , concurrency(concurrency_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -148,6 +148,7 @@ public:
 
     std::pair<pingcap::coprocessor::ResponseIter::Result, bool> nonBlockingNext()
     {
+        RUNTIME_CHECK(opened == true);
         return resp_iter.nonBlockingNext();
     }
 

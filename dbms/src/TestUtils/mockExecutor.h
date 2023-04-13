@@ -85,8 +85,17 @@ public:
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(
+        const String & db,
+        const String & table,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
+    DAGRequestBuilder & mockTable(
+        const MockTableName & name,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
 
     DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -200,7 +209,10 @@ public:
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
 
-    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder scan(
+        const String & db_name,
+        const String & table_name,
+        bool keep_order = false);
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }

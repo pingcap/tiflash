@@ -237,9 +237,6 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             switch (executor.tp())
             {
             case tipb::ExecType::TypeTableScan:
-                // TODO support keep order.
-                is_supported = !executor.tbl_scan().keep_order();
-                return is_supported;
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:

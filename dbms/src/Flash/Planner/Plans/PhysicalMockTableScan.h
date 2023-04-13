@@ -42,7 +42,8 @@ public:
         const String & req_id,
         const Block & sample_block_,
         const BlockInputStreams & mock_streams_,
-        Int64 table_id_);
+        Int64 table_id_,
+        bool keep_order_);
 
     void finalize(const Names & parent_require) override;
 
@@ -76,6 +77,8 @@ private:
 
     BlockInputStreams mock_streams;
 
+
     const Int64 table_id;
+    const bool keep_order;
 };
 } // namespace DB
