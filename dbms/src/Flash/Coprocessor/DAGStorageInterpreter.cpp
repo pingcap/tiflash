@@ -584,7 +584,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     {
         size_t task_end = task_start + task_per_thread;
         if (i < rest_task)
-            task_end++;
+            ++task_end;
         if (task_end == task_start)
             continue;
         std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
@@ -610,12 +610,12 @@ void DAGStorageInterpreter::buildRemoteSourceOps(
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
     pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
-    /// TODO: support S3
+    /// TODO: support reading data from write nodes
     for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
     {
         size_t task_end = task_start + task_per_thread;
         if (i < rest_task)
-            task_end++;
+            ++task_end;
         if (task_end == task_start)
             continue;
         std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
@@ -1341,7 +1341,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             filter_conditions,
             log));
     }
-    LOG_INFO(log, "remote request size: {}", remote_requests.size());
+    LOG_DEBUG(log, "remote request size: {}", remote_requests.size());
     return remote_requests;
 }
 

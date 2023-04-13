@@ -24,7 +24,7 @@ OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 
 void AggregateConvergentSourceOp::operateSuffix()
 {
-    LOG_INFO(log, "finish read {} rows from aggregate context", total_rows);
+    LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
 }
 
 } // namespace DB

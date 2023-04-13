@@ -36,7 +36,7 @@ void CoprocessorReaderSourceOp::operatePrefix()
 
 void CoprocessorReaderSourceOp::operateSuffix()
 {
-    LOG_INFO(log, "finish read {} rows from remote coprocessor", total_rows);
+    LOG_DEBUG(log, "finish read {} rows from remote coprocessor", total_rows);
 }
 
 Block CoprocessorReaderSourceOp::popFromBlockQueue()

@@ -28,6 +28,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
 
 namespace ProfileEvents
@@ -167,9 +168,9 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     // now only support pipeline model in test mode.
-    if (context.isTest()
-        && context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline)
+    if (context.getSettingsRef().enable_planner
+        && context.getSettingsRef().enable_pipeline
+        && context.getSharedContextDisagg()->notDisaggregatedMode())
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
