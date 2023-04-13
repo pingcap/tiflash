@@ -150,7 +150,7 @@ void CreatingSetsBlockInputStream::createAll()
                 exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Creating all tasks takes {} sec. ",
             watch.elapsedSeconds());
@@ -173,7 +173,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     Stopwatch watch;
     try
     {
-        LOG_DEBUG(log, "{}", gen_log_msg());
+        LOG_INFO(log, "{}", gen_log_msg());
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -192,7 +192,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_WARNING(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -242,31 +242,24 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (subquery.join)
             head_rows = subquery.join->getTotalBuildInputRows();
 
-        if (head_rows != 0)
-        {
-            // avoid generate log message when log level > DEBUG.
-            auto gen_debug_log_msg = [&] {
-                FmtBuffer msg;
-                msg.append("Created. ");
+        // avoid generate log message when log level > INFO.
+        auto gen_finish_log_msg = [&] {
+            FmtBuffer msg;
+            msg.append("Created. ");
 
-                if (subquery.set)
-                    msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
-                if (subquery.join)
-                    msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
-                if (subquery.table)
-                    msg.fmtAppend("Table with {} rows. ", head_rows);
+            if (subquery.set)
+                msg.fmtAppend("Set with {} entries from {} rows. ", head_rows > 0 ? subquery.set->getTotalRowCount() : 0, head_rows);
+            if (subquery.join)
+                msg.fmtAppend("Join with {} entries from {} rows. ", head_rows > 0 ? subquery.join->getTotalRowCount() : 0, head_rows);
+            if (subquery.table)
+                msg.fmtAppend("Table with {} rows. ", head_rows);
 
-                msg.fmtAppend("In {:.3f} sec. ", watch.elapsedSeconds());
-                msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
-                return msg.toString();
-            };
+            msg.fmtAppend("In {:.3f} sec. ", watch.elapsedSeconds());
+            msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
+            return msg.toString();
+        };
 
-            LOG_DEBUG(log, "{}", gen_debug_log_msg());
-        }
-        else
-        {
-            LOG_DEBUG(log, "Subquery has empty result.");
-        }
+        LOG_INFO(log, "{}", gen_finish_log_msg());
     }
     catch (...)
     {
