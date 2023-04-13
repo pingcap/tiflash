@@ -58,17 +58,22 @@ inline bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
         || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
 }
+
+bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+
 struct ProbeProcessInfo
 {
     Block block;
     size_t partition_index;
     UInt64 max_block_size;
+    UInt64 min_result_block_size;
     size_t start_row;
     size_t end_row;
     bool all_rows_joined_finish;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
+        , min_result_block_size((max_block_size + 1) / 2)
         , all_rows_joined_finish(true){};
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
