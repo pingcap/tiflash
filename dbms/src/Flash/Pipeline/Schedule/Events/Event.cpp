@@ -41,6 +41,7 @@ extern const char random_pipeline_model_event_finish_failpoint[];
 void Event::addInput(const EventPtr & input)
 {
     assert(status == EventStatus::INIT);
+    assert(input.get() != this);
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
@@ -48,8 +49,22 @@ void Event::addInput(const EventPtr & input)
 
 void Event::addOutput(const EventPtr & output)
 {
-    assert(status == EventStatus::INIT);
+    assert(status == EventStatus::INIT || status == EventStatus::FINISHED);
+    assert(output.get() != this);
     outputs.push_back(output);
+}
+
+void Event::insertEvent(const EventPtr & insert_event) noexcept
+{
+    assert(insert_event);
+    assert(status == EventStatus::FINISHED);
+    for (const auto & output : outputs)
+    {
+        assert(output);
+        output->addInput(insert_event);
+    }
+    insert_event->addInput(shared_from_this());
+    RUNTIME_ASSERT(!insert_event->prepareForSource());
 }
 
 void Event::onInputFinish() noexcept
@@ -125,6 +140,7 @@ void Event::finish() noexcept
     // If query has already been cancelled, it will not trigger outputs.
     if (likely(!exec_status.isCancelled()))
     {
+        std::cout << fmt::format("schedule {} outputs", outputs.size()) << std::endl;
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {

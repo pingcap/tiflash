@@ -69,6 +69,11 @@ protected:
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
+    /// eventA───────►eventB ===> eventA─────────────►eventB
+    ///                             │                    ▲
+    ///                             └────►insert_event───┘
+    void insertEvent(const EventPtr & insert_event) noexcept;
+
 private:
     void scheduleTasks(std::vector<TaskPtr> & tasks) noexcept;
 
