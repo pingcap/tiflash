@@ -262,7 +262,7 @@ try
                 BlocksList block_list;
                 block_list.insert(block_list.end(), blocks.begin(), blocks.end());
                 all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-                BlocksListBlockInputStream block_input_stream(std::move(block_list));
+                auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
                 spiller->spillBlocksUsingBlockInputStream(block_input_stream, partition_id, []() { return false; });
             }
         }
@@ -358,7 +358,7 @@ try
                 BlocksList block_list;
                 block_list.insert(block_list.end(), blocks.begin(), blocks.end());
                 all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-                BlocksListBlockInputStream block_input_stream(std::move(block_list));
+                auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
                 spiller->spillBlocksUsingBlockInputStream(block_input_stream, partition_id, []() { return false; });
             }
         }
@@ -449,7 +449,7 @@ try
         Blocks empty_blocks;
         spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
-        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
         verifyRestoreBlocks(spiller, 0, 2, 1, reference);
@@ -461,7 +461,7 @@ try
         Blocks empty_blocks;
         spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
-        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
         ASSERT_TRUE(spiller.hasSpilledData() == false);
@@ -482,7 +482,7 @@ try
     Spiller spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
     BlocksList block_list;
     block_list.insert(block_list.end(), blocks.begin(), blocks.end());
-    BlocksListBlockInputStream block_input_stream(std::move(block_list));
+    auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
     spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() {
         static Int64 i = 0;
         return i++ >= 10;
