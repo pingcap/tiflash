@@ -907,6 +907,8 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         right_indexes.push_back(num_columns_to_skip + i);
     }
 
+    /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
+    /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
     MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
     if (isRightSemiFamily(kind) && non_equal_conditions.other_cond_expr != nullptr)
     {
