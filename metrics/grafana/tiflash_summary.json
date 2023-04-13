@@ -129,6 +129,15 @@
               "legendFormat": "{{instance}}",
               "refId": "A",
               "step": 10
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeUsedLocal{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-local",
+              "refId": "B",
+              "step": 10
             }
           ],
           "thresholds": [],
@@ -236,6 +245,15 @@
               "legendFormat": "{{instance}}",
               "refId": "A",
               "step": 10
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeAvailableLocal{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-local",
+              "refId": "B",
+              "step": 10
             }
           ],
           "thresholds": [],
@@ -342,6 +360,15 @@
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
               "refId": "A",
+              "step": 10
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeCapacityLocal{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-local",
+              "refId": "B",
               "step": 10
             }
           ],
