@@ -170,7 +170,7 @@ public:
 protected:
     void readSuffixImpl() override
     {
-        LOG_INFO(log, "finish read {} rows from remote", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
     }
 
     void appendInfo(FmtBuffer & buffer) const override

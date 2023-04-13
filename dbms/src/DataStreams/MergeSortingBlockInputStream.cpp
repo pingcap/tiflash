@@ -79,6 +79,10 @@ Block MergeSortingBlockInputStream::readImpl()
               */
             if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
             {
+                if (!spiller->hasSpilledData())
+                {
+                    LOG_INFO(log, "Begin spill in sort");
+                }
                 auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
                 auto is_cancelled_pred = [this]() {
                     return this->isCancelled();
