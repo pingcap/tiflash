@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,22 @@
 
 #pragma once
 
-void pageStorageV3CtlEntry(int argc, char ** argv);
+#include <stdint.h>
 
-void universalpageStorageCtlEntry(int argc, char ** argv);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct ProcessMetricsInfo
+{
+    uint64_t cpu_total;
+    int64_t vsize;
+    int64_t rss;
+    int64_t start_time;
+};
+
+ProcessMetricsInfo get_process_metrics();
+
+#ifdef __cplusplus
+}
+#endif

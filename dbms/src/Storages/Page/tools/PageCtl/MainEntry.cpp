@@ -32,7 +32,7 @@ int PageStorageCtl::mainEntry(int argc, char ** argv)
     using po::value;
     po::options_description desc("Allowed commands");
     desc.add_options()("help,h", "produce help message") //
-        ("page_storage_version,V", value<int>(), "PageStorage Version: 2 means PageStorage V2, 3 means PageStorage V3.\n");
+        ("page_storage_version,V", value<int>(), "PageStorage Version: 2 means PageStorage V2, 3 means PageStorage V3, 4 means UniversalPageStorage.\n");
     po::variables_map options;
     po::parsed_options parsed = po::command_line_parser(argc, argv)
                                     .options(desc)
@@ -49,7 +49,12 @@ int PageStorageCtl::mainEntry(int argc, char ** argv)
     if (options.count("page_storage_version") > 0)
     {
         int ps_version = options["page_storage_version"].as<int>();
-        if (ps_version == 3)
+        if (ps_version == 4)
+        {
+            universalpageStorageCtlEntry(argc - 2, argv + 2);
+            return 0;
+        }
+        else if (ps_version == 3)
         {
             pageStorageV3CtlEntry(argc - 2, argv + 2);
             return 0;
