@@ -265,6 +265,8 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    ASTTableJoin::Strictness original_strictness;
+    const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     const Names key_names_left;
@@ -290,7 +292,6 @@ private:
 
     const JoinNonEqualConditions non_equal_conditions;
 
-    ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
     /** Blocks of "right" table.
       */
@@ -378,6 +379,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     Block joinBlockHash(ProbeProcessInfo & probe_process_info) const;
+    Block doJoinBlockHash(ProbeProcessInfo & probe_process_info) const;
 
     Block joinBlockNullAware(ProbeProcessInfo & probe_process_info) const;
 
