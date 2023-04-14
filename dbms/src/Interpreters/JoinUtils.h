@@ -126,7 +126,7 @@ void computeDispatchHash(size_t rows,
                          std::vector<String> & partition_key_containers,
                          size_t join_restore_round,
                          WeakHash32 & hash);
-                         
+
 template <int>
 struct PointerTypeColumnHelper;
 
