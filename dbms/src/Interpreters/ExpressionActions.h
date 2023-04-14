@@ -161,7 +161,7 @@ public:
     void addInput(const ColumnWithTypeAndName & column);
     void addInput(const NameAndTypePair & column);
 
-    void add(const ExpressionAction & action, const tipb::Expr * expr = nullptr);
+    void add(const ExpressionAction & action);
 
     /// Adds new column names to out_new_columns (formed as a result of the added action).
     void add(const ExpressionAction & action, Names & out_new_columns);
@@ -207,7 +207,7 @@ private:
     Actions actions;
     Block sample_block;
 
-    void addImpl(ExpressionAction action, Names & new_names, const tipb::Expr * expr = nullptr);
+    void addImpl(ExpressionAction action, Names & new_names);
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;

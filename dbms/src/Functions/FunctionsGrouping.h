@@ -21,6 +21,7 @@
 #include <Functions/IFunction.h>
 #include <common/types.h>
 #include <tipb/metadata.pb.h>
+#include <Interpreters/Context.h>
 
 #include <magic_enum.hpp>
 
@@ -33,64 +34,19 @@ extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 } // namespace ErrorCodes
 
-class FunctionGrouping : public IFunction
+using ResultType = UInt8;
+
+class FunctionGrouping : public IFunctionBase
+    , public IExecutableFunction
+    , public std::enable_shared_from_this<FunctionGrouping>
 {
 public:
-    using ResultType = UInt8;
-    using ArgType = UInt64; // arg type should always be UInt64
     static constexpr auto name = "grouping";
+    using ArgType = UInt64; // arg type should always be UInt64
 
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionGrouping>(); }
-    String getName() const override { return name; }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-    bool useDefaultImplementationForNulls() const override { return false; }
-    size_t getNumberOfArguments() const override { return 1; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        size_t arg_num = arguments.size();
-        if (arg_num < 1)
-            throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
-        else if (arg_num > 1)
-            throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
-
-        const DataTypePtr & arg_data_type = arguments[0];
-        if (arg_data_type->isNullable())
-        {
-            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg_data_type.get());
-            assert(null_type != nullptr);
-
-            const auto & nested_type = null_type->getNestedType();
-            if (nested_type->isInteger())
-                return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
-        }
-        else if (arg_data_type->isInteger())
-        {
-            return std::make_shared<DataTypeNumber<ResultType>>();
-        }
-
-        throw Exception(fmt::format("Illegal type {} of argument of grouping function", arg_data_type->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        NullPresence null_presence = getNullPresense(block, arguments);
-        if (null_presence.has_null_constant)
-        {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-            return;
-        }
-
-        const ColumnPtr & col_grouping_ids = block.getByPosition(arguments[0]).column;
-        const auto * col_grouping_ids_const = typeid_cast<const ColumnConst *>(&(*(col_grouping_ids)));
-
-        if (col_grouping_ids_const != nullptr)
-            processConstGroupingIDs(col_grouping_ids_const, block.getByPosition(result).column, block.rows());
-        else
-            processNonConstGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
-    }
-
-    void setMetaData(const tipb::Expr & expr) override
+    FunctionGrouping(const DataTypes & argument_types_, const DataTypePtr & return_type_, const tipb::Expr & expr)
+        : argument_types(argument_types_)
+        , return_type(return_type_)
     {
         tipb::GroupingFunctionMetadata meta;
         if (!meta.ParseFromString(expr.val()))
@@ -109,6 +65,33 @@ public:
             for (size_t i = 0; i < num; ++i)
                 meta_grouping_marks.insert(meta.grouping_marks()[i]);
         }
+    }
+
+    String getName() const override { return name; }
+    const DataTypes & getArgumentTypes() const override { return argument_types; }
+    const DataTypePtr & getReturnType() const override { return return_type; }
+
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
+    {
+        return std::const_pointer_cast<FunctionGrouping>(shared_from_this());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        NullPresence null_presence = getNullPresense(block, arguments);
+        if (null_presence.has_null_constant)
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        const ColumnPtr & col_grouping_ids = block.getByPosition(arguments[0]).column;
+        const auto * col_grouping_ids_const = typeid_cast<const ColumnConst *>(&(*(col_grouping_ids)));
+
+        if (col_grouping_ids_const != nullptr)
+            processConstGroupingIDs(col_grouping_ids_const, block.getByPosition(result).column, block.rows());
+        else
+            processNonConstGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
     }
 
 private:
@@ -207,11 +190,79 @@ private:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    DataTypes argument_types;
+    DataTypePtr return_type;
 
     tipb::GroupingMode mode;
     UInt64 meta_grouping_id = 0;
     std::set<UInt64> meta_grouping_marks = {};
+};
+
+class FunctionBuilderGrouping : public IFunctionBuilder
+{
+public:
+    static constexpr auto name = "grouping";
+
+    explicit FunctionBuilderGrouping(const Context & /*context*/){}
+
+    static FunctionBuilderPtr create(const Context & context)
+    {
+        if (!context.getDAGContext())
+        {
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        }
+        return std::make_shared<FunctionBuilderGrouping>(context);
+    }
+
+    String getName() const override { return name; }
+    bool useDefaultImplementationForNulls() const override { return false; }
+    size_t getNumberOfArguments() const override { return 1; }
+    void setExpr(const tipb::Expr & expr_)
+    {
+        expr = expr_;
+    }
+
+protected:
+    FunctionBasePtr buildImpl(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & return_type,
+        const TiDB::TiDBCollatorPtr & /*collator*/) const override
+    {
+        DataTypes data_types(arguments.size());
+        for (size_t i = 0; i < arguments.size(); ++i)
+            data_types[i] = arguments[i].type;
+
+        return std::make_shared<FunctionGrouping>(data_types, return_type, expr);
+    }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        size_t arg_num = arguments.size();
+        if (arg_num < 1)
+            throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
+        else if (arg_num > 1)
+            throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+
+        const DataTypePtr & arg_data_type = arguments[0].type;
+        if (arg_data_type->isNullable())
+        {
+            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg_data_type.get());
+            assert(null_type != nullptr);
+
+            const auto & nested_type = null_type->getNestedType();
+            if (nested_type->isInteger())
+                return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
+        }
+        else if (arg_data_type->isInteger())
+        {
+            return std::make_shared<DataTypeNumber<ResultType>>();
+        }
+
+        throw Exception(fmt::format("Illegal type {} of argument of grouping function", arg_data_type->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    tipb::Expr expr;
 };
 
 } // namespace DB

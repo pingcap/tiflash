@@ -56,7 +56,7 @@ protected:
     const String func_name = "grouping";
 };
 
-TEST_F(TestGrouping, TestVersion1)
+TEST_F(TestGrouping, ModeBitAnd)
 try
 {
     MetaData meta_data;
@@ -115,7 +115,7 @@ try
 }
 CATCH
 
-TEST_F(TestGrouping, TestVersion2)
+TEST_F(TestGrouping, ModeNumericCmp)
 try
 {
     MetaData meta_data;
@@ -174,7 +174,7 @@ try
 }
 CATCH
 
-TEST_F(TestGrouping, TestVersion3)
+TEST_F(TestGrouping, ModeNumericSet)
 try
 {
     MetaData meta_data;

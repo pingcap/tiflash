@@ -2975,8 +2975,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const TiDB::TiDBCollatorPtr &,
-        const tipb::Expr *) const override
+        const TiDB::TiDBCollatorPtr &) const override
     {
         DataTypes data_types(arguments.size());
 

@@ -19,6 +19,6 @@ namespace DB
 {
 void registerFunctionsGrouping(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionGrouping>();
+    factory.registerFunction<FunctionBuilderGrouping>();
 }
 } // namespace DB
