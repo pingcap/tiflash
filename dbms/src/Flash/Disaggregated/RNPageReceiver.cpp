@@ -202,6 +202,7 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
               magic_enum::enum_name(recv_msg->seg_task->state),
               recv_msg->seg_task->num_msg_consumed,
               recv_msg->seg_task->num_msg_to_consume);
+
     if (recv_msg->seg_task->state == DM::SegmentReadTaskState::Receiving
         && !has_pending_msg)
     {
