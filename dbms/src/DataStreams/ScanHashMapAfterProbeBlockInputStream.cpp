@@ -348,11 +348,11 @@ private:
 
 template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
 void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
-                                                       size_t num_columns_left,
-                                                       MutableColumns & mutable_columns_left,
-                                                       size_t num_columns_right,
-                                                       MutableColumns & mutable_columns_right,
-                                                       IColumn * row_counter_column)
+                                                        size_t num_columns_left,
+                                                        MutableColumns & mutable_columns_left,
+                                                        size_t num_columns_right,
+                                                        MutableColumns & mutable_columns_right,
+                                                        IColumn * row_counter_column)
 {
     size_t key_num = parent.key_names_right.size();
     /// first add rows that is not in the hash table
