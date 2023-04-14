@@ -36,4 +36,10 @@ void PlainPipelineEvent::finishImpl()
     // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
     pipeline.reset();
 }
+
+void PlainPipelineEvent::prepareImpl()
+{
+    source_ops = pipeline->prepare();
+}
+
 } // namespace DB

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -42,9 +43,12 @@ protected:
 
     void finishImpl() override;
 
+    void prepareImpl() override;
+
 private:
     Context & context;
     PipelinePtr pipeline;
+    SourceOps source_ops;
     size_t concurrency;
 };
 } // namespace DB

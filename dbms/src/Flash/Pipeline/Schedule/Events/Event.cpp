@@ -60,9 +60,10 @@ void Event::onInputFinish() noexcept
         schedule();
 }
 
-bool Event::prepareForSource()
+bool Event::prepare()
 {
     assert(status == EventStatus::INIT);
+    prepareImpl();
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.

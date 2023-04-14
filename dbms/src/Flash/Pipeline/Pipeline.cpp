@@ -22,6 +22,8 @@
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalMockTableScan.h>
+#include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <tipb/select.pb.h>
 
@@ -189,6 +191,23 @@ bool Pipeline::isFineGrainedMode() const
     assert(!plan_nodes.empty());
     // The source plan node determines whether the execution mode is fine grained or non-fine grained.
     return plan_nodes.front()->getFineGrainedShuffle().enable();
+}
+
+SourceOps Pipeline::prepare(PipelineExecutorStatus & status, Context & context, size_t concurrency) const
+{
+    assert(!plan_nodes.empty());
+    const auto & front_node = plan_nodes.front();
+
+    if (front_node->tp() == PlanType::TableScan)
+    {
+        // hack
+        if (auto * plan = dynamic_cast<PhysicalTableScan *>(front_node.get()); plan)
+            return plan->prepareSourceOps(status, context, concurrency);
+
+        // ywq todo....
+        // if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
+        //     return plan->prepareSourceOps(status, context, concurrency);
+    }
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,6 @@ void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
     tipb_executor->set_executor_id(name);
     auto * ts = tipb_executor->mutable_tbl_scan();
     ts->set_keep_order(keep_order);
-    std::cout << "ywq test keep order build table: " << keep_order << std::endl;
     ts->set_table_id(table_info.id);
     for (const auto & info : output_schema)
         setTipbColumnInfo(ts->add_columns(), info);

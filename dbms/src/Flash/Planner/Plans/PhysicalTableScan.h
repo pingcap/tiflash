@@ -15,10 +15,11 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
+#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
-
 namespace DB
 {
+
 class PhysicalTableScan : public PhysicalLeaf
 {
 public:
@@ -50,6 +51,10 @@ public:
         Context & context,
         size_t concurrency) override;
 
+    SourceOps prepareSourceOps(
+        PipelineExecutorStatus & exec_status,
+        Context & context,
+        size_t concurrency);
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

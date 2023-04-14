@@ -78,6 +78,8 @@ public:
 
     bool isFineGrainedMode() const;
 
+    SourceOps prepare(PipelineExecutorStatus & status, Context & context, size_t concurrency) const;
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 

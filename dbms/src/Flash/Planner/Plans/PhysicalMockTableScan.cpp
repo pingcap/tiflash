@@ -96,7 +96,6 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 {
     assert(context.isTest());
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
-    std::cout << "ywq test keep order: " << table_scan.keepOrder() << std::endl;
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
