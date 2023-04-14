@@ -14,7 +14,7 @@
 
 #include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 
 namespace DB
 {
@@ -159,7 +159,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
             if (need_output_non_joined_data)
             {
                 assert(restore_info->non_joined_stream);
-                non_joined_stream_index = dynamic_cast<ScanHashMapAfterProbBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
+                non_joined_stream_index = dynamic_cast<ScanHashMapAfterProbeBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
             }
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 restore_info->join,

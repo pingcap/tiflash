@@ -21,10 +21,10 @@
 namespace DB
 {
 /// Stream from scanning the right table after prob
-class ScanHashMapAfterProbBlockInputStream : public IProfilingBlockInputStream
+class ScanHashMapAfterProbeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ScanHashMapAfterProbBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
+    ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
 
     String getName() const override { return "ScanHashMapAfterProb"; }
 

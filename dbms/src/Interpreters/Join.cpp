@@ -18,7 +18,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
-#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -1681,7 +1681,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
 {
-    return std::make_shared<ScanHashMapAfterProbBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
+    return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
 }
 
 Blocks Join::dispatchBlock(const Strings & key_columns_names, const Block & from_block)

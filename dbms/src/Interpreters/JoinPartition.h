@@ -205,7 +205,7 @@ public:
     void releasePartition();
 
 private:
-    friend class ScanHashMapAfterProbBlockInputStream;
+    friend class ScanHashMapAfterProbeBlockInputStream;
     void initMap();
     /// mutex to protect concurrent modify partition
     /// note if you wants to acquire both build_probe_mutex and partition_mutex,

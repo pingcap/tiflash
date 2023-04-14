@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <DataStreams/ScanHashMapAfterProbBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 
 
@@ -29,7 +29,7 @@ template <ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 struct AdderMapEntry;
 
 template <bool add_joined, typename Mapped>
-struct AdderMapEntryRightSemi;
+struct AdderRowFlaggedMapEntry;
 
 template <typename Mapped>
 struct AdderMapEntry<ASTTableJoin::Strictness::Any, Mapped>
@@ -78,12 +78,12 @@ struct AdderMapEntry<ASTTableJoin::Strictness::All, Mapped>
 };
 
 template <bool add_joined, typename Mapped>
-struct AdderMapEntryRightSemi
+struct AdderRowFlaggedMapEntry
 {
     static size_t add(const Mapped & mapped, size_t key_num, size_t num_columns_left, MutableColumns & columns_left, size_t num_columns_right, MutableColumns & columns_right, const void *& next_element_in_row_list, const size_t max_row_added)
     {
         size_t rows_added = 0;
-        auto current = &static_cast<const typename Mapped::Base_t &>(mapped);
+        const auto * current = &static_cast<const typename Mapped::Base_t &>(mapped);
         if unlikely (next_element_in_row_list != nullptr)
             current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
         for (; rows_added < max_row_added && current != nullptr; current = current->next)
@@ -93,7 +93,7 @@ struct AdderMapEntryRightSemi
                 flag = !flag;
             if (flag)
             {
-                /// handle left columns later to utilize insertManyDefaults
+                /// handle left columns later to utilize insertManyDefaults if any
                 for (size_t j = 0; j < num_columns_right; ++j)
                     columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
                 ++rows_added;
@@ -111,7 +111,7 @@ struct AdderMapEntryRightSemi
     }
 };
 
-ScanHashMapAfterProbBlockInputStream::ScanHashMapAfterProbBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
+ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_)
     : parent(parent_)
     , index(index_)
     , step(step_)
@@ -165,7 +165,7 @@ ScanHashMapAfterProbBlockInputStream::ScanHashMapAfterProbBlockInputStream(const
     current_partition_index = index;
 }
 
-Block ScanHashMapAfterProbBlockInputStream::readImpl()
+Block ScanHashMapAfterProbeBlockInputStream::readImpl()
 {
     /// If build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
@@ -236,7 +236,7 @@ Block ScanHashMapAfterProbBlockInputStream::readImpl()
 }
 
 template <bool row_flagged, bool output_joined_rows>
-void ScanHashMapAfterProbBlockInputStream::fillColumnsUsingCurrentPartition(
+void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
     size_t num_columns_left,
     MutableColumns & mutable_columns_left,
     size_t num_columns_right,
@@ -347,7 +347,7 @@ private:
 };
 
 template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
-void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
+void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
                                                        size_t num_columns_left,
                                                        MutableColumns & mutable_columns_left,
                                                        size_t num_columns_right,
@@ -396,9 +396,9 @@ void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
     for (; *it != end;)
     {
         if constexpr (row_flagged && output_joined_rows)
-            row_count_info.inc(AdderMapEntryRightSemi<true, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+            row_count_info.inc(AdderRowFlaggedMapEntry<true, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
         else if constexpr (row_flagged && !output_joined_rows)
-            row_count_info.inc(AdderMapEntryRightSemi<false, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+            row_count_info.inc(AdderRowFlaggedMapEntry<false, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
         else
         {
             bool mapped = (*it)->getMapped().getUsed();
@@ -417,8 +417,8 @@ void ScanHashMapAfterProbBlockInputStream::fillColumns(const Map & map,
                 mutable_columns_right,
                 next_element_in_row_list,
                 row_count_info.availableRowCount()));
-            assert(row_count_info.getCurrentRows() <= max_block_size);
         }
+        assert(row_count_info.getCurrentRows() <= max_block_size);
 
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
