@@ -397,7 +397,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
         LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
-        if (cur_version == 0)
+        if (cur_version <= 0)
         {
             LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
             auto version =  loadAllSchema(getter, latest_version, context);
