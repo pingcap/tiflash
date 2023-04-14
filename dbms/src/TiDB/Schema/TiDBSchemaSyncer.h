@@ -398,7 +398,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         if (cur_version == 0)
         {
-            loadAllSchema(getter, cur_version, context);
+            return loadAllSchema(getter, cur_version, context);
         }
 
         LOG_DEBUG(ks_log, "Try load schema diffs.");
