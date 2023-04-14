@@ -88,6 +88,12 @@ public:
             Aws::New<SessionAwareIOStream<SessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf()));
     }
 
+    void SetResponseBody(Aws::IStream & incoming_stream, PooledHTTPSessionPtr & session_) /// NOLINT
+    {
+        body_stream = Aws::Utils::Stream::ResponseStream(
+            Aws::New<SessionAwareIOStream<PooledHTTPSessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf()));
+    }
+
     void SetResponseBody(std::string & response_body) /// NOLINT
     {
         auto * stream = Aws::New<std::stringstream>("http result buf", response_body); // STYLE_CHECK_ALLOW_STD_STRING_STREAM

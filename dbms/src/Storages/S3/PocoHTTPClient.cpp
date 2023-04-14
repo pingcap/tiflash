@@ -208,7 +208,8 @@ void PocoHTTPClient::makeRequestInternal(
             Poco::URI target_uri(uri);
             auto request_configuration = per_request_configuration(request);
             RUNTIME_CHECK(request_configuration.proxy_host.empty());
-            auto session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
+            // auto session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
+            auto session = makePooledHTTPSession(target_uri, timeouts, /* per_endpoint_pool_size = */ 1024, /* resolve_host = */ true);
 
             /// In case of error this address will be written to logs
             request.SetResolvedRemoteHost(session->getResolvedAddress());
@@ -274,7 +275,9 @@ void PocoHTTPClient::makeRequestInternal(
 
             Stopwatch watch;
 
-            auto & request_body_stream = session->sendRequest(poco_request);
+            Poco::Net::HTTPMetrics metrics;
+            auto & request_body_stream = session->sendRequest(poco_request, &metrics);
+            LOG_DEBUG(log, "URI={}, connect cost {}ms", uri, metrics.connect_ms);
 
             if (request.GetContentBody())
             {

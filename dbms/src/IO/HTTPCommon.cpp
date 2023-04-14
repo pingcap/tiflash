@@ -89,7 +89,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 
         session = std::move(https_session);
 #else
-        throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "ClickHouse was built without HTTPS support");
+        throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "TiFlash was built without HTTPS support");
 #endif
     }
     else
@@ -105,60 +105,6 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
     return session;
 }
 
-class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
-{
-private:
-    const std::string host;
-    const UInt16 port;
-    bool https;
-    const String proxy_host;
-    const UInt16 proxy_port;
-    bool proxy_https;
-    bool resolve_host;
-    using Base = PoolBase<Poco::Net::HTTPClientSession>;
-    ObjectPtr allocObject() override
-    {
-        auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
-#if 1
-        RUNTIME_CHECK_MSG(proxy_host.empty(), "proxy is not yet supported");
-        UNUSED(proxy_host, proxy_port, proxy_https);
-#else
-        if (!proxy_host.empty())
-        {
-            const String proxy_scheme = proxy_https ? "https" : "http";
-            session->setProxyHost(proxy_host);
-            session->setProxyPort(proxy_port);
-
-            session->setProxyProtocol(proxy_scheme);
-
-            /// Turn on tunnel mode if proxy scheme is HTTP while endpoint scheme is HTTPS.
-            session->setProxyTunnel(!proxy_https && https);
-        }
-#endif
-        return session;
-    }
-
-public:
-    SingleEndpointHTTPSessionPool(
-        const std::string & host_,
-        UInt16 port_,
-        bool https_,
-        const std::string & proxy_host_,
-        UInt16 proxy_port_,
-        bool proxy_https_,
-        size_t max_pool_size_,
-        bool resolve_host_ = true)
-        : Base(static_cast<unsigned>(max_pool_size_), &Poco::Logger::get("HTTPSessionPool"))
-        , host(host_)
-        , port(port_)
-        , https(https_)
-        , proxy_host(proxy_host_)
-        , proxy_port(proxy_port_)
-        , proxy_https(proxy_https_)
-        , resolve_host(resolve_host_)
-    {
-    }
-};
 
 class HTTPSessionPool : private boost::noncopyable
 {
@@ -218,11 +164,9 @@ public:
         size_t max_connections_per_endpoint,
         bool resolve_host = true)
     {
-        std::lock_guard lock(mutex);
         const std::string & host = uri.getHost();
         UInt16 port = uri.getPort();
         bool https = isHTTPS(uri);
-
 
         String proxy_host;
         UInt16 proxy_port = 0;
@@ -234,7 +178,9 @@ public:
             proxy_https = isHTTPS(proxy_uri);
         }
 
-        HTTPSessionPool::Key key{host, port, https, proxy_host, proxy_port, proxy_https};
+        const HTTPSessionPool::Key key{host, port, https, proxy_host, proxy_port, proxy_https};
+
+        std::lock_guard lock(mutex);
         auto pool_ptr = endpoints_pool.find(key);
         if (pool_ptr == endpoints_pool.end())
             std::tie(pool_ptr, std::ignore) = endpoints_pool.emplace(
@@ -277,6 +223,28 @@ public:
     }
 };
 } // namespace
+
+SingleEndpointHTTPSessionPool::ObjectPtr SingleEndpointHTTPSessionPool::allocObject()
+{
+    auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
+#if 1
+    RUNTIME_CHECK_MSG(proxy_host.empty(), "proxy is not yet supported");
+    UNUSED(proxy_host, proxy_port, proxy_https);
+#else
+    if (!proxy_host.empty())
+    {
+        const String proxy_scheme = proxy_https ? "https" : "http";
+        session->setProxyHost(proxy_host);
+        session->setProxyPort(proxy_port);
+
+        session->setProxyProtocol(proxy_scheme);
+
+        /// Turn on tunnel mode if proxy scheme is HTTP while endpoint scheme is HTTPS.
+        session->setProxyTunnel(!proxy_https && https);
+    }
+#endif
+    return session;
+}
 
 void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_alive_timeout)
 {
