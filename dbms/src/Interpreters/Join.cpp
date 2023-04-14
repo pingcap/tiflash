@@ -88,21 +88,6 @@ size_t getRestoreJoinBuildConcurrency(size_t total_partitions, size_t spilled_pa
         return std::max(2, restore_build_concurrency);
     }
 }
-ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names)
-{
-    ColumnRawPtrs key_columns(key_columns_names.size());
-    for (size_t i = 0; i < key_columns_names.size(); ++i)
-    {
-        key_columns[i] = block.getByName(key_columns_names[i]).column.get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.emplace_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
-    return key_columns;
-}
 } // namespace
 
 using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
@@ -356,54 +341,6 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
-}
-
-void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map)
-{
-    if (filter_column.empty())
-        return;
-    auto column = block.getByName(filter_column).column;
-    if (column->isColumnConst())
-        column = column->convertToFullColumnIfConst();
-    const PaddedPODArray<UInt8> * column_data;
-    if (column->isColumnNullable())
-    {
-        const auto & column_nullable = static_cast<const ColumnNullable &>(*column);
-        if (!null_map_holder)
-        {
-            null_map_holder = column_nullable.getNullMapColumnPtr();
-        }
-        else
-        {
-            MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
-
-            PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
-            const PaddedPODArray<UInt8> & other_null_map = column_nullable.getNullMapData();
-            for (size_t i = 0, size = mutable_null_map.size(); i < size; ++i)
-                mutable_null_map[i] |= other_null_map[i];
-
-            null_map_holder = std::move(mutable_null_map_holder);
-        }
-        column_data = &static_cast<const ColumnVector<UInt8> *>(column_nullable.getNestedColumnPtr().get())->getData();
-    }
-    else
-    {
-        if (!null_map_holder)
-        {
-            null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
-        }
-        column_data = &static_cast<const ColumnVector<UInt8> *>(column.get())->getData();
-    }
-
-    MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
-    PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
-
-    for (size_t i = 0, size = column_data->size(); i < size; ++i)
-        mutable_null_map[i] |= !(*column_data)[i];
-
-    null_map_holder = std::move(mutable_null_map_holder);
-
-    null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
 }
 
 /// the block should be valid.
@@ -835,44 +772,12 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
 Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
+    assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow();
     /// this makes a copy of `probe_process_info.block`
     Block block = probe_process_info.block;
     size_t keys_size = key_names_left.size();
-
-    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
-    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
-    Columns materialized_columns;
-    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_left);
-
-    /// Keys with NULL value in any column won't join to anything.
-    ColumnPtr null_map_holder;
-    ConstNullMapPtr null_map{};
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter won't join to anything
-    recordFilteredRows(block, non_equal_conditions.left_filter_column, null_map_holder, null_map);
-
     size_t existing_columns = block.columns();
-
-    /** If you use FULL or RIGHT JOIN, then the columns from the "left" table must be materialized.
-      * Because if they are constants, then in the "not joined" rows, they may have different values
-      *  - default values, which can differ from the values of these constants.
-      */
-    if (getFullness(kind))
-    {
-        for (size_t i = 0; i < existing_columns; ++i)
-        {
-            auto & col = block.getByPosition(i).column;
-
-            if (ColumnPtr converted = col->convertToFullColumnIfConst())
-                col = converted;
-
-            /// convert left columns (except keys) to Nullable
-            if (std::end(key_names_left) == std::find(key_names_left.begin(), key_names_left.end(), block.getByPosition(i).name))
-                convertColumnToNullable(block.getByPosition(i));
-        }
-    }
 
     /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
       * For FULL/RIGHT/RIGHT_SEMI/RIGHT_ANTI_SEMI JOIN, the saved blocks contain keys;
@@ -919,23 +824,13 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         flag_mapped_entry_helper_column->reserve(rows);
     }
 
-    /// Used with ANY INNER JOIN
-    std::unique_ptr<IColumn::Filter> filter;
-
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
-        || kind == ASTTableJoin::Kind::Anti)
-        filter = std::make_unique<IColumn::Filter>(rows);
-
-    /// Used with ALL ... JOIN
     IColumn::Offset current_offset = 0;
-    std::unique_ptr<IColumn::Offsets> offsets_to_replicate;
-
-    if (strictness == ASTTableJoin::Strictness::All)
-        offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
+    auto & filter = probe_process_info.filter;
+    auto & offsets_to_replicate = probe_process_info.offsets_to_replicate;
 
     bool enable_spill_join = isEnableSpill();
     JoinBuildInfo join_build_info{enable_fine_grained_shuffle, fine_grained_shuffle_count, enable_spill_join, is_spilled, build_concurrency, restore_round};
-    JoinPartition::probeBlock(partitions, rows, key_columns, key_sizes, added_columns, null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info, flag_mapped_entry_helper_column);
+    JoinPartition::probeBlock(partitions, rows, probe_process_info.key_columns, key_sizes, added_columns, probe_process_info.null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info， flag_mapped_entry_helper_column);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
     if (isRightSemiFamily(kind) && !flag_mapped_entry_helper_column)
@@ -1016,6 +911,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
+    probe_process_info.prepareForProbe(key_names_left, non_equal_conditions.left_filter_column, kind, strictness);
     while (true)
     {
         auto block = doJoinBlockHash(probe_process_info);

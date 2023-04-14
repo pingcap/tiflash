@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -86,6 +87,17 @@ struct ProbeProcessInfo
     size_t end_row;
     bool all_rows_joined_finish;
 
+    /// these are used for probe
+    bool prepare_for_probe_done = false;
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns;
+    ColumnPtr null_map_holder = nullptr;
+    ConstNullMapPtr null_map = nullptr;
+    /// Used with ANY INNER JOIN
+    std::unique_ptr<IColumn::Filter> filter = nullptr;
+    /// Used with ALL ... JOIN
+    std::unique_ptr<IColumn::Offsets> offsets_to_replicate = nullptr;
+
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
         , min_result_block_size((max_block_size + 1) / 2)
@@ -93,6 +105,7 @@ struct ProbeProcessInfo
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     void updateStartRow();
+    void prepareForProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 };
 struct JoinBuildInfo
 {
@@ -113,7 +126,7 @@ void computeDispatchHash(size_t rows,
                          std::vector<String> & partition_key_containers,
                          size_t join_restore_round,
                          WeakHash32 & hash);
-
+                         
 template <int>
 struct PointerTypeColumnHelper;
 
@@ -133,4 +146,6 @@ struct PointerTypeColumnHelper<8>
     using ArrayType = PaddedPODArray<Int64>;
 };
 
+ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names);
+void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map);
 } // namespace DB
