@@ -257,7 +257,8 @@ public:
 
     // only use for left semi joins.
     const String match_helper_name;
-    // only use for right semi, right anti joins with other conditions.
+    // only use for right semi, right anti joins with other conditions,
+    // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
     SpillerPtr build_spiller;
