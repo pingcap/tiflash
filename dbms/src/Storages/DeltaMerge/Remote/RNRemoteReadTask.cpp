@@ -48,7 +48,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <magic_enum.hpp>
 namespace DB::DM
 {
 
@@ -562,12 +563,20 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
     const DM::RSOperatorPtr & rs_filter,
     size_t expected_block_size)
 {
-    return segment->getInputStreamModeNormal(
+    auto read_mode = dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter ? ReadMode::Bitmap : ReadMode::Normal;
+    LOG_DEBUG(
+        log,
+        "dt_enable_bitmap_filter={} read_mode={}",
+        dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter,
+        magic_enum::enum_name(read_mode));
+    auto push_down_filter = std::make_shared<PushDownFilter>(rs_filter);
+    return segment->getInputStream(
+        read_mode,
         *dm_context,
         columns_to_read,
         segment_snap,
         key_ranges,
-        rs_filter,
+        push_down_filter,
         read_tso,
         expected_block_size);
 }
