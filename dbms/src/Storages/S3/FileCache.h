@@ -194,6 +194,11 @@ public:
         return files;
     }
 
+    size_t size() const
+    {
+        return table.size();
+    }
+
 private:
     std::list<String> lru_queue;
     std::unordered_map<String, std::pair<FileSegmentPtr, std::list<String>::iterator>> table;

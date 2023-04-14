@@ -862,6 +862,11 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 void Aggregator::spill(AggregatedDataVariants & data_variants)
 {
     assert(data_variants.need_spill);
+    bool init_value = false;
+    if (spill_triggered.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
+    {
+        LOG_INFO(log, "Begin spill in aggregator");
+    }
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \

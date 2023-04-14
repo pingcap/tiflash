@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnString.h>
+#include <Columns/ColumnUtils.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
@@ -111,13 +108,6 @@ ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & mat
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
-void convertColumnToNullable(ColumnWithTypeAndName & column)
-{
-    column.type = makeNullable(column.type);
-    if (column.column)
-        column.column = makeNullable(column.column);
-}
-
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
@@ -140,6 +130,8 @@ Join::Join(
     , match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
+    , original_strictness(strictness)
+    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind, strictness))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
@@ -148,7 +140,6 @@ Join::Join(
     , active_probe_threads(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
-    , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
@@ -172,7 +163,7 @@ Join::Join(
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
 
-    LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
+    LOG_DEBUG(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
 void Join::meetError(const String & error_message_)
@@ -191,97 +182,11 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     probe_cv.notify_all();
 }
 
-bool CanAsColumnString(const IColumn * column)
-{
-    return typeid_cast<const ColumnString *>(column)
-        || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
-}
-
-JoinType Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes_) const
-{
-    const size_t keys_size = key_columns.size();
-
-    if (keys_size == 0)
-        return JoinType::CROSS;
-
-    bool all_fixed = true;
-    size_t keys_bytes = 0;
-    key_sizes_.resize(keys_size);
-    for (size_t j = 0; j < keys_size; ++j)
-    {
-        if (!key_columns[j]->isFixedAndContiguous())
-        {
-            all_fixed = false;
-            break;
-        }
-        key_sizes_[j] = key_columns[j]->sizeOfValueIfFixed();
-        keys_bytes += key_sizes_[j];
-    }
-
-    /// If there is one numeric key that fits in 64 bits
-    if (keys_size == 1 && key_columns[0]->isNumeric())
-    {
-        size_t size_of_field = key_columns[0]->sizeOfValueIfFixed();
-        if (size_of_field == 1)
-            return JoinType::key8;
-        if (size_of_field == 2)
-            return JoinType::key16;
-        if (size_of_field == 4)
-            return JoinType::key32;
-        if (size_of_field == 8)
-            return JoinType::key64;
-        if (size_of_field == 16)
-            return JoinType::keys128;
-        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    /// If the keys fit in N bits, we will use a hash table for N-bit-packed keys
-    if (all_fixed && keys_bytes <= 16)
-        return JoinType::keys128;
-    if (all_fixed && keys_bytes <= 32)
-        return JoinType::keys256;
-
-    /// If there is single string key, use hash table of it's values.
-    if (keys_size == 1 && CanAsColumnString(key_columns[0]))
-    {
-        if (collators.empty() || !collators[0])
-            return JoinType::key_strbin;
-        else
-        {
-            switch (collators[0]->getCollatorType())
-            {
-            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
-            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
-            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
-            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
-            {
-                return JoinType::key_strbinpadding;
-            }
-            case TiDB::ITiDBCollator::CollatorType::BINARY:
-            {
-                return JoinType::key_strbin;
-            }
-            default:
-            {
-                // for CI COLLATION, use original way
-                return JoinType::key_string;
-            }
-            }
-        }
-    }
-
-    if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
-        return JoinType::key_fixed_string;
-
-    /// Otherwise, use serialized values as the key.
-    return JoinType::serialized;
-}
-
 size_t Join::getTotalRowCount() const
 {
     size_t res = 0;
 
-    if (type == JoinType::CROSS)
+    if (join_map_method == JoinMapMethod::CROSS)
     {
         res = total_input_build_rows;
     }
@@ -304,7 +209,7 @@ size_t Join::getTotalByteCount()
     }
     else
     {
-        if (type == JoinType::CROSS)
+        if (join_map_method == JoinMapMethod::CROSS)
         {
             for (const auto & block : blocks)
                 res += block.bytes();
@@ -344,7 +249,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     partitions.reserve(build_concurrency);
     for (size_t i = 0; i < getBuildConcurrency(); ++i)
     {
-        partitions.push_back(std::make_unique<JoinPartition>(type, kind, strictness, max_block_size, log));
+        partitions.push_back(std::make_unique<JoinPartition>(join_map_method, kind, strictness, max_block_size, log));
     }
 }
 
@@ -412,13 +317,13 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    type = chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes);
+    join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
     build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     if (max_bytes_before_external_join > 0)
     {
-        if (type == JoinType::CROSS)
+        if (join_map_method == JoinMapMethod::CROSS)
         {
             /// todo support spill for cross join
             max_bytes_before_external_join = 0;
@@ -917,8 +822,10 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }
 
-Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
+    probe_process_info.updateStartRow();
+    /// this makes a copy of `probe_process_info.block`
     Block block = probe_process_info.block;
     size_t keys_size = key_names_left.size();
 
@@ -1060,6 +967,26 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     return block;
+}
+
+Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+{
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+    while (true)
+    {
+        auto block = doJoinBlockHash(probe_process_info);
+        assert(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        /// exit the while loop if
+        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (probe_process_info.all_rows_joined_finish || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
+            break;
+    }
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
 }
 
 namespace
@@ -1341,6 +1268,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         DISPATCH(false)
     }
 #undef DISPATCH
+    /// todo control the returned block size for cross join
+    probe_process_info.all_rows_joined_finish = true;
     return block;
 }
 
@@ -1353,24 +1282,10 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 {
     Block block = probe_process_info.block;
 
-    size_t keys_size = key_names_left.size();
-    ColumnRawPtrs key_columns(keys_size);
-
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
-
-    /// Memoize key columns to work with.
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_left[i]).column.get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.emplace_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_left);
 
     /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
     /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
@@ -1416,6 +1331,9 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
+
+    /// Null aware join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
 
     return block;
 }
@@ -1547,19 +1465,20 @@ void Join::joinBlockNullAwareImpl(
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
 {
     size_t keys_size = key_names_left.size();
-
     for (size_t i = 0; i < keys_size; ++i)
     {
         /// Compare up to Nullability.
-
         DataTypePtr left_type = removeNullable(block_left.getByName(key_names_left[i]).type);
         DataTypePtr right_type = removeNullable(block_right.getByName(key_names_right[i]).type);
-
-        if (!left_type->equals(*right_type))
-            throw Exception("Type mismatch of columns to JOIN by: "
-                                + key_names_left[i] + " " + left_type->getName() + " at left, "
-                                + key_names_right[i] + " " + right_type->getName() + " at right",
-                            ErrorCodes::TYPE_MISMATCH);
+        if unlikely (!left_type->equals(*right_type))
+            throw Exception(
+                fmt::format(
+                    "Type mismatch of columns to JOIN by: {} {} at left, {} {} at right",
+                    key_names_left[i],
+                    left_type->getName(),
+                    key_names_right[i],
+                    right_type->getName()),
+                ErrorCodes::TYPE_MISMATCH);
     }
 }
 
@@ -1694,6 +1613,7 @@ void Join::finishOneNonJoin(size_t partition_index)
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
+    assert(!probe_process_info.all_rows_joined_finish);
     if unlikely (dry_run)
     {
         assert(probe_process_info.block.rows() == 0);
@@ -1708,8 +1628,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         }
     }
     std::shared_lock lock(rwlock);
-
-    probe_process_info.updateStartRow();
 
     Block block{};
 
@@ -1736,11 +1654,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
             vec_non_matched[i] = !vec_matched[i];
 
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
-    }
-
-    if (isCrossJoin(kind) || isNullAwareSemiFamily(kind))
-    {
-        probe_process_info.all_rows_joined_finish = true;
     }
 
     return block;
@@ -1851,7 +1764,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
 #endif
         if (!disable_spill && restore_round >= 4)
         {
-            LOG_DEBUG(log, fmt::format("restore round reach to 4, spilling will be disabled."));
+            LOG_INFO(log, fmt::format("restore round reach to 4, spilling will be disabled."));
             disable_spill = true;
             return;
         }
@@ -1875,8 +1788,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         is_spilled = true;
 
-        LOG_DEBUG(log, fmt::format("all bytes used : {} in join, partition size : {}", getTotalByteCount(), partitions.size()));
-        LOG_DEBUG(log, fmt::format("make round : {}, partition : {} spill.", restore_round, target_partition_index));
+        LOG_INFO(log, fmt::format("Join with restore round: {}, used {} bytes, will spill partition: {}.", restore_round, getTotalByteCount(), target_partition_index));
 
         std::unique_lock partition_lock = partitions[target_partition_index]->lockPartition();
         partitions[target_partition_index]->markSpill();
@@ -1885,7 +1797,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         spilled_partition_indexes.push_back(target_partition_index);
     }
     build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
-    LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
+    LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
 bool Join::getPartitionSpilled(size_t partition_index)
@@ -1905,7 +1817,7 @@ bool Join::hasPartitionSpilled()
     return !spilled_partition_indexes.empty();
 }
 
-RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
+std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
 {
     std::unique_lock lock(build_probe_mutex);
     if (meet_error)
@@ -1928,7 +1840,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
             {
                 spilled_partition_indexes.pop_front();
             }
-            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+            return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -1940,7 +1852,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
             restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
         /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
         assert(restore_join_build_concurrency >= 2);
-        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
+        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
@@ -1966,7 +1878,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+        return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
@@ -1979,7 +1891,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
     }
 }
 
-void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list)
+void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list)
 {
     Blocks partition_blocks = dispatchBlock(key_names_left, block);
     for (size_t i = 0; i < partition_blocks.size(); ++i)
@@ -2002,7 +1914,9 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
             probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
         }
         else
-            partition_blocks_list.push_back({i, partition_blocks[i]});
+        {
+            partition_blocks_list.emplace_back(i, std::move(partition_blocks[i]));
+        }
     }
 }
 

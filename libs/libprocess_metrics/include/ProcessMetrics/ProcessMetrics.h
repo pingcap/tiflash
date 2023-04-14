@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,31 +14,22 @@
 
 #pragma once
 
-#include <Core/Block.h>
+#include <stdint.h>
 
-namespace DB
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct ProcessMetricsInfo
 {
-
-class SquashingHashJoinBlockTransform
-{
-public:
-    SquashingHashJoinBlockTransform(UInt64 max_block_size_);
-
-    void appendBlock(Block & block);
-    Block getFinalOutputBlock();
-    bool isJoinFinished() const;
-    bool needAppendBlock() const;
-
-
-private:
-    void handleOverLimitBlock();
-    void reset();
-
-    Blocks blocks;
-    std::optional<Block> over_limit_block;
-    size_t output_rows;
-    UInt64 max_block_size;
-    bool join_finished;
+    uint64_t cpu_total;
+    int64_t vsize;
+    int64_t rss;
+    int64_t start_time;
 };
 
-} // namespace DB
+ProcessMetricsInfo get_process_metrics();
+
+#ifdef __cplusplus
+}
+#endif

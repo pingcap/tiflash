@@ -22,44 +22,15 @@
 
 namespace DB
 {
-class WriteBuffer;
 
 /// https://github.com/tikv/rfcs/blob/ed764d7d014c420ee0cbcde99597020c4f75346d/text/0018-unified-log-format.md
+template <bool enable_color = false>
 class UnifiedLogFormatter : public Poco::Formatter
 {
 public:
     UnifiedLogFormatter() = default;
 
     void format(const Poco::Message & msg, std::string & text) override;
-
-private:
-    enum class JsonEncodeKind
-    {
-        /**
-         * No need to encode, just copy the text
-         */
-        DirectCopy,
-
-        /**
-         * Add double quotes around the text is sufficient
-         */
-        AddQuoteAndCopy,
-
-        /**
-         * Need full JSON string encode
-         */
-        Encode,
-    };
-
-    static void writePriority(FmtBuffer & buf, const Poco::Message::Priority & priority);
-
-    static void writeTimestamp(FmtBuffer & buf);
-
-    static JsonEncodeKind needJsonEncode(const std::string & src);
-
-    static void writeJSONString(FmtBuffer & buf, const std::string & str);
-
-    static void writeEscapedString(FmtBuffer & buf, const std::string & str);
 };
 
 } // namespace DB

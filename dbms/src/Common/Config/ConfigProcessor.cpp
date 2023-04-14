@@ -84,11 +84,3 @@ ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 
     return LoadedConfig{configuration, false, config_doc};
 }
-
-void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config)
-{
-    std::ofstream out(preprocessed_path);
-    cpptoml::toml_writer writer(out);
-    loaded_config.preprocessed_conf->accept(std::move(writer));
-    out.close();
-}

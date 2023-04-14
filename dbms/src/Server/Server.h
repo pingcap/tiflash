@@ -34,6 +34,8 @@ class Server : public BaseDaemon
     , public IServer
 {
 public:
+    using ServerApplication::run;
+
     Poco::Util::LayeredConfiguration & config() const override
     {
         return BaseDaemon::config();
@@ -54,7 +56,11 @@ public:
         return BaseDaemon::isCancelled();
     }
 
+    void defineOptions(Poco::Util::OptionSet & _options) override;
+
 protected:
+    int run() override;
+
     void initialize(Application & self) override;
 
     void uninitialize() override;
