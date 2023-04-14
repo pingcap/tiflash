@@ -343,7 +343,7 @@ void MetricsPrometheus::run()
             {
                 // Remove stale keyspace store usage metric
                 LOG_DEBUG(log, "Remove stale keyspace store usage metric: keyspace_id = {}", keyspace_id);
-                tiflash_metrics.registered_keypace_store_used_family->Remove(metric.get());
+                tiflash_metrics.registered_keypace_store_used_family->Remove(metric);
                 tiflash_metrics.registered_keypace_store_used_metrics.erase(keyspace_id);
             }
         }

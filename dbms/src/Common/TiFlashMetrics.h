@@ -535,10 +535,10 @@ private:
     std::vector<prometheus::Gauge *> registered_current_metrics;
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
-    std::shared_ptr<prometheus::Family<prometheus::Gauge>> registered_keypace_store_used_family;
+    prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
     using KeyspaceID = UInt32;
-    std::unordered_map<KeyspaceID, std::shared_ptr<prometheus::Gauge>> registered_keypace_store_used_metrics;
-    std::shared_ptr<prometheus::Gauge> store_used_total_metric;
+    std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
+    prometheus::Gauge * store_used_total_metric;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

@@ -266,7 +266,7 @@ void StableValueSpace::enableDMFilesGC(DMContext & context)
     {
         auto delegator = context.path_pool->getStableDiskDelegator();
         for (auto & file : files)
-            delegator.enableGCForRemoteDTFile(file->pageId());
+            delegator.enableGCForRemoteDTFile(file->fileId());
     }
 }
 
