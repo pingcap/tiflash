@@ -503,7 +503,7 @@ void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request>
 {
     if (async_recv_version == 1)
     {
-        LOG_INFO(exc_log, "enable async_recv_version 1");
+        LOG_DEBUG(exc_log, "enable async_recv_version 1");
         if (!async_requests.empty())
         {
             auto async_conn_num = async_requests.size();
@@ -520,7 +520,7 @@ void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request>
     }
     else
     {
-        LOG_INFO(exc_log, "enable async_recv_version 2");
+        LOG_DEBUG(exc_log, "enable async_recv_version 2");
         for (auto & request : async_requests)
             createAsyncRequestHandler(std::move(request));
     }
@@ -1050,31 +1050,16 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
 {
-    if (grpc_recv_queue.empty())
-    {
-        for (auto & msg_channel : msg_channels)
-            msg_channel->finish();
-    }
-    else
-    {
-        for (auto & channel : grpc_recv_queue)
-            channel.finish();
-    }
+    for (auto & channel : grpc_recv_queue)
+        channel.finish();
+    
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancelAllMsgChannels()
 {
-    if (grpc_recv_queue.empty())
-    {
-        for (auto & msg_channel : msg_channels)
-            msg_channel->cancel();
-    }
-    else
-    {
-        for (auto & channel : grpc_recv_queue)
-            channel.cancel();
-    }
+    for (auto & channel : grpc_recv_queue)
+        channel.cancel();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

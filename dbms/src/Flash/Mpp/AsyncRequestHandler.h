@@ -22,6 +22,7 @@
 #include <common/defines.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -300,23 +301,31 @@ private:
 
     GRPCReceiveQueueRes sendPackets()
     {
-        // note: no exception should be thrown rudely, since it's called by a GRPC poller.
-        while (received_packet_index < read_packet_index)
+        try
         {
-            auto & packet = packets[received_packet_index++];
-            auto res = channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
-            if (res == GRPCReceiveQueueRes::FULL)
+            // note: no exception should be thrown rudely, since it's called by a GRPC poller.
+            while (received_packet_index < read_packet_index)
             {
-                packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-                return res;
-            }
-            if (res != GRPCReceiveQueueRes::OK)
-                return res;
+                auto & packet = packets[received_packet_index++];
+                auto res = channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+                if (res == GRPCReceiveQueueRes::FULL)
+                {
+                    packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                    return res;
+                }
+                if (res != GRPCReceiveQueueRes::OK)
+                    return res;
 
-            // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                // can't reuse packet since it is sent to readers.
+                packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+            }
+            return GRPCReceiveQueueRes::OK;
         }
-        return GRPCReceiveQueueRes::OK;
+        catch(...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RUNTIME_ASSERT(false, "Exception is thrown when sending packets in AsyncRequestHandler");
+        }
     }
 
     GRPCReceiveQueueRes reSendPackets()

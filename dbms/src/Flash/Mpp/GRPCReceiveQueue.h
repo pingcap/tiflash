@@ -91,11 +91,11 @@ public:
 
     std::queue<AsyncRetryConnection> popAll()
     {
-        std::lock_guard lock(mu);
-        if (wait_retry_queue.empty())
-            return std::queue<AsyncRetryConnection>{};
-
-        std::queue<AsyncRetryConnection> ret_conn = std::move(wait_retry_queue);
+        std::queue<AsyncRetryConnection> ret_conn;
+        {
+            std::lock_guard lock(mu);
+            std::swap(ret_conn, wait_retry_queue);
+        }
         return ret_conn;
     }
 
