@@ -206,7 +206,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & key_ranges,
         UInt64 read_tso,
-        const DM::RSOperatorPtr & rs_filter,
+        const PushDownFilterPtr & push_down_filter,
         size_t expected_block_size);
 
     void addPendingMsg() { num_msg_to_consume += 1; }

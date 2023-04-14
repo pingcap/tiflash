@@ -56,6 +56,7 @@
 
 #include <atomic>
 #include <numeric>
+#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
 
 namespace pingcap::kv
 {
@@ -486,6 +487,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
+    auto push_down_filter = std::make_shared<DM::PushDownFilter>(rs_operator);
 
     auto sub_streams_size = io_concurrency / num_streams;
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
@@ -501,7 +503,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
             read_tso,
             sub_streams_size,
             extra_table_id_index,
-            rs_operator,
+            push_down_filter,
             extra_info,
             /*tracing_id*/ log->identifier());
         RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);

@@ -560,7 +560,7 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & key_ranges,
     UInt64 read_tso,
-    const DM::RSOperatorPtr & rs_filter,
+    const PushDownFilterPtr & push_down_filter,
     size_t expected_block_size)
 {
     auto read_mode = dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter ? ReadMode::Bitmap : ReadMode::Normal;
@@ -569,7 +569,6 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
         "dt_enable_bitmap_filter={} read_mode={}",
         dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter,
         magic_enum::enum_name(read_mode));
-    auto push_down_filter = std::make_shared<PushDownFilter>(rs_filter);
     return segment->getInputStream(
         read_mode,
         *dm_context,

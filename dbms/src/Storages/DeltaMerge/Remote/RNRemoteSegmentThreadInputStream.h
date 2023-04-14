@@ -49,7 +49,7 @@ public:
         UInt64 read_tso,
         size_t num_streams,
         size_t extra_table_id_index,
-        DM::RSOperatorPtr rs_filter,
+        const PushDownFilterPtr & push_down_filter,
         std::string_view extra_info,
         std::string_view tracing_id,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
@@ -59,7 +59,7 @@ public:
         RNRemoteReadTaskPtr read_tasks_,
         RNPagePreparerPtr page_preparer_,
         const ColumnDefines & columns_to_read_,
-        const RSOperatorPtr & filter_,
+        const PushDownFilterPtr & push_down_filter_,
         UInt64 max_version_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -86,7 +86,7 @@ private:
     RNRemoteReadTaskPtr read_tasks;
     RNPagePreparerPtr page_preparer;
     ColumnDefines columns_to_read;
-    RSOperatorPtr filter;
+    PushDownFilterPtr push_down_filter;
     Block header;
     const UInt64 max_version;
     const size_t expected_block_size;

@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB
 {
@@ -53,6 +54,7 @@ struct SelectQueryInfo
     std::string req_id;
     bool keep_order = true;
     bool is_fast_scan = false;
+    ColumnInfos column_infos;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

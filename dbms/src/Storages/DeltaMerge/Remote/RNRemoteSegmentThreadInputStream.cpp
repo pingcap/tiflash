@@ -35,7 +35,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
     UInt64 read_tso,
     size_t num_streams,
     size_t extra_table_id_index,
-    DM::RSOperatorPtr rs_filter,
+    const PushDownFilterPtr & push_down_filter,
     std::string_view extra_info,
     std::string_view tracing_id,
     size_t expected_block_size)
@@ -49,7 +49,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
             remote_read_tasks,
             page_preparer,
             *columns_to_read,
-            rs_filter,
+            push_down_filter,
             read_tso,
             expected_block_size,
             DM::ReadMode::Normal,
@@ -66,7 +66,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     RNRemoteReadTaskPtr read_tasks_,
     RNPagePreparerPtr page_preparer_,
     const ColumnDefines & columns_to_read_,
-    const RSOperatorPtr & filter_,
+    const PushDownFilterPtr & push_down_filter_,
     UInt64 max_version_,
     size_t expected_block_size_,
     ReadMode read_mode_,
@@ -76,7 +76,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     , read_tasks(std::move(read_tasks_))
     , page_preparer(std::move(page_preparer_))
     , columns_to_read(columns_to_read_)
-    , filter(filter_)
+    , push_down_filter(push_down_filter_)
     , header(toEmptyBlock(columns_to_read))
     , max_version(max_version_)
     , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(db_context.getSettingsRef().dt_segment_stable_pack_rows)))
@@ -137,7 +137,7 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
                 columns_to_read,
                 cur_read_task->getReadRanges(),
                 max_version,
-                filter,
+                push_down_filter,
                 expected_block_size);
             seconds_build_stream += watch.elapsedSeconds();
             LOG_TRACE(log, "Read blocks from remote segment begin, segment_id={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
