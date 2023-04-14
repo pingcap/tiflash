@@ -84,7 +84,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {}
 
     // bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
-    bool isTooOldSchema(Int64 cur_ver) { return cur_ver == 0;}
+    bool isTooOldSchema(Int64 cur_ver) { return cur_ver == 0; }
 
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
@@ -181,10 +181,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
             Int64 version_after_load_diff = 0;
-            version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); 
+            version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log);
             while (version_after_load_diff == -1)
             {
-                version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); 
+                version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log);
                 LOG_ERROR(log, "tryLoadSchemaDiffs Failed");
             }
             cur_versions[keyspace_id] = version_after_load_diff;
@@ -343,7 +343,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     std::pair<DatabaseID, TableID> new_non_partition_pair(diff->schema_id, diff->table_id); // 这个就会出问题？？？？（2，89）
                     //std::pair<DatabaseID, TableID> new_partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
                     std::pair<DatabaseID, TableID> new_partition_belongs_pair(diff->affected_opts[0].schema_id, diff->affected_opts[0].table_id);
-                   // std::pair<DatabaseID, TableID> old_non_partition_pair(diff->schema_id, diff->old_table_id);//？再考虑过
+                    // std::pair<DatabaseID, TableID> old_non_partition_pair(diff->schema_id, diff->old_table_id);//？再考虑过
                     //std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
                     if (apply_tables.find(new_non_partition_pair) == apply_tables.end())
                     {
@@ -367,7 +367,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     //         apply_tables.erase(old_non_partition_pair);
                     //     }
                     // }
-                
+
                     break;
                 }
                 default:
@@ -437,8 +437,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return ret;
         }
 
-        LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}",
-            apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
+        LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}", apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
 
@@ -459,7 +458,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 {
                     LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
                     //schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
-                    builder.applyCreateSchema(create_database_id); 
+                    builder.applyCreateSchema(create_database_id);
                 }
 
                 //schema_apply_wait_group->wait();
@@ -478,7 +477,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 }
                 //schema_apply_wait_group->wait();
             }
-            
+
             {
                 //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 // drop tables
@@ -492,7 +491,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
                 //schema_apply_wait_group->wait();
             }
-            
+
             {
                 //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 // drop databases
@@ -504,7 +503,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
                 //schema_apply_wait_group->wait();
             }
-            
         }
         catch (TiFlashException & e)
         {
