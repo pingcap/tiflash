@@ -1085,45 +1085,44 @@ String createTableStmt(
     auto [columns, pks] = parseColumnsFromTableInfo(table_info);
 
     String stmt;
-    WriteBufferFromString stmt_buf(stmt);
-    writeString("CREATE TABLE ", stmt_buf);
-    writeBackQuotedString(name_mapper.mapDatabaseName(db_info), stmt_buf);
-    writeString(".", stmt_buf);
-    writeBackQuotedString(name_mapper.mapTableName(table_info), stmt_buf);
-    writeString("(", stmt_buf);
-    for (size_t i = 0; i < columns.size(); i++)
     {
-        if (i > 0)
-            writeString(", ", stmt_buf);
-        writeBackQuotedString(columns[i].name, stmt_buf);
-        writeString(" ", stmt_buf);
-        writeString(columns[i].type->getName(), stmt_buf);
-    }
-
-    // storage engine type
-    if (table_info.engine_type == TiDB::StorageEngine::DT)
-    {
-        writeString(") Engine = DeltaMerge((", stmt_buf);
-        for (size_t i = 0; i < pks.size(); i++)
+        WriteBufferFromString stmt_buf(stmt);
+        writeString("CREATE TABLE ", stmt_buf);
+        writeBackQuotedString(name_mapper.mapDatabaseName(db_info), stmt_buf);
+        writeString(".", stmt_buf);
+        writeBackQuotedString(name_mapper.mapTableName(table_info), stmt_buf);
+        writeString("(", stmt_buf);
+        for (size_t i = 0; i < columns.size(); i++)
         {
             if (i > 0)
                 writeString(", ", stmt_buf);
-            writeBackQuotedString(pks[i], stmt_buf);
+            writeBackQuotedString(columns[i].name, stmt_buf);
+            writeString(" ", stmt_buf);
+            writeString(columns[i].type->getName(), stmt_buf);
         }
-        writeString("), '", stmt_buf);
-        writeEscapedString(table_info.serialize(), stmt_buf);
-        writeString("')", stmt_buf);
-    }
-    else
-    {
-        // LOG_INFO(log, "hyy into");
-        throw TiFlashException(fmt::format("Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type)), Errors::DDL::Internal);
-        // LOG_WARNING(log, "Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type));
-        // return "";
-    }
-    // LOG_INFO(log, "before finish createTableStmt");
-    // LOG_INFO(log, "create table stmt : {}", stmt);
 
+        // storage engine type
+        if (table_info.engine_type == TiDB::StorageEngine::DT)
+        {
+            writeString(") Engine = DeltaMerge((", stmt_buf);
+            for (size_t i = 0; i < pks.size(); i++)
+            {
+                if (i > 0)
+                    writeString(", ", stmt_buf);
+                writeBackQuotedString(pks[i], stmt_buf);
+            }
+            writeString("), '", stmt_buf);
+            writeEscapedString(table_info.serialize(), stmt_buf);
+            writeString("')", stmt_buf);
+        }
+        else
+        {
+            // LOG_INFO(log, "hyy into");
+            //throw TiFlashException(fmt::format("Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type)), Errors::DDL::Internal);
+            LOG_WARNING(log, "Unknown engine type : {}", static_cast<int32_t>(table_info.engine_type));
+            return "";
+        }
+    }
     return stmt;
 }
 
@@ -1157,7 +1156,9 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
                 commands.emplace_back(std::move(command));
             }
             auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-            storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+            //std::cout << "name_mapper.mapDatabaseName(*db_info) is " << name_mapper.mapDatabaseName(*db_info) << " storage->getDatabaseName() is " << storage->getDatabaseName() << std::endl;
+            //storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+            storage->alterFromTiDB(alter_lock, commands, storage->getDatabaseName(), *table_info, name_mapper, context);
             LOG_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             return;
         }

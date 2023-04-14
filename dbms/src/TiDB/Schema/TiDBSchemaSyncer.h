@@ -341,21 +341,33 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
                     //std::pair<DatabaseID, TableID> new_non_partition_pair(diff->schema_id, diff->table_id);
                     std::pair<DatabaseID, TableID> new_non_partition_pair(diff->schema_id, diff->table_id); // 这个就会出问题？？？？（2，89）
-                    std::pair<DatabaseID, TableID> new_partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
+                    //std::pair<DatabaseID, TableID> new_partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
                     std::pair<DatabaseID, TableID> new_partition_belongs_pair(diff->affected_opts[0].schema_id, diff->affected_opts[0].table_id);
+                   // std::pair<DatabaseID, TableID> old_non_partition_pair(diff->schema_id, diff->old_table_id);//？再考虑过
                     //std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
                     if (apply_tables.find(new_non_partition_pair) == apply_tables.end())
                     {
                         apply_tables[new_non_partition_pair] = true;
                     }
-                    if (apply_tables.find(new_partition_pair) == apply_tables.end())
-                    {
-                        apply_tables[new_partition_pair] = true;
-                    }
+                    // if (apply_tables.find(new_partition_pair) == apply_tables.end())
+                    // {
+                    //     apply_tables[new_partition_pair] = true;
+                    // }
                     if (apply_tables.find(new_partition_belongs_pair) == apply_tables.end())
                     {
                         apply_tables[new_partition_belongs_pair] = true;
                     }
+
+                    // if (drop_tables.find(old_non_partition_pair) == drop_tables.end())
+                    // {
+                    //     drop_tables[old_non_partition_pair] = true;
+                    //     // delete item in apply_tables
+                    //     if (apply_tables.find(old_non_partition_pair) != apply_tables.end())
+                    //     {
+                    //         apply_tables.erase(old_non_partition_pair);
+                    //     }
+                    // }
+                
                     break;
                 }
                 default:
