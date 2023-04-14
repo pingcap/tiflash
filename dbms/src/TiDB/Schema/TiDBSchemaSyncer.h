@@ -396,10 +396,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if error happens, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
+        LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
         if (cur_version == 0)
         {
+            LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
             return loadAllSchema(getter, cur_version, context);
         }
+
+        LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} not with loadAllSchema", cur_version, latest_version);
 
         LOG_DEBUG(ks_log, "Try load schema diffs.");
 
