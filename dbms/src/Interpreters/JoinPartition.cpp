@@ -876,7 +876,6 @@ struct Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>
             container.template push_back(reinterpret_cast<std::intptr_t>(current));
             ++current_offset;
         }
-        //LOG_DEBUG(log, "{}th: {} offset, {} rows_joined", i, current_offset, rows_joined);
         (*offsets)[i] = current_offset;
         return false;
     }
