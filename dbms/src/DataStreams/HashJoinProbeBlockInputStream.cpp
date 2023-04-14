@@ -137,8 +137,6 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 }
                 else
                 {
-                    if (isRightSemiFamily(original_join->getKind()))
-                        continue;
                     joined_rows += ret.rows();
                     return ret;
                 }
