@@ -33,9 +33,7 @@ namespace CurrentMetrics
 extern const Metric StoreSizeCapacity;
 extern const Metric StoreSizeAvailable;
 extern const Metric StoreSizeUsed;
-extern const Metric StoreSizeCapacityLocal;
-extern const Metric StoreSizeAvailableLocal;
-extern const Metric StoreSizeUsedLocal;
+extern const Metric StoreSizeUsedRemote;
 } // namespace CurrentMetrics
 
 
@@ -237,14 +235,15 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
         total_stat.capacity_size = capacity_quota;
         total_stat.avail_size = std::min(total_stat.avail_size, total_stat.capacity_size - total_stat.used_size);
     }
-
-    CurrentMetrics::set(CurrentMetrics::StoreSizeCapacityLocal, total_stat.capacity_size);
-    CurrentMetrics::set(CurrentMetrics::StoreSizeAvailableLocal, total_stat.avail_size);
-    CurrentMetrics::set(CurrentMetrics::StoreSizeUsedLocal, total_stat.used_size);
-
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
 
+    // Just report local disk capacity and available size is enough
+    CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
+    CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
+    CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
+
+    size_t remote_used_size = 0;
     if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
     {
         {
@@ -253,6 +252,7 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
             {
                 UNUSED(keyspace_id);
                 total_stat.used_size += used_bytes;
+                remote_used_size += used_bytes;
             }
         }
 
@@ -261,6 +261,7 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
         total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
         total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     }
+    CurrentMetrics::set(CurrentMetrics::StoreSizeUsedRemote, remote_used_size);
 
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
@@ -273,10 +274,6 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
             formatReadableSizeWithBinarySuffix(total_stat.used_size),
             formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
     total_stat.ok = 1;
-
-    CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
-    CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
-    CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
 
     return total_stat;
 }
