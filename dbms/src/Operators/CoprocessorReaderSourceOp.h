@@ -46,7 +46,6 @@ protected:
 private:
     Block popFromBlockQueue();
 
-
 private:
     CoprocessorReaderPtr coprocessor_reader;
     UInt64 total_rows{};

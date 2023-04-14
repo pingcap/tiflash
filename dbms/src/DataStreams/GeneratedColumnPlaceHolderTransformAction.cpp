@@ -59,10 +59,9 @@ void GeneratedColumnPlaceHolderTransformAction::insertColumns(Block & block, boo
     }
 }
 
-bool GeneratedColumnPlaceHolderTransformAction::transform(Block & block)
+void GeneratedColumnPlaceHolderTransformAction::transform(Block & block)
 {
     insertColumns(block, true);
-    return true;
 }
 
 } // namespace DB

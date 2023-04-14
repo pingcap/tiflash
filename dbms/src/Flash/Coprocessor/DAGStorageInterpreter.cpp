@@ -299,15 +299,15 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
         source_ops = buildLocalSourceOps(exec_status, group_builder, context.getSettingsRef().max_block_size);
     }
 
-    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
+    // Should build `remote_requests` and `nullSourceOp` under protect of `table_structure_lock`.
     if (source_ops.empty())
         source_ops.emplace_back(std::make_unique<NullSourceOp>(
             exec_status,
             storage_for_logical_table->getSampleBlockForColumns(required_columns),
             log->identifier()));
 
-    // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
-    // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
+    // Note that `buildRemoteRequests` must be called after `buildLocalSourceOps` because
+    // `buildLocalSourceOps` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
     auto remote_requests = buildRemoteRequests(scan_context);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
@@ -328,8 +328,8 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
 
     // Release alter locks
-    // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
-    // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
+    // The DeltaTree engine ensures that once sourceOps are created, the caller can get a consistent result
+    // from those sourceOps even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
@@ -943,8 +943,8 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOpsForPhysicalTable(
                 max_streams);
 
             injectFailPointForLocalRead(query_info);
-            // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
-            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
+            // After getting sourceOps from storage, we need to validate whether Regions have changed or not after learner read.
+            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `sourceOps`
             // may contain different data other than expected.
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             return source_ops;

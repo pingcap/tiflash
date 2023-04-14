@@ -24,7 +24,7 @@ public:
         const Block & header_,
         const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos_);
 
-    bool transform(Block & block);
+    void transform(Block & block);
 
     Block getHeader() const;
 
