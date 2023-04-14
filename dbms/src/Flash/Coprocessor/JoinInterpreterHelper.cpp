@@ -225,7 +225,7 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
     return match_helper_name;
 }
 
-String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, bool has_other_condition) const
+String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const
 {
     if (!isRightSemiFamily(kind) || !has_other_condition)
     {
@@ -234,7 +234,7 @@ String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, bool has
 
     size_t i = 0;
     String helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, i);
-    while (header1.has(helper_name))
+    while (header1.has(helper_name) || header2.has(helper_name))
     {
         helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, ++i);
     }

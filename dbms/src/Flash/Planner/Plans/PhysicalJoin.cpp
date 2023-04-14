@@ -124,7 +124,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
-    String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
+    String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, right_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
