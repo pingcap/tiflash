@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CurrentMetrics.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
@@ -41,18 +38,6 @@
 #include <future>
 #include <memory>
 
-#include "Storages/Page/PageConstants.h"
-
-namespace CurrentMetrics
-{
-extern const Metric DT_SnapshotOfRead;
-extern const Metric DT_SnapshotOfReadRaw;
-extern const Metric DT_SnapshotOfSegmentSplit;
-extern const Metric DT_SnapshotOfSegmentMerge;
-extern const Metric DT_SnapshotOfDeltaMerge;
-extern const Metric DT_SnapshotOfPlaceIndex;
-} // namespace CurrentMetrics
-
 namespace DB
 {
 namespace FailPoints
@@ -61,11 +46,6 @@ extern const char force_use_dmfile_format_v3[];
 } // namespace FailPoints
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path);
 namespace tests
 {
 class SegmentTestS3 : public DB::base::TiFlashStorageTestBasic
@@ -186,7 +166,7 @@ protected:
     DB::PageStorageRunMode orig_mode = PageStorageRunMode::ONLY_V3;
 };
 
-TEST_F(SegmentTestS3, Split)
+TEST_F(SegmentTestS3, LogicalSplit)
 try
 {
     const size_t num_rows_write_per_batch = 100;
