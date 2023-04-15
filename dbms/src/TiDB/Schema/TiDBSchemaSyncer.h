@@ -135,6 +135,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
+        for (auto & pair : cur_versions){
+            LOG_ERROR(log, "sync schema with pair {} {}", pair.first, pair.second);
+        }
         std::lock_guard lock(schema_mutex);
         auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
         auto cur_version = cur_versions.try_emplace(keyspace_id, 0).first->second;
@@ -152,6 +155,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // If the schema version not exists, drop all schemas.
         if (version == SchemaGetter::SchemaVersionNotExist)
         {
+            LOG_ERROR(log, "version equal SchemaGetter::SchemaVersionNotExist");
             // Tables and databases are already tombstoned and waiting for GC.
             if (SchemaGetter::SchemaVersionNotExist == cur_version)
                 return false;
