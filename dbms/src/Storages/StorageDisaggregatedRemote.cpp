@@ -56,7 +56,8 @@
 
 #include <atomic>
 #include <numeric>
-#include "Storages/DeltaMerge/Filter/PushDownFilter.h"
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/StorageDeltaMerge.h>
 
 namespace pingcap::kv
 {
@@ -90,6 +91,7 @@ extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 
 BlockInputStreams StorageDisaggregated::readFromWriteNode(
     const Context & db_context,
+    const SelectQueryInfo & query_info,
     unsigned num_streams)
 {
     using namespace pingcap;
@@ -142,7 +144,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, remote_read_tasks, num_streams, pipeline);
+    buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     filterConditions(std::move(source_columns), pipeline);
     return pipeline.streams;
@@ -429,7 +431,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
-        google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
+        table_scan.getPushedDownFilters(),
         DAGPreparedSets{}, // Not care now
         NamesAndTypes{}, // Not care now
         db_context.getTimezoneInfo());
@@ -451,6 +453,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
     const DM::RNRemoteReadTaskPtr & remote_read_tasks,
+    const SelectQueryInfo & query_info,
     size_t num_streams,
     DAGPipeline & pipeline)
 {
@@ -487,7 +490,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
-    auto push_down_filter = std::make_shared<DM::PushDownFilter>(rs_operator);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(rs_operator, table_scan.getColumns(), query_info, *column_defines, db_context, log);
+    //auto push_down_filter = std::make_shared<DM::PushDownFilter>(rs_operator);
 
     auto sub_streams_size = io_concurrency / num_streams;
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)

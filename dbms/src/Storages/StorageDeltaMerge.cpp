@@ -704,7 +704,7 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     return ranges;
 }
 
-DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
                                                              const ColumnDefines & columns_to_read,
                                                              const Context & context,
                                                              const LoggerPtr & tracing_logger)
@@ -736,7 +736,16 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    // build push down filter
+    return rs_operator;
+}
+
+DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr & rs_operator,
+const ColumnInfos & table_infos,
+                                                             const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
     if (likely(query_info.dag_query) && !query_info.dag_query->pushed_down_filters.empty())
     {
         NamesAndTypes columns_to_read_name_and_type;
@@ -764,7 +773,6 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
 
         ColumnInfos table_scan_column_info;
         table_scan_column_info.reserve(columns_to_read.size());
-        const auto & table_infos = tidb_table_info.columns;
         for (const auto & col : columns_to_read)
         {
             // table_infos does not contain EXTRA_HANDLE_COLUMN and EXTRA_TABLE_ID_COLUMN
@@ -844,7 +852,20 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
 
         return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
     }
+    LOG_DEBUG(tracing_logger, "Push down filter is empty");
     return std::make_shared<PushDownFilter>(rs_operator);
+}
+
+DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
+    // build rough set operator
+    DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
+
+    // build push down filter
+    return buildPushDownFilter(rs_operator, tidb_table_info.columns, query_info, columns_to_read, context, tracing_logger);
 }
 
 BlockInputStreams StorageDeltaMerge::read(
