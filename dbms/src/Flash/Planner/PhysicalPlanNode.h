@@ -72,7 +72,7 @@ public:
 
     virtual void buildPipeline(
         PipelineBuilder & /*builder*/,
-        Context & /*context*/, 
+        Context & /*context*/,
         PipelineExecutorStatus & /*exec_status*/);
 
     virtual void finalize(const Names & parent_require) = 0;

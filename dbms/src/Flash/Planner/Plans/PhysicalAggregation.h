@@ -55,7 +55,7 @@ public:
 
     void buildPipeline(
         PipelineBuilder & builder,
-        Context & context, 
+        Context & context,
         PipelineExecutorStatus & exec_status) override;
 
     void buildPipelineExecGroup(
