@@ -118,7 +118,6 @@ SourceOps PhysicalMockTableScan::prepareSourceOps(
     Context & context,
     size_t concurrency)
 {
-    std::cout << "ywq test prepareSourceOps" << std::endl;
     if (context.mockStorage()->useDeltaMerge())
     {
         auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(

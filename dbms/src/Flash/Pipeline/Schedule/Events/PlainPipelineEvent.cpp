@@ -44,7 +44,6 @@ void PlainPipelineEvent::finishImpl()
 void PlainPipelineEvent::prepareImpl()
 {
     source_ops = pipeline->prepare(exec_status, context, concurrency);
-    std::cout << "ywq test prepare, source_ops size: " << source_ops.size() << std::endl;
 }
 
 } // namespace DB
