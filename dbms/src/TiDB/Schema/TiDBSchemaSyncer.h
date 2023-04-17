@@ -111,6 +111,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
+        for (auto & pair : cur_versions){
+            LOG_ERROR(log, "sync schema with pair {} {}", pair.first, pair.second);
+        }
         std::lock_guard lock(schema_mutex);
         auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
         auto cur_version = cur_versions.try_emplace(keyspace_id, 0).first->second;
