@@ -286,6 +286,7 @@ void ExecutorTest::enablePipeline(bool is_enable) const
     context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
+// ywq todo rename
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     const std::shared_ptr<tipb::DAGRequest> & request,
     size_t concurrency,

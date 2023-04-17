@@ -21,11 +21,7 @@ namespace DB
 std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    PipelineExecGroup pipeline_exec_group;
-    if (!source_ops.empty())
-        pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, source_ops, concurrency);
-    else
-        pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
+    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
@@ -39,11 +35,6 @@ void PlainPipelineEvent::finishImpl()
     // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.onEventFinish()` is called.
     // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
     pipeline.reset();
-}
-
-void PlainPipelineEvent::prepareImpl()
-{
-    source_ops = pipeline->prepare(exec_status, context, concurrency);
 }
 
 } // namespace DB

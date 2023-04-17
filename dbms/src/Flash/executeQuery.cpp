@@ -139,12 +139,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
-
-    PhysicalPlan physical_plan{context, logger->identifier()};
-    physical_plan.build(dag_context.dag_request());
-    physical_plan.outputAndOptimize();
-    auto pipeline = physical_plan.toPipeline();
-    auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier(), pipeline);
+    auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     return {std::move(executor)};

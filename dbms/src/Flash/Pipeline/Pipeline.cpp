@@ -167,24 +167,6 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
-        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
-    return builder.build();
-}
-
-PipelineExecGroup Pipeline::buildExecGroup(
-    PipelineExecutorStatus & exec_status,
-    Context & context,
-    SourceOps & source_ops,
-    size_t concurrency)
-{
-    assert(!plan_nodes.empty());
-    PipelineExecGroupBuilder builder;
-    builder.init(source_ops.size());
-    size_t i = 0;
-    builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
-    for (auto & plan_node : plan_nodes)
     {
         plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
     }
@@ -211,24 +193,6 @@ bool Pipeline::isFineGrainedMode() const
     assert(!plan_nodes.empty());
     // The source plan node determines whether the execution mode is fine grained or non-fine grained.
     return plan_nodes.front()->getFineGrainedShuffle().enable();
-}
-
-SourceOps Pipeline::prepare(PipelineExecutorStatus & status, Context & context, size_t concurrency) const
-{
-    assert(!plan_nodes.empty());
-    const auto & front_node = plan_nodes.front();
-
-    if likely (front_node->tp() == PlanType::TableScan)
-    {
-        if (auto * plan = dynamic_cast<PhysicalTableScan *>(front_node.get()); plan)
-            return plan->prepareSourceOps(status, context, concurrency);
-    }
-    else if (front_node->tp() == PlanType::MockTableScan)
-    {
-        if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
-            return plan->prepareSourceOps(status, context, concurrency);
-    }
-    return {};
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)

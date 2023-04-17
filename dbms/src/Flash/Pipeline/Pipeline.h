@@ -70,12 +70,6 @@ public:
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
-    PipelineExecGroup buildExecGroup(
-        PipelineExecutorStatus & exec_status,
-        Context & context,
-        SourceOps & source_ops,
-        size_t concurrency);
-
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
@@ -83,8 +77,6 @@ public:
     Block getSampleBlock() const;
 
     bool isFineGrainedMode() const;
-
-    SourceOps prepare(PipelineExecutorStatus & status, Context & context, size_t concurrency) const;
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;

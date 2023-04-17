@@ -43,12 +43,9 @@ protected:
 
     void finishImpl() override;
 
-    void prepareImpl() override;
-
 private:
     Context & context;
     PipelinePtr pipeline;
-    SourceOps source_ops;
     size_t concurrency;
 };
 } // namespace DB

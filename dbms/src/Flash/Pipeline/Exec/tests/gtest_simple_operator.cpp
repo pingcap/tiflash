@@ -100,22 +100,7 @@ public:
         PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            if (plan->tp() == PlanType::MockTableScan)
-            {
-                if (auto * plan_ptr = dynamic_cast<PhysicalMockTableScan *>(plan.get()); plan_ptr)
-                {
-                    auto source_ops = plan_ptr->prepareSourceOps(exec_status, *context.context, /*concurrency=*/1);
-                    group_builder.init(source_ops.size());
-                    size_t i = 0;
-                    group_builder.transform([&](auto & builder) {
-                        builder.setSourceOp(std::move(source_ops[i++]));
-                    });
-                }
-            }
-            else
-            {
-                plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
-            }
+            plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
         });
         assert(group_builder.concurrency == 1);
         group_builder.transform([&](auto & builder) {

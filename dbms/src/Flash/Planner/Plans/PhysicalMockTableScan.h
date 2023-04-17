@@ -63,20 +63,22 @@ public:
 
     void updateStreams(Context & context);
 
-    SourceOps prepareSourceOps(
-        PipelineExecutorStatus & exec_status,
+    // generate sourceOps in compile time
+    void buildPipeline(
+        PipelineBuilder & builder,
         Context & context,
-        size_t concurrency);
+        PipelineExecutorStatus & exec_status) override;
 
     void buildPipelineExecGroup(
         PipelineExecutorStatus &,
-        PipelineExecGroupBuilder &,
+        PipelineExecGroupBuilder & group_builder,
         Context &,
-        size_t) override
-    {}
+        size_t) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
+    void buildSourceOps(Context & context, PipelineExecutorStatus & exec_status);
 
 private:
     FilterConditions filter_conditions;
@@ -87,5 +89,7 @@ private:
 
     const Int64 table_id;
     const bool keep_order;
+
+    SourceOps source_ops;
 };
 } // namespace DB

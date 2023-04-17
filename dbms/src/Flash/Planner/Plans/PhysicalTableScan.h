@@ -49,16 +49,18 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    SourceOps prepareSourceOps(
-        PipelineExecutorStatus & exec_status,
-        Context & context,
-        size_t concurrency);
-
     void buildPipelineExecGroup(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t concurrency) override;
+
+    // generate sourceOps in compile time
+    void buildPipeline(
+        PipelineBuilder & builder,
+        Context & context,
+        PipelineExecutorStatus & exec_status) override;
+
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
@@ -76,5 +78,7 @@ private:
     std::unique_ptr<DAGStorageInterpreter> storage_interpreter;
 
     Block sample_block;
+
+    SourceOps source_ops;
 };
 } // namespace DB
