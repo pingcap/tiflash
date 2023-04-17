@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
+#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -49,12 +50,6 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
-        PipelineExecGroupBuilder & group_builder,
-        Context & context,
-        size_t concurrency) override;
-
     void initStreams(Context & context);
 
     // for delta-merge test
@@ -67,6 +62,18 @@ public:
     Int64 getLogicalTableID() const;
 
     void updateStreams(Context & context);
+
+    SourceOps prepareSourceOps(
+        PipelineExecutorStatus & exec_status,
+        Context & context,
+        size_t concurrency);
+
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus &,
+        PipelineExecGroupBuilder &,
+        Context &,
+        size_t) override
+    {}
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;

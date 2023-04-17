@@ -38,7 +38,7 @@ void PipelineExecutor::scheduleEvents()
     Events sources;
     for (const auto & event : events)
     {
-        if (event->prepare(status, context, context.getMaxStreams()))
+        if (event->prepare())
             sources.push_back(event);
     }
     for (const auto & event : sources)

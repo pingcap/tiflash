@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
+
 namespace DB
 {
 
@@ -45,16 +47,16 @@ public:
 
     const String & getFilterConditionsId() const;
 
+    SourceOps prepareSourceOps(
+        PipelineExecutorStatus & exec_status,
+        Context & context,
+        size_t concurrency);
+
     void buildPipelineExecGroup(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t concurrency) override;
-
-    SourceOps prepareSourceOps(
-        PipelineExecutorStatus & exec_status,
-        Context & context,
-        size_t concurrency);
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
@@ -68,6 +70,8 @@ private:
     FilterConditions filter_conditions;
 
     TiDBTableScan tidb_table_scan;
+
+    std::unique_ptr<DAGStorageInterpreter> storage_interpreter;
 
     Block sample_block;
 };

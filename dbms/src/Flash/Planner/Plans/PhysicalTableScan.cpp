@@ -72,16 +72,23 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     }
 }
 
-void PhysicalTableScan::buildPipelineExecGroup(
+SourceOps PhysicalTableScan::prepareSourceOps(
     PipelineExecutorStatus & exec_status,
-    PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t concurrency)
 {
-    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, concurrency);
-    storage_interpreter.execute(exec_status, group_builder);
+    storage_interpreter = std::make_unique<DAGStorageInterpreter>(context, tidb_table_scan, filter_conditions, concurrency);
+    return storage_interpreter->execute(exec_status);
+}
 
-    buildProjection(exec_status, group_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+void PhysicalTableScan::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context &,
+    size_t)
+{
+    storage_interpreter->executePrefix(exec_status, group_builder);
+    buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)

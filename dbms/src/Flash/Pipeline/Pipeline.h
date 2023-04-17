@@ -70,6 +70,12 @@ public:
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
+    PipelineExecGroup buildExecGroup(
+        PipelineExecutorStatus & exec_status,
+        Context & context,
+        SourceOps & source_ops,
+        size_t concurrency);
+
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);

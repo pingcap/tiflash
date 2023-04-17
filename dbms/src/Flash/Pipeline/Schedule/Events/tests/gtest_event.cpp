@@ -290,7 +290,7 @@ public:
         Events sources;
         for (const auto & event : events)
         {
-            if (event->prepareForSource())
+            if (event->prepare())
                 sources.push_back(event);
         }
         for (const auto & event : sources)
@@ -436,7 +436,7 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            if (on_err_event->prepareForSource())
+            if (on_err_event->prepare())
                 on_err_event->schedule();
         }
         wait(exec_status);
@@ -452,20 +452,20 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, memory_trace)
+TEST_F(EventTestRunner, memoryTrace)
 try
 {
     PipelineExecutorStatus exec_status;
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
-    if (event->prepareForSource())
+    if (event->prepare())
         event->schedule();
     wait(exec_status);
     assertNoErr(exec_status);
 }
 CATCH
 
-TEST_F(EventTestRunner, throw_exception)
+TEST_F(EventTestRunner, throwException)
 try
 {
     std::vector<bool> with_tasks{false, true};
@@ -493,14 +493,14 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, many_tasks)
+TEST_F(EventTestRunner, manyTasks)
 try
 {
     for (size_t i = 0; i < 200; i += 7)
     {
         PipelineExecutorStatus exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
-        if (event->prepareForSource())
+        if (event->prepare())
             event->schedule();
         wait(exec_status);
         assertNoErr(exec_status);

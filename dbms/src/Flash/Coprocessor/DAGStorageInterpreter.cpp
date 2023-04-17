@@ -278,14 +278,14 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     executeImpl(pipeline);
 }
 
-void DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+SourceOps DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status)
 {
     prepare(); // learner read
 
-    executeImpl(exec_status, group_builder);
+    return executeImpl(exec_status);
 }
 
-void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status)
 {
     auto & dag_context = dagContext();
 
@@ -296,20 +296,23 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     SourceOps source_ops;
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        source_ops = buildLocalSourceOps(exec_status, group_builder, context.getSettingsRef().max_block_size);
+        source_ops = buildLocalSourceOps(exec_status, context.getSettingsRef().max_block_size);
     }
 
     // Should build `remote_requests` and `nullSourceOp` under protect of `table_structure_lock`.
     if (source_ops.empty())
+    {
         source_ops.emplace_back(std::make_unique<NullSourceOp>(
             exec_status,
             storage_for_logical_table->getSampleBlockForColumns(required_columns),
             log->identifier()));
+    }
 
     // Note that `buildRemoteRequests` must be called after `buildLocalSourceOps` because
     // `buildLocalSourceOps` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
     auto remote_requests = buildRemoteRequests(scan_context);
+
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
@@ -333,17 +336,10 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    size_t remote_read_sources_start_index = source_ops.size();
+    remote_read_sources_start_index = source_ops.size();
 
     if (!remote_requests.empty())
         buildRemoteSourceOps(source_ops, exec_status, remote_requests);
-
-    /// build pipeline
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
 
     for (const auto & lock : drop_locks)
         dagContext().addTableLock(lock);
@@ -351,6 +347,11 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
+    return source_ops;
+}
+
+void DAGStorageInterpreter::executePrefix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+{
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
 
@@ -916,7 +917,6 @@ DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 SourceOps DAGStorageInterpreter::buildLocalSourceOpsForPhysicalTable(
     PipelineExecutorStatus & exec_status,
-    PipelineExecGroupBuilder & group_builder,
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     size_t max_block_size)
@@ -955,8 +955,6 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOpsForPhysicalTable(
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
-                // clean all sourceOps from local because we are not sure the correctness of those sourceOps
-                group_builder.group.clear();
                 if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
                     continue;
                 else
@@ -1038,7 +1036,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
 
 SourceOps DAGStorageInterpreter::buildLocalSourceOps(
     PipelineExecutorStatus & exec_status,
-    PipelineExecGroupBuilder & group_builder,
     size_t max_block_size)
 {
     const DAGContext & dag_context = *context.getDAGContext();
@@ -1053,7 +1050,7 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
     {
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        auto res = buildLocalSourceOpsForPhysicalTable(exec_status, group_builder, table_id, query_info, max_block_size);
+        auto res = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
         for (auto & s : res)
             source_ops.emplace_back(std::move(s));
     }

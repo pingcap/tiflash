@@ -21,7 +21,11 @@ namespace DB
 std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
 {
     assert(pipeline);
-    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
+    PipelineExecGroup pipeline_exec_group;
+    if (!source_ops.empty())
+        pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, source_ops, concurrency);
+    else
+        pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
@@ -39,7 +43,8 @@ void PlainPipelineEvent::finishImpl()
 
 void PlainPipelineEvent::prepareImpl()
 {
-    source_ops = pipeline->prepare();
+    source_ops = pipeline->prepare(exec_status, context, concurrency);
+    std::cout << "ywq test prepare, source_ops size: " << source_ops.size() << std::endl;
 }
 
 } // namespace DB

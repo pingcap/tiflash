@@ -171,6 +171,26 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
     return builder.build();
 }
 
+PipelineExecGroup Pipeline::buildExecGroup(
+    PipelineExecutorStatus & exec_status,
+    Context & context,
+    SourceOps & source_ops,
+    size_t concurrency)
+{
+    assert(!plan_nodes.empty());
+    PipelineExecGroupBuilder builder;
+    builder.init(source_ops.size());
+    size_t i = 0;
+    builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::move(source_ops[i++]));
+    });
+    for (auto & plan_node : plan_nodes)
+    {
+        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
+    }
+    return builder.build();
+}
+
 /**
  * There are two execution modes in pipeline.
  * 1. non fine grained mode
@@ -198,16 +218,17 @@ SourceOps Pipeline::prepare(PipelineExecutorStatus & status, Context & context, 
     assert(!plan_nodes.empty());
     const auto & front_node = plan_nodes.front();
 
-    if (front_node->tp() == PlanType::TableScan)
+    if (front_node->tp() == PlanType::MockTableScan)
     {
-        // hack
+        if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
+            return plan->prepareSourceOps(status, context, concurrency);
+    }
+    else if likely (front_node->tp() == PlanType::TableScan)
+    {
         if (auto * plan = dynamic_cast<PhysicalTableScan *>(front_node.get()); plan)
             return plan->prepareSourceOps(status, context, concurrency);
-
-        // ywq todo....
-        // if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
-        //     return plan->prepareSourceOps(status, context, concurrency);
     }
+    return {};
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
