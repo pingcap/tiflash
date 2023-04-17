@@ -1042,53 +1042,6 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
-
-    // // We must protect the following codes with lock.
-    // // Because once live_connections == 0, ExchangeReceiver may be destructed immediately
-    // // and the data in ExchangeReceiver is no longer alive.
-    // std::lock_guard lock(mu);
-
-    // if (meet_error)
-    // {
-    //     if (state == ExchangeReceiverState::NORMAL)
-    //         state = ExchangeReceiverState::ERROR;
-    //     if (err_msg.empty())
-    //         err_msg = local_err_msg;
-    //     else
-    //         first_err_msg = err_msg;
-    // }
-
-    // --live_connections;
-
-    // if (meet_error)
-    // {
-    //     LOG_WARNING(
-    //         log,
-    //         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-    //         meet_error,
-    //         local_err_msg,
-    //         live_connections);
-    // }
-    // else
-    // {
-    //     LOG_DEBUG(
-    //         log,
-    //         "connection end. Current alive connections: {}",
-    //         live_connections);
-    // }
-    // assert(live_connections >= 0);
-    // if (live_connections == 0)
-    // {
-    //     LOG_DEBUG(log, "All threads end in ExchangeReceiver");
-    //     cv.notify_all();
-    // }
-
-    // if (meet_error || live_connections == 0)
-    // {
-    //     auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
-    //     LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
-    //     finishAllMsgChannels();
-    // }
 }
 
 template <typename RPCContext>
