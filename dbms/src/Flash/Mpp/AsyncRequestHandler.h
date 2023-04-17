@@ -129,7 +129,7 @@ public:
 
     void wait() override
     {
-        std::unique_lock<std::mutex> ul;
+        std::unique_lock<std::mutex> ul(is_close_conn_called_mu);
         condition_cv.wait(ul, [this]() { return is_close_conn_called; });
     }
 
@@ -264,7 +264,7 @@ private:
 
     void closeConnection(String && msg)
     {
-        std::lock_guard lock(mu);
+        std::lock_guard lock(is_close_conn_called_mu);
         if (!is_close_conn_called)
         {
             stage = AsyncRequestStage::FINISHED;
@@ -285,9 +285,9 @@ private:
 
     void retryOrDone(String && done_msg, const String & log_msg)
     {
+        LOG_WARNING(log, log_msg);
         if (retriable())
         {
-            LOG_WARNING(log, log_msg);
             ++retry_times;
             stage = AsyncRequestStage::WAIT_RETRY;
 
@@ -297,7 +297,6 @@ private:
         }
         else
         {
-            LOG_WARNING(log, log_msg);
             closeConnection(std::move(done_msg));
         }
     }
@@ -398,7 +397,7 @@ private:
     // try-catch may call close_conn, and we need to ensure that close_conn is called for only once.
     bool is_close_conn_called;
 
-    std::mutex mu;
+    std::mutex is_close_conn_called_mu;
     std::condition_variable condition_cv;
 };
 } // namespace DB
