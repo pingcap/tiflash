@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,28 +14,33 @@
 
 #pragma once
 
-#include "IServer.h"
-
-#include <Poco/Net/HTTPRequestHandler.h>
-
+#include <atomic>
 
 namespace DB
 {
-
-/// Response with "Ok.\n". Used for availability checks.
-class PingRequestHandler : public Poco::Net::HTTPRequestHandler
+// TODO support more metrics after profile info of task has supported.
+template <bool is_cpu>
+class TaskThreadPoolMetrics
 {
-private:
-    IServer & server;
-
 public:
-    explicit PingRequestHandler(IServer & server_) : server(server_)
-    {
-    }
+    TaskThreadPoolMetrics();
 
-    void handleRequest(
-        Poco::Net::HTTPServerRequest & request,
-        Poco::Net::HTTPServerResponse & response) override;
+    void incPendingTask(size_t task_count);
+
+    void decPendingTask();
+
+    void incExecutingTask();
+
+    void decExecutingTask();
+
+    void incThreadCnt();
+
+    void decThreadCnt();
+
+    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+
+private:
+    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
 };
 
-}
+} // namespace DB

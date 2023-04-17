@@ -19,6 +19,7 @@
 
 namespace DB
 {
+using Sizes = std::vector<size_t>;
 /// Reference to the row in block.
 struct RowRef
 {
@@ -84,7 +85,7 @@ struct WithUsedFlag<false, Base> : Base
     M(keys256)                     \
     M(serialized)
 
-enum class JoinType
+enum class JoinMapMethod
 {
     EMPTY,
     CROSS,
@@ -165,4 +166,6 @@ using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
 using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
+
+JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
 } // namespace DB

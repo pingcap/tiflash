@@ -145,7 +145,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     auto pipeline = physical_plan.toPipeline();
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier(), pipeline);
     if (likely(!internal))
-        LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+        LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     return {std::move(executor)};
 }
 

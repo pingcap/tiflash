@@ -23,6 +23,8 @@ struct CPUImpl
 {
     static constexpr auto NAME = "cpu intensive";
 
+    static constexpr bool is_cpu = true;
+
     static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
 
     static ExecTaskStatus exec(TaskPtr & task)
@@ -41,6 +43,8 @@ struct CPUImpl
 struct IOImpl
 {
     static constexpr auto NAME = "io intensive";
+
+    static constexpr bool is_cpu = false;
 
     static constexpr auto TargetStatus = ExecTaskStatus::IO;
 

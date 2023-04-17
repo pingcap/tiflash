@@ -23,7 +23,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/JoinHashTable.h>
+#include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/SettingsCommon.h>
 
@@ -31,8 +31,49 @@
 
 namespace DB
 {
-struct ProbeProcessInfo;
-struct RestoreInfo;
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+using Joins = std::vector<JoinPtr>;
+
+struct RestoreInfo
+{
+    JoinPtr join;
+    BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr build_stream;
+    BlockInputStreamPtr probe_stream;
+
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && non_joined_data_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+        : join(join_)
+        , non_joined_stream(std::move(non_joined_data_stream_))
+        , build_stream(std::move(build_stream_))
+        , probe_stream(std::move(probe_stream_))
+    {}
+};
+
+struct PartitionBlock
+{
+    size_t partition_index;
+    Block block;
+
+    PartitionBlock()
+        : partition_index(0)
+        , block({})
+    {}
+
+    explicit PartitionBlock(Block && block_)
+        : partition_index(0)
+        , block(std::move(block_))
+    {}
+
+    PartitionBlock(size_t partition_index_, Block && block_)
+        : partition_index(partition_index_)
+        , block(std::move(block_))
+    {}
+
+    explicit operator bool() const { return static_cast<bool>(block); }
+    bool operator!() const { return !block; }
+};
+using PartitionBlocks = std::list<PartitionBlock>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -87,8 +128,6 @@ struct RestoreInfo;
   * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
-using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 class Join
 {
@@ -149,9 +188,9 @@ public:
 
     bool isSpilled() const { return is_spilled; }
 
-    RestoreInfo getOneRestoreStream(size_t max_block_size);
+    std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
@@ -226,6 +265,8 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    ASTTableJoin::Strictness original_strictness;
+    const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     const Names key_names_left;
@@ -251,7 +292,6 @@ private:
 
     const JoinNonEqualConditions non_equal_conditions;
 
-    ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
     /** Blocks of "right" table.
       */
@@ -291,9 +331,7 @@ private:
     bool has_build_data_in_memory = false;
 
 private:
-    JoinType type = JoinType::EMPTY;
-
-    JoinType chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
+    JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
 
@@ -341,6 +379,7 @@ private:
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     Block joinBlockHash(ProbeProcessInfo & probe_process_info) const;
+    Block doJoinBlockHash(ProbeProcessInfo & probe_process_info) const;
 
     Block joinBlockNullAware(ProbeProcessInfo & probe_process_info) const;
 
@@ -379,22 +418,5 @@ private:
     void workAfterBuildFinish();
     void workAfterProbeFinish();
 };
-
-struct RestoreInfo
-{
-    JoinPtr join;
-    BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr build_stream;
-    BlockInputStreamPtr probe_stream;
-
-    RestoreInfo() = default;
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
-        : join(join_)
-        , non_joined_stream(non_joined_data_stream_)
-        , build_stream(build_stream_)
-        , probe_stream(probe_stream_){};
-};
-
-void convertColumnToNullable(ColumnWithTypeAndName & column);
 
 } // namespace DB

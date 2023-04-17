@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolMetrics.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <thread>
@@ -52,5 +53,7 @@ private:
     TaskScheduler & scheduler;
 
     std::vector<std::thread> threads;
+
+    TaskThreadPoolMetrics<Impl::is_cpu> metrics;
 };
 } // namespace DB

@@ -86,8 +86,8 @@ public:
 
 
     // For S3 Lock Service
-    grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
-    grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
+    grpc::Status tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
 
     // The TiFlash read node call this RPC to build the disaggregated task
     // on the TiFlash write node.
@@ -98,6 +98,7 @@ public:
     grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 
     grpc::Status GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest * request, disaggregated::GetDisaggConfigResponse * response) override;
+    grpc::Status GetTiFlashSystemTable(grpc::ServerContext * grpc_context, const kvrpcpb::TiFlashSystemTableRequest * request, kvrpcpb::TiFlashSystemTableResponse * response) override;
 
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
@@ -109,7 +110,7 @@ protected:
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
     Context * context = nullptr;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log;
     bool is_async = false;
     bool enable_local_tunnel = false;
     bool enable_async_grpc_client = false;
