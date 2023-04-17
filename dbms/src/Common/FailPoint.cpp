@@ -67,6 +67,7 @@ namespace DB
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
     M(exception_between_schema_change_in_the_same_diff)           \
+    M(exception_when_construct_async_request_handler)             \
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/MppVersion.h>
@@ -29,6 +30,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_when_construct_async_request_handler[];
+} // namespace FailPoints
+
 enum class AsyncRequestStage
 {
     NEED_INIT,
@@ -86,10 +92,10 @@ public:
         , close_conn(std::move(close_conn_))
         , is_close_conn_called(false)
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_when_construct_async_request_handler);
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
             packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-        // TODO add random fail point to mock the fail
         start();
     }
 
