@@ -38,6 +38,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
     const PushDownFilterPtr & push_down_filter,
     std::string_view extra_info,
     std::string_view tracing_id,
+    ReadMode read_mode,
     size_t expected_block_size)
 {
     BlockInputStreams streams;
@@ -52,7 +53,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
             push_down_filter,
             read_tso,
             expected_block_size,
-            DM::ReadMode::Normal,
+            read_mode,
             extra_table_id_index,
             tracing_id);
         stream->setExtraInfo(String(extra_info));
@@ -132,13 +133,13 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
             cur_segment_id = cur_read_task->segment_id;
             keyspace_id = cur_read_task->ks_table_id.first;
             physical_table_id = cur_read_task->ks_table_id.second;
-            UNUSED(read_mode); // TODO: support more read mode
             cur_stream = cur_read_task->getInputStream(
                 columns_to_read,
                 cur_read_task->getReadRanges(),
                 max_version,
                 push_down_filter,
-                expected_block_size);
+                expected_block_size,
+                read_mode);
             seconds_build_stream += watch.elapsedSeconds();
             LOG_TRACE(log, "Read blocks from remote segment begin, segment_id={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
         }

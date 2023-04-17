@@ -34,6 +34,7 @@
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
@@ -497,7 +498,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         *column_defines,
         db_context,
         log);
-    //auto push_down_filter = std::make_shared<DM::PushDownFilter>(rs_operator);
+    auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
 
     auto sub_streams_size = io_concurrency / num_streams;
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
@@ -515,7 +516,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
             extra_table_id_index,
             push_down_filter,
             extra_info,
-            /*tracing_id*/ log->identifier());
+            /*tracing_id*/ log->identifier(),
+            read_mode);
         RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
 
         auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");

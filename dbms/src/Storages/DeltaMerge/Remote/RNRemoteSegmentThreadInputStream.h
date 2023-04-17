@@ -52,6 +52,7 @@ public:
         const PushDownFilterPtr & push_down_filter,
         std::string_view extra_info,
         std::string_view tracing_id,
+        ReadMode read_mode,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     RNRemoteSegmentThreadInputStream(
