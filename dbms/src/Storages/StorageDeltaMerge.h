@@ -191,7 +191,7 @@ public:
 
     static DM::PushDownFilterPtr buildPushDownFilter(const DM::RSOperatorPtr & rs_operator,
                                                      const ColumnInfos & table_infos,
-                                                     const SelectQueryInfo & query_info,
+                                                     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
                                                      const DM::ColumnDefines & columns_to_read,
                                                      const Context & context,
                                                      const LoggerPtr & tracing_logger);

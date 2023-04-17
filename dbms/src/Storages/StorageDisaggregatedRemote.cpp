@@ -490,7 +490,13 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(rs_operator, table_scan.getColumns(), query_info, *column_defines, db_context, log);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+        rs_operator,
+        table_scan.getColumns(),
+        table_scan.getPushedDownFilters(),
+        *column_defines,
+        db_context,
+        log);
     //auto push_down_filter = std::make_shared<DM::PushDownFilter>(rs_operator);
 
     auto sub_streams_size = io_concurrency / num_streams;

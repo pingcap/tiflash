@@ -2686,7 +2686,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
-    LOG_DEBUG(log, "{}", __PRETTY_FUNCTION__);
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
@@ -2728,7 +2727,6 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
                                                           UInt64 max_version,
                                                           size_t expected_block_size)
 {
-    LOG_DEBUG(log, "{}", __PRETTY_FUNCTION__);
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;

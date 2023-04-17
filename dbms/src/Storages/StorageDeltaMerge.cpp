@@ -741,12 +741,12 @@ DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & que
 
 DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr & rs_operator,
                                                              const ColumnInfos & table_infos,
-                                                             const SelectQueryInfo & query_info,
+                                                             const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
                                                              const ColumnDefines & columns_to_read,
                                                              const Context & context,
                                                              const LoggerPtr & tracing_logger)
 {
-    if (likely(query_info.dag_query) && !query_info.dag_query->pushed_down_filters.empty())
+    if (!pushed_down_filters.empty())
     {
         NamesAndTypes columns_to_read_name_and_type;
         for (const auto & col : columns_to_read)
@@ -755,7 +755,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         }
 
         std::unordered_set<String> filter_column_names;
-        for (const auto & filter : query_info.dag_query->pushed_down_filters)
+        for (const auto & filter : pushed_down_filters)
         {
             DB::getColumnNamesFromExpr(filter, columns_to_read_name_and_type, filter_column_names);
         }
@@ -847,7 +847,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         }
 
         // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(query_info.dag_query->pushed_down_filters, *analyzer);
+        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
         LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
         return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
@@ -865,7 +865,8 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
 
     // build push down filter
-    return buildPushDownFilter(rs_operator, tidb_table_info.columns, query_info, columns_to_read, context, tracing_logger);
+    const auto & pushed_down_filters = query_info.dag_query != nullptr ? query_info.dag_query->pushed_down_filters : google::protobuf::RepeatedPtrField<tipb::Expr>{};
+    return buildPushDownFilter(rs_operator, tidb_table_info.columns, pushed_down_filters, columns_to_read, context, tracing_logger);
 }
 
 BlockInputStreams StorageDeltaMerge::read(
