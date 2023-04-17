@@ -18,9 +18,8 @@
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-
-#include "Flash/Mpp/MPPTaskId.h"
 
 namespace DB
 {
