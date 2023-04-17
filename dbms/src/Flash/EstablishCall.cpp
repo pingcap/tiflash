@@ -122,8 +122,6 @@ void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncT
 
 void EstablishCallData::startEstablishConnection()
 {
-    connection_id = fmt::format("tunnel{}+{}", request.sender_meta().task_id(), request.receiver_meta().task_id());
-    query_id = MPPQueryId(request.sender_meta()).toString();
     stopwatch = std::make_unique<Stopwatch>();
 }
 
@@ -139,6 +137,8 @@ void EstablishCallData::initRpc()
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
 
+        connection_id = fmt::format("tunnel{}+{}", request.sender_meta().task_id(), request.receiver_meta().task_id());
+        query_id = MPPQueryId(request.sender_meta()).toString();
         auto res = service->establishMPPConnectionAsync(this);
 
         if (!res.ok())
@@ -226,9 +226,21 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
         // Trigger mpp tunnel finish work.
         async_tunnel_sender->consumerFinish(msg);
     }
-    else if (stopwatch != nullptr)
+    else if (!connection_id.empty())
     {
-        LOG_WARNING(getLogger(), "EstablishCallData finishes without connected, time cost {}ms, query id: {}, connection id: {}", stopwatch->elapsedMilliseconds(), query_id, connection_id);
+        if (stopwatch != nullptr)
+            LOG_WARNING(
+                getLogger(),
+                "EstablishCallData finishes without connected, time cost {}ms, query id: {}, connection id: {}",
+                stopwatch != nullptr ? stopwatch->elapsedMilliseconds() : 0,
+                query_id,
+                connection_id);
+        else
+            LOG_WARNING(
+                getLogger(),
+                "EstablishCallData finishes without connected, query id: {}, connection id: {}",
+                query_id,
+                connection_id);
     }
 
     responder.Finish(status, this);
