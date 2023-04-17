@@ -14,42 +14,37 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
-#include <Operators/Operator.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
-class AggregateBuildSinkOp : public SinkOp
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
+class AggregateFinalSpillEvent : public Event
 {
 public:
-    AggregateBuildSinkOp(
+    AggregateFinalSpillEvent(
         PipelineExecutorStatus & exec_status_,
-        size_t index_,
+        MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
         AggregateContextPtr agg_context_,
-        const String & req_id)
-        : SinkOp(exec_status_, req_id)
-        , index(index_)
-        , agg_context(agg_context_)
+        std::vector<size_t> indexes_)
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        , agg_context(std::move(agg_context_))
+        , indexes(std::move(indexes_))
     {
+        assert(agg_context);
+        assert(!indexes.empty());
     }
-
-    String getName() const override
-    {
-        return "AggregateBuildSinkOp";
-    }
-
-    void operateSuffix() override;
 
 protected:
-    OperatorStatus writeImpl(Block && block) override;
+    std::vector<TaskPtr> scheduleImpl() override;
 
-    OperatorStatus executeIOImpl() override;
+    void finishImpl() override;
 
 private:
-    size_t index{};
-    uint64_t total_rows{};
     AggregateContextPtr agg_context;
-
-    bool is_final_spill = false;
+    std::vector<size_t> indexes;
 };
 } // namespace DB

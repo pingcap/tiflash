@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
@@ -59,5 +60,24 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
+}
+
+EventPtr PhysicalAggregationBuild::sinkFinalize(PipelineExecutorStatus & exec_status)
+{
+    if (!aggregate_context->hasSpilledData())
+        return nullptr;
+    
+    std::vector<size_t> indexes;
+    for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+    {
+        if (aggregate_context->needSpill(index, /*try_mark_need_spill=*/true))
+            indexes.push_back(index);
+    }
+    if (!indexes.empty())
+    {
+        auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes));   
+    }
+    return nullptr;
 }
 } // namespace DB

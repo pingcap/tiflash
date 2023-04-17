@@ -191,6 +191,12 @@ bool Pipeline::isFineGrainedMode() const
     return plan_nodes.front()->getFineGrainedShuffle().enable();
 }
 
+EventPtr Pipeline::finalize(PipelineExecutorStatus & exec_status)
+{
+    assert(!plan_nodes.empty());
+    return plan_nodes.back()->sinkFinalize(exec_status);
+}
+
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;

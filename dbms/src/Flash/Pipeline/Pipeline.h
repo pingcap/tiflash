@@ -78,6 +78,8 @@ public:
 
     bool isFineGrainedMode() const;
 
+    EventPtr finalize(PipelineExecutorStatus & exec_status);
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 

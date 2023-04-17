@@ -20,12 +20,28 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
     if (unlikely(!block))
     {
+        if (agg_context->needSpill(index, /*try_mark_need_spill=*/true))
+        {
+            assert(!is_final_spill);
+            is_final_spill = true;
+            return OperatorStatus::IO;
+        }
         return OperatorStatus::FINISHED;
     }
     agg_context->buildOnBlock(index, block);
     total_rows += block.rows();
     block.clear();
-    return OperatorStatus::NEED_INPUT;
+    return agg_context->needSpill(index)
+        ? OperatorStatus::IO
+        : OperatorStatus::NEED_INPUT;
+}
+
+OperatorStatus AggregateBuildSinkOp::executeIOImpl()
+{
+    agg_context->spillData(index);
+    return is_final_spill
+        ? OperatorStatus::FINISHED
+        : OperatorStatus::NEED_INPUT;
 }
 
 void AggregateBuildSinkOp::operateSuffix()

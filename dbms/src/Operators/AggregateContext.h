@@ -49,6 +49,8 @@ public:
 
     void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
 
+    size_t getBuildConcurrency() const { return max_threads; }
+
     void buildOnBlock(size_t task_index, const Block & block);
 
     bool hasSpilledData() const;

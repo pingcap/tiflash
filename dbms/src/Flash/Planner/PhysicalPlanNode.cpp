@@ -21,6 +21,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
@@ -105,5 +106,10 @@ void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
     if (childrenSize() == 1)
         children(0)->buildPipeline(builder);
     builder.addPlanNode(shared_from_this());
+}
+
+EventPtr PhysicalPlanNode::sinkFinalize(PipelineExecutorStatus & /*exec_status*/)
+{
+    return nullptr; 
 }
 } // namespace DB

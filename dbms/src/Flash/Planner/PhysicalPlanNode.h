@@ -37,6 +37,9 @@ class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
 class PipelineBuilder;
 
+class Event;
+using EventPtr = std::shared_ptr<Event>;
+
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
@@ -71,6 +74,8 @@ public:
         size_t /*concurrency*/);
 
     virtual void buildPipeline(PipelineBuilder & builder);
+
+    virtual EventPtr sinkFinalize(PipelineExecutorStatus & /*exec_status*/);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
