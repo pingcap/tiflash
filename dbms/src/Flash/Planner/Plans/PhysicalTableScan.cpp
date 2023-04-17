@@ -87,13 +87,13 @@ void PhysicalTableScan::buildPipelineExecGroup(
     Context &,
     size_t)
 {
-    storage_interpreter->executePrefix(exec_status, group_builder);
+    storage_interpreter->executeSuffix(exec_status, group_builder);
     buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
-    auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
@@ -105,7 +105,7 @@ void PhysicalTableScan::buildProjection(
     PipelineExecGroupBuilder & group_builder,
     const NamesAndTypes & storage_schema)
 {
-    auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.

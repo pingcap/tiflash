@@ -120,13 +120,12 @@ SourceOps PhysicalMockTableScan::prepareSourceOps(
 {
     if (context.mockStorage()->useDeltaMerge())
     {
-        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(
+        return context.mockStorage()->getSourceOpsFromDeltaMerge(
             exec_status,
             context,
             table_id,
             concurrency,
             keep_order);
-        return source_ops;
     }
     else
     {

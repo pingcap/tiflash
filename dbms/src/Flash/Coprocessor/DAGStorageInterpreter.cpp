@@ -350,7 +350,7 @@ SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_statu
     return source_ops;
 }
 
-void DAGStorageInterpreter::executePrefix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+void DAGStorageInterpreter::executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
 {
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
@@ -1050,9 +1050,7 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
     {
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        auto res = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
-        for (auto & s : res)
-            source_ops.emplace_back(std::move(s));
+        source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
     }
 
     LOG_DEBUG(

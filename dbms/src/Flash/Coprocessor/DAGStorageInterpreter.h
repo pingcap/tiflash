@@ -55,7 +55,7 @@ public:
 
     SourceOps execute(PipelineExecutorStatus & exec_status);
 
-    void executePrefix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+    void executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
