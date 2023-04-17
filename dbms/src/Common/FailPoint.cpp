@@ -145,7 +145,8 @@ namespace DB
     M(random_pipeline_model_operator_run_failpoint)     \
     M(random_pipeline_model_cancel_failpoint)           \
     M(random_spill_to_disk_failpoint)                   \
-    M(random_restore_from_disk_failpoint)
+    M(random_restore_from_disk_failpoint)               \
+    M(exception_when_connect_local_tunnel)
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";
