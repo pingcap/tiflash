@@ -49,7 +49,7 @@ void Event::addInput(const EventPtr & input)
 
 void Event::addOutput(const EventPtr & output)
 {
-    /// Output will also be added in the Finish state, as can be seen in the `insertEvent`.
+    /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
     assert(status == EventStatus::INIT || status == EventStatus::FINISHED);
     assert(output.get() != this);
     outputs.push_back(output);
