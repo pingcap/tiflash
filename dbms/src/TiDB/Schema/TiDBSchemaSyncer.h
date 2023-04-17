@@ -551,12 +551,17 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        if (!getter.checkSchemaDiffExists(version))
-        {
-            --version;
+        try {
+            if (!getter.checkSchemaDiffExists(version))
+            {
+                --version;
+            }
+            SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+            builder.syncAllSchema();
+        } catch (...) {
+            tryLogCurrentException(log, "loadAllSchema failed");
         }
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
-        builder.syncAllSchema();
+        
         return version;
     }
 
