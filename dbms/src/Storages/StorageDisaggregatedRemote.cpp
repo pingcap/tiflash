@@ -453,7 +453,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
     const DM::RNRemoteReadTaskPtr & remote_read_tasks,
-    const SelectQueryInfo & query_info,
+    const SelectQueryInfo &,
     size_t num_streams,
     DAGPipeline & pipeline)
 {
