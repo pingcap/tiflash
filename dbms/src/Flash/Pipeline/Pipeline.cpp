@@ -218,14 +218,14 @@ SourceOps Pipeline::prepare(PipelineExecutorStatus & status, Context & context, 
     assert(!plan_nodes.empty());
     const auto & front_node = plan_nodes.front();
 
-    if (front_node->tp() == PlanType::MockTableScan)
-    {
-        if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
-            return plan->prepareSourceOps(status, context, concurrency);
-    }
-    else if likely (front_node->tp() == PlanType::TableScan)
+    if likely (front_node->tp() == PlanType::TableScan)
     {
         if (auto * plan = dynamic_cast<PhysicalTableScan *>(front_node.get()); plan)
+            return plan->prepareSourceOps(status, context, concurrency);
+    }
+    else if (front_node->tp() == PlanType::MockTableScan)
+    {
+        if (auto * plan = dynamic_cast<PhysicalMockTableScan *>(front_node.get()); plan)
             return plan->prepareSourceOps(status, context, concurrency);
     }
     return {};

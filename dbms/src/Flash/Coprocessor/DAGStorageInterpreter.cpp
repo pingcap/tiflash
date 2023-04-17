@@ -236,12 +236,12 @@ String genErrMsgForLocalRead(
 {
     return table_id == logical_table_id
         ? fmt::format(
-            "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id: {})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id)
         : fmt::format(
-            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id,
