@@ -49,6 +49,7 @@ void Event::addInput(const EventPtr & input)
 
 void Event::addOutput(const EventPtr & output)
 {
+    /// Output will also be added in the Finish state, as can be seen in the `insertEvent`.
     assert(status == EventStatus::INIT || status == EventStatus::FINISHED);
     assert(output.get() != this);
     outputs.push_back(output);
@@ -58,6 +59,9 @@ void Event::insertEvent(const EventPtr & insert_event) noexcept
 {
     assert(insert_event);
     assert(status == EventStatus::FINISHED);
+    /// eventA───────►eventB ===> eventA─────────────►eventB
+    ///                             │                    ▲
+    ///                             └────►insert_event───┘
     for (const auto & output : outputs)
     {
         assert(output);

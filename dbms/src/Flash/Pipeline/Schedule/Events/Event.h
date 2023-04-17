@@ -69,9 +69,7 @@ protected:
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
-    /// eventA───────►eventB ===> eventA─────────────►eventB
-    ///                             │                    ▲
-    ///                             └────►insert_event───┘
+    /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
     void insertEvent(const EventPtr & insert_event) noexcept;
 
 private:
