@@ -31,10 +31,7 @@ public:
         const String & req_id,
         CoprocessorReaderPtr coprocessor_reader_);
 
-    String getName() const override
-    {
-        return "CoprocessorReaderSourceOp";
-    }
+    String getName() const override;
 
     void operatePrefix() override;
     void operateSuffix() override;

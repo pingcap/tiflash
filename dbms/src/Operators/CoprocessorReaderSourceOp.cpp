@@ -29,8 +29,14 @@ CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
     setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(coprocessor_reader->getOutputSchema()))));
 }
 
+String CoprocessorReaderSourceOp::getName() const
+{
+    return "CoprocessorReaderSourceOp";
+}
+
 void CoprocessorReaderSourceOp::operatePrefix()
 {
+    LOG_DEBUG(log, "start reading from remote coprocessor", total_rows);
     coprocessor_reader->open();
 }
 

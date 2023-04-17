@@ -922,7 +922,6 @@ SourceOps StorageDeltaMerge::readSourceOps(
     unsigned num_streams)
 {
     auto & store = getAndMaybeInitStore();
-    std::cout << "wtf: keep order" << query_info.keep_order << std::endl;
     // Note that `columns_to_read` should keep the same sequence as ColumnRef
     // in `Coprocessor.TableScan.columns`, or rough set filter could be
     // failed to parsed.

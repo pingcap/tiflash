@@ -107,7 +107,7 @@ void PhysicalTableScan::buildProjection(
 {
     auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
 
-    /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
+    /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(group_builder.getCurrentHeader());
     schema_actions->add(ExpressionAction::project(schema_project_cols));
