@@ -34,6 +34,7 @@
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -41,6 +42,7 @@
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -56,8 +58,6 @@
 
 #include <atomic>
 #include <numeric>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/StorageDeltaMerge.h>
 
 namespace pingcap::kv
 {

@@ -705,9 +705,9 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
 }
 
 DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
-                                                             const ColumnDefines & columns_to_read,
-                                                             const Context & context,
-                                                             const LoggerPtr & tracing_logger)
+                                                     const ColumnDefines & columns_to_read,
+                                                     const Context & context,
+                                                     const LoggerPtr & tracing_logger)
 {
     // build rough set operator
     DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
@@ -740,7 +740,7 @@ DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & que
 }
 
 DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr & rs_operator,
-const ColumnInfos & table_infos,
+                                                             const ColumnInfos & table_infos,
                                                              const SelectQueryInfo & query_info,
                                                              const ColumnDefines & columns_to_read,
                                                              const Context & context,

@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -48,8 +49,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <magic_enum.hpp>
 namespace DB::DM
 {
 
