@@ -362,7 +362,7 @@ grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * 
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    auto & request = call_data->getRequest();
+    const auto & request = call_data->getRequest();
     LOG_INFO(log, "Handling establish mpp connection request: {}", request.DebugString());
 
     auto check_result = checkGrpcContext(call_data->getGrpcContext());
