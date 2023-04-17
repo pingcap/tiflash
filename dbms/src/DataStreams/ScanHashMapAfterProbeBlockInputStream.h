@@ -26,7 +26,7 @@ class ScanHashMapAfterProbeBlockInputStream : public IProfilingBlockInputStream
 public:
     ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
 
-    String getName() const override { return "ScanHashMapAfterProb"; }
+    String getName() const override { return "ScanHashMapAfterProbe"; }
 
     Block getHeader() const override { return result_sample_block; };
 

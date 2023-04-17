@@ -496,7 +496,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
-    if (needScanHashMapAfterProb(kind))
+    if (needScanHashMapAfterProbe(kind))
     {
         /** Move the key columns to the beginning of the block.
           * This is where ScanHashMapAfterProbBlockInputStream will expect.
@@ -784,7 +784,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
       *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
       */
     size_t num_columns_to_skip = 0;
-    if (needScanHashMapAfterProb(kind))
+    if (needScanHashMapAfterProbe(kind))
         num_columns_to_skip = keys_size;
 
     /// Add new columns to the block.
@@ -1493,7 +1493,7 @@ void Join::workAfterProbeFinish()
         {
             spillAllProbePartitions();
             probe_spiller->finishSpill();
-            if (!needScanHashMapAfterProb(kind))
+            if (!needScanHashMapAfterProbe(kind))
             {
                 releaseAllPartitions();
             }
@@ -1805,7 +1805,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         {
             spilled_partition_indexes.pop_front();
         }
-        if (needScanHashMapAfterProb(kind))
+        if (needScanHashMapAfterProbe(kind))
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);

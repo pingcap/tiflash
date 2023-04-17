@@ -24,7 +24,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     size_t non_joined_stream_index,
     size_t max_block_size)
 {
-    bool need_scan_hash_map_after_prob = needScanHashMapAfterProb(join->getKind());
+    bool need_scan_hash_map_after_prob = needScanHashMapAfterProbe(join->getKind());
     BlockInputStreamPtr non_joined_stream = nullptr;
     if (need_scan_hash_map_after_prob)
         non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), non_joined_stream_index, join->getProbeConcurrency(), max_block_size);

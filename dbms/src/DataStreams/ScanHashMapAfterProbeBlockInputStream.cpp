@@ -174,7 +174,7 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
     if unlikely (parent.active_build_threads != 0 || parent.active_probe_threads != 0)
     {
         /// build/probe is not finished yet, the query must be cancelled, so just return {}
-        LOG_WARNING(parent.log, "ScanHashMapAfterProb read without non zero active_build_threads/active_probe_threads, return empty block");
+        LOG_WARNING(parent.log, "ScanHashMapAfterProbe read without non zero active_build_threads/active_probe_threads, return empty block");
         return {};
     }
     if (!parent.has_build_data_in_memory)
