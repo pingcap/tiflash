@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/MppVersion.h>
@@ -22,7 +23,6 @@
 #include <common/defines.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
-#include <Common/Exception.h>
 
 #include <condition_variable>
 #include <mutex>
@@ -143,8 +143,7 @@ private:
             reader.reset();
             retryOrDone(
                 "Exchange receiver meet error : send async stream request fail",
-                fmt::format("Make reader fail. retry time: {}", retry_times)
-            );
+                fmt::format("Make reader fail. retry time: {}", retry_times));
         }
         else
         {
@@ -323,7 +322,7 @@ private:
             }
             return GRPCReceiveQueueRes::OK;
         }
-        catch(...)
+        catch (...)
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
             RUNTIME_ASSERT(false, "Exception is thrown when sending packets in AsyncRequestHandler");

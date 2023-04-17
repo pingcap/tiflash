@@ -1105,7 +1105,6 @@ void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
 {
     for (auto & channel : grpc_recv_queue)
         channel.finish();
-
 }
 
 template <typename RPCContext>
