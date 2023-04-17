@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
 #include <Common/Exception.h>
 #include <Common/PoolBase.h>
@@ -45,6 +46,10 @@ namespace ProfileEvents
 {
 extern const Event CreatedHTTPConnections;
 }
+namespace CurrentMetrics
+{
+extern const Metric ConnectionPoolSize;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -186,6 +191,8 @@ public:
             std::tie(pool_ptr, std::ignore) = endpoints_pool.emplace(
                 key,
                 std::make_shared<SingleEndpointHTTPSessionPool>(host, port, https, proxy_host, proxy_port, proxy_https, max_connections_per_endpoint, resolve_host));
+
+        CurrentMetrics::set(CurrentMetrics::ConnectionPoolSize, pool_ptr->second->getPoolSize());
 
         auto retry_timeout = timeouts.connection_timeout.totalMicroseconds();
         auto session = pool_ptr->second->get(retry_timeout);

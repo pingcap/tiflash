@@ -353,6 +353,10 @@ namespace DB
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                                  \
+    M(tiflash_storage_s3_http_request_seconds, "S3 request duration breakdown in seconds", Histogram,                                               \
+        F(type_dns, {{"type", "dns"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
+        F(type_connect, {{"type", "connect"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_send, {{"type", "send"}}, ExpBuckets{0.001, 2, 20}))                                                                                 \
     M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
         F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \

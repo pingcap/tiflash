@@ -135,6 +135,15 @@ private:
         Aws::Utils::RateLimits::RateLimiterInterface * readLimiter,
         Aws::Utils::RateLimits::RateLimiterInterface * writeLimiter) const;
 
+    template <typename Session>
+    std::optional<String> makeRequestOnce(
+        const Poco::URI & target_uri,
+        Aws::Http::HttpRequest & request,
+        const ClientConfigurationPerRequest & request_configuration,
+        Session session,
+        std::shared_ptr<PocoHTTPResponse> & response,
+        const LoggerPtr & tracing_logger) const;
+
     enum class S3MetricType
     {
         Microseconds,
