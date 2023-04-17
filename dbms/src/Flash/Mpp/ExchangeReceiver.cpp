@@ -408,6 +408,7 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
+    waitAsyncConnectionDone();
 }
 
 template <typename RPCContext>
@@ -417,6 +418,13 @@ void ExchangeReceiverBase<RPCContext>::waitLocalConnectionDone(std::unique_lock<
         return live_local_connections == 0;
     };
     cv.wait(lock, pred);
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::waitAsyncConnectionDone()
+{
+    for (auto & handler_ptr : async_handler_ptrs)
+        handler_ptr->wait();
 }
 
 template <typename RPCContext>
@@ -988,24 +996,22 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
+    Int32 copy_live_connections;
     String first_err_msg = local_err_msg;
-
-    // We must protect the following codes with lock.
-    // Because once live_connections == 0, ExchangeReceiver may be destructed immediately
-    // and the data in ExchangeReceiver is no longer alive.
-    std::lock_guard lock(mu);
-
-    if (meet_error)
     {
-        if (state == ExchangeReceiverState::NORMAL)
-            state = ExchangeReceiverState::ERROR;
-        if (err_msg.empty())
-            err_msg = local_err_msg;
-        else
-            first_err_msg = err_msg;
-    }
+        std::lock_guard lock(mu);
+        if (meet_error)
+        {
+            if (state == ExchangeReceiverState::NORMAL)
+                state = ExchangeReceiverState::ERROR;
+            if (err_msg.empty())
+                err_msg = local_err_msg;
+            else
+                first_err_msg = err_msg;
+        }
 
-    --live_connections;
+        copy_live_connections = --live_connections;
+    }
 
     if (meet_error)
     {
@@ -1014,28 +1020,75 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
             "connection end. meet error: {}, err msg: {}, current alive connections: {}",
             meet_error,
             local_err_msg,
-            live_connections);
+            copy_live_connections);
     }
     else
     {
         LOG_DEBUG(
             log,
             "connection end. Current alive connections: {}",
-            live_connections);
+            copy_live_connections);
     }
-    assert(live_connections >= 0);
-    if (live_connections == 0)
+    assert(copy_live_connections >= 0);
+    if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
 
-    if (meet_error || live_connections == 0)
+    if (meet_error || copy_live_connections == 0)
     {
         auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
+
+    // // We must protect the following codes with lock.
+    // // Because once live_connections == 0, ExchangeReceiver may be destructed immediately
+    // // and the data in ExchangeReceiver is no longer alive.
+    // std::lock_guard lock(mu);
+
+    // if (meet_error)
+    // {
+    //     if (state == ExchangeReceiverState::NORMAL)
+    //         state = ExchangeReceiverState::ERROR;
+    //     if (err_msg.empty())
+    //         err_msg = local_err_msg;
+    //     else
+    //         first_err_msg = err_msg;
+    // }
+
+    // --live_connections;
+
+    // if (meet_error)
+    // {
+    //     LOG_WARNING(
+    //         log,
+    //         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+    //         meet_error,
+    //         local_err_msg,
+    //         live_connections);
+    // }
+    // else
+    // {
+    //     LOG_DEBUG(
+    //         log,
+    //         "connection end. Current alive connections: {}",
+    //         live_connections);
+    // }
+    // assert(live_connections >= 0);
+    // if (live_connections == 0)
+    // {
+    //     LOG_DEBUG(log, "All threads end in ExchangeReceiver");
+    //     cv.notify_all();
+    // }
+
+    // if (meet_error || live_connections == 0)
+    // {
+    //     auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+    //     LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
+    //     finishAllMsgChannels();
+    // }
 }
 
 template <typename RPCContext>
@@ -1052,7 +1105,7 @@ void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
 {
     for (auto & channel : grpc_recv_queue)
         channel.finish();
-    
+
 }
 
 template <typename RPCContext>

@@ -24,6 +24,9 @@
 #include <grpcpp/completion_queue.h>
 #include <Common/Exception.h>
 
+#include <condition_variable>
+#include <mutex>
+
 namespace DB
 {
 enum class AsyncRequestStage
@@ -45,6 +48,8 @@ constexpr Int32 batch_packet_count = 16;
 
 class AsyncRequestHandlerBase : public UnaryCallback<bool>
 {
+public:
+    virtual void wait() = 0;
 };
 
 template <typename RPCContext, bool enable_fine_grained_shuffle>
@@ -122,6 +127,12 @@ public:
         }
     }
 
+    void wait() override
+    {
+        std::unique_lock<std::mutex> ul;
+        condition_cv.wait(ul, [this]() { return is_close_conn_called; });
+    }
+
 private:
     void processWaitMakeReader(bool ok)
     {
@@ -130,8 +141,10 @@ private:
         if (!ok)
         {
             reader.reset();
-            LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
-            retryOrDone("Exchange receiver meet error : send async stream request fail");
+            retryOrDone(
+                "Exchange receiver meet error : send async stream request fail",
+                fmt::format("Make reader fail. retry time: {}", retry_times)
+            );
         }
         else
         {
@@ -156,21 +169,9 @@ private:
             closeConnection("");
         else
         {
-            // As AsyncRequestHandler may have been destructed after close_conn is called;
-            // we need to copy some data for LOG_WARNING after a while.
-            LoggerPtr copy_log = log;
-            Status copy_finish_status = finish_status;
-            int copy_retry_times = retry_times;
-
-            if (!retryOrDone(fmt::format("Exchange receiver meet error : {}", finish_status.error_message())))
-            {
-                LOG_WARNING(
-                    copy_log,
-                    "Finish fail. err code: {}, err msg: {}, retry time {}",
-                    copy_finish_status.error_code(),
-                    copy_finish_status.error_message(),
-                    copy_retry_times);
-            }
+            String done_msg = fmt::format("Exchange receiver meet error : {}", finish_status.error_message());
+            String log_msg = fmt::format("Finish fail. err code: {}, err msg: {}, retry time {}", finish_status.error_code(), finish_status.error_message(), retry_times);
+            retryOrDone(done_msg, log_msg);
         }
     }
 
@@ -263,12 +264,14 @@ private:
 
     void closeConnection(String && msg)
     {
+        std::lock_guard lock(mu);
         if (!is_close_conn_called)
         {
             stage = AsyncRequestStage::FINISHED;
             close_conn(!msg.empty(), msg, log);
             is_close_conn_called = true;
         }
+        condition_cv.notify_all();
     }
 
     void start()
@@ -280,22 +283,22 @@ private:
         rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
     }
 
-    bool retryOrDone(String done_msg)
+    void retryOrDone(String && done_msg, const String & log_msg)
     {
         if (retriable())
         {
+            LOG_WARNING(log, log_msg);
             ++retry_times;
             stage = AsyncRequestStage::WAIT_RETRY;
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
             alarm.Set(cq, SystemClock::now() + std::chrono::seconds(retry_interval_time), this);
-            return true;
         }
         else
         {
+            LOG_WARNING(log, log_msg);
             closeConnection(std::move(done_msg));
-            return false;
         }
     }
 
@@ -394,5 +397,8 @@ private:
 
     // try-catch may call close_conn, and we need to ensure that close_conn is called for only once.
     bool is_close_conn_called;
+
+    std::mutex mu;
+    std::condition_variable condition_cv;
 };
 } // namespace DB

@@ -176,6 +176,7 @@ private:
 
     void waitAllConnectionDone();
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
+    void waitAsyncConnectionDone();
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
