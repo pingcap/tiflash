@@ -130,6 +130,8 @@ Join::Join(
     , match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
+    , original_strictness(strictness)
+    , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind, strictness))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
@@ -138,7 +140,6 @@ Join::Join(
     , active_probe_threads(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
-    , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
@@ -821,8 +822,10 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }
 
-Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
+    probe_process_info.updateStartRow();
+    /// this makes a copy of `probe_process_info.block`
     Block block = probe_process_info.block;
     size_t keys_size = key_names_left.size();
 
@@ -964,6 +967,26 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     return block;
+}
+
+Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
+{
+    std::vector<Block> result_blocks;
+    size_t result_rows = 0;
+    while (true)
+    {
+        auto block = doJoinBlockHash(probe_process_info);
+        assert(block);
+        result_rows += block.rows();
+        result_blocks.push_back(std::move(block));
+        /// exit the while loop if
+        /// 1. probe_process_info.all_rows_joined_finish is true, which means all the rows in current block is processed
+        /// 2. the block may be expanded after join and result_rows exceeds the min_result_block_size
+        if (probe_process_info.all_rows_joined_finish || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
+            break;
+    }
+    assert(!result_blocks.empty());
+    return vstackBlocks(std::move(result_blocks));
 }
 
 namespace
@@ -1245,6 +1268,8 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         DISPATCH(false)
     }
 #undef DISPATCH
+    /// todo control the returned block size for cross join
+    probe_process_info.all_rows_joined_finish = true;
     return block;
 }
 
@@ -1306,6 +1331,9 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
+
+    /// Null aware join never expand the left block, just handle the whole block at one time is enough
+    probe_process_info.all_rows_joined_finish = true;
 
     return block;
 }
@@ -1585,6 +1613,7 @@ void Join::finishOneNonJoin(size_t partition_index)
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
+    assert(!probe_process_info.all_rows_joined_finish);
     if unlikely (dry_run)
     {
         assert(probe_process_info.block.rows() == 0);
@@ -1599,8 +1628,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         }
     }
     std::shared_lock lock(rwlock);
-
-    probe_process_info.updateStartRow();
 
     Block block{};
 
@@ -1627,11 +1654,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
             vec_non_matched[i] = !vec_matched[i];
 
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
-    }
-
-    if (isCrossJoin(kind) || isNullAwareSemiFamily(kind))
-    {
-        probe_process_info.all_rows_joined_finish = true;
     }
 
     return block;
