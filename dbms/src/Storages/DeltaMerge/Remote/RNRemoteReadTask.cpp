@@ -562,12 +562,8 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
     const PushDownFilterPtr & push_down_filter,
     size_t expected_block_size)
 {
-    auto read_mode = dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter ? ReadMode::Bitmap : ReadMode::Normal;
-    LOG_DEBUG(
-        log,
-        "dt_enable_bitmap_filter={} read_mode={}",
-        dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter,
-        magic_enum::enum_name(read_mode));
+    auto enable_late_materialization = push_down_filter != nullptr && push_down_filter->before_where != nullptr;
+    auto read_mode = (enable_late_materialization || dm_context->db_context.getSettingsRef().dt_enable_bitmap_filter) ? ReadMode::Bitmap : ReadMode::Normal;
     return segment->getInputStream(
         read_mode,
         *dm_context,
