@@ -20,15 +20,21 @@ set_branch
 
 set -x
 
-check_env
+check_env || exit 1
 
 # run fullstack-tests (for engine DeltaTree)
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-clean_data_log
+function run_test() {
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test'
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test' || return
+
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+    clean_data_log
+}
+
+run_test
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-clean_data_log

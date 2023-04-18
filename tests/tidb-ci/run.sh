@@ -20,65 +20,72 @@ set_branch
 
 set -x
 
-check_env
+check_env || exit 1
 
 # run fullstack-tests (for engine DeltaTree)
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-clean_data_log
+function run_test() {
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt' || return
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
-clean_data_log
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
+    docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc' || return
 
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml down
-clean_data_log
+    docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_local_tunnel'
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_local_tunnel' || return
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
-clean_data_log
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_planner'
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_planner' || return
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
-clean_data_log
+    docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
+    clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/enable_pipeline'
+    docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/enable_pipeline' || return
+
+    docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml down
+    clean_data_log
+
+    # run new_collation_fullstack tests
+    docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
+    clean_data_log
+
+    docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/new_collation_fullstack' || return
+
+    docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
+    clean_data_log
+
+    # run disable_new_collation_fullstack tests
+    docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
+    clean_data_log
+
+    docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml up -d || return
+    wait_env || return
+    docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_new_collation_fullstack' || return
+
+    docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
+    clean_data_log
+
+}
+
+run_test
 
 docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml down
-clean_data_log
-
-# run new_collation_fullstack tests
-docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
-clean_data_log
-
-docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/new_collation_fullstack'
-
-docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
-clean_data_log
-
-# run disable_new_collation_fullstack tests
-docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
-clean_data_log
-
-docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_new_collation_fullstack'
-
-docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
-clean_data_log
