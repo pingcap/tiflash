@@ -976,14 +976,18 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
     // )raw";
 
     String stmt;
-    WriteBufferFromString stmt_buf(stmt);
-    writeString("CREATE DATABASE IF NOT EXISTS ", stmt_buf);
-    writeBackQuotedString(mapped, stmt_buf);
-    writeString(" ENGINE = TiFlash('", stmt_buf);
-    writeEscapedString(db_info.serialize(), stmt_buf); // must escaped for json-encoded text
-    writeString("', ", stmt_buf);
-    writeIntText(DatabaseTiFlash::CURRENT_VERSION, stmt_buf);
-    writeString(")", stmt_buf);
+
+    {
+        WriteBufferFromString stmt_buf(stmt);
+        writeString("CREATE DATABASE IF NOT EXISTS ", stmt_buf);
+        writeBackQuotedString(mapped, stmt_buf);
+        writeString(" ENGINE = TiFlash('", stmt_buf);
+        writeEscapedString(db_info.serialize(), stmt_buf); // must escaped for json-encoded text
+        writeString("', ", stmt_buf);
+        writeIntText(DatabaseTiFlash::CURRENT_VERSION, stmt_buf);
+        writeString(")", stmt_buf);
+    }
+
     return stmt;
 }
 
