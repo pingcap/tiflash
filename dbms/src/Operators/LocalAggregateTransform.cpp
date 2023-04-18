@@ -21,10 +21,10 @@ namespace DB
 {
 namespace
 {
-/// for local agg, the concurrency of build and convert must both be 1.
+/// for local agg, the concurrency of build and convergent must both be 1.
 constexpr size_t local_concurrency = 1;
 
-/// for local agg, the task_index of build and convert must both be 0.
+/// for local agg, the task_index of build and convergent must both be 0.
 constexpr size_t task_index = 0;
 } // namespace
 
@@ -48,7 +48,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         {
             return agg_context.hasSpilledData()
                 ? fromBuildToFinalSpillOrRestore()
-                : fromBuildToConvert(block);
+                : fromBuildToConvergent(block);
         }
         agg_context.buildOnBlock(task_index, block);
         block.clear();
@@ -58,11 +58,11 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     }
 }
 
-OperatorStatus LocalAggregateTransform::fromBuildToConvert(Block & block)
+OperatorStatus LocalAggregateTransform::fromBuildToConvergent(Block & block)
 {
-    // status from build to convert.
+    // status from build to convergent.
     assert(status == LocalAggStatus::build);
-    status = LocalAggStatus::convert;
+    status = LocalAggStatus::convergent;
     agg_context.initConvergent();
     RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
     block = agg_context.readForConvergent(task_index);
@@ -101,7 +101,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     {
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
-    case LocalAggStatus::convert:
+    case LocalAggStatus::convergent:
         block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
     case LocalAggStatus::restore:
