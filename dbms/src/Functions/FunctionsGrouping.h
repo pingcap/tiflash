@@ -19,9 +19,9 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <tipb/metadata.pb.h>
-#include <Interpreters/Context.h>
 
 #include <magic_enum.hpp>
 
@@ -34,6 +34,23 @@ extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 } // namespace ErrorCodes
 
+static bool isPowerOf2(uint64_t num)
+{
+    uint64_t flag = 1ul << 63ul;
+    bool appear = false;
+    for (auto i = 0; i < 64; ++i)
+    {
+        if ((num & flag) != 0)
+        {
+            if (appear)
+                return false;
+            appear = true;
+        }
+    }
+
+    return true;
+}
+
 using ResultType = UInt8;
 
 class FunctionGrouping : public IFunctionBase
@@ -43,6 +60,8 @@ class FunctionGrouping : public IFunctionBase
 public:
     static constexpr auto name = "grouping";
     using ArgType = UInt64; // arg type should always be UInt64
+
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     FunctionGrouping(const DataTypes & argument_types_, const DataTypePtr & return_type_, const tipb::Expr & expr)
         : argument_types(argument_types_)
@@ -58,8 +77,13 @@ public:
         if (num <= 0)
             throw Exception("number of grouping_ids should be greater than 0");
 
-        if (mode == 1 || mode == 2)
+        if (mode == tipb::GroupingMode::ModeBitAnd || mode == tipb::GroupingMode::ModeNumericCmp)
+        {
+            assert(meta.grouping_marks_size() == 1);
+            if (mode == tipb::GroupingMode::ModeBitAnd)
+                assert(isPowerOf2(meta.grouping_marks()[0]));
             meta_grouping_id = meta.grouping_marks()[0];
+        }
         else
         {
             for (size_t i = 0; i < num; ++i)
@@ -86,24 +110,19 @@ public:
         }
 
         const ColumnPtr & col_grouping_ids = block.getByPosition(arguments[0]).column;
-        const auto * col_grouping_ids_const = typeid_cast<const ColumnConst *>(&(*(col_grouping_ids)));
-
-        if (col_grouping_ids_const != nullptr)
-            processConstGroupingIDs(col_grouping_ids_const, block.getByPosition(result).column, block.rows());
-        else
-            processNonConstGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
+        processGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
     }
 
 private:
-    void processConstGroupingIDs(const ColumnConst * col_grouping_ids_const, ColumnPtr & col_res, size_t row_num) const
-    {
-        UInt64 grouping_id = col_grouping_ids_const->getUInt(0);
-        auto res = grouping(grouping_id);
+    // void processConstGroupingIDs(const ColumnConst * col_grouping_ids_const, ColumnPtr & col_res, size_t row_num) const
+    // {
+    //     UInt64 grouping_id = col_grouping_ids_const->getUInt(0);
+    //     auto res = grouping(grouping_id);
 
-        col_res = DataTypeNumber<ResultType>().createColumnConst(row_num, Field(static_cast<UInt64>(res)));
-    }
+    //     col_res = DataTypeNumber<ResultType>().createColumnConst(row_num, Field(static_cast<UInt64>(res)));
+    // }
 
-    void processNonConstGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
+    void processGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
         if (col_grouping_ids->isColumnNullable())
             throw Exception("Grouping function shouldn't get nullable column");
@@ -116,20 +135,20 @@ private:
         switch (mode)
         {
         case tipb::GroupingMode::ModeBitAnd:
-            groupingVec<1>(col_grouping_ids, col_res, row_num);
+            groupingVec<tipb::GroupingMode::ModeBitAnd>(col_grouping_ids, col_res, row_num);
             break;
         case tipb::GroupingMode::ModeNumericCmp:
-            groupingVec<2>(col_grouping_ids, col_res, row_num);
+            groupingVec<tipb::GroupingMode::ModeNumericCmp>(col_grouping_ids, col_res, row_num);
             break;
         case tipb::GroupingMode::ModeNumericSet:
-            groupingVec<3>(col_grouping_ids, col_res, row_num);
+            groupingVec<tipb::GroupingMode::ModeNumericSet>(col_grouping_ids, col_res, row_num);
             break;
         default:
             throw Exception(fmt::format("Invalid version {} in grouping function", magic_enum::enum_name(mode)));
         };
     }
 
-    template <int version>
+    template <tipb::GroupingMode mode>
     void groupingVec(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
         // get arg's data container
@@ -146,14 +165,14 @@ private:
 
         for (size_t i = 0; i < row_num; ++i)
         {
-            if constexpr (version == 1)
+            if constexpr (mode == tipb::GroupingMode::ModeBitAnd)
                 vec_res[i] = groupingImplModeAndBit(grouping_container[i]);
-            else if constexpr (version == 2)
+            else if constexpr (mode == tipb::GroupingMode::ModeNumericCmp)
                 vec_res[i] = groupingImplModeNumericCmp(grouping_container[i]);
-            else if constexpr (version == 3)
+            else if constexpr (mode == tipb::GroupingMode::ModeNumericSet)
                 vec_res[i] = groupingImplModeNumericSet(grouping_container[i]);
             else
-                throw Exception("Invalid version in grouping function");
+                throw Exception("Invalid mode in grouping function");
         }
         col_res = std::move(col_vec_res);
     }
@@ -203,7 +222,7 @@ class FunctionBuilderGrouping : public IFunctionBuilder
 public:
     static constexpr auto name = "grouping";
 
-    explicit FunctionBuilderGrouping(const Context & /*context*/){}
+    explicit FunctionBuilderGrouping(const Context & /*context*/) {}
 
     static FunctionBuilderPtr create(const Context & context)
     {

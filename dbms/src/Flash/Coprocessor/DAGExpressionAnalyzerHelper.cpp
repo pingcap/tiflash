@@ -22,8 +22,8 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsTiDBConversion.h>
 #include <Functions/FunctionsGrouping.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -420,8 +420,8 @@ String DAGExpressionAnalyzerHelper::buildGroupingFunction(
         return result_name;
 
     FunctionBuilderPtr function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
-    auto * function_builder_grouping_cast = dynamic_cast<FunctionBuilderGrouping *>(function_builder.get());
-    function_builder_grouping_cast->setExpr(expr);
+    auto * function_builder_grouping = dynamic_cast<FunctionBuilderGrouping *>(function_builder.get());
+    function_builder_grouping->setExpr(expr);
 
     const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
     actions->add(apply_function);
