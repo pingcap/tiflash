@@ -20,10 +20,12 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Operators/AggregateContext.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
 class PhysicalAggregationBuild : public PhysicalUnary
 {
 public:

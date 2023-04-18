@@ -105,48 +105,4 @@ bool LocalAggregateRestorer::tryPop(Block & block)
     restored_blocks.pop_front();
     return true;
 }
-
-LocalAggregateRestorer::Input::Input(const BlockInputStreamPtr & stream_)
-    : stream(stream_)
-{
-    stream->readPrefix();
-}
-
-Block LocalAggregateRestorer::Input::moveOutput()
-{
-    assert(output.has_value());
-    Block ret = std::move(*output);
-    output.reset();
-    return ret;
-}
-
-Int32 LocalAggregateRestorer::Input::bucketNum() const
-{
-    assert(output.has_value());
-    return output->info.bucket_num;
-}
-
-bool LocalAggregateRestorer::Input::load()
-{
-    if unlikely (is_exhausted)
-        return false;
-
-    if (output.has_value())
-        return true;
-
-    Block ret = stream->read();
-    if unlikely (!ret)
-    {
-        is_exhausted = true;
-        stream->readSuffix();
-        return false;
-    }
-    else
-    {
-        /// Only two level data can be spilled.
-        assert(ret.info.bucket_num != -1);
-        output.emplace(std::move(ret));
-        return true;
-    }
-}
 } // namespace DB

@@ -20,23 +20,20 @@
 
 namespace DB
 {
-class Aggregator;
+class PipelineExecutorStatus;
 
-class LocalAggregateRestorer
+class SharedBucketDataLoader : public std::enable_shared_from_this<SharedBucketDataLoader>
 {
 public:
-    LocalAggregateRestorer(
+    SharedBucketDataLoader(
+        PipelineExecutorStatus & exec_status_,
         const BlockInputStreams & bucket_streams,
-        Aggregator & aggregator_,
-        std::function<bool()> is_cancelled_,
-        const String & req_id);
-
-    // load data from bucket_inputs to bucket_data.
-    void loadBucketData();
+        const String & req_id,
+        size_t max_queue_size_);
 
     // return true if pop success
-    // return false means that `loadBucketData` need to be called.
-    bool tryPop(Block & block);
+    // return false means that need to continue tryPop.
+    bool tryPop(BlocksList & bucket_data);
 
 private:
     bool loadFromInputs();
@@ -46,21 +43,22 @@ private:
     void finish();
 
 private:
-    Aggregator & aggregator;
-
-    std::function<bool()> is_cancelled;
+    PipelineExecutorStatus & exec_status;
 
     LoggerPtr log;
 
-    bool finished = false;
+    size_t max_queue_size;
 
-    // bucket_inputs --> bucket_data --> restored_blocks.
-    BlocksList bucket_data;
-    BlocksList restored_blocks;
+    std::atomic_bool loading{false};
+
+    std::atomic_bool finished{false};
+
+    std::vector<BlocksList> bucket_data_queue;
 
     BucketInputs bucket_inputs;
 
     static constexpr Int32 NUM_BUCKETS = 256;
 };
-using LocalAggregateRestorerPtr = std::unique_ptr<LocalAggregateRestorer>;
+using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
+
 } // namespace DB

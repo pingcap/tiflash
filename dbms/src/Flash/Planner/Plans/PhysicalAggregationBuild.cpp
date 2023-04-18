@@ -19,6 +19,7 @@
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
