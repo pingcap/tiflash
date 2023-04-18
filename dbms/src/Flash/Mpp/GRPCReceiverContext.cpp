@@ -131,7 +131,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
 {
-    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_when_connect_local_tunnel);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_exception_when_connect_local_tunnel);
     RUNTIME_CHECK_MSG(tunnel != nullptr, fmt::runtime(err_msg));
     RUNTIME_CHECK_MSG(tunnel->isLocal(), "Need a local tunnel, but get remote tunnel.");
 }
