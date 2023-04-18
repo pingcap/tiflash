@@ -208,7 +208,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
 
         // Actual data will be stored in MockSSTReader.
-        void finish_file();
+        void finish_file(SSTFormatKind kind = SSTFormatKind::KIND_SST);
         void freeze() { freezed = true; }
 
         void insert(HandleID key, std::string val);

@@ -20,7 +20,22 @@ namespace DB
 {
 bool MonoSSTReader::remained() const
 {
-    return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    auto remained = proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    if (!remained)
+    {
+        return false;
+    }
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto end = r.second.key.toString();
+        auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
+        if (end != "" && key >= end)
+        {
+            return false;
+        }
+    }
+    return remained;
 }
 BaseBuffView MonoSSTReader::keyView() const
 {
@@ -40,7 +55,18 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
     , range(range_)
-{}
+{
+    kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto start = r.first.key.toString();
+        if (start != "")
+        {
+            proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
+        }
+    }
+}
 
 MonoSSTReader::~MonoSSTReader()
 {

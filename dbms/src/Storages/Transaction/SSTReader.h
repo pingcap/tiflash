@@ -51,6 +51,7 @@ private:
     SSTReaderPtr inner;
     ColumnFamilyType type;
     RegionRangeFilter range;
+    SSTFormatKind kind;
 };
 
 /// MultiSSTReader helps when there are multiple sst files in a column family.
