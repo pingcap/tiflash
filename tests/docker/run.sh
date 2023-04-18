@@ -15,7 +15,6 @@
 
 
 set -x
-set +e
 
 pwd
 df -h
@@ -29,8 +28,6 @@ lsmod
 dmidecode | grep 'Product Name'
 free -mh
 cat /proc/loadavg
-
-set -e
 
 function wait_env() {
   local engine="$1"

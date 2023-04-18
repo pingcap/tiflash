@@ -18,7 +18,7 @@ source ../docker/util.sh
 
 set_branch
 
-set -xe
+set -x
 
 check_env
 
