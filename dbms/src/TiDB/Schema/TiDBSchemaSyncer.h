@@ -145,11 +145,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         auto getter = createSchemaGetter(keyspace_id);
 
         Int64 version = getter.getVersion();
-        // make some test here.
-        if (version < 0)
-        {
-            version = 0;
-        }
+        // // make some test here.
+        // if (version < 0)
+        // {
+        //     version = 0;
+        // }
 
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
