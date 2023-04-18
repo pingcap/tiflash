@@ -891,10 +891,10 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+            const auto & ptr_col = static_cast<const PointerHelper::ColumnType &>(*mapped_column);
+            const auto & container = static_cast<const PointerHelper::ArrayType &>(ptr_col.getData());
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                const auto & ptr_col = static_cast<const PointerHelper::ColumnType &>(*mapped_column);
-                const auto & container = static_cast<const PointerHelper::ArrayType &>(ptr_col.getData());
                 auto ptr_value = container[i];
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
