@@ -708,7 +708,17 @@ try
         executeAndAssertColumnsEqual(request, {});
 
         request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {}, 0)
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, {});
+
+        request = context.scan("null_test", "null_table")
+                      .join(context.scan("null_test", "t"), tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {}, 0)
                       .build(context);
         executeAndAssertColumnsEqual(request, {});
 
@@ -1560,6 +1570,132 @@ try
 }
 CATCH
 
+
+TEST_F(JoinExecutorTestRunner, RightSemiFamilyJoin)
+try
+{
+    using tipb::JoinType;
+    /// One join key(t.a = s.a) + no other condition.
+    /// type + left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1 = {
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 3, {}, 4})},
+            {toNullableVec<Int32>("a", {1, 4})},
+        },
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {2, 3, {}, 7})},
+            {toNullableVec<Int32>("a", {2})},
+        },
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 1, 4, 5})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 3, {}, 4})},
+            {toNullableVec<Int32>("a", {{}, 2, 5})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {{}})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 7})},
+            {toNullableVec<Int32>("a", {{}, {}, 1, 5, 5})},
+        }};
+
+    for (const auto & [type, left, right, res] : t1)
+    {
+        context.addMockTable("right_semi_family", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_semi_family", "s", {{"a", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_semi_family", "t")
+                           .join(context.scan("right_semi_family", "s"),
+                                 type,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
+                                 false,
+                                 0)
+                           .build(context);
+        executeAndAssertColumnsEqual(request, res);
+    }
+
+    /// One join key(t.a = s.a) + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2 = {
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 5}), toNullableVec<Int32>("c", {1, 1, 1})},
+        },
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {2, 4}), toNullableVec<Int32>("c", {1, 1})},
+        },
+        {
+            JoinType::TypeSemiJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {1, 4}), toNullableVec<Int32>("c", {2, 9})},
+            {toNullableVec<Int32>("a", {1, 4, 4}), toNullableVec<Int32>("c", {1, 5, 6})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+            {toNullableVec<Int32>("a", {{}, 1, 2, 4}), toNullableVec<Int32>("c", {2, 1, 1, 7})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {{}, 1, 2}), toNullableVec<Int32>("c", {3, 1, 2})},
+        },
+        {
+            JoinType::TypeAntiSemiJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {{}, {}, 1, 2, 2, 4, 5}), toNullableVec<Int32>("c", {5, 6, 2, 3, 4, 7, 8})},
+        }};
+
+    for (const auto & [type, left, right, res] : t2)
+    {
+        context.addMockTable("right_semi_family", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_semi_family", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_semi_family", "t")
+                           .join(context.scan("right_semi_family", "s"),
+                                 type,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {lt(col("t.c"), col("s.c"))},
+                                 {},
+                                 0,
+                                 false,
+                                 0)
+                           .build(context);
+        executeAndAssertColumnsEqual(request, res);
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
