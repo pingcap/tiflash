@@ -659,10 +659,15 @@ void MockRaftStoreProxy::snapshot(
     uint64_t term)
 {
     auto region = getRegion(region_id);
-    auto kv_region = kvs.getRegion(region_id);
+    auto old_kv_region = kvs.getRegion(region_id);
     // We have catch up to index by snapshot.
-    index = region->getLatestCommitIndex() + 1;
-    term = region->getLatestCommitTerm();
+    if (index == 0)
+    {
+        index = region->getLatestCommitIndex() + 1;
+        term = region->getLatestCommitTerm();
+    }
+
+    auto new_kv_region = kvs.genRegionPtr(old_kv_region->getMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 
@@ -677,16 +682,16 @@ void MockRaftStoreProxy::snapshot(
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
     auto ingest_ids = kvs.preHandleSnapshotToFiles(
-        kv_region,
+        new_kv_region,
         snaps,
         index,
         term,
         tmt);
 
-    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{kv_region, std::move(ingest_ids)}, tmt);
+    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
-    kv_region->setApplied(index, term);
+    new_kv_region->setApplied(index, term);
 }
 
 TableID MockRaftStoreProxy::bootstrap_table(

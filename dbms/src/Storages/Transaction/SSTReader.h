@@ -53,6 +53,7 @@ private:
     ColumnFamilyType type;
     RegionRangeFilter range;
     SSTFormatKind kind;
+    Poco::Logger * log;
 };
 
 /// MultiSSTReader helps when there are multiple sst files in a column family.

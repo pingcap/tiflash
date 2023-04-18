@@ -56,11 +56,13 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     , type(view.type)
     , range(range_)
 {
+    log = &Poco::Logger::get("MonoSSTReader");
     kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
     if (kind == SSTFormatKind::KIND_TABLET)
     {
         auto && r = range->comparableKeys();
         auto start = r.first.key.toString();
+        LOG_DEBUG(log, "Seek cf {} to {}", static_cast<std::underlying_type<decltype(type)>::type>(type), Redact::keyToDebugString(start.data(), start.size()));
         if (start != "")
         {
             proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
