@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,31 +14,33 @@
 
 #pragma once
 
-#include <Core/Block.h>
+#include <Core/SpillHandler.h>
 
 namespace DB
 {
-
-class SquashingHashJoinBlockTransform
+class CachedSpillHandler
 {
 public:
-    SquashingHashJoinBlockTransform(UInt64 max_block_size_);
+    CachedSpillHandler(
+        Spiller * spiller,
+        UInt64 partition_id,
+        const BlockInputStreamPtr & from_,
+        size_t bytes_threshold_,
+        const std::function<bool()> & is_cancelled_);
 
-    void appendBlock(Block & block);
-    Block getFinalOutputBlock();
-    bool isJoinFinished() const;
-    bool needAppendBlock() const;
+    bool batchRead();
 
+    void spill();
 
 private:
-    void handleOverLimitBlock();
-    void reset();
+    SpillHandler handler;
+    BlockInputStreamPtr from;
+    size_t bytes_threshold;
+    std::function<bool()> is_cancelled;
 
-    Blocks blocks;
-    std::optional<Block> over_limit_block;
-    size_t output_rows;
-    UInt64 max_block_size;
-    bool join_finished;
+    Blocks batch;
+    bool finished = false;
 };
+using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
 } // namespace DB

@@ -318,6 +318,24 @@ inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & seg
     readIntBinary(segment_info.stable_id, buf);
 }
 
+
+std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, PageIdU64 segment_id)
+{
+    std::vector<PageIdU64> segment_ids = {};
+    PageIdU64 current_segment_id = segment_id;
+    while (current_segment_id != 0)
+    {
+        segment_ids.push_back(current_segment_id);
+        Page page = context.storage_pool->metaReader()->read(current_segment_id); // not limit restore
+
+        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+        Segment::SegmentMetaInfo segment_info;
+        readSegmentMetaInfo(buf, segment_info);
+        current_segment_id = segment_info.next_segment_id;
+    }
+    return segment_ids;
+}
+
 SegmentPtr Segment::restoreSegment( //
     const LoggerPtr & parent_log,
     DMContext & context,
@@ -2487,7 +2505,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2603,7 +2621,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
 
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0 && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
-        LOG_DEBUG(log, "all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+        LOG_DEBUG(log, "buildBitmapFilterStableOnly all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -2624,6 +2642,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     }
     if (!has_some_packs)
     {
+        LOG_DEBUG(log, "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
         return bitmap_filter;
     }
 
@@ -2654,7 +2673,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "buildBitmapFilterStableOnly total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 

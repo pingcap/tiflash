@@ -195,7 +195,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             BaseBuffView key = reader->keyView();
             BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
-            region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+            region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
             reader->next();
             (*p_process_keys) += 1;
         }

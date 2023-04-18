@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -251,7 +252,8 @@ public:
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS);
+                    const Settings & settings_ = EMPTY_SETTINGS,
+                    ThreadPool * thread_pool = nullptr);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -475,6 +477,8 @@ public:
     {
         return rowkey_column_size;
     }
+
+    static ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter);
 
 public:
     /// Methods mainly used by region split.

@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
@@ -84,7 +85,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         Stopwatch watch;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         auto block_size = blocks.size();
-        LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
+        LOG_DEBUG(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_spill);
 
@@ -114,7 +115,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         }
         double cost = watch.elapsedSeconds();
         time_cost += cost;
-        LOG_INFO(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
+        LOG_DEBUG(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
         RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
@@ -171,5 +172,4 @@ void SpillHandler::finish()
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
-
 } // namespace DB

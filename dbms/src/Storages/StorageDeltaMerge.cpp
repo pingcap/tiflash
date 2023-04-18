@@ -704,10 +704,10 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     return ranges;
 }
 
-DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
-                                                             const ColumnDefines & columns_to_read,
-                                                             const Context & context,
-                                                             const LoggerPtr & tracing_logger)
+DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
+                                                     const ColumnDefines & columns_to_read,
+                                                     const Context & context,
+                                                     const LoggerPtr & tracing_logger)
 {
     // build rough set operator
     DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
@@ -736,8 +736,17 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    // build push down filter
-    if (likely(query_info.dag_query) && !query_info.dag_query->pushed_down_filters.empty())
+    return rs_operator;
+}
+
+DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr & rs_operator,
+                                                             const ColumnInfos & table_infos,
+                                                             const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
+    if (!pushed_down_filters.empty())
     {
         NamesAndTypes columns_to_read_name_and_type;
         for (const auto & col : columns_to_read)
@@ -746,7 +755,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         }
 
         std::unordered_set<String> filter_column_names;
-        for (const auto & filter : query_info.dag_query->pushed_down_filters)
+        for (const auto & filter : pushed_down_filters)
         {
             DB::getColumnNamesFromExpr(filter, columns_to_read_name_and_type, filter_column_names);
         }
@@ -764,14 +773,30 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
 
         ColumnInfos table_scan_column_info;
         table_scan_column_info.reserve(columns_to_read.size());
-        const auto & table_infos = tidb_table_info.columns;
         for (const auto & col : columns_to_read)
         {
+            // table_infos does not contain EXTRA_HANDLE_COLUMN and EXTRA_TABLE_ID_COLUMN
+            if (col.id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                auto handle = ColumnInfo();
+                handle.id = EXTRA_HANDLE_COLUMN_ID;
+                handle.name = EXTRA_HANDLE_COLUMN_NAME;
+                table_scan_column_info.push_back(handle);
+                continue;
+            }
+            else if (col.id == ExtraTableIDColumnID)
+            {
+                auto col = ColumnInfo();
+                col.id = ExtraTableIDColumnID;
+                col.name = EXTRA_TABLE_ID_COLUMN_NAME;
+                table_scan_column_info.push_back(col);
+                continue;
+            }
             auto iter = std::find_if(
                 table_infos.begin(),
                 table_infos.end(),
                 [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
+            RUNTIME_CHECK_MSG(iter != table_infos.end(), "column: [id: {}, name: {}] not found in table info", col.id, col.name);
             table_scan_column_info.push_back(*iter);
         }
 
@@ -822,12 +847,26 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         }
 
         // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(query_info.dag_query->pushed_down_filters, *analyzer);
+        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
         LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
         return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
     }
+    LOG_DEBUG(tracing_logger, "Push down filter is empty");
     return std::make_shared<PushDownFilter>(rs_operator);
+}
+
+DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
+    // build rough set operator
+    DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
+
+    // build push down filter
+    const auto & pushed_down_filters = query_info.dag_query != nullptr ? query_info.dag_query->pushed_down_filters : google::protobuf::RepeatedPtrField<tipb::Expr>{};
+    return buildPushDownFilter(rs_operator, tidb_table_info.columns, pushed_down_filters, columns_to_read, context, tracing_logger);
 }
 
 BlockInputStreams StorageDeltaMerge::read(
@@ -1781,7 +1820,7 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
     return desc;
 }
 
-DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
+DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread_pool)
 {
     if (storeInited())
     {
@@ -1802,14 +1841,15 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings());
+            DeltaMergeStore::Settings(),
+            thread_pool);
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
     return _store;
 }
 
-bool StorageDeltaMerge::initStoreIfDataDirExist()
+bool StorageDeltaMerge::initStoreIfDataDirExist(ThreadPool * thread_pool)
 {
     if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
     {
@@ -1824,7 +1864,7 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
     {
         return false;
     }
-    getAndMaybeInitStore();
+    getAndMaybeInitStore(thread_pool);
     return true;
 }
 

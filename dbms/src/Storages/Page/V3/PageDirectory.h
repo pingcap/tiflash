@@ -260,6 +260,7 @@ public:
             being_ref_count,
             entries.size());
     }
+    template <typename T>
     friend class PageStorageControlV3;
 
 private:
@@ -418,6 +419,7 @@ public:
 
     template <typename>
     friend class PageDirectoryFactory;
+    template <typename>
     friend class PageStorageControlV3;
 
 private:
