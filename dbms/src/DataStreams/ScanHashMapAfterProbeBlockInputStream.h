@@ -20,7 +20,7 @@
 
 namespace DB
 {
-/// Stream from scanning the right table after prob
+/// Stream from scanning the hash table after probe
 class ScanHashMapAfterProbeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
