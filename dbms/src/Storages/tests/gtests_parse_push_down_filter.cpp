@@ -82,19 +82,17 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
+    columns_to_read.reserve(table_info.columns.size());
     {
-        NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            pushed_down_filters,
-            DAGPreparedSets(),
-            source_columns,
-            timezone_info);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
+        dag_query = std::make_unique<DAGQueryInfo>(
+            conditions,
+            pushed_down_filters,
+            table_info.columns,
+            timezone_info);
     }
 
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
@@ -119,41 +117,28 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
             columns_to_read_name_and_type.emplace_back(col.name, col.type);
         }
 
-        std::unordered_set<String> filter_column_names;
-        for (const auto & filter : dag_query->pushed_down_filters)
+        std::unordered_set<ColumnID> filter_col_id_set;
+        for (const auto & expr : pushed_down_filters)
         {
-            DB::getColumnNamesFromExpr(filter, columns_to_read_name_and_type, filter_column_names);
+            getColumnIDsFromExpr(expr, table_info.columns, filter_col_id_set);
         }
         DM::ColumnDefines filter_columns;
-        filter_columns.reserve(filter_column_names.size());
-        for (const auto & name : filter_column_names)
+        filter_columns.reserve(filter_col_id_set.size());
+        for (const auto & id : filter_col_id_set)
         {
             auto iter = std::find_if(
                 columns_to_read.begin(),
                 columns_to_read.end(),
-                [&name](const DM::ColumnDefine & d) -> bool { return d.name == name; });
+                [&id](const DM::ColumnDefine & d) -> bool { return d.id == id; });
             RUNTIME_CHECK(iter != columns_to_read.end());
             filter_columns.push_back(*iter);
         }
 
-        ColumnInfos table_scan_column_info;
-        table_scan_column_info.reserve(columns_to_read.size());
-        const auto & table_infos = table_info.columns;
-        for (const auto & col : columns_to_read)
-        {
-            auto iter = std::find_if(
-                table_infos.begin(),
-                table_infos.end(),
-                [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
-            table_scan_column_info.push_back(*iter);
-        }
-
         std::vector<ExtraCastAfterTSMode> need_cast_column;
         need_cast_column.reserve(columns_to_read.size());
-        for (const auto & col : table_scan_column_info)
+        for (const auto & col : table_info.columns)
         {
-            if (!filter_column_names.contains(col.name))
+            if (!filter_col_id_set.contains(col.id))
             {
                 need_cast_column.push_back(ExtraCastAfterTSMode::None);
             }
@@ -173,12 +158,12 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
         auto & step = analyzer->initAndGetLastStep(chain);
         auto & actions = step.actions;
         ExpressionActionsPtr extra_cast = nullptr;
-        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
+        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_info.columns); has_cast)
         {
             NamesWithAliases project_cols;
             for (size_t i = 0; i < columns_to_read.size(); ++i)
             {
-                if (filter_column_names.contains(columns_to_read[i].name))
+                if (filter_col_id_set.contains(columns_to_read[i].id))
                 {
                     project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
                 }
