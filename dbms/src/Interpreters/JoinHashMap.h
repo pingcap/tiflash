@@ -44,6 +44,22 @@ struct RowRefList : RowRef
     {}
 };
 
+/// Single linked list of references to rows with used flag for each row
+struct RowRefListWithUsedFlag : RowRef
+{
+    using Base_t = RowRefListWithUsedFlag;
+    mutable std::atomic<bool> used{};
+    RowRefListWithUsedFlag * next = nullptr;
+
+    void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
+    bool getUsed() const { return used.load(std::memory_order_relaxed); }
+
+    RowRefListWithUsedFlag() = default;
+    RowRefListWithUsedFlag(const Block * block_, size_t row_num_)
+        : RowRef(block_, row_num_)
+    {}
+};
+
 /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.
       * NOTE: It is possible to store the flag in one bit of pointer to block or row_num. It seems not reasonable, because memory saving is minimal.
@@ -161,11 +177,13 @@ using ConcurrentMapsAny = ConcurrentMapsTemplate<WithUsedFlag<false, RowRef>>;
 using ConcurrentMapsAll = ConcurrentMapsTemplate<WithUsedFlag<false, RowRefList>>;
 using ConcurrentMapsAnyFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRef>>;
 using ConcurrentMapsAllFull = ConcurrentMapsTemplate<WithUsedFlag<true, RowRefList>>;
+using ConcurrentMapsAllFullWithRowFlag = ConcurrentMapsTemplate<RowRefListWithUsedFlag>;
 
 using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
 using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
 using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
 using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
+using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With flag for every row ref
 
 JoinMapMethod chooseJoinMapMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators);
 } // namespace DB
