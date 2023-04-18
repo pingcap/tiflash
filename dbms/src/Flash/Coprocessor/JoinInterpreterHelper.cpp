@@ -83,7 +83,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     /// in DAG request, inner part is the build side, however for TiFlash implementation,
     /// the build side must be the right side, so need to swap the join side if needed
     /// 1. for (cross) inner join, there is no problem in this swap.
-    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
+    /// 2. for cross semi/anti-semi join, the build side is always right, needn't swap.
     /// 3. for non-cross left/right join, there is no problem in this swap.
     /// 4. for cross left join, the build side is always right, needn't and can't swap.
     /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
