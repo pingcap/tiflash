@@ -169,7 +169,8 @@ struct MockRaftStoreProxy : MutexLockWrap
     void bootstrap(
         KVStore & kvs,
         TMTContext & tmt,
-        UInt64 region_id);
+        UInt64 region_id,
+        std::optional<std::pair<std::string, std::string>> maybe_range);
 
     /// boostrap a table, since applying snapshot needs table schema.
     TableID bootstrap_table(
@@ -211,6 +212,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         void freeze() { freezed = true; }
 
         void insert(HandleID key, std::string val);
+        void insert_raw(std::string key, std::string val);
 
         ColumnFamilyType cf_type() const
         {

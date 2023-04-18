@@ -369,7 +369,8 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 void MockRaftStoreProxy::bootstrap(
     KVStore & kvs,
     TMTContext & tmt,
-    UInt64 region_id)
+    UInt64 region_id,
+    std::optional<std::pair<std::string, std::string>> maybe_range)
 {
     UNUSED(tmt);
     auto _ = genLockGuard();
@@ -378,7 +379,10 @@ void MockRaftStoreProxy::bootstrap(
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
     {
-        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10));
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id + 1, 0);
+        auto range = maybe_range.value_or(std::make_pair(start.toString(), end.toString()));
+        auto region = tests::makeRegion(region_id, range.first, range.second);
         lock.regions.emplace(region_id, region);
         lock.index.add(region);
     }
@@ -640,6 +644,11 @@ void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)
     kvs.emplace_back(k, v);
 }
 
+void MockRaftStoreProxy::Cf::insert_raw(std::string key, std::string val)
+{
+    kvs.emplace_back(std::move(key), std::move(val));
+}
+
 void MockRaftStoreProxy::snapshot(
     KVStore & kvs,
     TMTContext & tmt,
@@ -690,6 +699,8 @@ TableID MockRaftStoreProxy::bootstrap_table(
     columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
     auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
+    // Make sure there is a table with smaller id.
+    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
     UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
     auto schema_syncer = tmt.getSchemaSyncer();

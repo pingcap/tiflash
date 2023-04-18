@@ -27,7 +27,7 @@ try
         auto region_id = 1;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
 
             auto kvr1 = kvs.getRegion(region_id);
@@ -57,7 +57,7 @@ try
         auto region_id = 2;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE;
 
@@ -90,7 +90,7 @@ try
         auto region_id = 3;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE;
 
@@ -121,7 +121,7 @@ try
         auto region_id = 4;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE;
 
@@ -166,7 +166,7 @@ try
             initStorages();
             KVStore & kvs = getKVS();
             proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
 
             MockRaftStoreProxy::FailCond cond;
 
@@ -202,7 +202,7 @@ try
         auto region_id = 1;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
 
             auto kvr1 = kvs.getRegion(region_id);
@@ -262,7 +262,7 @@ try
             initStorages();
             KVStore & kvs = getKVS();
             table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
-            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id, std::nullopt);
         }
         {
             KVStore & kvs = getKVS();
@@ -272,12 +272,12 @@ try
                 auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
                     RaftStoreProxyPtr{proxy_instance.get()}));
                 proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
-                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-                    return std::make_unique<MonoSSTReader>(proxy_helper, snap);
+                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
+                    return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
                 };
                 auto ssts = default_cf.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
-                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts, Logger::get()};
+                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts, Logger::get(), kvr1->getRange()};
                 size_t counter = 0;
                 while (reader.remained())
                 {
@@ -442,6 +442,28 @@ try
                 kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
                 // Shall panic.
                 EXPECT_THROW(proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 6, 6), Exception);
+            }
+            {
+                // Shall filter out of range kvs.
+                LOG_DEBUG(&Poco::Logger::get("TTTTT"), "range {}", kvr1->getRange()->toDebugString());
+                auto klo = RecordKVFormat::genKey(table_id + 2, 1);
+                auto kro = RecordKVFormat::genKey(table_id + 1, 1);
+                auto kin = RecordKVFormat::genKey(table_id, 5);
+                MockSSTReader::getMockSSTData().clear();
+                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                default_cf.insert_raw(klo, "v1");
+                default_cf.insert_raw(kro, "v1");
+                default_cf.insert_raw(kin, "v1");
+                default_cf.finish_file();
+                default_cf.freeze();
+                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                default_cf.insert_raw(klo, "v1");
+                default_cf.insert_raw(kro, "v1");
+                default_cf.insert_raw(kin, "v1");
+                write_cf.finish_file();
+                write_cf.freeze();
+                validate(default_cf, 1, 1);
+                validate(write_cf, 1, 1);
             }
         }
     }
