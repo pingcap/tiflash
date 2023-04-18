@@ -357,20 +357,19 @@ static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::Establis
     return grpc::Status::OK;
 }
 
-grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
-                                                            const mpp::EstablishMPPConnectionRequest * request,
-                                                            EstablishCallData * call_data)
+grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_INFO(log, "Handling establish mpp connection request: {}", request->DebugString());
+    const auto & request = call_data->getRequest();
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request.DebugString());
 
-    auto check_result = checkGrpcContext(grpc_context);
+    auto check_result = checkGrpcContext(call_data->getGrpcContext());
     if (!check_result.ok())
         return check_result;
 
-    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    if (auto res = CheckMppVersionForEstablishMPPConnection(&request); !res.ok())
     {
         LOG_WARNING(log, res.error_message());
         return res;
