@@ -100,10 +100,10 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters; // don't care pushed down filters
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
-            google::protobuf::RepeatedPtrField<tipb::Expr>{}, // don't care pushed down filters
+            pushed_down_filters,
             table_info.columns,
             timezone_info);
     }
