@@ -28,6 +28,21 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace
+{
+void insertRowToList(RowRefList * list, RowRefList * elem)
+{
+    elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
+    list->next = elem;
+}
+
+void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem)
+{
+    elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
+    list->next = elem;
+}
+}
+
 namespace FailPoints
 {
 extern const char random_join_build_failpoint[];
@@ -55,18 +70,6 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
         insertRowToList(&head, elem);
     }
     ++total_size;
-}
-
-void insertRowToList(RowRefList * list, RowRefList * elem)
-{
-    elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
-    list->next = elem;
-}
-
-void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem)
-{
-    elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
-    list->next = elem;
 }
 
 template <typename Maps>

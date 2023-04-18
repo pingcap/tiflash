@@ -250,13 +250,17 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
         advancedToNextPartition();
         return;
     }
-    if (!output_joined_rows && !not_mapped_row_pos_inited)
+    if constexpr(!output_joined_rows)
     {
-        not_mapped_row_pos = partition->getRowsNotInsertedToMap()->head.next;
-        not_mapped_row_pos_inited = true;
+        if (!not_mapped_row_pos_inited)
+        {
+            not_mapped_row_pos = partition->getRowsNotInsertedToMap()->head.next;
+            not_mapped_row_pos_inited = true;
+        }
     }
     if constexpr (row_flagged)
     {
+        assert(parent.strictness == ASTTableJoin::Strictness::All);
         switch (parent.join_map_method)
         {
 #define M(METHOD)                                                             \
@@ -395,14 +399,14 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumns(const Map & map,
 
     for (; *it != end;)
     {
-        if constexpr (row_flagged && output_joined_rows)
-            row_count_info.inc(AdderRowFlaggedMapEntry<true, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
-        else if constexpr (row_flagged && !output_joined_rows)
-            row_count_info.inc(AdderRowFlaggedMapEntry<false, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
+        if constexpr (row_flagged)
+            row_count_info.inc(AdderRowFlaggedMapEntry<output_joined_rows, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, row_count_info.availableRowCount()));
         else
         {
-            bool mapped = (*it)->getMapped().getUsed();
-            if ((mapped && !output_joined_rows) || (!mapped && output_joined_rows))
+            bool should_skip = (*it)->getMapped().getUsed();
+            if constexpr (output_joined_rows)
+                should_skip = !should_skip;
+            if (should_skip)
             {
                 ++(*it);
                 continue;

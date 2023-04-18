@@ -66,9 +66,6 @@ struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     void insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool);
 };
 
-void insertRowToList(RowRefList * list, RowRefList * elem);
-void insertRowToList(RowRefListWithUsedFlag * list, RowRefListWithUsedFlag * elem);
-
 class JoinPartition;
 using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
