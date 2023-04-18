@@ -30,13 +30,13 @@ extern const int LOGICAL_ERROR;
 
 namespace
 {
-template<typename List, typename Elem>
+template <typename List, typename Elem>
 void insertRowToList(List * list, Elem * elem)
 {
     elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
     list->next = elem;
 }
-}
+} // namespace
 
 namespace FailPoints
 {

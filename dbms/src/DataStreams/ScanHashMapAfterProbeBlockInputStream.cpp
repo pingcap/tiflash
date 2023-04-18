@@ -250,7 +250,7 @@ void ScanHashMapAfterProbeBlockInputStream::fillColumnsUsingCurrentPartition(
         advancedToNextPartition();
         return;
     }
-    if constexpr(!output_joined_rows)
+    if constexpr (!output_joined_rows)
     {
         if (!not_mapped_row_pos_inited)
         {
