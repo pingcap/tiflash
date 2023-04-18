@@ -36,6 +36,11 @@ Int32 BucketInput::bucketNum() const
     return output->info.bucket_num;
 }
 
+bool BucketInput::needRemoved() const
+{
+    return is_exhausted && !output.has_value();
+}
+
 bool BucketInput::needLoad() const
 {
     return !is_exhausted && !output.has_value();

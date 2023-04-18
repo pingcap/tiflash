@@ -23,7 +23,8 @@ namespace DB
 class BucketInput
 {
 public:
-    explicit Input(const BlockInputStreamPtr & stream_);
+    explicit BucketInput(const BlockInputStreamPtr & stream_);
+    bool needRemoved() const;
     bool needLoad() const;
     bool load();
     Block moveOutput();

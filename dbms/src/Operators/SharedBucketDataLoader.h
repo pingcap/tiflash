@@ -17,6 +17,7 @@
 #include <Operators/BucketInput.h>
 
 #include <memory>
+#include <queue>
 
 namespace DB
 {
@@ -31,14 +32,18 @@ public:
         const String & req_id,
         size_t max_queue_size_);
 
+    ~SharedBucketDataLoader();
+
     // return true if pop success
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
 
-private:
-    bool loadFromInputs();
+    std::vector<BucketInput *> getLoadInputs();
 
     void storeFromInputToBucketData();
+
+private:
+    void submitLoadEvent();
 
     void finish();
 
@@ -49,14 +54,10 @@ private:
 
     size_t max_queue_size;
 
-    std::atomic_bool loading{false};
+    bool finished = false;
 
-    std::atomic_bool finished{false};
-
-    std::vector<BlocksList> bucket_data_queue;
-
+    std::queue<BlocksList> bucket_data_queue;
     BucketInputs bucket_inputs;
-
     static constexpr Int32 NUM_BUCKETS = 256;
 };
 using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Operators/SharedBucketDataLoader.h>
-#include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 
 namespace DB
 {
@@ -104,7 +104,7 @@ SharedBucketDataLoader::SharedBucketDataLoader(
     size_t max_queue_size_)
     : exec_status(exec_status_)
     , log(Logger::get(req_id))
-    , max_queue_size(max_queue_size_)
+    , max_queue_size(std::max(1, max_queue_size_))
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
@@ -121,8 +121,8 @@ SharedBucketDataLoader::~SharedBucketDataLoader()
 
 void SharedBucketDataLoader::finish()
 {
-    bool tmp = false;
-    RUNTIME_CHECK(finished.compare_exchange_strong(tmp, true));
+    assert(!finished);
+    finished = true;
     bucket_inputs.clear();
 }
 
@@ -132,7 +132,7 @@ std::vector<BucketInput *> SharedBucketDataLoader::getLoadInputs()
     std::vector<BucketInput *> load_inputs;
     auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     auto self_ptr = shared_from_this();
-    for (const auto & bucket_input : bucket_inputs)
+    for (auto & bucket_input : bucket_inputs)
     {
         if (bucket_input.needLoad())
             load_inputs.push_back(&bucket_input);
@@ -161,33 +161,29 @@ void SharedBucketDataLoader::storeFromInputToBucketData()
         if (min_bucket_num == bucket_input.bucketNum())
             bucket_data.push_back(bucket_input.moveOutput());
     }
-    assert(!bucket_data.empty());
-    storeBucketDataAndTryLoop(std::move(bucket_data));
-}
+    bucket_data_queue.push(std::move(bucket_data));
 
-void SharedAggregateLoader::trySubmitLoadEvent()
-{
-    if unlikely (finished)
-        return;
-
-    bool tmp = false;
-    if (loading.compare_exchange_strong(tmp, true))
-    {
-
-    }
-}
-
-void SharedAggregateLoader::storeBucketDataAndTryLoop(BlocksList && new_data)
-{
-    bool tmp = true;
-    loading.compare_exchange_strong(tmp, false);
-
-    bucket_data_queue.push_back(std::move(new_data));
     if (bucket_data_queue.size() < max_queue_size)
         submitLoadEvent();
 }
 
-bool SharedAggregateLoader::tryPop(BlocksList & bucket_data)
+void SharedBucketDataLoader::submitLoadEvent()
+{
+    if unlikely (finished)
+        return;
+
+   for (auto it = bucket_inputs.begin(); it != bucket_inputs.end();)
+        it = it->needRemoved() ? bucket_inputs.erase(it) : std::next(it);
+    if (!bucket_inputs.empty())
+    {
+        auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+        auto event = std::make_shared<LoadEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
+        RUNTIME_CHECK(event->prepareForSource());
+        event->schedule();
+    }
+}
+
+bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
     if unlikely (finished)
         return true;
@@ -195,8 +191,8 @@ bool SharedAggregateLoader::tryPop(BlocksList & bucket_data)
     if (bucket_data_queue.empty())
         return false;
     bucket_data = std::move(bucket_data_queue.front());
-    bucket_data_queue.pop_front();
-    trySubmitLoadEvent();
+    bucket_data_queue.pop();
+    submitLoadEvent();
     return true;
 }
 } // namespace DB
