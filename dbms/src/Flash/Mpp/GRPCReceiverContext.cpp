@@ -58,7 +58,7 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char exception_when_connect_local_tunnel[];
+extern const char random_exception_when_connect_local_tunnel[];
 } // namespace FailPoints
 
 namespace
