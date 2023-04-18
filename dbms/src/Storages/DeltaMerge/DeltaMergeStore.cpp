@@ -1154,9 +1154,8 @@ SourceOps DeltaMergeStore::readSourceOps(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1164,7 +1163,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         filter,
         max_version,
         expected_block_size,
-        getReadMode(db_context, is_fast_scan, keep_order, filter),
+        read_mode,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
