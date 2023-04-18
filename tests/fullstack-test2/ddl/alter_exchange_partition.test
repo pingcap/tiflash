@@ -71,7 +71,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e o
 | id  | fname | lname | c1   |
 +-----+-------+-------+------+
 |   3 | a     | b     | NULL |
-| 108 | a     | b     | NULL |
+| 108 | c     | b     | NULL |
 +-----+-------+-------+------+
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.e2;
 +----+-------+-------+
