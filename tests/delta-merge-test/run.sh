@@ -27,9 +27,9 @@ function run_test() {
     docker-compose -f mock-test-dt.yaml down
     clean_data_log
 
-    docker-compose -f mock-test-dt.yaml up -d || return 
-    wait_tiflash_env || return
-    docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test' || return
+    docker-compose -f mock-test-dt.yaml up -d || return 1
+    wait_tiflash_env || return 1
+    docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test' || return 1
 
     docker-compose -f mock-test-dt.yaml down
     clean_data_log
@@ -37,6 +37,9 @@ function run_test() {
 
 run_test
 
+exit_code=$?
+
 docker-compose -f mock-test-dt.yaml down
 
+exit $exit_code
 

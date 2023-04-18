@@ -80,7 +80,7 @@ rm -rf ./data ./log
 # run fullstack-tests (for engine DeltaTree)
 function run_test() {
   docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml up -d || return
-  wait_env dt || return
+  wait_env dt || return 1
   docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt' || return
   docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml down
   rm -rf ./data ./log
@@ -89,8 +89,9 @@ function run_test() {
 set +e
 
 run_test
+exit_code=$?
 
 docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml down
 
-[[ "$TIDB_CI_ONLY" -eq 1 ]] && exit
+[[ "$TIDB_CI_ONLY" -eq 1 ]] && exit exit_code
 #################################### TIDB-CI ONLY ####################################

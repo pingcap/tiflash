@@ -27,9 +27,9 @@ function run_test() {
     docker-compose -f cluster.yaml -f tiflash-dt.yaml down
     clean_data_log
 
-    docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d || return
-    wait_env || return
-    docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test' || return
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d || return 1
+    wait_env || return 1 
+    docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test' || return 1
 
     docker-compose -f cluster.yaml -f tiflash-dt.yaml down
     clean_data_log
@@ -37,4 +37,8 @@ function run_test() {
 
 run_test
 
+exit_code=$?
+
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+
+exit $exit_code
