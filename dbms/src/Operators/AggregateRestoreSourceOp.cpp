@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/AggregateConvergentSourceOp.h>
+#include <Operators/AggregateRestoreSourceOp.h>
 
 namespace DB
 {
-OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
+OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 {
-    block = agg_context->readForConvergent(index);
-    total_rows += block.rows();
+
     return OperatorStatus::HAS_OUTPUT;
 }
 
-void AggregateConvergentSourceOp::operateSuffix()
+OperatorStatus AggregateRestoreSourceOp::awaitImpl()
 {
-    LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
+    
 }
 
 } // namespace DB
