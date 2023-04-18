@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -48,7 +49,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-
 namespace DB::DM
 {
 
@@ -559,15 +559,17 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & key_ranges,
     UInt64 read_tso,
-    const DM::RSOperatorPtr & rs_filter,
-    size_t expected_block_size)
+    const PushDownFilterPtr & push_down_filter,
+    size_t expected_block_size,
+    ReadMode read_mode)
 {
-    return segment->getInputStreamModeNormal(
+    return segment->getInputStream(
+        read_mode,
         *dm_context,
         columns_to_read,
         segment_snap,
         key_ranges,
-        rs_filter,
+        push_down_filter,
         read_tso,
         expected_block_size);
 }

@@ -478,6 +478,8 @@ public:
         return rowkey_column_size;
     }
 
+    static ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter);
+
 public:
     /// Methods mainly used by region split.
 
