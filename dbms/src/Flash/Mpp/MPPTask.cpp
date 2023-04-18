@@ -360,6 +360,7 @@ void MPPTask::preprocess()
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
+    mpp_task_statistics.recordReadWaitIndex(*dag_context);
 }
 
 void MPPTask::runImpl()
@@ -426,7 +427,6 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
         mpp_task_statistics.collectRuntimeStatistics();
-        mpp_task_statistics.recordReadWaitIndex(*dag_context);
 
         auto runtime_statistics = query_executor_holder->getRuntimeStatistics();
         LOG_DEBUG(

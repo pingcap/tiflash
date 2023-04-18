@@ -22,8 +22,6 @@
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
-#include <Flash/Planner/Plans/PhysicalMockTableScan.h>
-#include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <tipb/select.pb.h>
 

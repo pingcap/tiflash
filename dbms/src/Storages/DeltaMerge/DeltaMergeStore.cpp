@@ -1164,7 +1164,6 @@ SourceOps DeltaMergeStore::readSourceOps(
         final_num_stream);
 
     SourceOps res;
-    // RUNTIME_CHECK(enable_read_thread); // TODO: support keep order
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         if (enable_read_thread)
