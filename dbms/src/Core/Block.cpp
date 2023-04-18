@@ -448,7 +448,6 @@ NamesAndTypesList Block::getNamesAndTypesList() const
     return res;
 }
 
-
 Names Block::getNames() const
 {
     Names res;
