@@ -28,18 +28,6 @@ namespace tests
 {
 class JoinKindAndBuildIndexTestRunner : public testing::Test
 {
-public:
-    static constexpr size_t join_type_num = 7;
-
-    static constexpr tipb::JoinType join_types[join_type_num] = {
-        tipb::JoinType::TypeInnerJoin,
-        tipb::JoinType::TypeLeftOuterJoin,
-        tipb::JoinType::TypeRightOuterJoin,
-        tipb::JoinType::TypeSemiJoin,
-        tipb::JoinType::TypeAntiSemiJoin,
-        tipb::JoinType::TypeLeftOuterSemiJoin,
-        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-    };
 };
 
 TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
