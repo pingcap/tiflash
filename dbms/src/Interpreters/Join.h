@@ -146,7 +146,8 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
-         const String & match_helper_name = "",
+         const String & match_helper_name_ = "",
+         const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
          bool is_test = true);
 
@@ -167,8 +168,6 @@ public:
     Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
 
     void checkTypes(const Block & block) const;
-
-    bool needReturnNonJoinedData() const;
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -253,18 +252,24 @@ public:
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
+    static const String flag_mapped_entry_helper_prefix;
+    static const DataTypePtr flag_mapped_entry_helper_type;
 
     // only use for left semi joins.
     const String match_helper_name;
+    // only use for right semi, right anti joins with other conditions,
+    // used to name the column that records matched map entry before other conditions filter
+    const String flag_mapped_entry_helper_name;
 
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
 
 private:
-    friend class NonJoinedBlockInputStream;
+    friend class ScanHashMapAfterProbeBlockInputStream;
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    bool has_other_condition;
     ASTTableJoin::Strictness original_strictness;
     const bool may_probe_side_expanded_after_join;
 

@@ -66,24 +66,23 @@ struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     void insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool);
 };
 
-void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block, size_t index);
-
 class JoinPartition;
 using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 class JoinPartition
 {
 public:
-    JoinPartition(JoinMapMethod join_map_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_)
+    JoinPartition(JoinMapMethod join_map_type_, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t max_block_size, const LoggerPtr & log_, bool has_other_condition_)
         : kind(kind_)
         , strictness(strictness_)
         , join_map_method(join_map_type_)
         , pool(std::make_shared<Arena>())
         , spill(false)
+        , has_other_condition(has_other_condition_)
         , log(log_)
     {
         /// Choose data structure to use for JOIN.
         initMap();
-        if (getFullness(kind) || isNullAwareSemiFamily(kind))
+        if (needRecordNotInsertRows(kind))
             rows_not_inserted_to_map = std::make_unique<RowsNotInsertToMap>(max_block_size);
         memory_usage = getHashMapAndPoolByteCount();
     }
@@ -93,7 +92,7 @@ public:
     size_t getHashMapAndPoolByteCount();
     RowsNotInsertToMap * getRowsNotInsertedToMap()
     {
-        if (getFullness(kind) || isNullAwareSemiFamily(kind))
+        if (needRecordNotInsertRows(kind))
         {
             assert(rows_not_inserted_to_map != nullptr);
             return rows_not_inserted_to_map.get();
@@ -171,7 +170,8 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info);
+        ProbeProcessInfo & probe_process_info,
+        MutableColumnPtr & record_mapped_entry_column);
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     static void probeBlockImpl(
         const JoinPartitions & join_partitions,
@@ -186,7 +186,8 @@ public:
         const std::vector<size_t> & right_indexes,
         const TiDB::TiDBCollators & collators,
         const JoinBuildInfo & join_build_info,
-        ProbeProcessInfo & probe_process_info);
+        ProbeProcessInfo & probe_process_info,
+        MutableColumnPtr & record_mapped_entry_column);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     static std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJoinResult<KIND, STRICTNESS> *>> probeBlockNullAware(
@@ -201,7 +202,7 @@ public:
     void releasePartition();
 
 private:
-    friend class NonJoinedBlockInputStream;
+    friend class ScanHashMapAfterProbeBlockInputStream;
     void initMap();
     /// mutex to protect concurrent modify partition
     /// note if you wants to acquire both build_probe_mutex and partition_mutex,
@@ -217,13 +218,15 @@ private:
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
-    /// For right/full join, including
+    MapsAllFullWithRowFlag maps_all_full_with_row_flag; /// For RIGHT_SEMI | RIGHT_ANTI_SEMI with other conditions
+    /// For right/full/rightSemi/rightAnti join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
     std::unique_ptr<RowsNotInsertToMap> rows_not_inserted_to_map;
     ArenaPtr pool;
     bool spill;
+    bool has_other_condition;
     /// only update this field when spill is enabled. todo support this field in non-spill mode
     std::atomic<size_t> memory_usage{0};
     const LoggerPtr log;

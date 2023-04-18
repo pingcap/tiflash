@@ -289,11 +289,12 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec other_conds,
     MockAstVec other_eq_conds_from_in,
     uint64_t fine_grained_shuffle_stream_count,
-    bool is_null_aware_semi_join)
+    bool is_null_aware_semi_join,
+    int64_t inner_index)
 {
     assert(root);
     assert(right.root);
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join, inner_index);
     return *this;
 }
 

@@ -58,6 +58,8 @@ void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
         {ASTTableJoin::Kind::NullAware_Anti, "NullAware_Anti"},
         {ASTTableJoin::Kind::NullAware_LeftSemi, "NullAware_LeftSemi"},
         {ASTTableJoin::Kind::NullAware_LeftAnti, "NullAware_LeftAnti"},
+        {ASTTableJoin::Kind::RightSemi, "RightSemi"},
+        {ASTTableJoin::Kind::RightAnti, "RightAnti"},
     };
     auto join_type_it = join_type_map.find(join->getKind());
     if (join_type_it == join_type_map.end())

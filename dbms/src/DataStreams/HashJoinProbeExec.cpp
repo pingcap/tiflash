@@ -14,7 +14,7 @@
 
 #include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 
 namespace DB
 {
@@ -24,16 +24,16 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     size_t non_joined_stream_index,
     size_t max_block_size)
 {
-    bool need_output_non_joined_data = join->needReturnNonJoinedData();
+    bool need_scan_hash_map_after_probe = needScanHashMapAfterProbe(join->getKind());
     BlockInputStreamPtr non_joined_stream = nullptr;
-    if (need_output_non_joined_data)
+    if (need_scan_hash_map_after_probe)
         non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
 
     return std::make_shared<HashJoinProbeExec>(
         join,
         nullptr,
         probe_stream,
-        need_output_non_joined_data,
+        need_scan_hash_map_after_probe,
         non_joined_stream_index,
         non_joined_stream,
         max_block_size);
@@ -159,7 +159,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
             if (need_output_non_joined_data)
             {
                 assert(restore_info->non_joined_stream);
-                non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
+                non_joined_stream_index = dynamic_cast<ScanHashMapAfterProbeBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
             }
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 restore_info->join,
