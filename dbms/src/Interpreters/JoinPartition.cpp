@@ -864,13 +864,13 @@ struct Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>
             return true;
         }
 
+        auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*ptr_col);
+        auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
         for (auto current = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped()); current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_to_add; ++j)
                 added_columns[j]->insertFrom(*current->block->getByPosition(right_indexes[j]).column.get(), current->row_num);
-
-            auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*ptr_col);
-            auto & container = static_cast<PointerHelper::ArrayType &>(actual_ptr_col.getData());
+            
             container.template push_back(reinterpret_cast<std::intptr_t>(current));
             ++current_offset;
         }
