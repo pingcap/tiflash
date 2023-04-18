@@ -57,13 +57,14 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
     MPPTaskId id{meta};
     Int64 sender_task_id = meta.task_id();
     Int64 receiver_task_id = request->receiver_meta().task_id();
+    String req_info = fmt::format("tunnel{}+{}", request->sender_meta().task_id(), request->receiver_meta().task_id());
 
     std::unique_lock lock(mu);
     auto query_it = mpp_query_map.find(id.query_id);
     if (query_it != mpp_query_map.end() && !query_it->second->isInNormalState())
     {
         /// if the query is aborted, return the error message
-        LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.query_id.toString()));
+        LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
         /// meet error
         return {nullptr, query_it->second->error_message};
     }
@@ -101,7 +102,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
                     cv.notify_all();
                 }
             }
-            return {nullptr, fmt::format("Can't find task [{}] within 10 s.", id.toString())};
+            return {nullptr, fmt::format("{}: Can't find task [{}] within 10s.", req_info, id.toString())};
         }
     }
     /// don't need to delete the alarm here because registerMPPTask will delete all the related alarm
@@ -114,6 +115,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
 {
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
+    String req_info = fmt::format("tunnel{}+{}", request->sender_meta().task_id(), request->receiver_meta().task_id());
     std::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
     bool cancelled = false;
     String error_message;
@@ -128,7 +130,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
         else if (!query_it->second->isInNormalState())
         {
             /// if the query is aborted, return true to stop waiting timeout.
-            LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.query_id.toString()));
+            LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
             cancelled = true;
             error_message = query_it->second->error_message;
             return true;
@@ -139,11 +141,11 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
-        return {nullptr, fmt::format("Task [{},{}] has been aborted, error message: {}", meta.start_ts(), meta.task_id(), error_message)};
+        return {nullptr, fmt::format("{}: Task [{},{}] has been aborted, error message: {}", req_info, meta.start_ts(), meta.task_id(), error_message)};
     }
     else if (!ret)
     {
-        return {nullptr, fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count())};
+        return {nullptr, fmt::format("{}: Can't find task [{},{}] within {}s.", req_info, meta.start_ts(), meta.task_id(), timeout.count())};
     }
     return it->second->getTunnel(request);
 }
