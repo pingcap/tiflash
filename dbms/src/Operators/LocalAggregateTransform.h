@@ -54,12 +54,11 @@ private:
     AggregateContext agg_context;
 
     /**
-     * build───┬─────────────►restore
-     *         │                 ▲
-     *         ├───►final_spill──┘
-     *         │
-     *         ▼
-     *      convergent
+     * spill◄────►build────┬─────────────►restore
+     *              │      │                 ▲
+     *              │      └───►final_spill──┘
+     *              ▼
+     *           convergent
      */
     enum class LocalAggStatus
     {
