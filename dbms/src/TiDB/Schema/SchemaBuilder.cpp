@@ -939,6 +939,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 static ASTPtr parseCreateStatement(const String & statement)
 {
     ParserCreateQuery parser;
+    LOG_ERROR(DB::Logger::get("hyy"), "statement is {}", statement);
     const char * pos = statement.data();
     std::string error_msg;
     auto ast = tryParseQuery(parser,
