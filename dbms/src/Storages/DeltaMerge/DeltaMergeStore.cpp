@@ -1148,7 +1148,7 @@ SourceOps DeltaMergeStore::readSourceOps(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    
+
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
 
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
