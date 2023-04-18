@@ -118,7 +118,7 @@ public:
         , range(range_)
     {
         assert(args.size() > 0);
-        LOG_INFO(log, "Open sst file first {}", buffToStrView(args[current].path));
+        LOG_INFO(log, "Open sst file first {} range {}", buffToStrView(args[current].path), range->toDebugString());
         mono = initer(proxy_helper, args[current], range);
     }
 

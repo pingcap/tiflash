@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <google/protobuf/text_format.h>
 
 namespace DB
 {
@@ -550,6 +551,8 @@ void MockRaftStoreProxy::doApply(
     if (cmd.has_raw_write_request())
     {
         // TiFlash write
+        std::string s;
+        google::protobuf::TextFormat::PrintToString(request, &s);
         kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
     }
     if (cmd.has_admin_request())

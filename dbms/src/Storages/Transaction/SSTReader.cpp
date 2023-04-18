@@ -32,6 +32,7 @@ bool MonoSSTReader::remained() const
         auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
         if (end != "" && key >= end)
         {
+            LOG_DEBUG(log, "!!!!! REMEMEME {}", Redact::keyToDebugString(key.data(), key.size()));
             return false;
         }
     }
