@@ -41,6 +41,7 @@ public:
     BaseBuffView keyView() const override;
     BaseBuffView valueView() const override;
     void next() override;
+    SSTFormatKind sst_format_kind() const { return kind; };
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
     MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_);

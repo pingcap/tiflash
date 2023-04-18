@@ -133,6 +133,24 @@ struct MockReadIndexTask
 
 struct MockRaftStoreProxy : MutexLockWrap
 {
+    static std::string encodeSSTView(SSTFormatKind kind, std::string ori)
+    {
+        if (kind == SSTFormatKind::KIND_TABLET)
+        {
+            return "!" + ori;
+        }
+        return ori;
+    }
+
+    static SSTFormatKind parseSSTViewKind(std::string_view v)
+    {
+        if (v[0] == '!')
+        {
+            return SSTFormatKind::KIND_TABLET;
+        }
+        return SSTFormatKind::KIND_SST;
+    }
+
     MockProxyRegionPtr getRegion(uint64_t id);
 
     MockProxyRegionPtr doGetRegion(uint64_t id);

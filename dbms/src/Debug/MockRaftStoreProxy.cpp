@@ -599,10 +599,7 @@ void MockRaftStoreProxy::Cf::finish_file(SSTFormatKind kind)
     if (freezed)
         return;
     auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
-    if (kind == SSTFormatKind::KIND_TABLET)
-    {
-        region_id_str = "!" + region_id_str;
-    }
+    region_id_str = MockRaftStoreProxy::encodeSSTView(kind, region_id_str);
     c++;
     sst_files.push_back(region_id_str);
     MockSSTReader::Data kv_list;

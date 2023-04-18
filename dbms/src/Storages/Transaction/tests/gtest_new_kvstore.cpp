@@ -273,12 +273,16 @@ try
                     RaftStoreProxyPtr{proxy_instance.get()}));
                 // Bind ffi to MockSSTReader.
                 proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
-                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
-                    return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
-                };
                 auto ssts = cf_data.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
+                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) -> std::unique_ptr<MonoSSTReader> {
+                    auto parsedKind = MockRaftStoreProxy::parseSSTViewKind(buffToStrView(snap.path));
+                    auto reader = std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
+                    assert(reader->sst_format_kind() == parsedKind);
+                    return reader;
+                };
                 MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), cf, make_inner_func, ssts, Logger::get(), kvr1->getRange()};
+
                 size_t counter = 0;
                 while (reader.remained())
                 {
