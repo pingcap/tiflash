@@ -548,116 +548,66 @@ try
 
     /// for cross join, there is no join columns
     size_t i = 0;
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
 
+    for (const auto & join_type : join_types)
     {
+        auto join_cond = cond;
+        if (join_type == tipb::TypeRightOuterJoin)
+            join_cond = cond_right;
         auto join_inputs = gen_join_inputs();
         for (auto & join_input : join_inputs)
         {
             auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                               .join(join_input.second, join_type, {}, {}, {}, {join_cond}, {})
                                .build(context);
             executeAndAssertColumnsEqual(request, expected_cols[i++]);
         }
-        join_inputs = gen_join_inputs();
-        i -= join_inputs.size();
-        for (auto & join_input : join_inputs)
+        /// extra tests for outer join
+        if (join_type == tipb::TypeLeftOuterJoin)
         {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            /// left out join with left condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {join_cond}, {}, {}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+            /// left out join with left condition and other condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {join_cond}, {}, {join_cond}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
         }
-        join_inputs = gen_join_inputs();
-        i -= join_inputs.size();
-        for (auto & join_input : join_inputs)
+        else if (join_type == tipb::TypeRightOuterJoin)
         {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
-
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond_right}, {}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-        join_inputs = gen_join_inputs();
-        i -= join_inputs.size();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {}, {cond_right}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-        join_inputs = gen_join_inputs();
-        i -= join_inputs.size();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond_right}, {cond_right}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
-
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
-
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
-
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
-        }
-    }
-
-    {
-        auto join_inputs = gen_join_inputs();
-        for (auto & join_input : join_inputs)
-        {
-            auto request = join_input.first
-                               .join(join_input.second, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                               .build(context);
-            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            /// right out join with right condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {join_cond}, {}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+            /// right out join with right condition and other condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {join_cond}, {join_cond}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
         }
     }
 }
