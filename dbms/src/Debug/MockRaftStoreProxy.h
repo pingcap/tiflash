@@ -133,6 +133,24 @@ struct MockReadIndexTask
 
 struct MockRaftStoreProxy : MutexLockWrap
 {
+    static std::string encodeSSTView(SSTFormatKind kind, std::string ori)
+    {
+        if (kind == SSTFormatKind::KIND_TABLET)
+        {
+            return "!" + ori;
+        }
+        return ori;
+    }
+
+    static SSTFormatKind parseSSTViewKind(std::string_view v)
+    {
+        if (v[0] == '!')
+        {
+            return SSTFormatKind::KIND_TABLET;
+        }
+        return SSTFormatKind::KIND_SST;
+    }
+
     MockProxyRegionPtr getRegion(uint64_t id);
 
     MockProxyRegionPtr doGetRegion(uint64_t id);
@@ -169,7 +187,8 @@ struct MockRaftStoreProxy : MutexLockWrap
     void bootstrap(
         KVStore & kvs,
         TMTContext & tmt,
-        UInt64 region_id);
+        UInt64 region_id,
+        std::optional<std::pair<std::string, std::string>> maybe_range);
 
     /// boostrap a table, since applying snapshot needs table schema.
     TableID bootstrap_table(
@@ -207,10 +226,11 @@ struct MockRaftStoreProxy : MutexLockWrap
         Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
 
         // Actual data will be stored in MockSSTReader.
-        void finish_file();
+        void finish_file(SSTFormatKind kind = SSTFormatKind::KIND_SST);
         void freeze() { freezed = true; }
 
         void insert(HandleID key, std::string val);
+        void insert_raw(std::string key, std::string val);
 
         ColumnFamilyType cf_type() const
         {

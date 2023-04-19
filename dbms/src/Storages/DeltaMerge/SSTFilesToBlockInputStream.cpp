@@ -68,8 +68,8 @@ void SSTFilesToBlockInputStream::readPrefix()
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;
 
-    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-        return std::make_unique<MonoSSTReader>(proxy_helper, snap);
+    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap, range);
     };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
@@ -91,15 +91,15 @@ void SSTFilesToBlockInputStream::readPrefix()
     // Pass the log to SSTReader inorder to filter logs by table_id suffix
     if (!ssts_default.empty())
     {
-        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default, log);
+        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default, log, region->getRange());
     }
     if (!ssts_write.empty())
     {
-        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write, log);
+        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write, log, region->getRange());
     }
     if (!ssts_lock.empty())
     {
-        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock, log);
+        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock, log, region->getRange());
     }
     LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
 
