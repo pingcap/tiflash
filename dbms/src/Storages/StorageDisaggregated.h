@@ -86,6 +86,7 @@ private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readFromWriteNode(
         const Context & db_context,
+        const SelectQueryInfo & query_info,
         unsigned num_streams);
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
@@ -107,6 +108,7 @@ private:
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::RNRemoteReadTaskPtr & remote_read_tasks,
+        const SelectQueryInfo & query_info,
         size_t num_streams,
         DAGPipeline & pipeline);
 
