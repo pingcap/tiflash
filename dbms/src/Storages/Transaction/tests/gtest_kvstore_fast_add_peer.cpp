@@ -189,7 +189,7 @@ try
     KVStore & kvs = getKVS();
     auto page_storage = global_context.getWriteNodePageStorage();
 
-    proxy_instance->bootstrap(kvs, global_context.getTMTContext(), region_id);
+    proxy_instance->bootstrap(kvs, global_context.getTMTContext(), region_id, std::nullopt);
     auto region = proxy_instance->getRegion(region_id);
     auto store_id = kvs.getStore().store_id.load();
     region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);

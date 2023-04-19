@@ -20,7 +20,22 @@ namespace DB
 {
 bool MonoSSTReader::remained() const
 {
-    return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    auto remained = proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    if (!remained)
+    {
+        return false;
+    }
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto end = r.second.key.toString();
+        auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
+        if (!end.empty() && key >= end)
+        {
+            return false;
+        }
+    }
+    return remained;
 }
 BaseBuffView MonoSSTReader::keyView() const
 {
@@ -35,11 +50,25 @@ void MonoSSTReader::next()
     return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
 }
 
-MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
+MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
-{}
+    , range(range_)
+{
+    log = &Poco::Logger::get("MonoSSTReader");
+    kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto start = r.first.key.toString();
+        LOG_DEBUG(log, "Seek cf {} to {}", static_cast<std::underlying_type<decltype(type)>::type>(type), Redact::keyToDebugString(start.data(), start.size()));
+        if (!start.empty())
+        {
+            proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
+        }
+    }
+}
 
 MonoSSTReader::~MonoSSTReader()
 {
