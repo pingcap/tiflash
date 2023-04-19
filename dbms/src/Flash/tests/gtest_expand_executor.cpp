@@ -109,19 +109,25 @@ try
          toVec<UInt64>({1, 2})});
 
     /// case 3: this case is only for non-planner mode.
-    /// request = context
-    ///                 .scan("test_db", "test_table")
-    ///                 .expand(MockVVecColumnNameVec{MockVecColumnNameVec{MockColumnNameVec{"s1"},}, MockVecColumnNameVec{MockColumnNameVec{"s2"},},})
-    ///                 .filter(eq(col("s1"), col("s2")))
-    ///                 .build(context);
+    request = context
+                  .scan("test_db", "test_table")
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s1"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
+                  .filter(eq(col("s1"), col("s2")))
+                  .build(context);
     /// data flow: TiFlash isn't aware of the operation sequence, this filter here will be run before expand does just like the second test case above.
-    /// since this case is only succeed under planner-disabled mode, just comment and assert the result here for a note.
-    ///
-    /// executeAndAssertColumnsEqual(
-    ///        request,
-    ///        {toNullableVec<String>({"banana", {}}),
-    ///        toNullableVec<String>({{}, "banana"}),
-    ///        toVec<UInt64>({1,2})});
+    /// this case is only succeed under planner-disabled mode.
+    enablePlanner(false);
+    ColumnsWithTypeAndName expect{toNullableVec<String>({"banana", {}}),
+                                  toNullableVec<String>({{}, "banana"}),
+                                  toVec<UInt64>({1, 2})};
+    ASSERT_COLUMNS_EQ_R(expect, executeStreams(request));
 
     /// case 4
     auto const_false = lit(Field(static_cast<UInt64>(0)));
