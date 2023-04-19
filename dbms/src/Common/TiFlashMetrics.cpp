@@ -44,7 +44,7 @@ TiFlashMetrics::TiFlashMetrics()
         registered_current_metrics.push_back(&family.Add({}));
     }
 
-    std::string prometheus_name = TiFlashMetrics::current_metrics_prefix + std::string("StoreSizeUsed");
+    auto prometheus_name = TiFlashMetrics::current_metrics_prefix + std::string("StoreSizeUsed");
     registered_keypace_store_used_family = &prometheus::BuildGauge().Name(prometheus_name).Help("Store size used of keyspace").Register(*registry);
     store_used_total_metric = &registered_keypace_store_used_family->Add({{"keyspace_id", ""}, {"type", "all_used"}});
 }

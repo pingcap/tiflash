@@ -323,7 +323,7 @@ void MetricsPrometheus::run()
     size_t total_size = 0;
     {
         // Add keyspace store usage here
-        const auto keyspace_usage = path_capacity_metrics->getKeyspaceUsedSizes();
+        const auto & keyspace_usage = path_capacity_metrics->getKeyspaceUsedSizes();
         for (const auto & [keyspace_id, usage] : keyspace_usage)
         {
             total_size += usage;
