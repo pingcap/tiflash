@@ -675,13 +675,13 @@ try
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                       .build(context);
-        // the 4th col is left semi helper col.
+        // the 4th col is left outer semi helper col.
         executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})});
 
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                       .build(context);
-        // the 4th col is left semi helper col.
+        // the 4th col is left outer semi helper col.
         executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     }
 

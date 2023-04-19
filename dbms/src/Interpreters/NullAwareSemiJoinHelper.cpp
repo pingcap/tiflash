@@ -34,8 +34,8 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , pos_in_columns(0)
     , map_it(map_it_)
 {
-    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
-                  || KIND == NullAware_LeftSemi);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti
+                  || KIND == NullAware_LeftOuterSemi);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -215,13 +215,13 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     , max_block_size(max_block_size_)
     , non_equal_conditions(non_equal_conditions_)
 {
-    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
-                  || KIND == NullAware_LeftSemi);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftOuterAnti
+                  || KIND == NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == Any || STRICTNESS == All);
 
     RUNTIME_CHECK(block.columns() == left_columns + right_columns);
 
-    if constexpr (KIND == NullAware_LeftAnti || KIND == NullAware_LeftSemi)
+    if constexpr (KIND == NullAware_LeftOuterAnti || KIND == NullAware_LeftOuterSemi)
     {
         /// The last column is `match_helper`.
         right_columns -= 1;
