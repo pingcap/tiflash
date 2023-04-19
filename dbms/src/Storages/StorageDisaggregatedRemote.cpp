@@ -45,6 +45,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -433,8 +434,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
         table_scan.getPushedDownFilters(),
-        DAGPreparedSets{}, // Not care now
-        NamesAndTypes{}, // Not care now
+        table_scan.getColumns(),
         db_context.getTimezoneInfo());
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
