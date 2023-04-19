@@ -129,6 +129,42 @@ using PartitionBlocks = std::list<PartitionBlock>;
   *  as in standard SQL.
   */
 
+class BuildResult
+{
+public:
+    BuildResult() {}
+
+    explicit BuildResult(Spiller * spiller_): spiller(spiller_)
+    {
+      assert(spiller);
+    }
+
+    void append(size_t index, Blocks && blocks)
+    {
+      assert(spiller);
+      remaings.emplace_back(index, std::move(blocks));
+    }
+
+    bool needSpill()
+    {
+      return spiller && !remaings.empty();
+    }
+
+    void spill()
+    {
+      while (!remaings.empty())
+      {
+        auto & cur = remaings.back();
+        spiller->spillBlocks(std::move(cur.second), cur.first);
+        remaings.pop_back();
+      }
+    }
+
+private:
+    std::vector<std::pair<size_t, Blocks>> remaings;
+    Spiller * spiller;
+};
+
 class Join
 {
 public:
@@ -160,7 +196,7 @@ public:
 
     void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
 
-    void insertFromBlock(const Block & block, size_t stream_index);
+    BuildResult insertFromBlock(const Block & block, size_t stream_index);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -417,7 +453,7 @@ private:
     void releaseAllPartitions();
 
 
-    void spillMostMemoryUsedPartitionIfNeed();
+    void spillMostMemoryUsedPartitionIfNeed(BuildResult & result);
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
     void workAfterBuildFinish();

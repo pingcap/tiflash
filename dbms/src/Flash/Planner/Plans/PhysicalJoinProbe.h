@@ -31,12 +31,16 @@ public:
         const PhysicalPlanNodePtr & child_,
         const JoinPtr & join_ptr_,
         const ExpressionActionsPtr & prepare_actions_)
-        : PhysicalUnary(executor_id_, PlanType::JoinProbe, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::JoinProbe, schema_, FineGrainedShuffle{}, req_id, child_)
         , join_ptr(join_ptr_)
         , prepare_actions(prepare_actions_)
     {}
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
 private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER

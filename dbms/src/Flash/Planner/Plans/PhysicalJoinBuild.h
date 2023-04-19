@@ -27,11 +27,12 @@ public:
     PhysicalJoinBuild(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const JoinPtr & join_ptr_,
         const ExpressionActionsPtr & prepare_actions_)
-        : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, fine_grained_shuffle_, req_id, child_)
         , join_ptr(join_ptr_)
         , prepare_actions(prepare_actions_)
     {}

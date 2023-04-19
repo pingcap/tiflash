@@ -15,33 +15,32 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
-#include <Operators/HashJoinProbeTransformOp.h>
+// #include <Operators/HashJoinProbeTransformOp.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 
 namespace DB
 {
-void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalJoinProbe::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
-    if (!prepare_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, prepare_actions, log->identifier()));
-        });
-    }
+    executeExpression(exec_status, group_builder, prepare_actions, log);
 
-    size_t probe_index = 0;
-    join_ptr->setProbeConcurrency(group_builder.concurrency);
-    const auto & max_block_size = context.getSettingsRef().max_block_size;
-    auto input_header = group_builder.getCurrentHeader();
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
-            group_builder.exec_status,
-            join_ptr,
-            probe_index++,
-            max_block_size,
-            input_header,
-            log->identifier()));
-    });
+    // size_t probe_index = 0;
+    // const auto & max_block_size = context.getSettingsRef().max_block_size;
+    // auto input_header = group_builder.getCurrentHeader();
+    // join_ptr->initProbe(input_header, group_builder.concurrency);
+    // group_builder.transform([&](auto & builder) {
+    //     builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
+    //         group_builder.exec_status,
+    //         join_ptr,
+    //         probe_index++,
+    //         max_block_size,
+    //         input_header,
+    //         log->identifier()));
+    // });
 
     /// add a project to remove all the useless column
     ExpressionActionsPtr schema_project = std::make_shared<ExpressionActions>(group_builder.getCurrentHeader().getColumnsWithTypeAndName());
@@ -54,9 +53,6 @@ void PhysicalJoinProbe::buildPipelineExec(PipelineExecGroupBuilder & group_build
     }
     assert(!schema_project_cols.empty());
     schema_project->add(ExpressionAction::project(schema_project_cols));
-    assert(schema_project && !schema_project->getActions().empty());
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, schema_project, log->identifier()));
-    });
+    executeExpression(exec_status, group_builder, schema_project, log);
 }
 } // namespace DB

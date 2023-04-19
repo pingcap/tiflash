@@ -30,7 +30,7 @@ void PhysicalJoinBuild::buildPipelineExecGroup(
     // TODO support join_execute_info like IBlockInputStream.
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_status, join_ptr, build_index++, log->identifier()));
+        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_status, log->identifier(), join_ptr, build_index++));
     });
     join_ptr->initBuild(group_builder.getCurrentHeader(), group_builder.concurrency);
     join_ptr->setInitActiveBuildThreads();
