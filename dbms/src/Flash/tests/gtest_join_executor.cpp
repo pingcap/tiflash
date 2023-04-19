@@ -472,88 +472,305 @@ TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
 try
 {
     context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "empty_table_t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable("cross_join", "empty_table_t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
 
-    const auto cond = gt(col("a"), lit(Field("1", 1)));
-
-    const auto table_scan = [&]() -> std::tuple<DAGRequestBuilder, DAGRequestBuilder> {
-        return {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")};
+    const ColumnsWithTypeAndName expected_cols[join_type_num * 4] = {
+        // non-empty inner non-empty
+        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty inner non-empty
+        {},
+        // non-empty inner empty
+        {toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty inner empty
+        {},
+        // non-empty left non-empty
+        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
+        // empty left non-empty
+        {},
+        // non-empty left empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}})},
+        // empty left empty
+        {},
+        // non-empty right non-empty
+        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
+        // empty right non-empty
+        {toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // non-empty right empty
+        {},
+        // empty right empty
+        {},
+        // non-empty semi non-empty
+        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
+        // empty semi non-empty
+        {},
+        // non-empty semi empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty semi empty
+        {},
+        // non-empty anti semi non-empty
+        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
+        // empty anti semi non-empty
+        {},
+        // non-empty anti semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty anti semi empty
+        {},
+        // non-empty left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
+        // empty left outer semi non-empty
+        {},
+        // non-empty left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty left outer semi empty
+        {},
+        // non-empty anti left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+        // empty anti left outer semi non-empty
+        {},
+        // non-empty anti left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty anti left outer semi empty
+        {},
     };
 
-    const ColumnsWithTypeAndName expected_cols[join_type_num] = {
-        // inner
-        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
-        // left
-        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
-        // right
-        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
-        // semi
-        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
-        // anti semi
-        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
-        // left outer semi
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
-        // anti left outer semi
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+    const auto cond = gt(col("a"), lit(Field("1", 1)));
+    const auto cond_right = gt(col("c"), lit(Field("1", 1)));
+    const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
+        return {
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table_t2")},
+            {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "empty_table_t2")},
+        };
+    };
+
+    /// for cross join, there is no join columns
+    size_t i = 0;
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+        join_inputs = gen_join_inputs();
+        i -= join_inputs.size();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+        join_inputs = gen_join_inputs();
+        i -= join_inputs.size();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond_right}, {}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+        join_inputs = gen_join_inputs();
+        i -= join_inputs.size();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {}, {cond_right}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+        join_inputs = gen_join_inputs();
+        i -= join_inputs.size();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond_right}, {cond_right}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+
+    {
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
+try
+{
+    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "empty_table", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+
+    const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
+        return {
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "empty_table")},
+        };
+    };
+
+    const ColumnsWithTypeAndName expected_cols[join_type_num * 4] = {
+        // non-empty inner non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty inner non-empty
+        {},
+        // non-empty inner empty
+        {toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty inner empty
+        {},
+        // non-empty left non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty left non-empty
+        {},
+        // non-empty left empty
+        {
+            toNullableVec<String>({"1", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}})},
+        // empty left empty
+        {},
+        // non-empty right non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty right non-empty
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}})},
+        // non-empty right empty
+        {},
+        // empty right empty
+        {},
+        // non-empty semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty semi non-empty
+        {},
+        // non-empty semi empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty semi empty
+        {},
+        // non-empty anti semi non-empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty anti semi non-empty
+        {},
+        // non-empty anti semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty anti semi empty
+        {},
+        // non-empty left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty left outer semi non-empty
+        {},
+        // non-empty left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty left outer semi empty
+        {},
+        // non-empty anti left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty anti left outer semi non-empty
+        {},
+        // non-empty anti left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty anti left outer semi empty
+        {},
     };
 
     /// for cross join, there is no join columns
     size_t i = 0;
 
+    for (const auto & join_type : join_types)
     {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, join_type, {}, {}, {}, {}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
     }
 }
 CATCH
