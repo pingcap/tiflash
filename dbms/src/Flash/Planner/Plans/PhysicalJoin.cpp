@@ -83,12 +83,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_schema = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
-
     auto & dag_context = *context.getDAGContext();
 
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
+    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
 
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
@@ -125,6 +124,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
+    String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, right_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -141,6 +141,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         join_non_equal_conditions,
         max_block_size,
         match_helper_name,
+        flag_mapped_entry_helper_name,
         0,
         context.isTest());
 
@@ -166,7 +167,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), join_ptr->needReturnNonJoinedData());
+    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
     join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
                         probe_pipeline.streams.size());
     size_t probe_index = 0;

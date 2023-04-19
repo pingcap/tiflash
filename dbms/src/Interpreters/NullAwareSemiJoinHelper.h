@@ -80,13 +80,13 @@ class NASemiJoinResult
 public:
     NASemiJoinResult(size_t row_num, NASemiJoinStep step, const void * map_it);
 
-    /// For convenience, callers can only consider the result of left semi join.
-    /// This function will correct the result if it's not left semi join.
+    /// For convenience, callers can only consider the result of left outer semi join.
+    /// This function will correct the result if it's not left outer semi join.
     template <NASemiJoinResultType RES>
     void setResult()
     {
         step = NASemiJoinStep::DONE;
-        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi)
         {
             result = RES;
             return;
@@ -185,12 +185,12 @@ private:
     const JoinNonEqualConditions & non_equal_conditions;
 };
 
-#define APPLY_FOR_NULL_AWARE_JOIN(M)                                                              \
-    M(DB::ASTTableJoin::Kind::NullAware_LeftSemi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
-    M(DB::ASTTableJoin::Kind::NullAware_LeftSemi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
-    M(DB::ASTTableJoin::Kind::NullAware_LeftAnti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
-    M(DB::ASTTableJoin::Kind::NullAware_LeftAnti, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
-    M(DB::ASTTableJoin::Kind::NullAware_Anti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)     \
+#define APPLY_FOR_NULL_AWARE_JOIN(M)                                                                   \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftOuterSemi, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftOuterSemi, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftOuterAnti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny) \
+    M(DB::ASTTableJoin::Kind::NullAware_LeftOuterAnti, DB::ASTTableJoin::Strictness::All, DB::MapsAll) \
+    M(DB::ASTTableJoin::Kind::NullAware_Anti, DB::ASTTableJoin::Strictness::Any, DB::MapsAny)          \
     M(DB::ASTTableJoin::Kind::NullAware_Anti, DB::ASTTableJoin::Strictness::All, DB::MapsAll)
 
 } // namespace DB

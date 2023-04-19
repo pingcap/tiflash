@@ -836,8 +836,9 @@ grpc::Status FlashService::GetTiFlashSystemTable(
 
     try
     {
-        ContextPtr ctx;
-        std::tie(ctx, std::ignore) = createDBContext(grpc_context);
+        auto [ctx, status] = createDBContext(grpc_context);
+        if (!status.ok())
+            return status;
         ctx->setDefaultFormat("JSONCompact");
         ReadBufferFromString in_buf(request->sql());
         MemoryWriteBuffer out_buf;
