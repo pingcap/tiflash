@@ -135,10 +135,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
-        for (auto & pair : cur_versions)
-        {
-            LOG_ERROR(log, "sync schema with pair {} {}", pair.first, pair.second);
-        }
+        // for (auto & pair : cur_versions)
+        // {
+        //     LOG_ERROR(log, "sync schema with pair {} {}", pair.first, pair.second);
+        // }
         std::lock_guard lock(schema_mutex);
         auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
         auto cur_version = cur_versions.try_emplace(keyspace_id, 0).first->second;
@@ -156,7 +156,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // If the schema version not exists, drop all schemas.
         if (version == SchemaGetter::SchemaVersionNotExist)
         {
-            LOG_ERROR(log, "version equal SchemaGetter::SchemaVersionNotExist");
+            //LOG_ERROR(log, "version equal SchemaGetter::SchemaVersionNotExist");
             // Tables and databases are already tombstoned and waiting for GC.
             if (SchemaGetter::SchemaVersionNotExist == cur_version)
                 return false;
@@ -411,52 +411,78 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
         LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
-        if (cur_version <= 0)
-        {
-            LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
-            auto version = loadAllSchema(getter, latest_version, context);
-            LOG_ERROR(log, "tryLoadSchemaDiffs with loadAllSchema res is {}", version);
-            return version;
-        }
-
-        LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} not with loadAllSchema", cur_version, latest_version);
-
-        LOG_DEBUG(ks_log, "Try load schema diffs.");
-
-        Int64 used_version = cur_version;
-        // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
-        // schema diff without any exception.
-        std::vector<std::optional<SchemaDiff>> diffs;
-        while (used_version < latest_version)
-        {
-            used_version++;
-            diffs.push_back(getter.getSchemaDiff(used_version));
-        }
-        LOG_DEBUG(ks_log, "End load schema diffs with total {} entries.", diffs.size());
-        if (diffs.empty())
-        {
-            LOG_WARNING(ks_log, "Schema Diff is empty.");
-            return -1;
-        }
-        // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
-        // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
-        if (!diffs.back())
-        {
-            --used_version;
-            diffs.pop_back();
-        }
-
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> apply_tables;
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables;
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> exchange_tables;
         std::vector<DatabaseID> create_database_ids;
         std::vector<DatabaseID> drop_database_ids;
-        // 根据 diffs 整理一波 database_id, table_id 的 pairs
-        auto ret = getDiffTables(diffs, apply_tables, exchange_tables, drop_tables, create_database_ids, drop_database_ids);
-        if (ret == -1)
+        int used_version = 0;
+        if (cur_version <= 0)
         {
-            return ret;
+            int version = latest_version;
+            if (!getter.checkSchemaDiffExists(version))
+            {
+                --version;
+            }
+            SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+            std::vector<TiDB::DBInfoPtr> all_schemas = getter.listDBs();
+            for (const auto & db : all_schemas)
+            {
+                create_database_ids.push_back(db->id);
+
+                std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
+                for (auto & table : tables)
+                {
+                    /// Ignore view and sequence.
+                    if (table->is_view || table->is_sequence)
+                    {
+                        continue;
+                    }
+                    apply_tables.emplace(std::make_pair(db->id, table->id), true);
+                }
+            }
+            used_version = version;
+            // LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
+            // auto version = loadAllSchema(getter, latest_version, context);
+            // LOG_ERROR(log, "tryLoadSchemaDiffs with loadAllSchema res is {}", version);
+            // return version;
+            // 换一种方式获取要更新的database 和 tables
+        } else {
+            LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} not with loadAllSchema", cur_version, latest_version);
+
+            LOG_DEBUG(ks_log, "Try load schema diffs.");
+
+            Int64 used_version = cur_version;
+            // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
+            // schema diff without any exception.
+            std::vector<std::optional<SchemaDiff>> diffs;
+            while (used_version < latest_version)
+            {
+                used_version++;
+                diffs.push_back(getter.getSchemaDiff(used_version));
+            }
+            LOG_DEBUG(ks_log, "End load schema diffs with total {} entries.", diffs.size());
+            if (diffs.empty())
+            {
+                LOG_WARNING(ks_log, "Schema Diff is empty.");
+                return -1;
+            }
+            // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
+            // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
+            if (!diffs.back())
+            {
+                --used_version;
+                diffs.pop_back();
+            }
+
+            // 根据 diffs 整理一波 database_id, table_id 的 pairs
+            auto ret = getDiffTables(diffs, apply_tables, exchange_tables, drop_tables, create_database_ids, drop_database_ids);
+            if (ret == -1)
+            {
+                return ret;
+            }
         }
+        
 
         LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}", apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
 
