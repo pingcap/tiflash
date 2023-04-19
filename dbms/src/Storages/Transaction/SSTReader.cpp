@@ -63,7 +63,7 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
         auto && r = range->comparableKeys();
         auto start = r.first.key.toString();
         LOG_DEBUG(log, "Seek cf {} to {}", static_cast<std::underlying_type<decltype(type)>::type>(type), Redact::keyToDebugString(start.data(), start.size()));
-        if (!start.epmty())
+        if (!start.empty())
         {
             proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
         }
