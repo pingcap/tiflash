@@ -18,31 +18,30 @@
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+class BucketInput;
 
-class AggregateFinalSpillTask : public EventTask
+class BucketLoadTask : public EventTask
 {
 public:
-    AggregateFinalSpillTask(
+    BucketLoadTask(
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
-        AggregateContextPtr agg_context_,
-        size_t index_);
+        BucketInput & input_)
+        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        , input(input_)
+    {
+    }
 
-protected:
+private:
     ExecTaskStatus doExecuteImpl() override;
 
     ExecTaskStatus doExecuteIOImpl() override;
 
     ExecTaskStatus doAwaitImpl() override;
 
-    void finalizeImpl() override;
-
 private:
-    AggregateContextPtr agg_context;
-    size_t index;
+    BucketInput & input;
 };
 } // namespace DB

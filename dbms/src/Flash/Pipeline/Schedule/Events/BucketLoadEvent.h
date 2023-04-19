@@ -14,35 +14,33 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+class SharedBucketDataLoader;
+using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
 
-class AggregateFinalSpillTask : public EventTask
+class BucketLoadEvent : public Event
 {
 public:
-    AggregateFinalSpillTask(
+    BucketLoadEvent(
+        PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_,
-        AggregateContextPtr agg_context_,
-        size_t index_);
+        SharedBucketDataLoaderPtr loader_)
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        , loader(std::move(loader_))
+    {
+        assert(loader);
+    }
 
 protected:
-    ExecTaskStatus doExecuteImpl() override;
+    std::vector<TaskPtr> scheduleImpl() override;
 
-    ExecTaskStatus doExecuteIOImpl() override;
-
-    ExecTaskStatus doAwaitImpl() override;
-
-    void finalizeImpl() override;
+    void finishImpl() override;
 
 private:
-    AggregateContextPtr agg_context;
-    size_t index;
+    SharedBucketDataLoaderPtr loader;
 };
 } // namespace DB

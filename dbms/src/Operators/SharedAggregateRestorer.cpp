@@ -13,88 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
-#include <Flash/Pipeline/Schedule/Events/Event.h>
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Events/BucketLoadEvent.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
-namespace
-{
-class LoadTask : public EventTask
-{
-public:
-    LoadTask(
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id,
-        PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_,
-        BucketInput & input_)
-        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
-        , input(input_)
-    {
-    }
-
-private:
-    ExecTaskStatus doExecuteImpl() override
-    {
-        return ExecTaskStatus::IO;
-    }
-
-    ExecTaskStatus doExecuteIOImpl() override
-    {
-        input.load();
-        return ExecTaskStatus::FINISHED;
-    }
-
-    ExecTaskStatus doAwaitImpl() override
-    {
-        return ExecTaskStatus::IO;
-    }
-
-private:
-    BucketInput & input;
-};
-
-class LoadEvent : public Event
-{
-public:
-    LoadEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id,
-        SharedBucketDataLoaderPtr loader_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
-        , loader(std::move(loader_))
-    {
-        assert(loader);
-    }
-
-protected:
-    std::vector<TaskPtr> scheduleImpl() override
-    {
-        assert(loader);
-        std::vector<TaskPtr> tasks;
-        auto load_inputs = loader->getLoadInputs();
-        tasks.reserve(load_inputs.size());
-        for (const auto & input : load_inputs)
-            tasks.push_back(std::make_unique<LoadTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input));
-        return tasks;
-    }
-
-    void finishImpl() override
-    {
-        assert(loader);
-        loader->storeFromInputToBucketData();
-        loader.reset();
-    }
-
-private:
-    SharedBucketDataLoaderPtr loader;
-};
-} // namespace
-
 SharedBucketDataLoader::SharedBucketDataLoader(
     PipelineExecutorStatus & exec_status_,
     const BlockInputStreams & bucket_streams,
@@ -202,7 +126,7 @@ void SharedBucketDataLoader::submitLoadEvent()
     if (!bucket_inputs.empty())
     {
         auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        auto event = std::make_shared<LoadEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
+        auto event = std::make_shared<BucketLoadEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
         RUNTIME_CHECK(event->prepareForSource());
         event->schedule();
     }
