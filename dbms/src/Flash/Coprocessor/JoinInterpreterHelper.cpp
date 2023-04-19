@@ -40,7 +40,8 @@ namespace
 {
 struct joinKindAndInnerIndexPairHash
 {
-    std::size_t operator () (const std::pair<tipb::JoinType, size_t> & pair) const {
+    std::size_t operator()(const std::pair<tipb::JoinType, size_t> & pair) const
+    {
         return (static_cast<size_t>(pair.first) << 1) | pair.second;
     }
 };
