@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
+#include <Operators/SharedAggregateRestorer.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -60,6 +61,8 @@ public:
     void spillData(size_t task_index);
 
     LocalAggregateRestorerPtr buildLocalRestorer();
+
+    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorStatus & exec_status);
 
     void initConvergent();
 

@@ -78,6 +78,21 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
+std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorStatus & exec_status)
+{
+    assert(status.load() == AggStatus::build);
+    aggregator->finishSpill();
+    LOG_INFO(log, "Begin restore data from disk for aggregation.");
+    auto input_streams = aggregator->restoreSpilledData();
+    auto loader = std::make_shared<SharedBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
+    loader->start();
+    std::vector<SharedAggregateRestorerPtr> ret;
+    for (size_t i = 0; i < max_threads; ++i)
+        ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));
+    status = AggStatus::restore;
+    return ret;
+}
+
 void AggregateContext::initConvergentPrefix()
 {
     assert(build_watch);

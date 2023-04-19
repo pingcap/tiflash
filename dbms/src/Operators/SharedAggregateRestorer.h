@@ -16,12 +16,22 @@
 
 #include <Operators/BucketInput.h>
 
+#include <atomic>
 #include <memory>
 #include <queue>
 
 namespace DB
 {
 class PipelineExecutorStatus;
+
+class Aggregator;
+
+enum class SharedLoaderStatus
+{
+    idle,
+    loading,
+    finished,
+};
 
 class SharedBucketDataLoader : public std::enable_shared_from_this<SharedBucketDataLoader>
 {
@@ -34,6 +44,8 @@ public:
 
     ~SharedBucketDataLoader();
 
+    void start();
+
     // return true if pop success
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
@@ -45,7 +57,9 @@ public:
 private:
     void submitLoadEvent();
 
-    void finish();
+    bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
+
+    void toFinishStatus();
 
 private:
     PipelineExecutorStatus & exec_status;
@@ -54,12 +68,42 @@ private:
 
     size_t max_queue_size;
 
-    bool finished = false;
+    std::atomic<SharedLoaderStatus> status{SharedLoaderStatus::idle};
 
+    std::mutex queue_mu;
     std::queue<BlocksList> bucket_data_queue;
+
+    // `bucket_inputs` will only be modified in `toFinishStatus` and `storeFromInputToBucketData` and always in `SharedLoaderStatus::loading`.
+    // The unique_ptr of spilled file is held by BucketInput, so don't need to care about agg_context.
     BucketInputs bucket_inputs;
     static constexpr Int32 NUM_BUCKETS = 256;
 };
 using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
+
+class SharedAggregateRestorer
+{
+public:
+    SharedAggregateRestorer(
+        Aggregator & aggregator_,
+        SharedBucketDataLoaderPtr loader_);
+
+    // return true if pop success
+    // return false means that `tryLoadBucketData` need to be called.
+    bool tryPop(Block & block);
+
+    bool tryLoadBucketData();
+
+private:
+    Aggregator & aggregator;
+
+    // loader --> bucket_data --> restored_blocks.
+    BlocksList bucket_data;
+    BlocksList restored_blocks;
+
+    SharedBucketDataLoaderPtr loader;
+
+    bool finished = false;
+};
+using SharedAggregateRestorerPtr = std::unique_ptr<SharedAggregateRestorer>;
 
 } // namespace DB

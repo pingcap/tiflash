@@ -30,6 +30,15 @@ public:
     }
 };
 
+#define WRAP_FOR_SPILL_TEST_BEGIN                  \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SPILL_TEST_END \
+    }
+
 /// todo add more tests
 TEST_F(SpillAggregationTestRunner, SimpleCase)
 try
@@ -51,6 +60,7 @@ try
         column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_datas, 8);
 
+    WRAP_FOR_SPILL_TEST_BEGIN
     auto request = context
                        .scan("spill_sort_test", "simple_table")
                        .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")})
@@ -91,6 +101,7 @@ try
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -142,6 +153,7 @@ try
         {"key_8", "key_16", "key_32", "key_64"},
     };
     std::vector<std::vector<ASTPtr>> agg_funcs{{Max(col("value"))}, {Max(col("value")), Min(col("value"))}};
+    WRAP_FOR_SPILL_TEST_BEGIN
     for (auto collator_id : collators)
     {
         for (const auto & keys : group_by_keys)
@@ -215,6 +227,7 @@ try
             }
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -275,6 +288,7 @@ try
         {"key_8", "key_16", "key_32", "key_64"},
     };
     std::vector<std::vector<ASTPtr>> agg_funcs{{Max(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1"))}};
+    WRAP_FOR_SPILL_TEST_BEGIN
     for (auto collator_id : collators)
     {
         for (const auto & keys : group_by_keys)
@@ -348,6 +362,7 @@ try
             }
         }
     }
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -402,6 +417,9 @@ try
     }
 }
 CATCH
+
+#undef WRAP_FOR_SPILL_TEST_BEGIN
+#undef WRAP_FOR_SPILL_TEST_END
 
 } // namespace tests
 } // namespace DB

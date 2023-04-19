@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/SharedBucketDataLoader.h>
+#include <Operators/SharedAggregateRestorer.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Interpreters/Aggregator.h>
 
 namespace DB
 {
@@ -84,11 +85,8 @@ protected:
 
     void finishImpl() override
     {
-        if likely (!exec_status.isCancelled())
-        {
-            assert(loader);
-            loader->storeFromInputToBucketData();
-        }
+        assert(loader);
+        loader->storeFromInputToBucketData();
         loader.reset();
     }
 
@@ -108,30 +106,32 @@ SharedBucketDataLoader::SharedBucketDataLoader(
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
-    if (bucket_inputs.empty())
-        finish();
 
     exec_status.onEventSchedule();
 }
 
 SharedBucketDataLoader::~SharedBucketDataLoader()
 {
+    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedBucketDataLoader` is destructed.
     exec_status.onEventFinish();   
 }
 
-void SharedBucketDataLoader::finish()
+void SharedBucketDataLoader::start()
 {
-    assert(!finished);
-    finished = true;
-    bucket_inputs.clear();
+    assert(status == SharedLoaderStatus::idle);
+    RUNTIME_CHECK(switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading));
+    submitLoadEvent();
+}
+
+bool SharedBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
+{
+    return status.compare_exchange_strong(from, to);
 }
 
 std::vector<BucketInput *> SharedBucketDataLoader::getLoadInputs()
 {
     assert(!bucket_inputs.empty());
     std::vector<BucketInput *> load_inputs;
-    auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-    auto self_ptr = shared_from_this();
     for (auto & bucket_input : bucket_inputs)
     {
         if (bucket_input.needLoad())
@@ -140,17 +140,39 @@ std::vector<BucketInput *> SharedBucketDataLoader::getLoadInputs()
     return load_inputs;
 }
 
+void SharedBucketDataLoader::toFinishStatus()
+{
+    // only allow from loading to finished.
+    RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
+    bucket_inputs.clear();
+}
+
 void SharedBucketDataLoader::storeFromInputToBucketData()
 {
-    assert(!bucket_inputs.empty());
+    assert(status == SharedLoaderStatus::loading);
+
+    if unlikely (exec_status.isCancelled())
+    {
+        toFinishStatus();
+        return;
+    }
+
+    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end();)
+        it = it->needRemoved() ? bucket_inputs.erase(it) : std::next(it);
+    if (bucket_inputs.empty())
+    {
+        toFinishStatus();
+        return;
+    }
 
     // get min bucket num.
     Int32 min_bucket_num = NUM_BUCKETS;
+    assert(!bucket_inputs.empty());
     for (auto & bucket_input : bucket_inputs)
         min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
-        finish();
+        toFinishStatus();
         return;
     }
 
@@ -161,19 +183,22 @@ void SharedBucketDataLoader::storeFromInputToBucketData()
         if (min_bucket_num == bucket_input.bucketNum())
             bucket_data.push_back(bucket_input.moveOutput());
     }
-    bucket_data_queue.push(std::move(bucket_data));
-
-    if (bucket_data_queue.size() < max_queue_size)
+    assert(!bucket_data.empty());
+    bool should_load = false;
+    {
+        std::lock_guard lock(queue_mu);
+        bucket_data_queue.push(std::move(bucket_data));
+        should_load = bucket_data_queue.size() < max_queue_size;
+    }
+    if (should_load)
         submitLoadEvent();
+    else
+        RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
 }
 
 void SharedBucketDataLoader::submitLoadEvent()
 {
-    if unlikely (finished)
-        return;
-
-   for (auto it = bucket_inputs.begin(); it != bucket_inputs.end();)
-        it = it->needRemoved() ? bucket_inputs.erase(it) : std::next(it);
+    assert(status == SharedLoaderStatus::loading);
     if (!bucket_inputs.empty())
     {
         auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
@@ -181,18 +206,66 @@ void SharedBucketDataLoader::submitLoadEvent()
         RUNTIME_CHECK(event->prepareForSource());
         event->schedule();
     }
+    else
+    {
+        toFinishStatus();
+    }
 }
 
 bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
+    if unlikely (exec_status.isCancelled())
+        return true;
+
+    std::lock_guard lock(queue_mu);
+    {
+        if (bucket_data_queue.empty())
+            return status == SharedLoaderStatus::finished;
+        bucket_data = std::move(bucket_data_queue.front());
+        bucket_data_queue.pop();
+    }
+    if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
+        submitLoadEvent();
+    return true;
+}
+
+SharedAggregateRestorer::SharedAggregateRestorer(
+    Aggregator & aggregator_,
+    SharedBucketDataLoaderPtr loader_)
+    : aggregator(aggregator_)
+    , loader(std::move(loader_))
+{
+    assert(loader);
+}
+
+bool SharedAggregateRestorer::tryPop(Block & block)
+{
     if unlikely (finished)
         return true;
 
-    if (bucket_data_queue.empty())
-        return false;
-    bucket_data = std::move(bucket_data_queue.front());
-    bucket_data_queue.pop();
-    submitLoadEvent();
+    if (restored_blocks.empty())
+    {
+        if (bucket_data.empty())
+            return false;
+
+        BlocksList tmp;
+        std::swap(tmp, bucket_data);
+        restored_blocks = aggregator.vstackBlocks(tmp, true);
+        assert(!restored_blocks.empty());
+    }
+    block = std::move(restored_blocks.front());
+    restored_blocks.pop_front();
     return true;
 }
+
+bool SharedAggregateRestorer::tryLoadBucketData()
+{
+    assert(!finished && bucket_data.empty());
+    if (!loader->tryPop(bucket_data))
+        return false;
+    if unlikely (bucket_data.empty())
+        finished = true;
+    return true;
+}
+
 } // namespace DB
