@@ -45,7 +45,7 @@ protected:
 private:
     OperatorStatus tryFromBuildToSpill();
 
-    OperatorStatus fromBuildToConvert(Block & block);
+    OperatorStatus fromBuildToConvergent(Block & block);
 
     OperatorStatus fromBuildToFinalSpillOrRestore();
 
@@ -54,12 +54,11 @@ private:
     AggregateContext agg_context;
 
     /**
-     * build───┬─────────────►restore
-     *         │                 ▲
-     *         ├───►final_spill──┘
-     *         │
-     *         ▼
-     *      convergent
+     * spill◄────►build────┬─────────────►restore
+     *              │      │                 ▲
+     *              │      └───►final_spill──┘
+     *              ▼
+     *           convergent
      */
     enum class LocalAggStatus
     {
@@ -68,7 +67,7 @@ private:
         // spill the aggregate data into disk.
         spill,
         // convert the aggregate data to block and then output it.
-        convert,
+        convergent,
         // spill the rest remaining memory aggregate data.
         final_spill,
         // load the disk aggregate data to memory and then convert to block and output it.

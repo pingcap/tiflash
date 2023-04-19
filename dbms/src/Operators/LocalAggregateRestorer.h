@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,21 @@ namespace DB
 {
 class Aggregator;
 
+/**
+ * ┌──────────────────────────────────────────────────┐
+ * │  {bucket0, bucket1, ... bucket256}spilled_file0──┼────┐
+ * │  {bucket0, bucket1, ... bucket256}spilled_file1──┼────┤
+ * │  {bucket0, bucket1, ... bucket256}spilled_file2──┼────┤
+ * │  ...                                             │    │
+ * │  {bucket0, bucket1, ... bucket256}spilled_filen──┼────┤
+ * └──────────────────────────────────────────────────┘    │
+ *                                                         │ loadBucketData
+ *                   bucket_data◄──────────────────────────┘
+ *                      │
+ *                      │ tryPop
+ *                      ▼
+ *                restored_blocks
+ */
 class LocalAggregateRestorer
 {
 public:
