@@ -495,6 +495,7 @@ private:
     };
     using LatestPathInfos = std::vector<LatestPathInfo>;
 
+    // A map of DMFileID -> { isGCEnabled, FileSize }
     using RemoteDMFileSizeMap = std::unordered_map<UInt64, std::pair<bool, UInt64>>;
 
     friend class StableDiskDelegator;
@@ -513,7 +514,7 @@ private:
 
     KeyspaceID keyspace_id = NullspaceID;
 
-    // This mutex mainly used to protect the `dt_file_path_map` and `s3_dt_file_size_map`.
+    // This mutex mainly used to protect the `dt_file_path_map` and `remote_dt_file_size_map`.
     mutable std::mutex mutex;
     // DMFileID -> path index
     DMFilePathMap dt_file_path_map;

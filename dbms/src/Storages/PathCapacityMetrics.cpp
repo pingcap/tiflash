@@ -134,9 +134,9 @@ void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used
 {
     std::unique_lock<std::mutex> lock(mutex);
     auto iter = keyspace_id_to_used_bytes.find(keyspace_id);
-    RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end());
+    RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end(), keyspace_id);
     iter->second -= used_bytes;
-    RUNTIME_CHECK(iter->second >= 0);
+    RUNTIME_CHECK_MSG(iter->second >= 0, iter->second, keyspace_id, used_bytes);
     if (iter->second == 0)
         keyspace_id_to_used_bytes.erase(iter);
 }
