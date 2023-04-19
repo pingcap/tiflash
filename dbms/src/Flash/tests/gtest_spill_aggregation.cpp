@@ -414,10 +414,9 @@ try
     {
         /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
         auto request = gen_request(exchange_concurrency);
-        enablePipeline(false);
+        WRAP_FOR_SPILL_TEST_BEGIN
         ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
-        enablePipeline(true);
-        ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+        WRAP_FOR_SPILL_TEST_END
     }
 }
 CATCH
