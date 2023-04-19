@@ -16,7 +16,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
-#include <tipb/expression.pb.h>
 #include <tipb/metadata.pb.h>
 
 namespace DB

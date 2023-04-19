@@ -20,7 +20,6 @@
 #include <Core/Names.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/Transaction/Collator.h>
-#include <tipb/expression.pb.h>
 
 #include <memory>
 
