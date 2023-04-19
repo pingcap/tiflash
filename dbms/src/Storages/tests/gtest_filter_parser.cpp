@@ -94,20 +94,18 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
+    columns_to_read.reserve(table_info.columns.size());
     {
-        NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            google::protobuf::RepeatedPtrField<tipb::Expr>{}, // don't care pushed down filters
-            DAGPreparedSets(),
-            source_columns,
-            timezone_info);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters; // don't care pushed down filters
+        dag_query = std::make_unique<DAGQueryInfo>(
+            conditions,
+            pushed_down_filters,
+            table_info.columns,
+            timezone_info);
     }
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
