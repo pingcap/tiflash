@@ -36,19 +36,7 @@ extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 
 static bool isPowerOf2(uint64_t num)
 {
-    uint64_t flag = 1ul << 63ul;
-    bool appear = false;
-    for (auto i = 0; i < 64; ++i)
-    {
-        if ((num & flag) != 0)
-        {
-            if (appear)
-                return false;
-            appear = true;
-        }
-    }
-
-    return true;
+    return (num & (num - 1)) == 0;
 }
 
 using ResultType = UInt8;
