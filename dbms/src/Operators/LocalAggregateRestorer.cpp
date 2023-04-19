@@ -28,8 +28,7 @@ LocalAggregateRestorer::LocalAggregateRestorer(
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
-    if (bucket_inputs.empty())
-        finish();
+    assert(!bucket_inputs.empty());
 }
 
 void LocalAggregateRestorer::finish()
@@ -78,7 +77,7 @@ void LocalAggregateRestorer::storeFromInputToBucketData()
 
 void LocalAggregateRestorer::loadBucketData()
 {
-    if unlikely (finished)
+    if unlikely (finished || is_cancelled())
         return;
 
     assert(bucket_data.empty());
