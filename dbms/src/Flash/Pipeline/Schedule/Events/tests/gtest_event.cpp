@@ -280,6 +280,37 @@ protected:
 private:
     size_t task_num;
 };
+
+class DoInsertEvent : public Event
+{
+public:
+    DoInsertEvent(
+        PipelineExecutorStatus & exec_status_,
+        std::atomic_int16_t & counter_)
+        : Event(exec_status_, nullptr)
+        , counter(counter_)
+    {
+        assert(counter > 0);
+    }
+
+protected:
+    std::vector<TaskPtr> scheduleImpl() override
+    {
+        std::vector<TaskPtr> tasks;
+        tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        return tasks;
+    }
+
+    void finishImpl() override
+    {
+        --counter;
+        if (counter > 0)
+            insertEvent(std::make_shared<DoInsertEvent>(exec_status, counter));
+    }
+
+private:
+    std::atomic_int16_t & counter;
+};
 } // namespace
 
 class EventTestRunner : public ::testing::Test
@@ -505,6 +536,33 @@ try
         wait(exec_status);
         assertNoErr(exec_status);
     }
+}
+CATCH
+
+TEST_F(EventTestRunner, insert_events)
+try
+{
+    PipelineExecutorStatus exec_status;
+    std::atomic_int16_t counter1{5};
+    std::atomic_int16_t counter2{5};
+    std::atomic_int16_t counter3{5};
+    {
+        std::vector<EventPtr> events;
+        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter1));
+        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter2));
+        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter3));
+        auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);
+        for (const auto & event : events)
+            err_event->addInput(event);
+        events.push_back(err_event);
+        schedule(events);
+    }
+    wait(exec_status);
+    auto exception_ptr = exec_status.getExceptionPtr();
+    ASSERT_TRUE(exception_ptr);
+    ASSERT_EQ(0, counter1);
+    ASSERT_EQ(0, counter2);
+    ASSERT_EQ(0, counter3);
 }
 CATCH
 
