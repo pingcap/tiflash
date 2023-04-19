@@ -87,8 +87,6 @@ void ExecutorTest::initializeContext()
     context.initMockStorage();
     dag_context_ptr->log = Logger::get("executorTest");
     TiFlashTestEnv::getGlobalContext().setExecutorTest();
-    if (Poco::File file(TiFlashTestEnv::getGlobalContext().getTemporaryPath()); file.exists())
-        file.remove(true);
 }
 
 void ExecutorTest::SetUpTestCase()
