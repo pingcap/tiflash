@@ -68,6 +68,13 @@ EventPtr PhysicalAggregationBuild::sinkFinalize(PipelineExecutorStatus & exec_st
     if (!aggregate_context->hasSpilledData())
         return nullptr;
 
+    /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
+    /// so a new event is added here to execute the final spill.
+    /// ...──►AggregateBuildSinkOp[local spill]──┐
+    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         ┌──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┼──►[final spill]AggregateFinalSpillEvent─┼──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         └──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┘
     std::vector<size_t> indexes;
     for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
     {

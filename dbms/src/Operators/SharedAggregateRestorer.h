@@ -33,6 +33,27 @@ enum class SharedLoaderStatus
     finished,
 };
 
+/**
+ * ┌──────────────────────────────────────────────────┐
+ * │  {bucket0, bucket1, ... bucket256}spilled_file0──┼─►LoadBucketTask1───┐
+ * │  {bucket0, bucket1, ... bucket256}spilled_file1──┼─►LoadBucketTask2───┤
+ * │  {bucket0, bucket1, ... bucket256}spilled_file2──┼─►LoadBucketTask3───┤
+ * │  ...                                             │  ...               │
+ * │  {bucket0, bucket1, ... bucket256}spilled_filen──┼─►LoadBucketTaskn───┤
+ * └──────────────────────────────────────────────────┘                    │
+ *                                                                         │
+ *               LoadBucketEvent◄──────────────────────────────────────────┘
+ *                      ▲ 
+ *                      │ 1 concurrency loop
+ *                      ▼
+ *             SharedBucketDataLoader
+ *                      │
+ *                      │    ┌─────►SharedAggregateRestorer1
+ *                      │    ├─────►SharedAggregateRestorer2
+ *                      └────┼─────►SharedAggregateRestorer3
+ *                           ...
+ *                           └─────►SharedAggregateRestorern
+ */
 class SharedBucketDataLoader : public std::enable_shared_from_this<SharedBucketDataLoader>
 {
 public:
