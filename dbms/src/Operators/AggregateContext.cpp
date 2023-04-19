@@ -75,6 +75,7 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     LOG_INFO(log, "Begin restore data from disk for local aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     status = AggStatus::restore;
+    RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
