@@ -38,7 +38,7 @@ namespace JoinInterpreterHelper
 {
 namespace
 {
-struct joinKindAndInnerIndexPairHash
+struct JoinKindAndInnerIndexPairHash
 {
     std::size_t operator()(const std::pair<tipb::JoinType, size_t> & pair) const
     {
@@ -56,7 +56,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
     /// 4. for cross left join, the build side is always right, needn't and can't swap.
     /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
     /// note that whatever the build side is, we can't support cross-right join now.
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, joinKindAndInnerIndexPairHash> equal_join_type_map{
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> equal_join_type_map{
         {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Inner, 0}},
         {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
         {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::RightOuter, 0}},
@@ -69,7 +69,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
         {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Anti, 1}},
         {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterSemi, 1}},
         {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterAnti, 1}}};
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, joinKindAndInnerIndexPairHash> cartesian_join_type_map{
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> cartesian_join_type_map{
         {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Cross, 0}},
         {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
         {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
@@ -80,7 +80,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
         {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Anti, 1}},
         {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterSemi, 1}},
         {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterAnti, 1}}};
-    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, joinKindAndInnerIndexPairHash> null_aware_join_type_map{
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> null_aware_join_type_map{
         {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_Anti, 1}},
         {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterSemi, 1}},
         {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
