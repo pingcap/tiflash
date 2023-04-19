@@ -155,10 +155,10 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
     case Kind::Inner:
         settings.ostr << "INNER JOIN";
         break;
-    case Kind::Left:
+    case Kind::LeftOuter:
         settings.ostr << "LEFT JOIN";
         break;
-    case Kind::Right:
+    case Kind::RightOuter:
         settings.ostr << "RIGHT JOIN";
         break;
     case Kind::Full:
