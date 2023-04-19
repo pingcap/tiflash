@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
-#include <Flash/Pipeline/Schedule/Events/BucketLoadEvent.h>
+#include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
 
@@ -44,7 +44,7 @@ void SharedBucketDataLoader::start()
 {
     assert(status == SharedLoaderStatus::idle);
     RUNTIME_CHECK(switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading));
-    submitLoadEvent();
+    loadBucket();
 }
 
 bool SharedBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
@@ -52,7 +52,7 @@ bool SharedBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderS
     return status.compare_exchange_strong(from, to);
 }
 
-std::vector<BucketInput *> SharedBucketDataLoader::getLoadInputs()
+std::vector<BucketInput *> SharedBucketDataLoader::getNeedLoadInputs()
 {
     assert(!bucket_inputs.empty());
     std::vector<BucketInput *> load_inputs;
@@ -71,7 +71,7 @@ void SharedBucketDataLoader::toFinishStatus()
     bucket_inputs.clear();
 }
 
-void SharedBucketDataLoader::storeFromInputToBucketData()
+void SharedBucketDataLoader::storeBucketData()
 {
     assert(status == SharedLoaderStatus::loading);
 
@@ -115,18 +115,18 @@ void SharedBucketDataLoader::storeFromInputToBucketData()
         should_load = bucket_data_queue.size() < max_queue_size;
     }
     if (should_load)
-        submitLoadEvent();
+        loadBucket();
     else
         RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
 }
 
-void SharedBucketDataLoader::submitLoadEvent()
+void SharedBucketDataLoader::loadBucket()
 {
     assert(status == SharedLoaderStatus::loading);
     if (!bucket_inputs.empty())
     {
         auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        auto event = std::make_shared<BucketLoadEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
+        auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
         RUNTIME_CHECK(event->prepareForSource());
         event->schedule();
     }
@@ -149,7 +149,7 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
         bucket_data_queue.pop();
     }
     if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
-        submitLoadEvent();
+        loadBucket();
     return true;
 }
 

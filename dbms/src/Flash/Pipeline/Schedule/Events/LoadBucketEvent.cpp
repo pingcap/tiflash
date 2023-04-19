@@ -12,27 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/BucketLoadEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/BucketLoadTask.h>
+#include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
 #include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
-std::vector<TaskPtr> BucketLoadEvent::scheduleImpl()
+std::vector<TaskPtr> LoadBucketEvent::scheduleImpl()
 {
     assert(loader);
     std::vector<TaskPtr> tasks;
-    auto load_inputs = loader->getLoadInputs();
+    auto load_inputs = loader->getNeedLoadInputs();
     tasks.reserve(load_inputs.size());
     for (const auto & input : load_inputs)
-        tasks.push_back(std::make_unique<BucketLoadTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input));
+        tasks.push_back(std::make_unique<LoadBucketTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input));
     return tasks;
 }
 
-void BucketLoadEvent::finishImpl()
+void LoadBucketEvent::finishImpl()
 {
     assert(loader);
-    loader->storeFromInputToBucketData();
+    loader->storeBucketData();
     loader.reset();
 }
 } // namespace DB

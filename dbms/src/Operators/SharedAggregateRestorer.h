@@ -50,12 +50,12 @@ public:
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
 
-    std::vector<BucketInput *> getLoadInputs();
+    std::vector<BucketInput *> getNeedLoadInputs();
 
-    void storeFromInputToBucketData();
+    void storeBucketData();
 
 private:
-    void submitLoadEvent();
+    void loadBucket();
 
     bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
 

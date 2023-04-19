@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/BucketLoadTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
 #include <Operators/BucketInput.h>
 
 namespace DB
 {
-ExecTaskStatus BucketLoadTask::doExecuteImpl()
+ExecTaskStatus LoadBucketTask::doExecuteImpl()
 {
     return ExecTaskStatus::IO;
 }
 
-ExecTaskStatus BucketLoadTask::doExecuteIOImpl()
+ExecTaskStatus LoadBucketTask::doExecuteIOImpl()
 {
     input.load();
     return ExecTaskStatus::FINISHED;
 }
 
-ExecTaskStatus BucketLoadTask::doAwaitImpl()
+ExecTaskStatus LoadBucketTask::doAwaitImpl()
 {
     return ExecTaskStatus::IO;
 }

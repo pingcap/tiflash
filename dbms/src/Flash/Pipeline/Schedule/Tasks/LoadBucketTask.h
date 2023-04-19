@@ -20,10 +20,10 @@ namespace DB
 {
 class BucketInput;
 
-class BucketLoadTask : public EventTask
+class LoadBucketTask : public EventTask
 {
 public:
-    BucketLoadTask(
+    LoadBucketTask(
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecutorStatus & exec_status_,

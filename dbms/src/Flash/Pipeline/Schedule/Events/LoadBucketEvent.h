@@ -21,10 +21,10 @@ namespace DB
 class SharedBucketDataLoader;
 using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
 
-class BucketLoadEvent : public Event
+class LoadBucketEvent : public Event
 {
 public:
-    BucketLoadEvent(
+    LoadBucketEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
