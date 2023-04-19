@@ -31,6 +31,7 @@
 #include <Poco/Net/SecureServerSocket.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
@@ -201,6 +202,7 @@ MetricsPrometheus::MetricsPrometheus(
     Context & context,
     const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
+    , path_capacity_metrics(context.getPathCapacity())
     , async_metrics(async_metrics_)
     , log(Logger::get("Prometheus"))
 {
@@ -317,6 +319,36 @@ void MetricsPrometheus::run()
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
         tiflash_metrics.registered_current_metrics[metric]->Set(value);
     }
+
+    size_t total_size = 0;
+    {
+        // Add keyspace store usage here
+        const auto & keyspace_usage = path_capacity_metrics->getKeyspaceUsedSizes();
+        for (const auto & [keyspace_id, usage] : keyspace_usage)
+        {
+            total_size += usage;
+            if (!tiflash_metrics.registered_keypace_store_used_metrics.count(keyspace_id))
+            {
+                // Add new keyspace store usage metric
+                tiflash_metrics.registered_keypace_store_used_metrics.emplace(
+                    keyspace_id,
+                    &tiflash_metrics.registered_keypace_store_used_family->Add({{"keyspace_id", std::to_string(keyspace_id)}, {"type", "used"}}));
+            }
+            tiflash_metrics.registered_keypace_store_used_metrics[keyspace_id]->Set(usage);
+        }
+
+        for (auto & [keyspace_id, metric] : tiflash_metrics.registered_keypace_store_used_metrics)
+        {
+            if (!keyspace_usage.count(keyspace_id))
+            {
+                // Remove stale keyspace store usage metric
+                LOG_DEBUG(log, "Remove stale keyspace store usage metric: keyspace_id = {}", keyspace_id);
+                tiflash_metrics.registered_keypace_store_used_family->Remove(metric);
+                tiflash_metrics.registered_keypace_store_used_metrics.erase(keyspace_id);
+            }
+        }
+    }
+    tiflash_metrics.store_used_total_metric->Set(total_size);
 
     auto async_metric_values = async_metrics.getValues();
     for (const auto & metric : async_metric_values)
