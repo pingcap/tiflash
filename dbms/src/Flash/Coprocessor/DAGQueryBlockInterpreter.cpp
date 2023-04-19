@@ -240,7 +240,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     NamesAndTypes join_output_columns = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
+    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
 
     JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
