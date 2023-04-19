@@ -20,7 +20,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
     if (unlikely(!block))
     {
-        if (agg_context->needSpill(index, /*try_mark_need_spill=*/true))
+        if (agg_context->hasSpilledData() && agg_context->needSpill(index, /*try_mark_need_spill=*/true))
         {
             assert(!is_final_spill);
             is_final_spill = true;

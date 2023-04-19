@@ -36,6 +36,30 @@ public:
     }
 };
 
+TEST_F(ExpandExecutorTestRunner, ForTest)
+try
+{
+    auto request = context
+                  .scan("test_db", "test_table")
+                  .aggregation({Count(col("s1"))}, {col("s2")})
+                  .expand(MockVVecColumnNameVec{
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"count(s1)"},
+                      },
+                      MockVecColumnNameVec{
+                          MockColumnNameVec{"s2"},
+                      },
+                  })
+                  .project({"count(s1)"})
+                  .topN({{"count(s1)", true}}, 2)
+                  .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<UInt64>({1, 1})});
+
+}
+CATCH
+
 TEST_F(ExpandExecutorTestRunner, ExpandLogical)
 try
 {
