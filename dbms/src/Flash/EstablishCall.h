@@ -140,5 +140,6 @@ private:
     String query_id;
     String connection_id;
     double waiting_task_time_ms = 0;
+    std::mutex proceed_mutex;
 };
 } // namespace DB
