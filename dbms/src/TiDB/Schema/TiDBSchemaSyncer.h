@@ -145,11 +145,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         auto getter = createSchemaGetter(keyspace_id);
 
         Int64 version = getter.getVersion();
-        // // make some test here.
-        // if (version < 0)
-        // {
-        //     version = 0;
-        // }
 
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
@@ -228,6 +223,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Int64 getDiffTables(std::vector<std::optional<SchemaDiff>> & diffs,
                         std::unordered_map<std::pair<DatabaseID, TableID>, bool> & apply_tables,
+                        std::unordered_map<std::pair<DatabaseID, TableID>, bool> & exchange_tables,
                         std::unordered_map<std::pair<DatabaseID, TableID>, bool> & drop_tables,
                         std::vector<DatabaseID> & create_database_ids,
                         std::vector<DatabaseID> & drop_database_ids)
@@ -263,7 +259,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     for (auto && opt : diff->affected_opts)
                     {
                         std::pair<DatabaseID, TableID> pair(opt.schema_id, opt.table_id);
-                        if (apply_tables.find(pair) == apply_tables.end())
+                        if (apply_tables.find(pair) == apply_tables.end() && exchange_tables.find(pair) == exchange_tables.end())
                         {
                             apply_tables[pair] = true;
                         }
@@ -277,7 +273,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     {
                         drop_tables.erase(pair);
                     }
-                    if (apply_tables.find(pair) == apply_tables.end())
+                    if (apply_tables.find(pair) == apply_tables.end() && exchange_tables.find(pair) == exchange_tables.end())
                     {
                         apply_tables[pair] = true;
                     }
@@ -334,7 +330,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 case SchemaActionType::SetTiFlashReplica:
                 {
                     std::pair<DatabaseID, TableID> pair(diff->schema_id, diff->table_id);
-                    if (apply_tables.find(pair) == apply_tables.end())
+                    if (apply_tables.find(pair) == apply_tables.end() && exchange_tables.find(pair) == exchange_tables.end())
                     {
                         apply_tables[pair] = true;
                     }
@@ -355,17 +351,25 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     std::pair<DatabaseID, TableID> new_partition_belongs_pair(diff->affected_opts[0].schema_id, diff->affected_opts[0].table_id);
                     // std::pair<DatabaseID, TableID> old_non_partition_pair(diff->schema_id, diff->old_table_id);//？再考虑过
                     //std::pair<DatabaseID, TableID> partition_pair(diff->affected_opts[0].schema_id, diff->old_table_id);
-                    if (apply_tables.find(new_non_partition_pair) == apply_tables.end())
+                    if (exchange_tables.find(new_non_partition_pair) == exchange_tables.end())
                     {
-                        apply_tables[new_non_partition_pair] = true;
+                        exchange_tables[new_non_partition_pair] = true;
+                        if (apply_tables.find(new_non_partition_pair) != apply_tables.end())
+                        {
+                            apply_tables.erase(new_non_partition_pair);
+                        }
                     }
                     // if (apply_tables.find(new_partition_pair) == apply_tables.end())
                     // {
                     //     apply_tables[new_partition_pair] = true;
                     // }
-                    if (apply_tables.find(new_partition_belongs_pair) == apply_tables.end())
+                    if (exchange_tables.find(new_partition_belongs_pair) == exchange_tables.end())
                     {
-                        apply_tables[new_partition_belongs_pair] = true;
+                        exchange_tables[new_partition_belongs_pair] = true;
+                        if (apply_tables.find(new_partition_belongs_pair) != apply_tables.end())
+                        {
+                            apply_tables.erase(new_partition_belongs_pair);
+                        }
                     }
 
                     // if (drop_tables.find(old_non_partition_pair) == drop_tables.end())
@@ -444,10 +448,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> apply_tables;
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables;
+        std::unordered_map<std::pair<DatabaseID, TableID>, bool> exchange_tables;
         std::vector<DatabaseID> create_database_ids;
         std::vector<DatabaseID> drop_database_ids;
         // 根据 diffs 整理一波 database_id, table_id 的 pairs
-        auto ret = getDiffTables(diffs, apply_tables, drop_tables, create_database_ids, drop_database_ids);
+        auto ret = getDiffTables(diffs, apply_tables, exchange_tables, drop_tables, create_database_ids, drop_database_ids);
         if (ret == -1)
         {
             return ret;
@@ -457,67 +462,78 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
 
-        // size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
+        size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
 
-        // auto schema_apply_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+        auto schema_apply_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
         try
         {
             // 并发做 create databases
+            // 串行处理 exchange tables 相关
             // 并发处理 apply tables
             // 并发处理 drop tables
             // 并发处理 drop databases
             // create databases
             {
-                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 for (const auto & create_database_id : create_database_ids)
                 {
                     LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
-                    //schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
-                    builder.applyCreateSchema(create_database_id);
+                    schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
+                    //builder.applyCreateSchema(create_database_id);
                 }
 
-                //schema_apply_wait_group->wait();
+                schema_apply_wait_group->wait();
+            }
+
+            {
+                for (const auto & [key, value] : exchange_tables)
+                {
+                    const auto & database_id = key.first;
+                    const auto & table_id = key.second;
+                    LOG_INFO(DB::Logger::get("hyy"), "exchange_tables with database_id:{}, table_id:{}", database_id, table_id);
+                    builder.applyVariousDiff(database_id, table_id);
+                }
             }
 
             {
                 // apply tables
-                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 for (const auto & [key, value] : apply_tables)
                 {
                     const auto & database_id = key.first;
                     const auto & table_id = key.second;
                     LOG_INFO(DB::Logger::get("hyy"), "apply tables with database_id:{}, table_id:{}", database_id, table_id);
-                    //schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
-                    builder.applyVariousDiff(database_id, table_id);
+                    schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
+                    //builder.applyVariousDiff(database_id, table_id);
                 }
-                //schema_apply_wait_group->wait();
+                schema_apply_wait_group->wait();
             }
 
             {
-                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 // drop tables
                 for (const auto & [key, value] : drop_tables)
                 {
                     const auto & database_id = key.first;
                     const auto & table_id = key.second;
-                    //schema_apply_wait_group->schedule([&] { builder.applyDropTable(database_id, table_id); });
-                    builder.applyDropTable(database_id, table_id);
+                    schema_apply_wait_group->schedule([&] { builder.applyDropTable(database_id, table_id); });
+                    //builder.applyDropTable(database_id, table_id);
                 }
 
-                //schema_apply_wait_group->wait();
+                schema_apply_wait_group->wait();
             }
 
             {
-                //auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 // drop databases
                 for (const auto & drop_database_id : drop_database_ids)
                 {
-                    //schema_apply_wait_group->schedule([&] { builder.applyDropSchema(drop_database_id); });
-                    builder.applyDropSchema(drop_database_id);
+                    schema_apply_wait_group->schedule([&] { builder.applyDropSchema(drop_database_id); });
+                    //builder.applyDropSchema(drop_database_id);
                 }
 
-                //schema_apply_wait_group->wait();
+                schema_apply_wait_group->wait();
             }
         }
         catch (TiFlashException & e)
