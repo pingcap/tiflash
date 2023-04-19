@@ -385,6 +385,7 @@ try
 
     /// disable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    enablePipeline(false);
     auto baseline = executeStreams(gen_request(1), 1);
 
     /// enable spill
