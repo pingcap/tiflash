@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -55,6 +56,11 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_exception_when_connect_local_tunnel[];
+} // namespace FailPoints
+
 namespace
 {
 struct GrpcExchangePacketReader : public ExchangePacketReader
@@ -125,8 +131,9 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
 {
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_exception_when_connect_local_tunnel);
     RUNTIME_CHECK_MSG(tunnel != nullptr, fmt::runtime(err_msg));
-    RUNTIME_CHECK_MSG(tunnel->isLocal(), "EstablishMPPConnectionLocal into a remote channel!");
+    RUNTIME_CHECK_MSG(tunnel->isLocal(), "Need a local tunnel, but get remote tunnel.");
 }
 
 } // namespace
