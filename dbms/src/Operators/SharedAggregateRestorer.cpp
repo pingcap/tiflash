@@ -30,6 +30,7 @@ SharedBucketDataLoader::SharedBucketDataLoader(
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
+    assert(!bucket_inputs.empty());
 
     exec_status.onEventSchedule();
 }
@@ -123,17 +124,11 @@ void SharedBucketDataLoader::storeBucketData()
 void SharedBucketDataLoader::loadBucket()
 {
     assert(status == SharedLoaderStatus::loading);
-    if (!bucket_inputs.empty())
-    {
-        auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
-        RUNTIME_CHECK(event->prepareForSource());
-        event->schedule();
-    }
-    else
-    {
-        toFinishStatus();
-    }
+    assert(!bucket_inputs.empty());
+    auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+    auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
+    RUNTIME_CHECK(event->prepareForSource());
+    event->schedule();
 }
 
 bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
