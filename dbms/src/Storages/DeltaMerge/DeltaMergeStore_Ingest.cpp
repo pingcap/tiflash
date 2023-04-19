@@ -692,9 +692,6 @@ void DeltaMergeStore::ingestFiles(
     // Assume that one segment get compacted after file ingested, `gc_handle` gc the
     // DTFiles before they get applied to all segments. Then we will apply some
     // deleted DTFiles to other segments.
-    for (const auto & file : files)
-        file->enableGC();
-
     if (auto data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store; !data_store)
     {
         for (auto & file : files)

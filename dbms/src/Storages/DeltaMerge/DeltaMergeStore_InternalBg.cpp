@@ -219,10 +219,12 @@ private:
     // this callback instance may still valid inside the PageStorage
     // even after the DeltaMerge storage is shutdown or released.
     std::weak_ptr<StoragePathPool> path_pool_weak_ref;
+    LoggerPtr logger;
 
 public:
-    explicit S3DMFileGcRemover(std::weak_ptr<StoragePathPool> path_pool_)
+    explicit S3DMFileGcRemover(std::weak_ptr<StoragePathPool> path_pool_, LoggerPtr log)
         : path_pool_weak_ref(std::move(path_pool_))
+        , logger(std::move(log))
     {}
 
     void operator()(const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageIdU64> & valid_ids)
@@ -242,6 +244,7 @@ public:
                 if (!valid_ids.count(id))
                 {
                     delegate.removeRemoteDTFile(id);
+                    LOG_DEBUG(logger, "GC removed remote DM file [id={}]", id);
                 }
             }
         }
@@ -263,7 +266,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     else
     {
         callbacks.scanner = S3DMFileGcScanner(std::weak_ptr<StoragePathPool>(path_pool));
-        callbacks.remover = S3DMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool));
+        callbacks.remover = S3DMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool), log);
     }
     // remember to unregister it when shutdown
     storage_pool->startup(std::move(callbacks));

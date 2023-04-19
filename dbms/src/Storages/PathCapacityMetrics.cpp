@@ -136,7 +136,7 @@ void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used
     auto iter = keyspace_id_to_used_bytes.find(keyspace_id);
     RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end(), keyspace_id);
     iter->second -= used_bytes;
-    RUNTIME_CHECK_MSG(iter->second >= 0, iter->second, keyspace_id, used_bytes);
+    RUNTIME_CHECK_MSG(iter->second >= 0, "Remote size {} is invalid after remove {} bytes for keyspace {}", iter->second, used_bytes, keyspace_id);
     if (iter->second == 0)
         keyspace_id_to_used_bytes.erase(iter);
 }
@@ -238,6 +238,17 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
 
+    const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
+    // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
+    if (avail_rate <= 0.2)
+        LOG_WARNING(
+            log,
+            "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
+            avail_rate * 100.0,
+            formatReadableSizeWithBinarySuffix(total_stat.avail_size),
+            formatReadableSizeWithBinarySuffix(total_stat.used_size),
+            formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
+
     // Just report local disk capacity and available size is enough
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
@@ -263,16 +274,6 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     }
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsedRemote, remote_used_size);
 
-    const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
-    // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
-    if (avail_rate <= 0.2)
-        LOG_WARNING(
-            log,
-            "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
-            avail_rate * 100.0,
-            formatReadableSizeWithBinarySuffix(total_stat.avail_size),
-            formatReadableSizeWithBinarySuffix(total_stat.used_size),
-            formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
     total_stat.ok = 1;
 
     return total_stat;
