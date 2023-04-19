@@ -447,7 +447,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // LOG_ERROR(log, "tryLoadSchemaDiffs with loadAllSchema res is {}", version);
             // return version;
             // 换一种方式获取要更新的database 和 tables
-        } else {
+        }
+        else
+        {
             LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} not with loadAllSchema", cur_version, latest_version);
 
             LOG_DEBUG(ks_log, "Try load schema diffs.");
@@ -482,7 +484,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 return ret;
             }
         }
-        
+
 
         LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}", apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
 
