@@ -26,11 +26,11 @@ namespace DB
 {
 namespace tests
 {
-void columnsToTiPBExpr(
-    tipb::Expr * expr,
+tipb::Expr columnsToTiPBExpr(
     const String & func_name,
     const ColumnNumbers & argument_column_number,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator);
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val);
 } // namespace tests
 } // namespace DB

@@ -102,35 +102,12 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        NullPresence null_presence = getNullPresense(block, arguments);
-        if (null_presence.has_null_constant)
-        {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-            return;
-        }
-
         const ColumnPtr & col_grouping_ids = block.getByPosition(arguments[0]).column;
         processGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
     }
 
 private:
-    // void processConstGroupingIDs(const ColumnConst * col_grouping_ids_const, ColumnPtr & col_res, size_t row_num) const
-    // {
-    //     UInt64 grouping_id = col_grouping_ids_const->getUInt(0);
-    //     auto res = grouping(grouping_id);
-
-    //     col_res = DataTypeNumber<ResultType>().createColumnConst(row_num, Field(static_cast<UInt64>(res)));
-    // }
-
     void processGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
-    {
-        if (col_grouping_ids->isColumnNullable())
-            throw Exception("Grouping function shouldn't get nullable column");
-        else
-            processVectorGroupingIDs(col_grouping_ids, col_res, row_num);
-    }
-
-    void processVectorGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
         switch (mode)
         {
@@ -177,21 +154,6 @@ private:
         col_res = std::move(col_vec_res);
     }
 
-    ResultType grouping(UInt64 grouping_id) const
-    {
-        switch (mode)
-        {
-        case tipb::GroupingMode::ModeBitAnd:
-            return groupingImplModeAndBit(grouping_id);
-        case tipb::GroupingMode::ModeNumericCmp:
-            return groupingImplModeNumericCmp(grouping_id);
-        case tipb::GroupingMode::ModeNumericSet:
-            return groupingImplModeNumericSet(grouping_id);
-        default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", magic_enum::enum_name(mode)));
-        }
-    }
-
     ResultType groupingImplModeAndBit(UInt64 grouping_id) const
     {
         return (grouping_id & meta_grouping_id) != 0;
@@ -214,6 +176,10 @@ private:
 
     tipb::GroupingMode mode;
     UInt64 meta_grouping_id = 0;
+
+    // In grouping function, the number of rolled up columns usually very small,
+    // so it's appropriate to use std::set as it is faster than unordered_set in
+    // small amount of elements.
     std::set<UInt64> meta_grouping_marks = {};
 };
 

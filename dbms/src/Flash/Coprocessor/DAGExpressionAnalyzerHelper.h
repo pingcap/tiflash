@@ -99,7 +99,6 @@ public:
 
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
-    using FunctionNeedMetaData = std::set<String>;
 
     static FunctionBuilderMap function_builder_map;
 };

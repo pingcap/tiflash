@@ -159,14 +159,13 @@ void columnsToTiPBExprForDateAddSub(
         expr->mutable_field_type()->set_collate(-collator->getCollatorId());
 }
 
-} // namespace
-
 void columnsToTiPBExpr(
     tipb::Expr * expr,
     const String & func_name,
     const ColumnNumbers & argument_column_number,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator)
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val)
 {
     if (func_name == "tidb_cast")
     {
@@ -182,6 +181,9 @@ void columnsToTiPBExpr(
     }
     else
     {
+        if (func_name == "grouping")
+            expr->set_val(val);
+
         expr->set_tp(tipb::ExprType::ScalarFunc);
         expr->set_sig(reverseGetFuncSigByFuncName(func_name));
         for (size_t i = 0; i < argument_column_number.size(); ++i)
@@ -194,6 +196,19 @@ void columnsToTiPBExpr(
         if (collator != nullptr)
             expr->mutable_field_type()->set_collate(-collator->getCollatorId());
     }
+}
+} // namespace
+
+tipb::Expr columnsToTiPBExpr(
+    const String & func_name,
+    const ColumnNumbers & argument_column_number,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val)
+{
+    tipb::Expr ret;
+    columnsToTiPBExpr(&ret, func_name, argument_column_number, columns, collator, val);
+    return ret;
 }
 } // namespace tests
 } // namespace DB

@@ -17,10 +17,8 @@
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
-#include <Functions/IFunction.h>
 #include <Interpreters/Expand.h>
 #include <Storages/Transaction/Collator.h>
-#include <tipb/expression.pb.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -39,7 +37,10 @@ using NamesWithAliases = std::vector<NameWithAlias>;
 class Join;
 class Expand;
 
+class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
+
+class IFunctionBuilder;
 using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
 
 class IDataType;

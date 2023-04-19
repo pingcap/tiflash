@@ -31,9 +31,9 @@ struct MetaData
     std::set<UInt64> grouping_ids;
 };
 
-tipb::Expr buildTiPBExpr(const MetaData & meta_data)
+FuncMetaData buildFuncMetaData(const MetaData & meta_data)
 {
-    tipb::Expr expr;
+    FuncMetaData func_meta;
     tipb::GroupingFunctionMetadata grouping_meta;
     grouping_meta.set_mode(meta_data.mode);
     if (meta_data.mode == tipb::GroupingMode::ModeBitAnd || meta_data.mode == tipb::GroupingMode::ModeNumericCmp)
@@ -46,8 +46,8 @@ tipb::Expr buildTiPBExpr(const MetaData & meta_data)
             grouping_meta.add_grouping_marks(grouping_id);
     }
 
-    expr.set_val(grouping_meta.SerializeAsString());
-    return expr;
+    func_meta.val = grouping_meta.SerializeAsString();
+    return func_meta;
 }
 
 class TestGrouping : public DB::tests::FunctionTest
@@ -60,6 +60,7 @@ TEST_F(TestGrouping, ModeBitAnd)
 try
 {
     MetaData meta_data;
+    FuncMetaData func_meta;
     meta_data.mode = tipb::GroupingMode::ModeBitAnd;
     const TiDB::TiDBCollatorPtr collator = nullptr;
 
@@ -73,15 +74,15 @@ try
         for (size_t i = 0; i < case_num; ++i)
         {
             meta_data.grouping_id = meta_grouping_id[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createConstColumn<UInt8>(1, expect[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     collator,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 
@@ -101,15 +102,15 @@ try
         for (size_t i = 0; i < expects.size(); ++i)
         {
             meta_data.grouping_id = meta_grouping_id[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createColumn<UInt8>(expects[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 }
@@ -132,15 +133,15 @@ try
         for (size_t i = 0; i < case_num; ++i)
         {
             meta_data.grouping_id = meta_grouping_id[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createConstColumn<UInt8>(1, expect[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     collator,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 
@@ -160,15 +161,15 @@ try
         for (size_t i = 0; i < expects.size(); ++i)
         {
             meta_data.grouping_id = meta_grouping_id[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createColumn<UInt8>(expects[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 }
@@ -191,15 +192,15 @@ try
         for (size_t i = 0; i < case_num; ++i)
         {
             meta_data.grouping_ids = meta_grouping_ids[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createConstColumn<UInt8>(1, expect[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     collator,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 
@@ -216,15 +217,15 @@ try
         for (size_t i = 0; i < expects.size(); ++i)
         {
             meta_data.grouping_ids = meta_grouping_id[i];
-            tipb::Expr expr = buildTiPBExpr(meta_data);
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
                 createColumn<UInt8>(expects[i]),
-                executeFunction(
+                executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
-                    false,
-                    &expr));
+                    func_meta,
+                    false));
         }
     }
 }
