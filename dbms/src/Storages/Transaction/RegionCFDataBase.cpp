@@ -42,7 +42,6 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    LOG_DEBUG(&Poco::Logger::get("!!!!"), "RegionCFDataBase {}", key.toDebugString());
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (!kv_pair)
