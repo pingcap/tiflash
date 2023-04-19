@@ -323,10 +323,10 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
     case ASTTableJoin::Kind::Inner:
         tp = tipb::JoinType::TypeInnerJoin;
         break;
-    case ASTTableJoin::Kind::Left:
+    case ASTTableJoin::Kind::LeftOuter:
         tp = tipb::JoinType::TypeLeftOuterJoin;
         break;
-    case ASTTableJoin::Kind::Right:
+    case ASTTableJoin::Kind::RightOuter:
         tp = tipb::JoinType::TypeRightOuterJoin;
         break;
     default:

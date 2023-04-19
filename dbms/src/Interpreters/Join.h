@@ -255,7 +255,7 @@ public:
     static const String flag_mapped_entry_helper_prefix;
     static const DataTypePtr flag_mapped_entry_helper_type;
 
-    // only use for left semi joins.
+    // only use for left outer semi joins.
     const String match_helper_name;
     // only use for right semi, right anti joins with other conditions,
     // used to name the column that records matched map entry before other conditions filter

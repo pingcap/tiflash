@@ -742,7 +742,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 struct Adder;
 
 template <typename Map>
-struct Adder<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any, Map>
+struct Adder<ASTTableJoin::Kind::LeftOuter, ASTTableJoin::Strictness::Any, Map>
 {
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & right_indexes, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
     {
@@ -798,7 +798,7 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
 };
 
 template <typename Map>
-struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any, Map>
+struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::Any, Map>
 {
     static bool addFound(const typename Map::ConstLookupResult & /*it*/, size_t num_columns_to_add, MutableColumns & added_columns, size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
     {
@@ -818,7 +818,7 @@ struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any, Map>
 };
 
 template <typename Map>
-struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All, Map>
+struct Adder<ASTTableJoin::Kind::LeftOuterSemi, ASTTableJoin::Strictness::All, Map>
 {
     static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & /*probe_process_info*/, MutableColumnPtr & /* ptr_col */)
     {
@@ -1228,8 +1228,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     const NALeftSideInfo & left_side_info,
     const NARightSideInfo & right_side_info)
 {
-    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
-                  || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti
+                  || KIND == ASTTableJoin::Kind::NullAware_LeftOuterSemi);
     static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
 
     size_t rows = block.rows();
@@ -1243,8 +1243,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
     std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
-    /// We can just consider the result of left semi join because `NASemiJoinResult::setResult` will correct
-    /// the result if it's not left semi join.
+    /// We can just consider the result of left outer semi join because `NASemiJoinResult::setResult` will correct
+    /// the result if it's not left outer semi join.
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_filter_map)
@@ -1447,34 +1447,34 @@ void JoinPartition::probeBlock(
         probe_process_info,                \
         record_mapped_entry_column);
 
-    if (kind == Left && strictness == Any)
-        CALL(Left, Any, MapsAny)
+    if (kind == LeftOuter && strictness == Any)
+        CALL(LeftOuter, Any, MapsAny)
     else if (kind == Inner && strictness == Any)
         CALL(Inner, Any, MapsAny)
-    else if (kind == Left && strictness == All)
-        CALL(Left, All, MapsAll)
+    else if (kind == LeftOuter && strictness == All)
+        CALL(LeftOuter, All, MapsAll)
     else if (kind == Inner && strictness == All)
         CALL(Inner, All, MapsAll)
     else if (kind == Full && strictness == Any)
-        CALL(Left, Any, MapsAnyFull)
-    else if (kind == Right && strictness == Any)
+        CALL(LeftOuter, Any, MapsAnyFull)
+    else if (kind == RightOuter && strictness == Any)
         CALL(Inner, Any, MapsAnyFull)
     else if (kind == Full && strictness == All)
-        CALL(Left, All, MapsAllFull)
-    else if (kind == Right && strictness == All)
+        CALL(LeftOuter, All, MapsAllFull)
+    else if (kind == RightOuter && strictness == All)
         CALL(Inner, All, MapsAllFull)
     else if (kind == Anti && strictness == Any)
         CALL(Anti, Any, MapsAny)
     else if (kind == Anti && strictness == All)
         CALL(Anti, All, MapsAll)
-    else if (kind == LeftSemi && strictness == Any)
-        CALL(LeftSemi, Any, MapsAny)
-    else if (kind == LeftSemi && strictness == All)
-        CALL(LeftSemi, All, MapsAll)
-    else if (kind == LeftAnti && strictness == Any)
-        CALL(LeftSemi, Any, MapsAny)
-    else if (kind == LeftAnti && strictness == All)
-        CALL(LeftSemi, All, MapsAll)
+    else if (kind == LeftOuterSemi && strictness == Any)
+        CALL(LeftOuterSemi, Any, MapsAny)
+    else if (kind == LeftOuterSemi && strictness == All)
+        CALL(LeftOuterSemi, All, MapsAll)
+    else if (kind == LeftOuterAnti && strictness == Any)
+        CALL(LeftOuterSemi, Any, MapsAny)
+    else if (kind == LeftOuterAnti && strictness == All)
+        CALL(LeftOuterSemi, All, MapsAll)
     else if (kind == RightSemi && record_mapped_entry_column)
         CALL(RightSemi, All, MapsAllFullWithRowFlag)
     else if (kind == RightSemi && !record_mapped_entry_column)
