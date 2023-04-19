@@ -74,8 +74,8 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for local aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
-    status = AggStatus::restore;
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
+    status = AggStatus::restore;
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
@@ -85,6 +85,7 @@ std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(Pi
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
+    RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
     auto loader = std::make_shared<SharedBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
     loader->start();
     std::vector<SharedAggregateRestorerPtr> ret;
