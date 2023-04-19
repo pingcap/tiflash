@@ -1094,14 +1094,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
+    const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto [remote_cache_paths, remote_cache_capacity_quota] = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
         storage_config.latest_capacity_quota,
-        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
-        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
+        remote_cache_paths,
+        remote_cache_capacity_quota);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1109,7 +1111,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_compute_mode)
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);

@@ -43,8 +43,8 @@ public:
                         const std::vector<size_t> & main_capacity_quota_, //
                         const Strings & latest_paths_,
                         const std::vector<size_t> & latest_capacity_quota_,
-                        String remote_cache_path = "",
-                        size_t remote_cache_capacity = 0);
+                        const Strings & remote_cache_paths = {},
+                        const std::vector<size_t> & remote_cache_capacity_quota_ = {});
 
     virtual ~PathCapacityMetrics() = default;
 
