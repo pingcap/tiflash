@@ -62,42 +62,29 @@ std::vector<BucketInput *> SharedBucketDataLoader::getNeedLoadInputs()
         if (bucket_input.needLoad())
             load_inputs.push_back(&bucket_input);
     }
+    assert(!bucket_inputs.empty());
     return load_inputs;
-}
-
-void SharedBucketDataLoader::toFinishStatus()
-{
-    // only allow from loading to finished.
-    RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
-    bucket_inputs.clear();
 }
 
 void SharedBucketDataLoader::storeBucketData()
 {
     assert(status == SharedLoaderStatus::loading);
 
+    // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
     if unlikely (exec_status.isCancelled())
-    {
-        toFinishStatus();
         return;
-    }
-
-    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end();)
-        it = it->needRemoved() ? bucket_inputs.erase(it) : std::next(it);
-    if (bucket_inputs.empty())
-    {
-        toFinishStatus();
-        return;
-    }
 
     // get min bucket num.
     Int32 min_bucket_num = NUM_BUCKETS;
     assert(!bucket_inputs.empty());
     for (auto & bucket_input : bucket_inputs)
-        min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
+    {
+        if (bucket_input.hasOutput())
+            min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
+    }
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
-        toFinishStatus();
+        RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
         return;
     }
 
@@ -105,7 +92,7 @@ void SharedBucketDataLoader::storeBucketData()
     // store bucket data of min bucket num.
     for (auto & bucket_input : bucket_inputs)
     {
-        if (min_bucket_num == bucket_input.bucketNum())
+        if (bucket_input.hasOutput() && min_bucket_num == bucket_input.bucketNum())
             bucket_data.push_back(bucket_input.moveOutput());
     }
     assert(!bucket_data.empty());
@@ -124,6 +111,10 @@ void SharedBucketDataLoader::storeBucketData()
 void SharedBucketDataLoader::loadBucket()
 {
     assert(status == SharedLoaderStatus::loading);
+    // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
+    if unlikely (exec_status.isCancelled())
+        return;
+
     assert(!bucket_inputs.empty());
     auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
@@ -141,7 +132,13 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
         // If `SharedBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
         // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that A is finished.
         if (bucket_data_queue.empty())
-            return status == SharedLoaderStatus::finished;
+        {
+            if unlikely (status == SharedLoaderStatus::finished)
+                return true;
+            if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
+                loadBucket();
+        }
+
         bucket_data = std::move(bucket_data_queue.front());
         bucket_data_queue.pop();
     }

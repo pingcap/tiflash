@@ -80,8 +80,6 @@ private:
 
     bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
 
-    void toFinishStatus();
-
 private:
     PipelineExecutorStatus & exec_status;
 

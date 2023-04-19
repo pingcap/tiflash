@@ -24,7 +24,7 @@ class BucketInput
 {
 public:
     explicit BucketInput(const BlockInputStreamPtr & stream_);
-    bool needRemoved() const;
+    bool hasOutput() const;
     bool needLoad() const;
     bool load();
     Block moveOutput();
