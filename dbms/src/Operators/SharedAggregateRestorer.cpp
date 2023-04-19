@@ -137,6 +137,7 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
                 return true;
             if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
                 loadBucket();
+            return false;
         }
 
         bucket_data = std::move(bucket_data_queue.front());
