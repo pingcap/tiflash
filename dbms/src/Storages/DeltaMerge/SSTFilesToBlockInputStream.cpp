@@ -228,7 +228,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
                 BaseBuffView key = reader->keyView();
                 BaseBuffView value = reader->valueView();
                 // TODO: use doInsert to avoid locking
-                LOG_DEBUG(log, "! LLLLK3 {}", Redact::keyToDebugString(key.data, key.len));
                 region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 (*p_process_keys) += 1;
                 if (*p_process_keys == process_keys_offset_end)
