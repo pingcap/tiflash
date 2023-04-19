@@ -60,7 +60,6 @@ try
         column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_datas, 8);
 
-    WRAP_FOR_SPILL_TEST_BEGIN
     auto request = context
                        .scan("spill_sort_test", "simple_table")
                        .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")})
@@ -68,8 +67,10 @@ try
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    enablePipeline(false);
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
+    WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
@@ -153,7 +154,6 @@ try
         {"key_8", "key_16", "key_32", "key_64"},
     };
     std::vector<std::vector<ASTPtr>> agg_funcs{{Max(col("value"))}, {Max(col("value")), Min(col("value"))}};
-    WRAP_FOR_SPILL_TEST_BEGIN
     for (auto collator_id : collators)
     {
         for (const auto & keys : group_by_keys)
@@ -163,7 +163,6 @@ try
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);
-                SortDescription sd;
                 bool has_string_key = false;
                 MockAstVec key_vec;
                 for (const auto & key : keys)
@@ -176,7 +175,9 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+                enablePipeline(false);
                 auto reference = executeStreams(request, 1);
+                SortDescription sd;
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -205,6 +206,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+                    WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -223,11 +225,11 @@ try
                     {
                         ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                     }
+                    WRAP_FOR_SPILL_TEST_END
                 }
             }
         }
     }
-    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -288,7 +290,6 @@ try
         {"key_8", "key_16", "key_32", "key_64"},
     };
     std::vector<std::vector<ASTPtr>> agg_funcs{{Max(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1")), CountDistinct(col("value_2"))}, {CountDistinct(col("value_1"))}};
-    WRAP_FOR_SPILL_TEST_BEGIN
     for (auto collator_id : collators)
     {
         for (const auto & keys : group_by_keys)
@@ -298,7 +299,6 @@ try
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);
-                SortDescription sd;
                 bool has_string_key = false;
                 MockAstVec key_vec;
                 for (const auto & key : keys)
@@ -311,7 +311,9 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+                enablePipeline(false);
                 auto reference = executeStreams(request, 1);
+                SortDescription sd;
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -340,6 +342,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+                    WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -358,11 +361,11 @@ try
                     {
                         ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                     }
+                    WRAP_FOR_SPILL_TEST_END
                 }
             }
         }
     }
-    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -400,6 +403,7 @@ try
 
     /// disable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    enablePipeline(false);
     auto baseline = executeStreams(gen_request(1), 1);
 
     /// enable spill
