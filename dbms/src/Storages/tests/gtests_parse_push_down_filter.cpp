@@ -15,15 +15,14 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaBuilder-internal.h>
@@ -82,19 +81,17 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
+    columns_to_read.reserve(table_info.columns.size());
     {
-        NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            pushed_down_filters,
-            DAGPreparedSets(),
-            source_columns,
-            timezone_info);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
+        dag_query = std::make_unique<DAGQueryInfo>(
+            conditions,
+            pushed_down_filters,
+            table_info.columns,
+            timezone_info);
     }
 
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
@@ -109,97 +106,8 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
     };
 
     auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-
-    // build push down filter
-    if (!dag_query->pushed_down_filters.empty())
-    {
-        NamesAndTypes columns_to_read_name_and_type;
-        for (const auto & col : columns_to_read)
-        {
-            columns_to_read_name_and_type.emplace_back(col.name, col.type);
-        }
-
-        std::unordered_set<String> filter_column_names;
-        for (const auto & filter : dag_query->pushed_down_filters)
-        {
-            DB::getColumnNamesFromExpr(filter, columns_to_read_name_and_type, filter_column_names);
-        }
-        DM::ColumnDefines filter_columns;
-        filter_columns.reserve(filter_column_names.size());
-        for (const auto & name : filter_column_names)
-        {
-            auto iter = std::find_if(
-                columns_to_read.begin(),
-                columns_to_read.end(),
-                [&name](const DM::ColumnDefine & d) -> bool { return d.name == name; });
-            RUNTIME_CHECK(iter != columns_to_read.end());
-            filter_columns.push_back(*iter);
-        }
-
-        ColumnInfos table_scan_column_info;
-        table_scan_column_info.reserve(columns_to_read.size());
-        const auto & table_infos = table_info.columns;
-        for (const auto & col : columns_to_read)
-        {
-            auto iter = std::find_if(
-                table_infos.begin(),
-                table_infos.end(),
-                [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
-            table_scan_column_info.push_back(*iter);
-        }
-
-        std::vector<ExtraCastAfterTSMode> need_cast_column;
-        need_cast_column.reserve(columns_to_read.size());
-        for (const auto & col : table_scan_column_info)
-        {
-            if (!filter_column_names.contains(col.name))
-            {
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-            else
-            {
-                if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                else
-                    need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-        }
-
-        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, *ctx);
-        ExpressionActionsChain chain;
-        auto & step = analyzer->initAndGetLastStep(chain);
-        auto & actions = step.actions;
-        ExpressionActionsPtr extra_cast = nullptr;
-        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
-        {
-            NamesWithAliases project_cols;
-            for (size_t i = 0; i < columns_to_read.size(); ++i)
-            {
-                if (filter_column_names.contains(columns_to_read[i].name))
-                {
-                    project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
-                }
-            }
-            actions->add(ExpressionAction::project(project_cols));
-
-            for (auto & col : filter_columns)
-                step.required_output.push_back(col.name);
-
-            extra_cast = chain.getLastActions();
-            assert(extra_cast);
-            chain.finalize();
-            chain.clear();
-        }
-
-        // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(dag_query->pushed_down_filters, *analyzer);
-
-        return std::make_shared<DM::PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
-    }
-    return std::make_shared<DM::PushDownFilter>(rs_operator);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(rs_operator, table_info.columns, pushed_down_filters, columns_to_read, *ctx, log);
+    return push_down_filter;
 }
 
 // Test cases for col and literal
