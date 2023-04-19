@@ -18,10 +18,10 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
-#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
@@ -110,6 +110,6 @@ void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
 
 EventPtr PhysicalPlanNode::sinkFinalize(PipelineExecutorStatus & /*exec_status*/)
 {
-    return nullptr; 
+    return nullptr;
 }
 } // namespace DB

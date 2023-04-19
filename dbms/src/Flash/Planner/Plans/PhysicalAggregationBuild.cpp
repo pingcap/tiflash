@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
@@ -67,7 +67,7 @@ EventPtr PhysicalAggregationBuild::sinkFinalize(PipelineExecutorStatus & exec_st
 {
     if (!aggregate_context->hasSpilledData())
         return nullptr;
-    
+
     std::vector<size_t> indexes;
     for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
     {
@@ -77,7 +77,7 @@ EventPtr PhysicalAggregationBuild::sinkFinalize(PipelineExecutorStatus & exec_st
     if (!indexes.empty())
     {
         auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes));   
+        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes));
     }
     return nullptr;
 }

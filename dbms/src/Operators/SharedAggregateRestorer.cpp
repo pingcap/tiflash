@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/SharedAggregateRestorer.h>
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
-#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 #include <Interpreters/Aggregator.h>
+#include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
@@ -93,7 +93,7 @@ protected:
 private:
     SharedBucketDataLoaderPtr loader;
 };
-}
+} // namespace
 
 SharedBucketDataLoader::SharedBucketDataLoader(
     PipelineExecutorStatus & exec_status_,
@@ -113,7 +113,7 @@ SharedBucketDataLoader::SharedBucketDataLoader(
 SharedBucketDataLoader::~SharedBucketDataLoader()
 {
     // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedBucketDataLoader` is destructed.
-    exec_status.onEventFinish();   
+    exec_status.onEventFinish();
 }
 
 void SharedBucketDataLoader::start()
