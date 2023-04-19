@@ -703,11 +703,11 @@ std::string ExpressionActions::dumpActions() const
     return ss.str();
 }
 
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr ExpressionActions::createStreamWithScanHashMapAfterProbeIfNeeded(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
 {
     for (const auto & action : actions)
         if (action.join && (needScanHashMapAfterProbe(action.join->getKind())))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
+            return action.join->createScanHashMapAfterProbeStream(source_header, index, step, max_block_size);
 
     return {};
 }
