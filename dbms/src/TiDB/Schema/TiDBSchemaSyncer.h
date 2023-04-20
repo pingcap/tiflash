@@ -135,11 +135,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
+        std::lock_guard lock(schema_mutex);
         // for (auto & pair : cur_versions)
         // {
-        //     LOG_ERROR(log, "sync schema with pair {} {}", pair.first, pair.second);
+        //     LOG_ERROR(log, "hyy sync schema with cur_versions pair {} {}", pair.first, pair.second);
         // }
-        std::lock_guard lock(schema_mutex);
         auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
         auto cur_version = cur_versions.try_emplace(keyspace_id, 0).first->second;
         auto getter = createSchemaGetter(keyspace_id);
@@ -156,7 +156,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // If the schema version not exists, drop all schemas.
         if (version == SchemaGetter::SchemaVersionNotExist)
         {
-            //LOG_ERROR(log, "version equal SchemaGetter::SchemaVersionNotExist");
             // Tables and databases are already tombstoned and waiting for GC.
             if (SchemaGetter::SchemaVersionNotExist == cur_version)
                 return false;
@@ -193,11 +192,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 LOG_ERROR(log, "tryLoadSchemaDiffs Failed");
             }
             cur_versions[keyspace_id] = version_after_load_diff;
+            //LOG_INFO(log, "hyy cur_versions keyspace_id is {} value is {}", keyspace_id ,cur_versions[keyspace_id]);
         }
 
         // TODO: (keyspace) attach keyspace id to the metrics.
-        GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
+        GET_METRIC(tiflash_schema_version).Set(version);
+        LOG_INFO(ks_log, "hyy End sync schema, version has been updated to {}{}", version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
@@ -410,7 +410,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if error happens, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
-        LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
+        //LOG_ERROR(log, "hyy tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> apply_tables;
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables;
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> exchange_tables;
@@ -425,6 +425,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 --version;
             }
             SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+
             std::vector<TiDB::DBInfoPtr> all_schemas = getter.listDBs();
             for (const auto & db : all_schemas)
             {
@@ -439,6 +440,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                         continue;
                     }
                     apply_tables.emplace(std::make_pair(db->id, table->id), true);
+                    //LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
                 }
             }
             used_version = version;
@@ -450,11 +452,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} not with loadAllSchema", cur_version, latest_version);
-
             LOG_DEBUG(ks_log, "Try load schema diffs.");
 
-            Int64 used_version = cur_version;
+            used_version = cur_version;
             // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
             // schema diff without any exception.
             std::vector<std::optional<SchemaDiff>> diffs;
@@ -486,7 +486,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
 
 
-        LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}", apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
+        //LOG_INFO(log, "apply_tables size is {}, drop_tables size is {}, create_database_ids size is {}, drop_database_ids size is {}", apply_tables.size(), drop_tables.size(), create_database_ids.size(), drop_database_ids.size());
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
 
