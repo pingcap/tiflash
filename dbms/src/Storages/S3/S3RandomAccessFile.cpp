@@ -78,6 +78,8 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
+    // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
+    // It's just a double check for more safty.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
         LOG_ERROR(
