@@ -133,9 +133,10 @@ void AggregateContext::initConvergentPrefix()
             threads_data[0]->key_columns,
             threads_data[0]->aggregate_columns);
         /// Since this won't consume a lot of memory,
-        /// even if it triggers spilling due to a low threshold setting,
+        /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.
         many_data[0]->need_spill = false;
+        assert(!aggregator->hasSpilledData());
     }
 }
 

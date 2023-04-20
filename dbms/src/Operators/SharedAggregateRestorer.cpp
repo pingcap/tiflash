@@ -119,7 +119,7 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
     {
         std::lock_guard lock(queue_mu);
         // If `SharedBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
-        // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that A is finished.
+        // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that `SharedBucketDataLoader` is finished.
         if (bucket_data_queue.empty())
         {
             if unlikely (status == SharedLoaderStatus::finished)

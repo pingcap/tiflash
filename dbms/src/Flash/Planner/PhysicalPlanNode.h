@@ -75,7 +75,7 @@ public:
 
     virtual void buildPipeline(PipelineBuilder & builder);
 
-    virtual EventPtr sinkFinalize(PipelineExecutorStatus & /*exec_status*/);
+    EventPtr sinkFinalize(PipelineExecutorStatus & exec_status);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -96,6 +96,8 @@ public:
     String toSimpleString();
 
 protected:
+    virtual EventPtr doSinkFinalize(PipelineExecutorStatus & /*exec_status*/);
+
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
