@@ -38,6 +38,7 @@ public:
         : SourceOp(exec_status_, req_id)
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
+        , ref_no(0)
     {
         setHeader(toEmptyBlock(columns_to_read_));
         if (extra_table_id_index != InvalidColumnID)
@@ -46,9 +47,15 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
-        auto ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
+    }
+
+    ~UnorderedSourceOp() override
+    {
+        task_pool->decreaseUnorderedInputStreamRefCount();
+        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
     String getName() const override
@@ -70,5 +77,6 @@ private:
     DM::SegmentReadTaskPoolPtr task_pool;
     SegmentReadTransformAction action;
     std::optional<Block> t_block;
+    int64_t ref_no;
 };
 } // namespace DB

@@ -53,6 +53,10 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
+    SourceOps execute(PipelineExecutorStatus & exec_status);
+
+    void executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -72,13 +76,25 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
+
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
+
+    SourceOps buildLocalSourceOpsForPhysicalTable(
+        PipelineExecutorStatus & exec_status,
+        const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        size_t max_block_size);
+
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
+
+    SourceOps buildLocalSourceOps(
+        PipelineExecutorStatus & exec_status,
+        size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -97,13 +113,25 @@ private:
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
+    void buildRemoteSourceOps(
+        SourceOps & source_ops,
+        PipelineExecutorStatus & exec_status,
+        const std::vector<RemoteRequest> & remote_requests);
+
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 
+    void executeCastAfterTableScan(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        size_t remote_read_sources_start_index);
+
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
+
+    SourceOps executeImpl(PipelineExecutorStatus & exec_status);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
@@ -139,6 +167,8 @@ private:
     NamesAndTypes source_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+
+    size_t remote_read_sources_start_index{};
 };
 
 } // namespace DB

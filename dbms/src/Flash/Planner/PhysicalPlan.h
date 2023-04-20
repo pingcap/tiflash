@@ -45,7 +45,7 @@ public:
 
     void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    PipelinePtr toPipeline();
+    PipelinePtr toPipeline(PipelineExecutorStatus & exec_status, Context & context);
 
 private:
     void addRootFinalProjectionIfNeed();

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,12 +88,13 @@ void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
     tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
     tipb_executor->set_executor_id(name);
     auto * ts = tipb_executor->mutable_tbl_scan();
+    ts->set_keep_order(keep_order);
     ts->set_table_id(table_info.id);
     for (const auto & info : output_schema)
         setTipbColumnInfo(ts->add_columns(), info);
 }
 
-ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column)
+ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column, bool keep_order)
 {
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)
@@ -121,6 +122,6 @@ ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_in
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
     }
 
-    return std::make_shared<mock::TableScanBinder>(executor_index, ts_output, table_info);
+    return std::make_shared<mock::TableScanBinder>(executor_index, ts_output, table_info, keep_order);
 }
 } // namespace DB::mock

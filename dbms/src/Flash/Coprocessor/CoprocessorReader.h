@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,13 +81,13 @@ public:
         pingcap::kv::Cluster * cluster,
         std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
-        int concurrency,
+        int concurrency_,
         const pingcap::kv::LabelFilter & tiflash_label_filter_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
+        , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
-        , concurrency_(concurrency)
+        , concurrency(concurrency_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -115,7 +115,7 @@ public:
             return detail;
 
         detail.packet_bytes = resp->ByteSizeLong();
-        for (int i = 0; i < chunk_size; i++)
+        for (int i = 0; i < chunk_size; ++i)
         {
             Block block;
             const tipb::Chunk & chunk = resp->chunks(i);
@@ -146,17 +146,28 @@ public:
         return detail;
     }
 
-    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
+    std::pair<pingcap::coprocessor::ResponseIter::Result, bool> nonBlockingNext()
     {
         RUNTIME_CHECK(opened == true);
+        return resp_iter.nonBlockingNext();
+    }
 
-        auto && [result, has_next] = resp_iter.next();
+    CoprocessorReaderResult toResult(std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
+                                     std::queue<Block> & block_queue,
+                                     const Block & header)
+    {
+        auto && [result, has_next] = result_pair;
+
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
 
         if (!has_next)
-            return {nullptr, false, "", true};
+        {
+            if (result.finished)
+                return {nullptr, false, "", true};
+            else
+                return {nullptr, false, "", false};
+        }
 
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
@@ -182,14 +193,24 @@ public:
         }
     }
 
+    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
+    {
+        RUNTIME_CHECK(opened == true);
+
+        auto && result_pair = resp_iter.next();
+
+        return toResult(result_pair, block_queue, header);
+    }
+
     size_t getSourceNum() const { return 1; }
 
-    int getExternalThreadCnt() const { return concurrency_; }
+    int getExternalThreadCnt() const { return concurrency; }
 
     void close() {}
 
     bool collected = false;
-    int concurrency_;
+    int concurrency;
     bool opened = false;
 };
 } // namespace DB
