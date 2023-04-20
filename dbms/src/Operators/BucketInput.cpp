@@ -67,7 +67,7 @@ Int32 BucketInput::getMinBucketNum(const BucketInputs & inputs)
 {
     assert(!inputs.empty());
     Int32 min_bucket_num = NUM_BUCKETS;
-    for (auto & input : inputs)
+    for (const auto & input : inputs)
     {
         if (input.hasOutput())
             min_bucket_num = std::min(input.bucketNum(), min_bucket_num);
