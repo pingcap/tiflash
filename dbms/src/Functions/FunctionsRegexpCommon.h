@@ -105,10 +105,15 @@ inline int getDefaultFlags()
 template <bool need_subpattern = false>
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
+    if (pattern.empty())
+        throw Exception("Length of the pattern argument must be greater than 0.");
+
     String mode = re2Util::getRE2ModeModifiers(match_type, collator);
     String final_pattern;
     if constexpr (need_subpattern)
         final_pattern = fmt::format("({})", pattern);
+    else
+        final_pattern = pattern;
 
     if (mode.empty())
         return final_pattern;
@@ -835,7 +840,7 @@ public:
             return nullptr;
 
         String final_pattern = pat_param.getString(0);
-        if (unlikely(final_pattern.empty()))
+        if (unlikely(final_pattern.empty())) // TODO delete it
             throw Exception(EMPTY_PAT_ERR_MSG);
 
         String match_type = match_type_param.getString(0);

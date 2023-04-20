@@ -324,13 +324,13 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
 
         re2 = std::make_unique<RegexType>(regexp_, options);
         if (!re2->ok())
-            throw Poco::Exception("OptimizedRegularExpression: cannot compile re2: " + regexp_ + ", error: " + re2->error());
+            throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
         if (!is_no_capture)
         {
             capture_num = re2->NumberOfCapturingGroups();
             if (capture_num > max_captures)
-                throw Poco::Exception("OptimizedRegularExpression: too many subpatterns in regexp: " + regexp_);
+                throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many subpatterns in regexp: {}", regexp_));
         }
     }
 }
@@ -781,12 +781,12 @@ Instructions OptimizedRegularExpressionImpl<thread_safe>::getInstructions(const 
         instructions.emplace_back(literals);
 
     for (const auto & instr : instructions)
-        if (instr.substitution_num >= static_cast<Int32>(capture_num))
+        if (instr.substitution_num > static_cast<Int32>(capture_num))
             throw Poco::Exception(
                 fmt::format(
                     "Id {} in replacement string is an invalid substitution, regexp has only {} capturing groups",
                     instr.substitution_num,
-                    capture_num - 1),
+                    capture_num),
                 DB::ErrorCodes::BAD_ARGUMENTS);
 
     return instructions;
