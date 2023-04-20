@@ -51,7 +51,10 @@ public:
         , sample_block(sample_block_)
     {}
 
-    void buildPipeline(PipelineBuilder & builder) override;
+    void buildPipeline(
+        PipelineBuilder & builder,
+        Context & context,
+        PipelineExecutorStatus & exec_status) override;
 
     void finalize(const Names & parent_require) override;
 

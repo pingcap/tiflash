@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,31 +14,11 @@
 
 #pragma once
 
-#include <Core/Block.h>
+#include <memory>
 
 namespace DB
 {
-
-class SquashingHashJoinBlockTransform
-{
-public:
-    SquashingHashJoinBlockTransform(UInt64 max_block_size_);
-
-    void appendBlock(Block & block);
-    Block getFinalOutputBlock();
-    bool isJoinFinished() const;
-    bool needAppendBlock() const;
-
-
-private:
-    void handleOverLimitBlock();
-    void reset();
-
-    Blocks blocks;
-    std::optional<Block> over_limit_block;
-    size_t output_rows;
-    UInt64 max_block_size;
-    bool join_finished;
-};
-
+class SourceOp;
+using SourceOpPtr = std::unique_ptr<SourceOp>;
+using SourceOps = std::vector<SourceOpPtr>;
 } // namespace DB

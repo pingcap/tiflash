@@ -20,17 +20,17 @@
 
 namespace DB
 {
-/// Stream from not joined earlier rows of the right table.
-class NonJoinedBlockInputStream : public IProfilingBlockInputStream
+/// Stream from scanning the hash table after probe
+class ScanHashMapAfterProbeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
+    ScanHashMapAfterProbeBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t index_, size_t step_, size_t max_block_size_);
 
-    String getName() const override { return "NonJoined"; }
+    String getName() const override { return "ScanHashMapAfterProbe"; }
 
     Block getHeader() const override { return result_sample_block; };
 
-    size_t getNonJoinedIndex() const { return index; }
+    size_t getIndex() const { return index; }
 
 
 protected:
@@ -73,7 +73,7 @@ private:
         not_mapped_row_pos = nullptr;
     }
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename Map>
+    template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
     void fillColumns(const Map & map,
                      size_t num_columns_left,
                      MutableColumns & mutable_columns_left,
@@ -81,6 +81,7 @@ private:
                      MutableColumns & mutable_columns_right,
                      IColumn * row_counter_column);
 
+    template <bool row_flagged, bool output_joined_rows>
     void fillColumnsUsingCurrentPartition(
         size_t num_columns_left,
         MutableColumns & mutable_columns_left,

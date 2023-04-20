@@ -14,28 +14,28 @@
 
 #include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 
 namespace DB
 {
 HashJoinProbeExecPtr HashJoinProbeExec::build(
     const JoinPtr & join,
     const BlockInputStreamPtr & probe_stream,
-    size_t non_joined_stream_index,
+    size_t scan_hash_map_after_probe_stream_index,
     size_t max_block_size)
 {
-    bool need_output_non_joined_data = join->needReturnNonJoinedData();
-    BlockInputStreamPtr non_joined_stream = nullptr;
-    if (need_output_non_joined_data)
-        non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
+    bool need_scan_hash_map_after_probe = needScanHashMapAfterProbe(join->getKind());
+    BlockInputStreamPtr scan_hash_map_stream = nullptr;
+    if (need_scan_hash_map_after_probe)
+        scan_hash_map_stream = join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), scan_hash_map_after_probe_stream_index, join->getProbeConcurrency(), max_block_size);
 
     return std::make_shared<HashJoinProbeExec>(
         join,
         nullptr,
         probe_stream,
-        need_output_non_joined_data,
-        non_joined_stream_index,
-        non_joined_stream,
+        need_scan_hash_map_after_probe,
+        scan_hash_map_after_probe_stream_index,
+        scan_hash_map_stream,
         max_block_size);
 }
 
@@ -43,16 +43,16 @@ HashJoinProbeExec::HashJoinProbeExec(
     const JoinPtr & join_,
     const BlockInputStreamPtr & restore_build_stream_,
     const BlockInputStreamPtr & probe_stream_,
-    bool need_output_non_joined_data_,
-    size_t non_joined_stream_index_,
-    const BlockInputStreamPtr & non_joined_stream_,
+    bool need_scan_hash_map_after_probe_,
+    size_t scan_hash_map_after_probe_stream_index_,
+    const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
     size_t max_block_size_)
     : join(join_)
     , restore_build_stream(restore_build_stream_)
     , probe_stream(probe_stream_)
-    , need_output_non_joined_data(need_output_non_joined_data_)
-    , non_joined_stream_index(non_joined_stream_index_)
-    , non_joined_stream(non_joined_stream_)
+    , need_scan_hash_map_after_probe(need_scan_hash_map_after_probe_)
+    , scan_hash_map_after_probe_stream_index(scan_hash_map_after_probe_stream_index_)
+    , scan_hash_map_after_probe_stream(scan_hash_map_after_probe_stream_)
     , max_block_size(max_block_size_)
     , probe_process_info(max_block_size_)
 {}
@@ -155,19 +155,19 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
         {
             /// restored join should always enable spill
             assert(restore_info->join && restore_info->join->isEnableSpill());
-            size_t non_joined_stream_index = 0;
-            if (need_output_non_joined_data)
+            size_t scan_hash_map_stream_index = 0;
+            if (need_scan_hash_map_after_probe)
             {
-                assert(restore_info->non_joined_stream);
-                non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
+                assert(restore_info->scan_hash_map_stream);
+                scan_hash_map_stream_index = dynamic_cast<ScanHashMapAfterProbeBlockInputStream *>(restore_info->scan_hash_map_stream.get())->getIndex();
             }
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
                 restore_info->join,
                 restore_info->build_stream,
                 restore_info->probe_stream,
-                need_output_non_joined_data,
-                non_joined_stream_index,
-                restore_info->non_joined_stream,
+                need_scan_hash_map_after_probe,
+                scan_hash_map_stream_index,
+                restore_info->scan_hash_map_stream,
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->setCancellationHook(is_cancelled);
@@ -197,9 +197,9 @@ void HashJoinProbeExec::cancel()
     ///       - for threads reading joined data: will return empty block if build is not finished yet
     ///       - for threads reading non joined data: will return empty block if build or probe is not finished yet
     join->wakeUpAllWaitingThreads();
-    if (non_joined_stream != nullptr)
+    if (scan_hash_map_after_probe_stream != nullptr)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get()); p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(scan_hash_map_after_probe_stream.get()); p_stream != nullptr)
             p_stream->cancel(false);
     }
     if (probe_stream != nullptr)
@@ -230,31 +230,31 @@ bool HashJoinProbeExec::onProbeFinish()
     if (join->isRestoreJoin())
         probe_stream->readSuffix();
     join->finishOneProbe();
-    return !need_output_non_joined_data && !join->isEnableSpill();
+    return !need_scan_hash_map_after_probe && !join->isEnableSpill();
 }
 
-void HashJoinProbeExec::onNonJoinedStart()
+void HashJoinProbeExec::onScanHashMapAfterProbeStart()
 {
-    assert(non_joined_stream != nullptr);
-    non_joined_stream->readPrefix();
+    assert(scan_hash_map_after_probe_stream != nullptr);
+    scan_hash_map_after_probe_stream->readPrefix();
 }
 
-Block HashJoinProbeExec::fetchNonJoined()
+Block HashJoinProbeExec::fetchScanHashMapData()
 {
-    assert(non_joined_stream != nullptr);
-    return non_joined_stream->read();
+    assert(scan_hash_map_after_probe_stream != nullptr);
+    return scan_hash_map_after_probe_stream->read();
 }
 
-bool HashJoinProbeExec::onNonJoinedFinish()
+bool HashJoinProbeExec::onScanHashMapAfterProbeFinish()
 {
-    non_joined_stream->readSuffix();
+    scan_hash_map_after_probe_stream->readSuffix();
     if (!join->isEnableSpill())
     {
         return true;
     }
     else
     {
-        join->finishOneNonJoin(non_joined_stream_index);
+        join->finishOneNonJoin(scan_hash_map_after_probe_stream_index);
         return false;
     }
 }

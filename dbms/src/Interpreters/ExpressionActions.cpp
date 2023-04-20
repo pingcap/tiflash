@@ -213,7 +213,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::RightOuter)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
@@ -701,15 +701,6 @@ std::string ExpressionActions::dumpActions() const
         ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
-}
-
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
-{
-    for (const auto & action : actions)
-        if (action.join && (action.join->needReturnNonJoinedData()))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
-
-    return {};
 }
 
 void ExpressionActionsChain::addStep()

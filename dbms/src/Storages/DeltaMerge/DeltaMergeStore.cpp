@@ -25,6 +25,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -1004,7 +1005,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     return res;
 }
 
-static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, bool keep_order)
 {
     if (is_fast_scan)
     {
@@ -1015,6 +1016,13 @@ static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan
         return ReadMode::Bitmap;
     }
     return ReadMode::Normal;
+}
+
+ReadMode DeltaMergeStore::getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter)
+{
+    auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
+    return read_mode;
 }
 
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
@@ -1056,8 +1064,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1108,7 +1115,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 SourceOps DeltaMergeStore::readSourceOps(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorStatus & exec_status,
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
@@ -1147,7 +1154,8 @@ SourceOps DeltaMergeStore::readSourceOps(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream = std::max(1, num_streams);
+    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1155,7 +1163,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         filter,
         max_version,
         expected_block_size,
-        getReadMode(db_context, is_fast_scan, keep_order),
+        read_mode,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
@@ -1163,17 +1171,35 @@ SourceOps DeltaMergeStore::readSourceOps(
         final_num_stream);
 
     SourceOps res;
-    RUNTIME_CHECK(enable_read_thread); // TODO: support keep order
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        res.push_back(
-            std::make_unique<UnorderedSourceOp>(
-                exec_status_,
+        if (enable_read_thread)
+        {
+            res.push_back(
+                std::make_unique<UnorderedSourceOp>(
+                    exec_status,
+                    read_task_pool,
+                    columns_to_read,
+                    extra_table_id_index,
+                    physical_table_id,
+                    log_tracing_id));
+        }
+        else
+        {
+            res.push_back(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_status,
+                dm_context,
                 read_task_pool,
+                after_segment_read,
                 columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id));
+        }
     }
     LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 

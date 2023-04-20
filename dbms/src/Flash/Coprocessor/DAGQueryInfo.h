@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include <Core/NamesAndTypes.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Interpreters/TimezoneInfo.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <google/protobuf/repeated_ptr_field.h>
+#include <tipb/expression.pb.h>
 
 #include <unordered_map>
 
@@ -29,23 +30,18 @@ struct DAGQueryInfo
     DAGQueryInfo(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
-        DAGPreparedSets dag_sets_,
-        const NamesAndTypes & source_columns_,
+        const ColumnInfos & source_columns_,
         const TimezoneInfo & timezone_info_)
         : source_columns(source_columns_)
         , filters(filters_)
         , pushed_down_filters(pushed_down_filters_)
-        , dag_sets(std::move(dag_sets_))
         , timezone_info(timezone_info_){};
 
-    const NamesAndTypes & source_columns;
+    const ColumnInfos & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
     // filters have been push down to storage engine in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters;
-    // Prepared sets extracted from dag request, which are used for indices
-    // by storage engine.
-    DAGPreparedSets dag_sets;
 
     const TimezoneInfo & timezone_info;
 };

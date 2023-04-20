@@ -59,7 +59,7 @@ public:
     void onTaskFinish() noexcept;
 
     // return true for source event.
-    bool prepareForSource();
+    bool prepare();
 
 protected:
     // Returns the tasks ready to be scheduled.
@@ -68,6 +68,9 @@ protected:
     // So far the ownership and the life-cycle of the resources are not very well-defined so we still rely on things like "A must be released before B".
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
+
+    /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
+    void insertEvent(const EventPtr & insert_event) noexcept;
 
 private:
     void scheduleTasks(std::vector<TaskPtr> & tasks) noexcept;

@@ -55,8 +55,7 @@ public:
     PipelineExecutor(
         const MemoryTrackerPtr & memory_tracker_,
         Context & context_,
-        const String & req_id,
-        const PipelinePtr & root_pipeline_);
+        const String & req_id);
 
     String toString() const override;
 
