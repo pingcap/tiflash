@@ -22,18 +22,26 @@ BucketInput::BucketInput(const BlockInputStreamPtr & stream_)
     stream->readPrefix();
 }
 
-Block BucketInput::moveOutput()
+bool BucketInput::needLoad() const
 {
-    assert(output.has_value());
-    Block ret = std::move(*output);
-    output.reset();
-    return ret;
+    return !is_exhausted && !output.has_value();
 }
 
-Int32 BucketInput::bucketNum() const
+void BucketInput::load()
 {
-    assert(output.has_value());
-    return output->info.bucket_num;
+    assert(needLoad());
+    Block ret = stream->read();
+    if unlikely (!ret)
+    {
+        is_exhausted = true;
+        stream->readSuffix();
+    }
+    else
+    {
+        /// Only two level data can be spilled.
+        assert(ret.info.bucket_num != -1);
+        output.emplace(std::move(ret));
+    }
 }
 
 bool BucketInput::hasOutput() const
@@ -41,32 +49,42 @@ bool BucketInput::hasOutput() const
     return output.has_value();
 }
 
-bool BucketInput::needLoad() const
+Int32 BucketInput::bucketNum() const
 {
-    return !is_exhausted && !output.has_value();
+    assert(hasOutput());
+    return output->info.bucket_num;
 }
 
-bool BucketInput::load()
+Block BucketInput::moveOutput()
 {
-    if unlikely (is_exhausted)
-        return false;
+    assert(hasOutput());
+    Block ret = std::move(*output);
+    output.reset();
+    return ret;
+}
 
-    if (output.has_value())
-        return true;
+Int32 BucketInput::getMinBucketNum(const BucketInputs & inputs)
+{
+    assert(!bucket_inputs.empty());
+    Int32 min_bucket_num = NUM_BUCKETS;
+    for (auto & input : inputs)
+    {
+        if (input.hasOutput())
+            min_bucket_num = std::min(input.bucketNum(), min_bucket_num);
+    }
+    return min_bucket_num;
+}
 
-    Block ret = stream->read();
-    if unlikely (!ret)
+BlocksList BucketInput::moveOutputs(BucketInputs & inputs, Int32 target_bucket_num)
+{
+    BlocksList bucket_data;
+    // store bucket data of min bucket num.
+    for (auto & input : inputs)
     {
-        is_exhausted = true;
-        stream->readSuffix();
-        return false;
+        if (input.hasOutput() && target_bucket_num == input.bucketNum())
+            bucket_data.push_back(input.moveOutput());
     }
-    else
-    {
-        /// Only two level data can be spilled.
-        assert(ret.info.bucket_num != -1);
-        output.emplace(std::move(ret));
-        return true;
-    }
+    assert(!bucket_data.empty());
+    return bucket_data;
 }
 } // namespace DB

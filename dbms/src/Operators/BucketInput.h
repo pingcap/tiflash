@@ -24,11 +24,20 @@ class BucketInput
 {
 public:
     explicit BucketInput(const BlockInputStreamPtr & stream_);
-    bool hasOutput() const;
+
     bool needLoad() const;
-    bool load();
-    Block moveOutput();
+    void load();
+
+    bool hasOutput() const;
     Int32 bucketNum() const;
+    Block moveOutput();
+
+    static Int32 getMinBucketNum(const BucketInputs & inputs);
+
+    static BlocksList moveOutputs(BucketInputs & inputs, Int32 target_bucket_num);
+
+public:
+    static constexpr Int32 NUM_BUCKETS = 256;
 
 private:
     BlockInputStreamPtr stream;

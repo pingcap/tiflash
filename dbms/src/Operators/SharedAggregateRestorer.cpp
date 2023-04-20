@@ -68,37 +68,25 @@ void SharedBucketDataLoader::storeBucketData()
         return;
 
     // get min bucket num.
-    Int32 min_bucket_num = NUM_BUCKETS;
-    assert(!bucket_inputs.empty());
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if (bucket_input.hasOutput())
-            min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
-    }
+    Int32 min_bucket_num = BucketInput::getMinBucketNum(bucket_inputs);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
         RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
+        LOG_DEBUG(log, "shared agg restore finished");
         return;
     }
 
-    BlocksList bucket_data;
     // store bucket data of min bucket num.
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if (bucket_input.hasOutput() && min_bucket_num == bucket_input.bucketNum())
-            bucket_data.push_back(bucket_input.moveOutput());
-    }
-    assert(!bucket_data.empty());
-    bool should_load = false;
+    BlocksList bucket_data = BucketInput::moveOutputs(bucket_inputs, min_bucket_num);
     {
         std::lock_guard lock(queue_mu);
         bucket_data_queue.push(std::move(bucket_data));
-        should_load = bucket_data_queue.size() < max_queue_size;
+        // 
+        if (bucket_data_queue.size() >= max_queue_size)
+            RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
+        return;
     }
-    if (should_load)
-        loadBucket();
-    else
-        RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
+    loadBucket();
 }
 
 void SharedBucketDataLoader::loadBucket()

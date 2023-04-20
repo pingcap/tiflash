@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Core/Block.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Operators/BucketInput.h>
 
 #include <memory>
@@ -56,9 +58,7 @@ public:
 private:
     bool loadFromInputs();
 
-    void storeFromInputToBucketData();
-
-    void finish();
+    void storeToBucketData();
 
 private:
     Aggregator & aggregator;
@@ -72,7 +72,6 @@ private:
     // bucket_inputs --> bucket_data --> restored_blocks.
     BlocksList bucket_data;
     BlocksList restored_blocks;
-
     BucketInputs bucket_inputs;
 
     static constexpr Int32 NUM_BUCKETS = 256;

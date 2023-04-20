@@ -65,8 +65,6 @@ public:
 
     ~SharedBucketDataLoader();
 
-    void start();
-
     // return true if pop success
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
@@ -88,9 +86,6 @@ private:
     LoggerPtr log;
 
     size_t max_queue_size;
-
-    std::atomic<SharedLoaderStatus> status{SharedLoaderStatus::idle};
-
     std::mutex queue_mu;
     std::queue<BlocksList> bucket_data_queue;
 
@@ -98,6 +93,8 @@ private:
     // The unique_ptr of spilled file is held by BucketInput, so don't need to care about agg_context.
     BucketInputs bucket_inputs;
     static constexpr Int32 NUM_BUCKETS = 256;
+
+    std::atomic<SharedLoaderStatus> status{SharedLoaderStatus::idle};
 };
 using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
 

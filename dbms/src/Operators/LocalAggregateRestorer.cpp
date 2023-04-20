@@ -31,48 +31,38 @@ LocalAggregateRestorer::LocalAggregateRestorer(
     assert(!bucket_inputs.empty());
 }
 
-void LocalAggregateRestorer::finish()
-{
-    assert(!finished);
-    finished = true;
-    bucket_inputs.clear();
-    LOG_INFO(log, "local agg restore finished");
-}
-
 bool LocalAggregateRestorer::loadFromInputs()
 {
     assert(!bucket_inputs.empty());
-    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end() && unlikely(!is_cancelled());)
-        it = it->load() ? std::next(it) : bucket_inputs.erase(it);
-    if unlikely (is_cancelled() || bucket_inputs.empty())
+    for (auto & bucket_input : bucket_inputs)
     {
-        finish();
-        return false;
+        if unlikely (is_cancelled())
+            return false;
+        if (bucket_input.needLoad())
+            bucket_input.load();
     }
+    if unlikely (is_cancelled())
+        return false;
     return true;
 }
 
-void LocalAggregateRestorer::storeFromInputToBucketData()
+void LocalAggregateRestorer::storeToBucketData()
 {
+    assert(!finished);
     assert(!bucket_inputs.empty());
 
     // get min bucket num.
-    Int32 min_bucket_num = NUM_BUCKETS;
-    for (auto & bucket_input : bucket_inputs)
-        min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
+    Int32 min_bucket_num = BucketInput::getMinBucketNum(bucket_inputs);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
-        finish();
+        assert(!finished);
+        finished = true;
+        LOG_DEBUG(log, "local agg restore finished");
         return;
     }
 
     // store bucket data of min bucket num.
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if (min_bucket_num == bucket_input.bucketNum())
-            bucket_data.push_back(bucket_input.moveOutput());
-    }
-    assert(!bucket_data.empty());
+    bucket_data = BucketInput::moveOutputs(bucket_inputs, min_bucket_num);
 }
 
 void LocalAggregateRestorer::loadBucketData()
@@ -82,7 +72,7 @@ void LocalAggregateRestorer::loadBucketData()
 
     assert(bucket_data.empty());
     if (loadFromInputs())
-        storeFromInputToBucketData();
+        storeToBucketData();
 }
 
 bool LocalAggregateRestorer::tryPop(Block & block)
