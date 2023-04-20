@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Operators/FilterTransformOp.h>
+#include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
 #include <Operators/LimitTransformOp.h>
 #include <Operators/LocalSortTransformOp.h>
 
@@ -286,6 +288,29 @@ void executePushedDownFilter(
     }
 }
 
+void executePushedDownFilter(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log)
+{
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+
+    assert(remote_read_sources_start_index <= group_builder.group.size());
+    auto input_header = group_builder.getCurrentHeader();
+
+    // for remote read, filter had been pushed down, don't need to execute again.
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & group = group_builder.group[i];
+        group.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        // after filter, do project action to keep the schema of local transforms and remote transforms the same.
+        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
+    }
+}
+
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
@@ -300,6 +325,46 @@ void executeGeneratedColumnPlaceholder(
         auto & stream = pipeline.streams[i];
         stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
+    }
+}
+
+NamesWithAliases buildTableScanProjectionCols(const NamesAndTypes & schema,
+                                              const NamesAndTypes & storage_schema)
+{
+    RUNTIME_CHECK(
+        storage_schema.size() == schema.size(),
+        storage_schema.size(),
+        schema.size());
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type),
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
+        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
+        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
+    }
+    return schema_project_cols;
+}
+
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_sources_start_index <= group_builder.group.size());
+
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & group = group_builder.group[i];
+        group.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
     }
 }
 

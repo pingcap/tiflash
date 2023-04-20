@@ -201,13 +201,16 @@ void PhysicalAggregation::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, expr_after_agg, log);
 }
 
-void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
+void PhysicalAggregation::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
 {
     auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
     if (fine_grained_shuffle.enable())
     {
         // For fine grained shuffle, Aggregate wouldn't be broken.
-        child->buildPipeline(builder);
+        child->buildPipeline(builder, context, exec_status);
         builder.addPlanNode(shared_from_this());
     }
     else
@@ -227,7 +230,7 @@ void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
         // Break the pipeline for agg_build.
         auto agg_build_builder = builder.breakPipeline(agg_build);
         // agg_build pipeline.
-        child->buildPipeline(agg_build_builder);
+        child->buildPipeline(agg_build_builder, context, exec_status);
         agg_build_builder.build();
         // agg_convergent pipeline.
         auto agg_convergent = std::make_shared<PhysicalAggregationConvergent>(

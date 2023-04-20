@@ -73,7 +73,10 @@ public:
         Context & /*context*/,
         size_t /*concurrency*/);
 
-    virtual void buildPipeline(PipelineBuilder & builder);
+    virtual void buildPipeline(
+        PipelineBuilder & /*builder*/,
+        Context & /*context*/,
+        PipelineExecutorStatus & /*exec_status*/);
 
     EventPtr sinkFinalize(PipelineExecutorStatus & exec_status);
 

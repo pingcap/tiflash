@@ -68,7 +68,7 @@ void Event::insertEvent(const EventPtr & insert_event) noexcept
         output->addInput(insert_event);
     }
     insert_event->addInput(shared_from_this());
-    RUNTIME_ASSERT(!insert_event->prepareForSource());
+    RUNTIME_ASSERT(!insert_event->prepare());
 }
 
 void Event::onInputFinish() noexcept
@@ -79,7 +79,7 @@ void Event::onInputFinish() noexcept
         schedule();
 }
 
-bool Event::prepareForSource()
+bool Event::prepare()
 {
     assert(status == EventStatus::INIT);
     if (is_source)
