@@ -425,7 +425,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 --version;
             }
             SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
-
+            LOG_INFO(log, "begin to fetch all database");
             std::vector<TiDB::DBInfoPtr> all_schemas = getter.listDBs();
             for (const auto & db : all_schemas)
             {
@@ -440,9 +440,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                         continue;
                     }
                     apply_tables.emplace(std::make_pair(db->id, table->id), true);
-                    //LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
+                    LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
                 }
             }
+            LOG_INFO(log, "finish to fetch all database");
             used_version = version;
             // LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
             // auto version = loadAllSchema(getter, latest_version, context);
