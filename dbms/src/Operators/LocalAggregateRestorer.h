@@ -56,8 +56,6 @@ public:
     bool tryPop(Block & block);
 
 private:
-    bool loadFromInputs();
-
     void storeToBucketData();
 
 private:
