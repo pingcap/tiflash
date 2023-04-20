@@ -78,6 +78,8 @@ public:
 private:
     void loadBucket();
 
+    void tryLoadBucket();
+
     bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
 
 private:

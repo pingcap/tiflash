@@ -87,7 +87,6 @@ std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(Pi
     auto input_streams = aggregator->restoreSpilledData();
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
     auto loader = std::make_shared<SharedBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
-    loader->start();
     std::vector<SharedAggregateRestorerPtr> ret;
     for (size_t i = 0; i < max_threads; ++i)
         ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));

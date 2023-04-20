@@ -41,13 +41,6 @@ SharedBucketDataLoader::~SharedBucketDataLoader()
     exec_status.onEventFinish();
 }
 
-void SharedBucketDataLoader::start()
-{
-    assert(status == SharedLoaderStatus::idle);
-    RUNTIME_CHECK(switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading));
-    loadBucket();
-}
-
 bool SharedBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
 {
     return status.compare_exchange_strong(from, to);
@@ -122,6 +115,12 @@ void SharedBucketDataLoader::loadBucket()
     event->schedule();
 }
 
+void SharedBucketDataLoader::tryLoadBucket()
+{
+    if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
+        loadBucket();
+}
+
 bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
     if unlikely (exec_status.isCancelled())
@@ -135,16 +134,14 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
         {
             if unlikely (status == SharedLoaderStatus::finished)
                 return true;
-            if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
-                loadBucket();
+            tryLoadBucket();
             return false;
         }
 
         bucket_data = std::move(bucket_data_queue.front());
         bucket_data_queue.pop();
     }
-    if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
-        loadBucket();
+    tryLoadBucket();
     return true;
 }
 
