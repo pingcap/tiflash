@@ -55,7 +55,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
     /// 3. for non-cross left/right outer join, there is no problem in this swap.
     /// 4. for cross left outer join, the build side is always right, needn't and can't swap.
     /// 5. for cross right outer join, the build side is always left, so it will always swap and change to cross left outer join.
-    /// note that whatever the build side is, we can't support cross-right-outer  join now.
+    /// note that whatever the build side is, we can't support cross-right-outer join now.
     static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> equal_join_type_map{
         {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Inner, 0}},
         {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
