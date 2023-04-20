@@ -146,10 +146,11 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
-    auto column_infos = table_schema_for_delta_merge[table_id];
+    auto & column_infos = table_schema_for_delta_merge[table_id];
     assert(storage);
     assert(!column_infos.empty());
     Names column_names;
+    column_names.reserve(column_infos.size());
     for (const auto & column_info : column_infos)
         column_names.push_back(column_info.name);
 
@@ -172,8 +173,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             pushed_down_filters, // Not care now
-            analyzer->getPreparedSets(),
-            analyzer->getCurrentInputColumns(),
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
             context.getTimezoneInfo());
         auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams

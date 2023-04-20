@@ -42,24 +42,24 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
 {
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::LeftOuter},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::RightOuter},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterAnti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_LeftOuter},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_RightOuter},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterAnti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> null_aware_join_type_map{
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::NullAware_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterAnti}};
 
     const auto & join_type_map = [is_null_aware, join_keys_size]() {
         if (is_null_aware)
@@ -92,10 +92,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
     size_t build_side_index = 0;
     switch (kind)
     {
-    case ASTTableJoin::Kind::Cross_Right:
+    case ASTTableJoin::Kind::Cross_RightOuter:
         build_side_index = 0;
         break;
-    case ASTTableJoin::Kind::Cross_Left:
+    case ASTTableJoin::Kind::Cross_LeftOuter:
         build_side_index = 1;
         break;
     default:
@@ -116,14 +116,14 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
             if (tipb_join_type == tipb::JoinType::TypeAntiSemiJoin)
                 kind = ASTTableJoin::Kind::RightAnti;
             break;
-        case ASTTableJoin::Kind::Left:
-            kind = ASTTableJoin::Kind::Right;
+        case ASTTableJoin::Kind::LeftOuter:
+            kind = ASTTableJoin::Kind::RightOuter;
             break;
-        case ASTTableJoin::Kind::Right:
-            kind = ASTTableJoin::Kind::Left;
+        case ASTTableJoin::Kind::RightOuter:
+            kind = ASTTableJoin::Kind::LeftOuter;
             break;
-        case ASTTableJoin::Kind::Cross_Right:
-            kind = ASTTableJoin::Kind::Cross_Left;
+        case ASTTableJoin::Kind::Cross_RightOuter:
+            kind = ASTTableJoin::Kind::Cross_LeftOuter;
             break;
         default:; // just `default`, for other kinds, don't need to change kind.
         }
@@ -216,7 +216,7 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
 {
-    if (!isLeftSemiFamily())
+    if (!isLeftOuterSemiFamily())
     {
         return "";
     }

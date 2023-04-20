@@ -36,10 +36,10 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_Anti && result.second == 1);
 
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 1, true, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftSemi && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftOuterSemi && result.second == 1);
 
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, true, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftAnti && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftOuterAnti && result.second == 1);
 
     /// NullAware join, expect join keys > 0
     try
@@ -55,9 +55,9 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 0, true, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_Anti && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 0, true, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftSemi && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftOuterSemi && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, true, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftAnti && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::NullAware_LeftOuterAnti && result.second == 0);
 }
 
 TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
@@ -70,15 +70,15 @@ TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
 
     /// Cross LeftOuterJoin, uses right table as build side only
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterJoin, 1, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Left && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuter && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterJoin, 0, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Left && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuter && result.second == 1);
 
     /// Cross RightOuterJoin, uses left table as build side only
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeRightOuterJoin, 0, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Left && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuter && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeRightOuterJoin, 1, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_Left && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuter && result.second == 0);
 
     /// Cross Semi/Anti, uses right table as build side only
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 1, false, 0);
@@ -92,13 +92,13 @@ TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
 
     /// Cross LeftOuter Semi/Anti, uses right table as build side only
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 1, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftSemi && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterSemi && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftSemi && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterSemi && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftAnti && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterAnti && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, false, 0);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftAnti && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Cross_LeftOuterAnti && result.second == 0);
 }
 
 TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
@@ -111,15 +111,15 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
 
     /// LeftOuterJoin
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterJoin, 1, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Left && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuter && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterJoin, 0, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Right && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::RightOuter && result.second == 0);
 
     /// RightOuterJoin
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeRightOuterJoin, 0, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Left && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuter && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeRightOuterJoin, 1, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Right && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::RightOuter && result.second == 1);
 
     /// Semi/Anti
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 1, false, 1);
@@ -133,13 +133,13 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
 
     /// LeftOuter Semi/Anti
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 1, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftSemi && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterSemi && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftSemi && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterSemi && result.second == 0);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftAnti && result.second == 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterAnti && result.second == 1);
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, false, 1);
-    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftAnti && result.second == 0);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::LeftOuterAnti && result.second == 0);
 }
 
 } // namespace tests

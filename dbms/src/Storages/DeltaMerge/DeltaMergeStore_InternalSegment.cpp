@@ -145,8 +145,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
-    split_info.my_stable->enableDMFilesGC();
-    split_info.other_stable->enableDMFilesGC();
+    split_info.my_stable->enableDMFilesGC(dm_context);
+    split_info.other_stable->enableDMFilesGC(dm_context);
 
     SegmentPtr new_left, new_right;
     {
@@ -283,7 +283,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
     auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
     wbs.writeLogAndData();
-    merged_stable->enableDMFilesGC();
+    merged_stable->enableDMFilesGC(dm_context);
 
     SYNC_FOR("after_DeltaMergeStore::segmentMerge|prepare_merge");
 
@@ -430,7 +430,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
-    new_stable->enableDMFilesGC();
+    new_stable->enableDMFilesGC(dm_context);
 
     SegmentPtr new_segment;
     {

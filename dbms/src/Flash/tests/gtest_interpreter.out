@@ -248,7 +248,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
      Expression: <final projection>
       MockExchangeReceiver
 @
@@ -264,7 +264,7 @@ CreatingSets
  Union: <for test>
   Expression x 5: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
      Expression: <final projection>
       MockTableScan
 @
@@ -280,7 +280,7 @@ CreatingSets
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+    HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
      Expression: <final projection>
       MockExchangeReceiver
 @
@@ -315,13 +315,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
        Expression: <final projection>
         MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
      Expression: <final projection>
       MockTableScan
 @
@@ -339,13 +339,13 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+    HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
      Expression: <final projection>
       MockExchangeReceiver
 @
@@ -363,14 +363,14 @@ CreatingSets
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = false>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+     HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
       Expression: <final projection>
        MockExchangeReceiver
 @
@@ -388,7 +388,7 @@ CreatingSets
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
        Expression: <final projection>
         MockTableScan
 @
@@ -406,7 +406,7 @@ CreatingSets
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
+      HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
@@ -431,7 +431,7 @@ CreatingSets
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <remove useless column after join>
-            HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
+            HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
              Expression: <append join key and join filters for probe side>
               Expression: <final projection>
                MockExchangeReceiver
@@ -481,7 +481,7 @@ CreatingSets
        Expression: <projection>
         Expression: <final projection>
          Expression: <remove useless column after join>
-          HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
+          HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = false>
            Expression: <final projection>
             Expression: <expand: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
              SharedQuery: <restore concurrency>

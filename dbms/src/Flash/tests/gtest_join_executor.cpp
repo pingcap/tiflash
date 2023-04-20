@@ -61,7 +61,7 @@ public:
                                     {toNullableVec<String>("s", {"banana", "banana"}),
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
 
-        /// for NonJoinedData test
+        /// for ScanHashMapData test
         DB::MockColumnInfoVec left_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
         DB::MockColumnInfoVec right_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
         DB::MockColumnInfoVec right_partition_column_infos{{"a", TiDB::TP::TypeLong}};
@@ -675,13 +675,13 @@ try
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                       .build(context);
-        // the 4th col is left semi helper col.
+        // the 4th col is left outer semi helper col.
         executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})});
 
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
                       .build(context);
-        // the 4th col is left semi helper col.
+        // the 4th col is left outer semi helper col.
         executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toNullableVec<Int32>({1, 1, 1, 1, 1, 1, 1, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 1, 1, 2, 2, 2, 2, 2}), toNullableVec<Int8>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
     }
 
@@ -897,7 +897,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, NonJoinedData)
+TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeData)
 try
 {
     UInt64 max_block_size = 800;
@@ -983,7 +983,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, NonJoinedDataWithSpillEnabledAndSpillTriggered)
+TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillTriggered)
 try
 {
     UInt64 max_block_size = 800;
@@ -1102,7 +1102,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, NonJoinedDataWithSpillEnabledAndSpillNotTriggered)
+TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillNotTriggered)
 try
 {
     UInt64 max_block_size = 800;
