@@ -26,11 +26,11 @@ class Aggregator;
 
 /**
  * ┌──────────────────────────────────────────────────┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file0──┼────┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file1──┼────┤
- * │  {bucket0, bucket1, ... bucket256}spilled_file2──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file0──┼────┐
+ * │  {bucket0, bucket1, ... bucket255}spilled_file1──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file2──┼────┤
  * │  ...                                             │    │
- * │  {bucket0, bucket1, ... bucket256}spilled_filen──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_filen──┼────┤
  * └──────────────────────────────────────────────────┘    │
  *                                                         │ loadBucketData
  *                   bucket_data◄──────────────────────────┘

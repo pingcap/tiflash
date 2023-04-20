@@ -200,8 +200,12 @@ EventPtr Pipeline::finalize(PipelineExecutorStatus & exec_status)
     assert(!plan_nodes.empty());
     /// This method will not be called for fine grained pipeline.
     /// This method is used to execute two-stage logic and is not suitable for fine grained execution mode,
-    /// such as local/global join build and local/final spill of agg.
-    /// `stage1(n concurrency) --> stage2(m concurrency)`.
+    /// such as local/global join build and local/final agg spill.
+    ///  ┌─stage1─┐      ┌─stage2─┐
+    ///     task1──┐    ┌──►task1
+    ///     task2──┼──►─┼──►task2
+    ///     ...    │    │   ...
+    ///     taskn──┘    └──►taskm
     assert(!isFineGrainedMode());
     return plan_nodes.back()->sinkFinalize(exec_status);
 }

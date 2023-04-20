@@ -35,11 +35,11 @@ enum class SharedLoaderStatus
 
 /**
  * ┌──────────────────────────────────────────────────┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file0──┼─►LoadBucketTask1───┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file1──┼─►LoadBucketTask2───┤
- * │  {bucket0, bucket1, ... bucket256}spilled_file2──┼─►LoadBucketTask3───┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file0──┼─►LoadBucketTask1───┐
+ * │  {bucket0, bucket1, ... bucket255}spilled_file1──┼─►LoadBucketTask2───┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file2──┼─►LoadBucketTask3───┤
  * │  ...                                             │  ...               │
- * │  {bucket0, bucket1, ... bucket256}spilled_filen──┼─►LoadBucketTaskn───┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_filen──┼─►LoadBucketTaskn───┤
  * └──────────────────────────────────────────────────┘                    │
  *                                                                         │
  *               LoadBucketEvent◄──────────────────────────────────────────┘
