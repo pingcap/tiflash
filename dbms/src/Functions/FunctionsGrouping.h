@@ -218,7 +218,7 @@ protected:
         else if (arg_num > 1)
             throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
-        assert(arguments[0].type->getTypeId() == TypeIndex::UInt64);
+        RUNTIME_CHECK_MSG(arguments[0].type->getTypeId() == TypeIndex::UInt64, "Parameter type of grouping function should be UInt64");
         return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
