@@ -339,7 +339,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     for (auto & stream : pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
-        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", query_block.source_name, needScanHashMapAfterProbe(join_ptr->getKind())));
+        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}, scan_hash_map_after_probe = {}", query_block.source_name, needScanHashMapAfterProbe(join_ptr->getKind())));
     }
 
     /// add a project to remove all the useless column

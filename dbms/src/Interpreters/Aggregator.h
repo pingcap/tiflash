@@ -672,6 +672,10 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     Type type{Type::EMPTY};
 
+    bool need_spill = false;
+
+    bool tryMarkNeedSpill();
+
     void destroyAggregationMethodImpl();
 
     AggregatedDataVariants()
