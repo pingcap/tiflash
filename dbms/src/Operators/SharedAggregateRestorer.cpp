@@ -55,7 +55,7 @@ std::vector<BucketInput *> SharedBucketDataLoader::getNeedLoadInputs()
         if (bucket_input.needLoad())
             load_inputs.push_back(&bucket_input);
     }
-    assert(!bucket_inputs.empty());
+    assert(!load_inputs.empty());
     return load_inputs;
 }
 

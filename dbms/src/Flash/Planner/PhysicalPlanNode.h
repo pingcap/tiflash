@@ -96,6 +96,7 @@ public:
     String toSimpleString();
 
 protected:
+    /// Used for non-fine grained shuffle sink plan node to trigger two-stage execution logic.
     virtual EventPtr doSinkFinalize(PipelineExecutorStatus & /*exec_status*/);
 
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};

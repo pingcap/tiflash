@@ -118,7 +118,8 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
     assert(plan_node);
     /// For fine grained mode, all plan node should enable fine grained shuffle.
-    assert(plan_nodes.empty() || !isFineGrainedMode() || plan_node->getFineGrainedShuffle().enable());
+    if (!plan_node->getFineGrainedShuffle().enable())
+        is_fine_grained_mode = false;
     plan_nodes.push_back(plan_node);
 }
 
@@ -189,9 +190,7 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
  */
 bool Pipeline::isFineGrainedMode() const
 {
-    assert(!plan_nodes.empty());
-    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
-    return plan_nodes.front()->getFineGrainedShuffle().enable();
+    return is_fine_grained_mode;
 }
 
 EventPtr Pipeline::finalize(PipelineExecutorStatus & exec_status)
