@@ -104,7 +104,7 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
          *     ```
          */
 
-        // If the outputs is fine grained model, the intputs must also be.
+        // If the outputs is fine grained mode, the intputs must also be.
         RUNTIME_CHECK(inputs.is_fine_grained || !is_fine_grained);
         for (const auto & output : events)
         {
@@ -116,6 +116,9 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
 
 void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
+    assert(plan_node);
+    /// For fine grained mode, all plan node should enable fine grained shuffle.
+    assert(plan_nodes.empty() || !isFineGrainedMode() || plan_node->getFineGrainedShuffle().enable());
     plan_nodes.push_back(plan_node);
 }
 
@@ -193,12 +196,14 @@ bool Pipeline::isFineGrainedMode() const
 
 EventPtr Pipeline::finalize(PipelineExecutorStatus & exec_status)
 {
+    if unlikely (exec_status.isCancelled())
+        return nullptr;
     assert(!plan_nodes.empty());
     /// This method will not be called for fine grained pipeline and fine grained plan node.
     /// This method is used to execute two-stage logic and is not suitable for fine grained execution mode,
     /// such as local/global join build and local/final spill of agg.
     /// `stage1(n concurrency) --> stage2(m concurrency)`.
-    assert(!isFineGrainedMode() && !plan_nodes.back()->getFineGrainedShuffle().enable());
+    assert(!isFineGrainedMode());
     return plan_nodes.back()->sinkFinalize(exec_status);
 }
 
@@ -220,12 +225,12 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
-        LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
+        LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
         self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
-        LOG_DEBUG(log, "Execute in non fine grained model and generate one plain pipeline event");
+        LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
 }

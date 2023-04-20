@@ -14,30 +14,31 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
 namespace DB
 {
-class BucketInput;
-
-class LoadBucketTask : public IOEventTask
+class IOEventTask : public EventTask
 {
 public:
-    LoadBucketTask(
+    IOEventTask(
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_,
-        BucketInput & input_)
-        : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
-        , input(input_)
+        const EventPtr & event_)
+        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     {
     }
 
 private:
-    ExecTaskStatus doExecuteIOImpl() override;
+    ExecTaskStatus doExecuteImpl() override
+    {
+        return ExecTaskStatus::IO;
+    }
 
-private:
-    BucketInput & input;
+    ExecTaskStatus doAwaitImpl() override
+    {
+        return ExecTaskStatus::IO;
+    }
 };
 } // namespace DB

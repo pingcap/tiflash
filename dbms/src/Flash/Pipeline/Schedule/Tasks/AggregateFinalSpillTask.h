@@ -14,14 +14,14 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
 
 namespace DB
 {
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalSpillTask : public EventTask
+class AggregateFinalSpillTask : public IOEventTask
 {
 public:
     AggregateFinalSpillTask(
@@ -33,11 +33,7 @@ public:
         size_t index_);
 
 protected:
-    ExecTaskStatus doExecuteImpl() override;
-
     ExecTaskStatus doExecuteIOImpl() override;
-
-    ExecTaskStatus doAwaitImpl() override;
 
     void finalizeImpl() override;
 

@@ -17,19 +17,9 @@
 
 namespace DB
 {
-ExecTaskStatus LoadBucketTask::doExecuteImpl()
-{
-    return ExecTaskStatus::IO;
-}
-
 ExecTaskStatus LoadBucketTask::doExecuteIOImpl()
 {
     input.load();
     return ExecTaskStatus::FINISHED;
-}
-
-ExecTaskStatus LoadBucketTask::doAwaitImpl()
-{
-    return ExecTaskStatus::IO;
 }
 } // namespace DB

@@ -24,7 +24,7 @@ AggregateFinalSpillTask::AggregateFinalSpillTask(
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
     size_t index_)
-    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {
@@ -36,20 +36,10 @@ void AggregateFinalSpillTask::finalizeImpl()
     agg_context.reset();
 }
 
-ExecTaskStatus AggregateFinalSpillTask::doExecuteImpl()
-{
-    return ExecTaskStatus::IO;
-}
-
 ExecTaskStatus AggregateFinalSpillTask::doExecuteIOImpl()
 {
     agg_context->spillData(index);
     return ExecTaskStatus::FINISHED;
-}
-
-ExecTaskStatus AggregateFinalSpillTask::doAwaitImpl()
-{
-    return ExecTaskStatus::IO;
 }
 
 } // namespace DB

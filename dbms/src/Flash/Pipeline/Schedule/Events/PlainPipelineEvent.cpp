@@ -32,11 +32,8 @@ std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
 
 void PlainPipelineEvent::finishImpl()
 {
-    if likely (!exec_status.isCancelled())
-    {
-        if (auto finalize_event = pipeline->finalize(exec_status); finalize_event)
-            insertEvent(finalize_event);
-    }
+    if (auto finalize_event = pipeline->finalize(exec_status); finalize_event)
+        insertEvent(finalize_event);
     // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.onEventFinish()` is called.
     // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
     pipeline.reset();
