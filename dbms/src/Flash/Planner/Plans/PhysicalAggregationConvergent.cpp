@@ -29,29 +29,15 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     assert(!fine_grained_shuffle.enable());
 
     aggregate_context->initConvergent();
-
-    if (unlikely(aggregate_context->useNullSource()))
-    {
-        group_builder.init(1);
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<NullSourceOp>(
-                exec_status,
-                aggregate_context->getHeader(),
-                log->identifier()));
-        });
-    }
-    else
-    {
-        group_builder.init(aggregate_context->getConvergentConcurrency());
-        size_t index = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-                exec_status,
-                aggregate_context,
-                index++,
-                log->identifier()));
-        });
-    }
+    group_builder.init(aggregate_context->getConvergentConcurrency());
+    size_t index = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
+            exec_status,
+            aggregate_context,
+            index++,
+            log->identifier()));
+    });
 
     executeExpression(exec_status, group_builder, expr_after_agg, log);
 }
