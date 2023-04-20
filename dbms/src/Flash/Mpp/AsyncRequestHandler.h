@@ -128,7 +128,7 @@ public:
         }
         catch (...)
         {
-            LOG_ERROR(log, "Some errors happen in the AsyncRequestHandler.execute()");
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
             closeConnection("Exception is thrown in AsyncRequestHandler");
         }
     }
@@ -176,7 +176,7 @@ private:
         {
             String done_msg = fmt::format("Exchange receiver meet error : {}", finish_status.error_message());
             String log_msg = fmt::format("Finish fail. err code: {}, err msg: {}, retry time {}", finish_status.error_code(), finish_status.error_message(), retry_times);
-            retryOrDone(done_msg, log_msg);
+            retryOrDone(std::move(done_msg), log_msg);
         }
     }
 

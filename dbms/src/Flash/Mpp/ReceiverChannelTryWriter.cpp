@@ -74,7 +74,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteFineGrain(size_t source_in
 
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
 
-        // Only the first ExchangeReceiverInputStream need to handle resp.
+        // Only the first ExchangeReceiverInputStream/Source need to handle resp.
         resp_ptr = nullptr;
     }
     return res;

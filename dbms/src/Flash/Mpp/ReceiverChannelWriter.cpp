@@ -16,8 +16,6 @@
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 
-#include <utility>
-
 namespace DB
 {
 namespace

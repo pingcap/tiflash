@@ -35,7 +35,7 @@ namespace tests
 class TestGRPCReceiveQueue;
 } // namespace tests
 
-/// In grpc cpp framework, the tag that is pushed into grpc completion
+/// In grpc cpp framework, the tag that pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
 class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
