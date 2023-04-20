@@ -40,6 +40,7 @@ struct TiKVRangeKey : boost::noncopyable
 
     TiKVRangeKey copy() const;
     TiKVRangeKey & operator=(TiKVRangeKey &&);
+    std::string toDebugString() const;
 
     State state;
     TiKVKey key;
@@ -57,6 +58,7 @@ public:
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
+    std::string toDebugString() const;
 
 private:
     RegionRange ori;

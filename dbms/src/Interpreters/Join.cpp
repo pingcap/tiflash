@@ -781,7 +781,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
     /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
       * For FULL/RIGHT/RIGHT_SEMI/RIGHT_ANTI_SEMI JOIN, the saved blocks contain keys;
-      *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
+      *  but they will not be used at this stage of joining (and will be in `ScanHashMapAfterProbe`), and they need to be skipped.
       */
     size_t num_columns_to_skip = 0;
     if (needScanHashMapAfterProbe(kind))
@@ -1597,9 +1597,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     return block;
 }
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
+BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {
-    return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
+    return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
 Blocks Join::dispatchBlock(const Strings & key_columns_names, const Block & from_block)
@@ -1757,8 +1757,8 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         throw Exception(error_message);
     try
     {
-        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
-        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
+        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_scan_hash_map_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_scan_hash_map_streams.size()));
+        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_scan_hash_map_streams.size());
         auto get_back_stream = [](BlockInputStreams & streams) {
             BlockInputStreamPtr stream = streams.back();
             streams.pop_back();
@@ -1768,12 +1768,12 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         {
             auto build_stream = get_back_stream(restore_build_streams);
             auto probe_stream = get_back_stream(restore_probe_streams);
-            auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
+            auto scan_hash_map_stream = get_back_stream(restore_scan_hash_map_streams);
             if (restore_build_streams.empty())
             {
                 spilled_partition_indexes.pop_front();
             }
-            return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
+            return RestoreInfo{restore_join, std::move(scan_hash_map_stream), std::move(build_stream), std::move(probe_stream)};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -1788,7 +1788,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
+        restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
         RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
         auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
         restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
@@ -1808,16 +1808,16 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         if (needScanHashMapAfterProbe(kind))
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-                restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
+                restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
         }
-        auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
+        auto scan_hash_map_streams = get_back_stream(restore_scan_hash_map_streams);
+        return RestoreInfo{restore_join, std::move(scan_hash_map_streams), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
         restore_build_streams.clear();
         restore_probe_streams.clear();
-        restore_non_joined_data_streams.clear();
+        restore_scan_hash_map_streams.clear();
         auto err_message = getCurrentExceptionMessage(false, true);
         meetErrorImpl(err_message, lock);
         throw Exception(err_message);

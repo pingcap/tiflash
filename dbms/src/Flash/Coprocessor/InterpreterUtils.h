@@ -33,12 +33,6 @@ void restoreConcurrency(
     size_t concurrency,
     const LoggerPtr & log);
 
-BlockInputStreamPtr combinedNonJoinedDataStream(
-    DAGPipeline & pipeline,
-    size_t max_threads,
-    const LoggerPtr & log,
-    bool ignore_block = false);
-
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,

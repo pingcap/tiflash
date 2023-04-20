@@ -31,21 +31,6 @@ LocalAggregateRestorer::LocalAggregateRestorer(
     assert(!bucket_inputs.empty());
 }
 
-bool LocalAggregateRestorer::loadFromInputs()
-{
-    assert(!bucket_inputs.empty());
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if unlikely (is_cancelled())
-            return false;
-        if (bucket_input.needLoad())
-            bucket_input.load();
-    }
-    if unlikely (is_cancelled())
-        return false;
-    return true;
-}
-
 void LocalAggregateRestorer::storeToBucketData()
 {
     assert(!finished);
@@ -70,9 +55,19 @@ void LocalAggregateRestorer::loadBucketData()
     if unlikely (finished || is_cancelled())
         return;
 
+    // load bucket data from inputs.
     assert(bucket_data.empty());
-    if (loadFromInputs())
-        storeToBucketData();
+    for (auto & bucket_input : bucket_inputs)
+    {
+        if unlikely (is_cancelled())
+            return;
+        if (bucket_input.needLoad())
+            bucket_input.load();
+    }
+    if unlikely (is_cancelled())
+        return;
+
+    storeToBucketData();
 }
 
 bool LocalAggregateRestorer::tryPop(Block & block)
