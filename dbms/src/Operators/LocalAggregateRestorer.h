@@ -16,6 +16,7 @@
 
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Operators/BucketInput.h>
 
 #include <memory>
 
@@ -57,9 +58,7 @@ public:
 private:
     bool loadFromInputs();
 
-    void storeFromInputToBucketData();
-
-    void finish();
+    void storeToBucketData();
 
 private:
     Aggregator & aggregator;
@@ -73,24 +72,7 @@ private:
     // bucket_inputs --> bucket_data --> restored_blocks.
     BlocksList bucket_data;
     BlocksList restored_blocks;
-
-    class Input
-    {
-    public:
-        explicit Input(const BlockInputStreamPtr & stream_);
-
-        bool load();
-
-        Block moveOutput();
-        Int32 bucketNum() const;
-
-    private:
-        BlockInputStreamPtr stream;
-        std::optional<Block> output;
-        bool is_exhausted = false;
-    };
-    using Inputs = std::vector<Input>;
-    Inputs bucket_inputs;
+    BucketInputs bucket_inputs;
 
     static constexpr Int32 NUM_BUCKETS = 256;
 };

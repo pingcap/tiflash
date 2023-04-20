@@ -31,45 +31,45 @@ LocalAggregateRestorer::LocalAggregateRestorer(
     assert(!bucket_inputs.empty());
 }
 
-void LocalAggregateRestorer::finish()
-{
-    assert(!finished);
-    finished = true;
-    bucket_inputs.clear();
-    LOG_INFO(log, "local agg restore finished");
-}
-
 bool LocalAggregateRestorer::loadFromInputs()
 {
     assert(!bucket_inputs.empty());
-    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end() && unlikely(!is_cancelled());)
-        it = it->load() ? std::next(it) : bucket_inputs.erase(it);
-    if unlikely (is_cancelled() || bucket_inputs.empty())
+    for (auto & bucket_input : bucket_inputs)
     {
-        finish();
-        return false;
+        if unlikely (is_cancelled())
+            return false;
+        if (bucket_input.needLoad())
+            bucket_input.load();
     }
+    if unlikely (is_cancelled())
+        return false;
     return true;
 }
 
-void LocalAggregateRestorer::storeFromInputToBucketData()
+void LocalAggregateRestorer::storeToBucketData()
 {
+    assert(!finished);
     assert(!bucket_inputs.empty());
 
     // get min bucket num.
     Int32 min_bucket_num = NUM_BUCKETS;
     for (auto & bucket_input : bucket_inputs)
-        min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
+    {
+        if (bucket_input.hasOutput())
+            min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
+    }
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
-        finish();
+        assert(!finished);
+        finished = true;
+        LOG_DEBUG(log, "local agg restore finished");
         return;
     }
 
     // store bucket data of min bucket num.
     for (auto & bucket_input : bucket_inputs)
     {
-        if (min_bucket_num == bucket_input.bucketNum())
+        if (bucket_input.hasOutput() && min_bucket_num == bucket_input.bucketNum())
             bucket_data.push_back(bucket_input.moveOutput());
     }
     assert(!bucket_data.empty());
@@ -82,7 +82,7 @@ void LocalAggregateRestorer::loadBucketData()
 
     assert(bucket_data.empty());
     if (loadFromInputs())
-        storeFromInputToBucketData();
+        storeToBucketData();
 }
 
 bool LocalAggregateRestorer::tryPop(Block & block)
@@ -103,49 +103,5 @@ bool LocalAggregateRestorer::tryPop(Block & block)
     block = std::move(restored_blocks.front());
     restored_blocks.pop_front();
     return true;
-}
-
-LocalAggregateRestorer::Input::Input(const BlockInputStreamPtr & stream_)
-    : stream(stream_)
-{
-    stream->readPrefix();
-}
-
-Block LocalAggregateRestorer::Input::moveOutput()
-{
-    assert(output.has_value());
-    Block ret = std::move(*output);
-    output.reset();
-    return ret;
-}
-
-Int32 LocalAggregateRestorer::Input::bucketNum() const
-{
-    assert(output.has_value());
-    return output->info.bucket_num;
-}
-
-bool LocalAggregateRestorer::Input::load()
-{
-    if unlikely (is_exhausted)
-        return false;
-
-    if (output.has_value())
-        return true;
-
-    Block ret = stream->read();
-    if unlikely (!ret)
-    {
-        is_exhausted = true;
-        stream->readSuffix();
-        return false;
-    }
-    else
-    {
-        /// Only two level data can be spilled.
-        assert(ret.info.bucket_num != -1);
-        output.emplace(std::move(ret));
-        return true;
-    }
 }
 } // namespace DB
