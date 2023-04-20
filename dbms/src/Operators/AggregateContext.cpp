@@ -126,11 +126,17 @@ void AggregateContext::initConvergentPrefix()
         total_src_bytes / elapsed_seconds / 1048576.0);
 
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
+    {
         aggregator->executeOnBlock(
             this->getHeader(),
             *many_data[0],
             threads_data[0]->key_columns,
             threads_data[0]->aggregate_columns);
+        /// Since this won't consume a lot of memory,
+        /// even if it triggers spilling due to a low threshold setting,
+        /// it's still reasonable not to spill disk.
+        many_data[0]->need_spill = false;
+    }
 }
 
 void AggregateContext::initConvergent()
