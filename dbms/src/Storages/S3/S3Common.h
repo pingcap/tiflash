@@ -134,7 +134,6 @@ private:
     std::unique_ptr<Aws::S3::S3Client> create() const;
 
     static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
-    static Aws::Http::Scheme parseScheme(std::string_view endpoint);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
 
@@ -159,7 +158,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key);
 void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
-void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
+bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
 
 /**
  * tagging is the tag-set for the object. The tag-set must be encoded as URL Query

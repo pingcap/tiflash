@@ -23,8 +23,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 namespace DB
@@ -1096,7 +1094,7 @@ Field decodeLiteral(const tipb::Expr & expr)
     case tipb::ExprType::Uint64:
         return decodeDAGUInt64(expr.val());
     case tipb::ExprType::Float32:
-        return Float64(decodeDAGFloat32(expr.val()));
+        return static_cast<Float64>(decodeDAGFloat32(expr.val()));
     case tipb::ExprType::Float64:
         return decodeDAGFloat64(expr.val());
     case tipb::ExprType::String:
@@ -1136,25 +1134,35 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
-        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
     }
     return input_col[column_index].name;
 }
 
-void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_name_set)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col)
+{
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
+    {
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
+    }
+    return input_col[column_index].id;
+}
+
+void getColumnIDsFromExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col, std::unordered_set<ColumnID> & col_id_set)
 {
     if (expr.children_size() == 0)
     {
         if (isColumnExpr(expr))
         {
-            col_name_set.insert(getColumnNameForColumnExpr(expr, input_col));
+            col_id_set.insert(getColumnIDForColumnExpr(expr, input_col));
         }
     }
     else
     {
         for (const auto & child : expr.children())
         {
-            getColumnNamesFromExpr(child, input_col, col_name_set);
+            getColumnIDsFromExpr(child, input_col, col_id_set);
         }
     }
 }
@@ -1178,8 +1186,8 @@ NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
-        && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
-             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0 || expr.field_type().flen() == -1));
+        && (expr.field_type().tp() != TiDB::TP::TypeNewDecimal
+            || (expr.field_type().decimal() != -1 && expr.field_type().flen() != 0 && expr.field_type().flen() != -1));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)

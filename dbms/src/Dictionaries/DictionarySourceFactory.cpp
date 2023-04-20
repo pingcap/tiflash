@@ -23,7 +23,6 @@
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/ExecutableDictionarySource.h>
 #include <Dictionaries/FileDictionarySource.h>
-#include <Dictionaries/HTTPDictionarySource.h>
 #include <Dictionaries/LibraryDictionarySource.h>
 #include <IO/HTTPCommon.h>
 #include <Poco/Logger.h>
@@ -142,15 +141,6 @@ DictionarySourcePtr DictionarySourceFactory::create(
                 ErrorCodes::LOGICAL_ERROR};
 
         return std::make_unique<ExecutableDictionarySource>(dict_struct, config, config_prefix + ".executable", sample_block, context);
-    }
-    else if ("http" == source_type)
-    {
-        if (dict_struct.has_expressions)
-            throw Exception{
-                "Dictionary source of type `http` does not support attribute expressions",
-                ErrorCodes::LOGICAL_ERROR};
-
-        return std::make_unique<HTTPDictionarySource>(dict_struct, config, config_prefix + ".http", sample_block, context);
     }
     else if ("library" == source_type)
     {

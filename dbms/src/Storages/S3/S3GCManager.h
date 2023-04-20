@@ -117,10 +117,11 @@ public:
         const String & datafile_key,
         const String & delmark_key,
         const Aws::Utils::DateTime & timepoint,
-        const Aws::Utils::DateTime & delmark_mtime);
+        const Aws::Utils::DateTime & delmark_mtime,
+        const LoggerPtr & sub_logger) const;
 
-    void lifecycleMarkDataFileDeleted(const String & datafile_key);
-    void physicalRemoveDataFile(const String & datafile_key);
+    void lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger);
+    void physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const;
 
     static std::vector<UInt64> getAllStoreIds();
 

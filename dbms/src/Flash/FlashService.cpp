@@ -34,8 +34,10 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Interpreters/executeQuery.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -84,7 +86,7 @@ FlashService::FlashService() = default;
 void FlashService::init(Context & context_)
 {
     context = &context_;
-    log = &Poco::Logger::get("FlashService");
+    log = Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
@@ -130,7 +132,7 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     return default_val;
 }
 
-void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, Poco::Logger * log)
+void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, LoggerPtr log)
 {
     const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_varname = {
         std::make_pair("tidb_max_tiflash_threads", "max_threads"),
@@ -156,13 +158,14 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
+    auto log_level = is_remote_read ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(log, log_level, "Handling coprocessor request, is_remote_read: {}, start ts: {}, region info: {}, region epoch: {}", is_remote_read, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
 
-    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
     if (is_remote_read)
@@ -183,7 +186,7 @@ grpc::Status FlashService::Coprocessor(
 
     const auto & settings = context->getSettingsRef();
     auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
-    auto max_queued_duration_seconds = std::min(settings.cop_pool_max_queued_seconds, 20);
+    auto max_queued_duration_ms = std::min(settings.cop_pool_max_queued_seconds, 20) * 1000;
 
     if (handle_limit > 0)
     {
@@ -198,14 +201,18 @@ grpc::Status FlashService::Coprocessor(
 
 
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
-        if (max_queued_duration_seconds > 0)
+        auto wait_ms = watch.elapsedMilliseconds();
+        if (max_queued_duration_ms > 0)
         {
-            if (auto current = watch.elapsedSeconds(); current > max_queued_duration_seconds)
+            if (wait_ms > static_cast<UInt64>(max_queued_duration_ms))
             {
-                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
+                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {} ms, limit = {} ms", wait_ms, max_queued_duration_ms));
                 return grpc::Status::OK;
             }
         }
+        if (wait_ms > 1000)
+            log_level = Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(log, log_level, "Begin process cop request after wait {} ms, start ts: {}, region info: {}, region epoch: {}", wait_ms, request->start_ts(), request->context().region_id(), request->context().region_epoch().DebugString());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -222,14 +229,14 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_IMPL(log, log_level, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
 grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    LOG_INFO(log, "Handling batch coprocessor request, start ts: {}", request->start_ts());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -245,6 +252,8 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
     });
 
     grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
+        auto wait_ms = watch.elapsedMilliseconds();
+        LOG_INFO(log, "Begin process batch cop request after wait {} ms, start ts: {}", wait_ms, request->start_ts());
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -255,7 +264,7 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
         return cop_handler.execute();
     });
 
-    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_INFO(log, "Handle batch coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -265,7 +274,7 @@ grpc::Status FlashService::DispatchMPPTask(
     mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    LOG_INFO(log, "Handling mpp dispatch request, task meta: {}", request->meta().DebugString());
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
         return check_result;
@@ -348,20 +357,19 @@ static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::Establis
     return grpc::Status::OK;
 }
 
-grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
-                                                            const mpp::EstablishMPPConnectionRequest * request,
-                                                            EstablishCallData * call_data)
+grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+    const auto & request = call_data->getRequest();
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request.DebugString());
 
-    auto check_result = checkGrpcContext(grpc_context);
+    auto check_result = checkGrpcContext(call_data->getGrpcContext());
     if (!check_result.ok())
         return check_result;
 
-    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    if (auto res = CheckMppVersionForEstablishMPPConnection(&request); !res.ok())
     {
         LOG_WARNING(log, res.error_message());
         return res;
@@ -380,7 +388,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -440,7 +448,7 @@ grpc::Status FlashService::CancelMPPTask(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -495,7 +503,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
     auto [context, status] = createDBContextForTest();
     if (!status.ok())
     {
@@ -813,6 +821,60 @@ grpc::Status FlashService::GetDisaggConfig(grpc::ServerContext * grpc_context, c
     s3_config->set_bucket(local_s3config.bucket);
     s3_config->set_root(local_s3config.root);
 
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::GetTiFlashSystemTable(
+    grpc::ServerContext * grpc_context,
+    const kvrpcpb::TiFlashSystemTableRequest * request,
+    kvrpcpb::TiFlashSystemTableResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    try
+    {
+        auto [ctx, status] = createDBContext(grpc_context);
+        if (!status.ok())
+            return status;
+        ctx->setDefaultFormat("JSONCompact");
+        ReadBufferFromString in_buf(request->sql());
+        MemoryWriteBuffer out_buf;
+        executeQuery(in_buf, out_buf, false, *ctx, nullptr);
+        auto data_size = out_buf.count();
+        auto buf = out_buf.tryGetReadBuffer();
+        String data;
+        data.resize(data_size);
+        buf->readStrict(&data[0], data_size);
+        response->set_data(data);
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    }
     return grpc::Status::OK;
 }
 

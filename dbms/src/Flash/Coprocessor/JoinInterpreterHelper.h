@@ -92,9 +92,9 @@ struct JoinNonEqualConditions
     /// Validate this JoinNonEqualConditions and return error message if any.
     String validate(ASTTableJoin::Kind kind) const
     {
-        if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
+        if (unlikely(!left_filter_column.empty() && !isLeftOuterJoin(kind)))
             return "non left join with left conditions";
-        if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
+        if (unlikely(!right_filter_column.empty() && !isRightOuterJoin(kind)))
             return "non right join with right conditions";
 
         if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
@@ -130,10 +130,10 @@ struct TiFlashJoin
 
     ASTTableJoin::Strictness strictness;
 
-    /// (cartesian) (anti) left semi join.
-    bool isLeftSemiFamily() const { return join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin; }
+    /// (cartesian) (anti) left outer semi join.
+    bool isLeftOuterSemiFamily() const { return join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin; }
 
-    bool isSemiJoin() const { return join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || isLeftSemiFamily(); }
+    bool isSemiJoin() const { return join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || isLeftOuterSemiFamily(); }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getBuildJoinKeys() const
     {
@@ -155,14 +155,18 @@ struct TiFlashJoin
         return build_side_index == 0 ? join.right_conditions() : join.left_conditions();
     }
 
-    bool isTiFlashLeftJoin() const { return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left; }
+    bool isTiFlashLeftOuterJoin() const { return kind == ASTTableJoin::Kind::LeftOuter || kind == ASTTableJoin::Kind::Cross_LeftOuter; }
 
-    /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
-    bool isTiFlashRightJoin() const { return kind == ASTTableJoin::Kind::Right; }
+    /// Cross_RightOuter join will be converted to Cross_LeftOuter join, so no need to check Cross_RightOuter
+    bool isTiFlashRightOuterJoin() const { return kind == ASTTableJoin::Kind::RightOuter; }
 
-    /// return a name that is unique in header1 and header2 for left semi family join,
+    /// return a name that is unique in header1 and header2 for left outer semi family join,
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
+
+    /// return a name that is unique in header1 and header2 for right semi/anti joins that has_other_condition,
+    /// return "" for everything else.
+    String genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const;
 
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}

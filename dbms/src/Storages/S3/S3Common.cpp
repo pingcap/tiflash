@@ -74,6 +74,7 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 
 namespace ProfileEvents
@@ -86,6 +87,7 @@ extern const Event S3WriteBytes;
 extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
 extern const Event S3CopyObject;
+extern const Event S3PutObjectRetry;
 } // namespace ProfileEvents
 
 namespace
@@ -378,16 +380,18 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
+namespace
+{
+bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
     {
-        return;
+        return true;
     }
 
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
-    Poco::URI uri(cfg.endpointOverride);
+    const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
@@ -398,7 +402,41 @@ void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
         cfg.region = Aws::Region::AWS_GLOBAL;
     }
+
+    if (uri.getScheme() == "https")
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTPS;
+    }
+    else
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTP;
+    }
+    cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
+
+    bool use_virtual_address = true;
+    {
+        std::string_view view(cfg.endpointOverride);
+        if (auto pos = view.find("://"); pos != std::string_view::npos)
+        {
+            view.remove_prefix(pos + 3); // remove the "<Scheme>://" prefix
+        }
+        // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
+        // the service need virtual addressing to do load balancing.
+        // For deployed with local minio, the address contains fix port, we should disable virtual addressing
+        use_virtual_address = (view.find(':') == std::string_view::npos);
+    }
+
+    LOG_INFO(
+        log,
+        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} useVirtualAddressing={}}}",
+        cfg.endpointOverride,
+        cfg.region,
+        magic_enum::enum_name(cfg.scheme),
+        cfg.verifySSL,
+        use_virtual_address);
+    return use_virtual_address;
 }
+} // namespace
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
@@ -411,11 +449,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;
-        auto scheme = parseScheme(config_.endpoint);
-        cfg.scheme = scheme;
-        cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
-    updateRegionByEndpoint(cfg);
+    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
         Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
@@ -446,7 +481,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             provider,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ true);
+            /*userVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
@@ -458,16 +493,12 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ true);
+            /*useVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
 }
 
-Aws::Http::Scheme ClientFactory::parseScheme(std::string_view endpoint)
-{
-    return boost::algorithm::starts_with(endpoint, "https://") ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
-}
 
 bool isNotFoundError(Aws::S3::S3Errors error)
 {
@@ -510,6 +541,10 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
     auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -553,6 +588,10 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -653,7 +692,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
-void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
+bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
@@ -670,7 +709,13 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
             {
                 break;
             }
-            throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
+            LOG_WARNING(
+                client.log,
+                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+                ", bucket={} {}",
+                client.bucket(),
+                S3ErrorMessage(error));
+            return false;
         }
 
         auto res = outcome.GetResultWithOwnership();
@@ -703,17 +748,9 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     if (lifecycle_rule_has_been_set)
     {
         LOG_INFO(client.log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
-        return;
-    }
-    else
-    {
-        UNUSED(expire_days);
-        LOG_WARNING(client.log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
-        return;
+        return true;
     }
 
-#if 0
-    // Adding rule by AWS SDK is failed, don't know why
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(client.log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
@@ -737,16 +774,24 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         .WithRules(old_rules);
 
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
-    request.WithBucket(bucket)
+    request.WithBucket(client.bucket())
         .WithLifecycleConfiguration(lifecycle_config);
 
     auto outcome = client.PutBucketLifecycleConfiguration(request);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
+        const auto & error = outcome.GetError();
+        LOG_WARNING(
+            client.log,
+            "Create lifecycle rule with filter \"{}\" failed, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+            ", bucket={} {}",
+            TaggingObjectIsDeleted,
+            client.bucket(),
+            S3ErrorMessage(error));
+        return false;
     }
     LOG_INFO(client.log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
-#endif
+    return true;
 }
 
 void listPrefix(

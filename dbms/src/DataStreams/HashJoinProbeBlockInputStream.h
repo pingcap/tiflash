@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SquashingHashJoinBlockTransform.h>
 #include <Interpreters/Join.h>
 
 namespace DB
@@ -37,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t non_joined_stream_index,
+        size_t scan_hash_map_after_probe_stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 
@@ -47,6 +47,8 @@ public:
 
 protected:
     Block readImpl() override;
+
+    void readSuffixImpl() override;
 
 private:
     /*
@@ -58,47 +60,47 @@ private:
      *                                          |
      *                                          ▼
      *                                  -----------------
-     *              has non_joined data |               | no non_joined data
+     *        has scan_after_probe data |               | no scan_after_probe data
      *                                  ▼               ▼
      *                         WAIT_PROBE_FINISH     FINISHED
      *                                  |
      *                                  ▼
-     *                        READ_NON_JOINED_DATA
+     *                        READ_SCAN_HASH_MAP_DATA
      *                                  |
      *                                  ▼
      *                               FINISHED
      *
      *   spill enabled:
-     *                  |-------------------> WAIT_BUILD_FINISH
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                           PROBE
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                    WAIT_PROBE_FINISH
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                      ---------------
-     *                  |  has non_joined data |             | no non_joined data
-     *                  |                      ▼             |
-     *                  |             READ_NON_JOINED_DATA   |
-     *                  |                      \             /
-     *                  |                       \           /
-     *                  |                        \         /
-     *                  |                         \       /
-     *                  |                          \     /
-     *                  |                           \   /
-     *                  |                            \ /
-     *                  |                             ▼
-     *                  |                      GET_RESTORE_JOIN
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                      ---------------
-     *                  |    has restored join |             | no restored join
-     *                  |                      ▼             ▼
-     *                  |                RESTORE_BUILD    FINISHED
-     *                  |                      |
-     *                  -----------------------|
+     *                  |------------------->  WAIT_BUILD_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                            PROBE
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     WAIT_PROBE_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |has scan_hash_map data |             | no scan_hash_map data
+     *                  |                       ▼             |
+     *                  |           READ_SCAN_HASH_MAP_DATA   |
+     *                  |                       \             /
+     *                  |                        \           /
+     *                  |                         \         /
+     *                  |                          \       /
+     *                  |                           \     /
+     *                  |                            \   /
+     *                  |                             \ /
+     *                  |                              ▼
+     *                  |                       GET_RESTORE_JOIN
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |     has restored join |             | no restored join
+     *                  |                       ▼             ▼
+     *                  |                 RESTORE_BUILD    FINISHED
+     *                  |                       |
+     *                  ------------------------|
      *
      */
     enum class ProbeStatus
@@ -108,37 +110,30 @@ private:
         WAIT_PROBE_FINISH, /// wait probe finish
         GET_RESTORE_JOIN, /// try to get restore join
         RESTORE_BUILD, /// build for restore join
-        READ_NON_JOINED_DATA, /// output non joined data
+        READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
         FINISHED, /// the final state
     };
 
+    void switchStatus(ProbeStatus to);
     Block getOutputBlock();
     std::tuple<size_t, Block> getOneProbeBlock();
     void onCurrentProbeDone();
     void onAllProbeDone();
-    void onCurrentReadNonJoinedDataDone();
+    void onCurrentScanHashMapDone();
     void tryGetRestoreJoin();
-    void readSuffixImpl() override;
+
+private:
     const LoggerPtr log;
-    /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
-    /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
-    /// read them, so need to protect the multi-threads access
-    std::mutex mutex;
     JoinPtr original_join;
-    JoinPtr join;
-    const bool need_output_non_joined_data;
-    size_t current_non_joined_stream_index;
-    BlockInputStreamPtr current_probe_stream;
-    UInt64 max_block_size;
-    ProbeProcessInfo probe_process_info;
-    BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr restore_build_stream;
-    BlockInputStreamPtr restore_probe_stream;
+    /// probe_exec can be modified during the runtime,
+    /// although read/write to those are almost only in 1 thread,
+    /// but an exception is cancel thread will read them,
+    /// so need to use HashJoinProbeExecHolder protect the multi-threads access.
+    HashJoinProbeExecHolder probe_exec;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
-    size_t non_joined_rows = 0;
-    std::list<JoinPtr> parents;
-    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+    size_t scan_hash_map_rows = 0;
+
     Block header;
 };
 

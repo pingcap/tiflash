@@ -897,19 +897,19 @@ delta_rate = 1.1
             continue;
         }
 
-        const auto & remote_cache_config = storage.remote_cache_config;
+        const auto & cache_config = storage.remote_cache_config;
         if (i == 0 || i == 1)
         {
             auto target_dir = fmt::format("/tmp/StorageConfigTest/RemoteCacheConfig/0{}", i == 0 ? "" : "/");
-            ASSERT_EQ(remote_cache_config.dir, target_dir);
-            ASSERT_EQ(remote_cache_config.capacity, 10000000);
-            ASSERT_EQ(remote_cache_config.dtfile_level, 11);
-            ASSERT_DOUBLE_EQ(remote_cache_config.delta_rate, 0.33);
-            ASSERT_EQ(remote_cache_config.getDTFileCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/dtfile");
-            ASSERT_EQ(remote_cache_config.getPageCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/page");
-            ASSERT_EQ(remote_cache_config.getDTFileCapacity() + remote_cache_config.getPageCapacity(), remote_cache_config.capacity);
-            ASSERT_DOUBLE_EQ(remote_cache_config.getDTFileCapacity() * 1.0 / remote_cache_config.capacity, 1.0 - remote_cache_config.delta_rate);
-            ASSERT_TRUE(remote_cache_config.isCacheEnabled());
+            ASSERT_EQ(cache_config.dir, target_dir);
+            ASSERT_EQ(cache_config.capacity, 10000000);
+            ASSERT_EQ(cache_config.dtfile_level, 11);
+            ASSERT_DOUBLE_EQ(cache_config.delta_rate, 0.33);
+            ASSERT_EQ(cache_config.getDTFileCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/dtfile");
+            ASSERT_EQ(cache_config.getPageCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/page");
+            ASSERT_EQ(cache_config.getDTFileCapacity() + cache_config.getPageCapacity() + cache_config.getReservedCapacity(), cache_config.capacity);
+            ASSERT_DOUBLE_EQ(cache_config.getDTFileCapacity() * 1.0 / cache_config.capacity, 1.0 - cache_config.delta_rate - cache_config.reserved_rate);
+            ASSERT_TRUE(cache_config.isCacheEnabled());
         }
         else
         {

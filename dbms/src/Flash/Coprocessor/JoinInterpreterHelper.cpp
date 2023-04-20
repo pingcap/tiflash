@@ -38,43 +38,43 @@ namespace JoinInterpreterHelper
 {
 namespace
 {
-std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
+std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
 {
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::LeftOuter},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::RightOuter},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterAnti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_LeftOuter},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_RightOuter},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterAnti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> null_aware_join_type_map{
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::NullAware_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftAnti}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterAnti}};
 
-    const auto & join_type_map = [join]() {
-        if (join.is_null_aware_semi_join())
+    const auto & join_type_map = [is_null_aware, join_keys_size]() {
+        if (is_null_aware)
         {
-            if (unlikely(join.left_join_keys_size() == 0))
+            if (unlikely(join_keys_size == 0))
                 throw TiFlashException("null-aware semi join does not have join key", Errors::Coprocessor::BadRequest);
             return null_aware_join_type_map;
         }
-        else if (join.left_join_keys_size() > 0)
+        else if (join_keys_size > 0)
             return equal_join_type_map;
         else
             return cartesian_join_type_map;
     }();
 
-    auto join_type_it = join_type_map.find(join.join_type());
+    auto join_type_it = join_type_map.find(tipb_join_type);
     if (unlikely(join_type_it == join_type_map.end()))
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
 
@@ -82,8 +82,8 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
 
     /// in DAG request, inner part is the build side, however for TiFlash implementation,
     /// the build side must be the right side, so need to swap the join side if needed
-    /// 1. for (cross) inner join, there is no problem in this swap.
-    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
+    /// 1. for (cross) inner join, semi/anti-semi join, there is no problem in this swap.
+    /// 2. for cross semi/anti-semi join, the build side is always right, needn't swap.
     /// 3. for non-cross left/right join, there is no problem in this swap.
     /// 4. for cross left join, the build side is always right, needn't and can't swap.
     /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
@@ -92,14 +92,14 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     size_t build_side_index = 0;
     switch (kind)
     {
-    case ASTTableJoin::Kind::Cross_Right:
+    case ASTTableJoin::Kind::Cross_RightOuter:
         build_side_index = 0;
         break;
-    case ASTTableJoin::Kind::Cross_Left:
+    case ASTTableJoin::Kind::Cross_LeftOuter:
         build_side_index = 1;
         break;
     default:
-        build_side_index = join.inner_idx();
+        build_side_index = inner_index;
     }
     assert(build_side_index == 0 || build_side_index == 1);
 
@@ -108,19 +108,33 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     {
         switch (kind)
         {
-        case ASTTableJoin::Kind::Left:
-            kind = ASTTableJoin::Kind::Right;
+        case ASTTableJoin::Kind::Inner:
+            if (tipb_join_type == tipb::JoinType::TypeSemiJoin)
+                kind = ASTTableJoin::Kind::RightSemi;
             break;
-        case ASTTableJoin::Kind::Right:
-            kind = ASTTableJoin::Kind::Left;
+        case ASTTableJoin::Kind::Anti:
+            if (tipb_join_type == tipb::JoinType::TypeAntiSemiJoin)
+                kind = ASTTableJoin::Kind::RightAnti;
             break;
-        case ASTTableJoin::Kind::Cross_Right:
-            kind = ASTTableJoin::Kind::Cross_Left;
+        case ASTTableJoin::Kind::LeftOuter:
+            kind = ASTTableJoin::Kind::RightOuter;
+            break;
+        case ASTTableJoin::Kind::RightOuter:
+            kind = ASTTableJoin::Kind::LeftOuter;
+            break;
+        case ASTTableJoin::Kind::Cross_RightOuter:
+            kind = ASTTableJoin::Kind::Cross_LeftOuter;
+            break;
         default:; // just `default`, for other kinds, don't need to change kind.
         }
     }
 
     return {kind, build_side_index};
+}
+
+std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
+{
+    return getJoinKindAndBuildSideIndex(join.join_type(), join.inner_idx(), join.is_null_aware_semi_join(), join.left_join_keys_size());
 }
 
 JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypePtr & right_type)
@@ -197,12 +211,12 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+    strictness = (isSemiJoin() && !isRightSemiFamily(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
 {
-    if (!isLeftSemiFamily())
+    if (!isLeftOuterSemiFamily())
     {
         return "";
     }
@@ -214,6 +228,22 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
         match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
     }
     return match_helper_name;
+}
+
+String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const
+{
+    if (!isRightSemiFamily(kind) || !has_other_condition)
+    {
+        return "";
+    }
+
+    size_t i = 0;
+    String helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, i);
+    while (header1.has(helper_name) || header2.has(helper_name))
+    {
+        helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, ++i);
+    }
+    return helper_name;
 }
 
 NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(

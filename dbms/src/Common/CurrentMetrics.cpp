@@ -35,6 +35,7 @@
     M(StoreSizeCapacity)                        \
     M(StoreSizeAvailable)                       \
     M(StoreSizeUsed)                            \
+    M(StoreSizeUsedRemote)                      \
     M(DT_DeltaMerge)                            \
     M(DT_DeltaCompact)                          \
     M(DT_DeltaFlush)                            \
@@ -71,7 +72,11 @@
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \
     M(LocalThread)                              \
-    M(LocalThreadActive)
+    M(LocalThreadActive)                        \
+    M(DTFileCacheCapacity)                      \
+    M(DTFileCacheUsed)                          \
+    M(PageCacheCapacity)                        \
+    M(PageCacheUsed)
 
 namespace CurrentMetrics
 {

@@ -174,7 +174,9 @@ protected:
             file_id,
             store_path);
 
-        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        // add the file id to delegator so later test code to retrieve the file path.
+        delegator.addDTFile(file_id, /*file_size*/ 0, store_path);
 
         const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);

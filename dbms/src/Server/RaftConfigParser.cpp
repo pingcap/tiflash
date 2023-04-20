@@ -35,8 +35,14 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfigura
     TiFlashRaftConfig res;
     res.flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
 
-    if (!config.has("raft"))
-        return res;
+    {
+        // Check by `raft` prefix instead of check by `config.has("raft")`,
+        // because when sub keys are set from cli args, `raft` will not exist.
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys("raft", keys);
+        if (keys.empty())
+            return res;
+    }
 
     if (config.has("raft.pd_addr"))
     {
