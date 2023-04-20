@@ -81,10 +81,11 @@ void SharedBucketDataLoader::storeBucketData()
     {
         std::lock_guard lock(queue_mu);
         bucket_data_queue.push(std::move(bucket_data));
-        // 
         if (bucket_data_queue.size() >= max_queue_size)
+        {
             RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::idle));
-        return;
+            return;
+        }
     }
     loadBucket();
 }
@@ -114,23 +115,25 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
     if unlikely (exec_status.isCancelled())
         return true;
 
-    std::lock_guard lock(queue_mu);
+    bool result = true;
     {
+        std::lock_guard lock(queue_mu);
         // If `SharedBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
         // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that A is finished.
         if (bucket_data_queue.empty())
         {
             if unlikely (status == SharedLoaderStatus::finished)
                 return true;
-            tryLoadBucket();
-            return false;
+            result = false;
         }
-
-        bucket_data = std::move(bucket_data_queue.front());
-        bucket_data_queue.pop();
+        else
+        {
+            bucket_data = std::move(bucket_data_queue.front());
+            bucket_data_queue.pop();
+        }
     }
     tryLoadBucket();
-    return true;
+    return result;
 }
 
 SharedAggregateRestorer::SharedAggregateRestorer(

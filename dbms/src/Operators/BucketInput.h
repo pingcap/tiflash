@@ -20,6 +20,8 @@
 namespace DB
 {
 /// Used to reading spilled bucket data of aggregator.
+class BucketInput;
+using BucketInputs = std::vector<BucketInput>;
 class BucketInput
 {
 public:
@@ -44,6 +46,5 @@ private:
     std::optional<Block> output;
     bool is_exhausted = false;
 };
-using BucketInputs = std::vector<BucketInput>;
 
 } // namespace DB

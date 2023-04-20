@@ -65,7 +65,7 @@ Block BucketInput::moveOutput()
 
 Int32 BucketInput::getMinBucketNum(const BucketInputs & inputs)
 {
-    assert(!bucket_inputs.empty());
+    assert(!inputs.empty());
     Int32 min_bucket_num = NUM_BUCKETS;
     for (auto & input : inputs)
     {

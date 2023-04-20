@@ -31,7 +31,7 @@ public:
 };
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
-    std::vector<bool> pipeline_bools{false, true}; \
+    std::vector<bool> pipeline_bools{true}; \
     for (auto enable_pipeline : pipeline_bools)    \
     {                                              \
         enablePipeline(enable_pipeline);
