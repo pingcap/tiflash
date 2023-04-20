@@ -18,7 +18,8 @@ namespace DB
 {
 void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook)
 {
-    RUNTIME_CHECK(!inited_build && !inited_convergent);
+    assert(status.load() == AggStatus::init);
+    is_cancelled = std::move(hook);
     max_threads = max_threads_;
     empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
     keys_size = params.keys_size;
@@ -31,19 +32,51 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
     }
 
     aggregator = std::make_unique<Aggregator>(params, log->identifier());
-    aggregator->setCancellationHook(std::move(hook));
+    aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
-    inited_build = true;
+    status = AggStatus::build;
     build_watch.emplace();
     LOG_TRACE(log, "Aggregate Context inited");
 }
 
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
-    RUNTIME_CHECK(inited_build && !inited_convergent);
+    assert(status.load() == AggStatus::build);
     aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns);
     threads_data[task_index]->src_bytes += block.bytes();
     threads_data[task_index]->src_rows += block.rows();
+}
+
+bool AggregateContext::hasSpilledData() const
+{
+    assert(status.load() == AggStatus::build);
+    return aggregator->hasSpilledData();
+}
+
+bool AggregateContext::needSpill(size_t task_index, bool try_mark_need_spill)
+{
+    assert(status.load() == AggStatus::build);
+    auto & data = *many_data[task_index];
+    if (try_mark_need_spill && !data.need_spill)
+        data.tryMarkNeedSpill();
+    return data.need_spill;
+}
+
+void AggregateContext::spillData(size_t task_index)
+{
+    assert(status.load() == AggStatus::build);
+    aggregator->spill(*many_data[task_index]);
+}
+
+LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
+{
+    assert(status.load() == AggStatus::build);
+    aggregator->finishSpill();
+    LOG_INFO(log, "Begin restore data from disk for local aggregation.");
+    auto input_streams = aggregator->restoreSpilledData();
+    status = AggStatus::restore;
+    RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
+    return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
 void AggregateContext::initConvergentPrefix()
@@ -87,43 +120,32 @@ void AggregateContext::initConvergentPrefix()
 
 void AggregateContext::initConvergent()
 {
-    RUNTIME_CHECK(inited_build && !inited_convergent);
+    assert(status.load() == AggStatus::build);
 
     initConvergentPrefix();
 
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, true, max_threads);
-    inited_convergent = true;
+    status = AggStatus::convergent;
     RUNTIME_CHECK(!merging_buckets || merging_buckets->getConcurrency() > 0);
 }
 
 size_t AggregateContext::getConvergentConcurrency()
 {
-    RUNTIME_CHECK(inited_convergent);
-
-    return isTwoLevel() ? merging_buckets->getConcurrency() : 1;
+    assert(status.load() == AggStatus::convergent);
+    return merging_buckets ? merging_buckets->getConcurrency() : 1;
 }
 
 Block AggregateContext::getHeader() const
 {
-    RUNTIME_CHECK(inited_build);
+    assert(aggregator);
     return aggregator->getHeader(true);
-}
-
-bool AggregateContext::isTwoLevel()
-{
-    RUNTIME_CHECK(inited_build);
-    return many_data[0]->isTwoLevel();
-}
-
-bool AggregateContext::useNullSource()
-{
-    RUNTIME_CHECK(inited_convergent);
-    return !merging_buckets;
 }
 
 Block AggregateContext::readForConvergent(size_t index)
 {
-    RUNTIME_CHECK(inited_convergent);
+    assert(status.load() == AggStatus::convergent);
+    if unlikely (!merging_buckets)
+        return {};
     return merging_buckets->getData(index);
 }
 } // namespace DB
