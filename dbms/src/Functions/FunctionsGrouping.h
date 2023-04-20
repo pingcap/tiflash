@@ -218,24 +218,8 @@ protected:
         else if (arg_num > 1)
             throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
-        const DataTypePtr & arg_data_type = arguments[0].type;
-        if (arg_data_type->isNullable())
-        {
-            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg_data_type.get());
-            assert(null_type != nullptr);
-
-            const auto & nested_type = removeNullable(arg_data_type);
-            assert(nested_type->getTypeId() == TypeIndex::UInt64);
-            if (nested_type->isInteger())
-                return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
-        }
-        else if (arg_data_type->isInteger())
-        {
-            assert(removeNullable(arg_data_type)->getTypeId() == TypeIndex::UInt64);
-            return std::make_shared<DataTypeNumber<ResultType>>();
-        }
-
-        throw Exception(fmt::format("Illegal type {} of argument of grouping function", arg_data_type->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        assert(arguments[0].type->getTypeId() == TypeIndex::UInt64);
+        return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
 private:

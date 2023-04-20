@@ -61,7 +61,6 @@ try
     MetaData meta_data;
     FuncMetaData func_meta;
     meta_data.mode = tipb::GroupingMode::ModeBitAnd;
-    const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const
     {
@@ -80,7 +79,7 @@ try
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     func_meta,
-                    collator));
+                    nullptr));
         }
     }
 
@@ -107,6 +106,30 @@ try
                     nullptr));
         }
     }
+
+    // nullable
+    {
+        std::vector<std::optional<UInt64>> grouping_id{1, 4, {}};
+        std::vector<UInt64> meta_grouping_id{1, 2, 4, 8};
+        std::vector<std::vector<std::optional<UInt64>>> expects{
+            {1, 0, {}},
+            {0, 0, {}},
+            {0, 1, {}},
+            {0, 0, {}}};
+
+        for (size_t i = 0; i < expects.size(); ++i)
+        {
+            meta_data.grouping_id = meta_grouping_id[i];
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<UInt8>>(expects[i]),
+                executeFunctionWithMetaData(
+                    func_name,
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
+                    func_meta,
+                    nullptr));
+        }
+    }
 }
 CATCH
 
@@ -115,7 +138,6 @@ try
 {
     MetaData meta_data;
     meta_data.mode = tipb::GroupingMode::ModeNumericCmp;
-    const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const
     {
@@ -134,7 +156,7 @@ try
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     func_meta,
-                    collator));
+                    nullptr));
         }
     }
 
@@ -164,6 +186,33 @@ try
                     nullptr));
         }
     }
+
+    // nullable
+    {
+        std::vector<std::optional<UInt64>> grouping_id{2, 4, {}};
+        std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
+        std::vector<std::vector<std::optional<UInt64>>> expects{
+            {1, 1, {}},
+            {0, 1, {}},
+            {0, 1, {}},
+            {0, 0, {}},
+            {0, 0, {}},
+            {0, 0, {}},
+            {0, 0, {}}};
+
+        for (size_t i = 0; i < expects.size(); ++i)
+        {
+            meta_data.grouping_id = meta_grouping_id[i];
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<UInt8>>(expects[i]),
+                executeFunctionWithMetaData(
+                    func_name,
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
+                    func_meta,
+                    nullptr));
+        }
+    }
 }
 CATCH
 
@@ -172,7 +221,6 @@ try
 {
     MetaData meta_data;
     meta_data.mode = tipb::GroupingMode::ModeNumericSet;
-    const TiDB::TiDBCollatorPtr collator = nullptr;
 
     // const
     {
@@ -191,7 +239,7 @@ try
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
                     func_meta,
-                    collator));
+                    nullptr));
         }
     }
 
@@ -214,6 +262,30 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
+                    func_meta,
+                    nullptr));
+        }
+    }
+
+    // nullable
+    {
+        std::vector<std::optional<UInt64>> grouping_id{1, 2, 3, 4, {}};
+        std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
+        std::vector<std::vector<std::optional<UInt64>>> expects{
+            {1, 0, 1, 1, {}},
+            {1, 1, 0, 1, {}},
+            {1, 0, 0, 1, {}},
+            {0, 1, 0, 1, {}}};
+
+        for (size_t i = 0; i < expects.size(); ++i)
+        {
+            meta_data.grouping_ids = meta_grouping_id[i];
+            FuncMetaData func_meta = buildFuncMetaData(meta_data);
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<UInt8>>(expects[i]),
+                executeFunctionWithMetaData(
+                    func_name,
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
                     func_meta,
                     nullptr));
         }
