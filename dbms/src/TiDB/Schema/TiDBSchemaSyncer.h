@@ -431,18 +431,53 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             {
                 create_database_ids.push_back(db->id);
 
-                std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
-                for (auto & table : tables)
-                {
-                    /// Ignore view and sequence.
-                    if (table->is_view || table->is_sequence)
-                    {
-                        continue;
-                    }
-                    apply_tables.emplace(std::make_pair(db->id, table->id), true);
-                    LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
-                }
+                // std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
+                // for (auto & table : tables)
+                // {
+                //     /// Ignore view and sequence.
+                //     if (table->is_view || table->is_sequence)
+                //     {
+                //         continue;
+                //     }
+                //     apply_tables.emplace(std::make_pair(db->id, table->id), true);
+                //     LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
+                // }
             }
+
+            size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
+
+            auto get_table_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+
+            auto get_table_wait_group = get_table_thread_pool.waitGroup();
+
+            std::mutex apply_mutex;
+            for (const auto& db_id : create_database_ids)
+            {
+                auto task = [db_id, &getter, &apply_tables, &apply_mutex] {
+                    std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db_id);
+                    std::vector<TableID> table_ids;
+                    table_ids.reserve(tables.size());
+                    for (auto & table : tables)
+                    {
+                        /// Ignore view and sequence.
+                        if (table->is_view || table->is_sequence)
+                        {
+                            continue;
+                        }
+                        table_ids.push_back(table->id);
+                        ///apply_tables.emplace(std::make_pair(db->id, table->id), true);
+                        //LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
+                    };
+                    std::lock_guard<std::mutex> lock(apply_mutex);
+                    for (const auto & table_id : table_ids) {
+                        apply_tables.emplace(std::make_pair(db_id, table_id), true);
+                    }
+                };
+                get_table_wait_group->schedule(task);
+            }
+
+            get_table_wait_group->wait();
+
             LOG_INFO(log, "finish to fetch all database");
             used_version = version;
             // LOG_ERROR(log, "tryLoadSchemaDiffs cur_version is {}, latest_version is {} with loadAllSchema ", cur_version, latest_version);
