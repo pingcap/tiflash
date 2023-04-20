@@ -826,17 +826,15 @@ public:
     ColumnWithTypeAndName executeFunctionWithMetaData(
         const String & func_name,
         const ColumnsWithTypeAndName & columns,
-        const TiDB::TiDBCollatorPtr & collator = nullptr,
-        const FuncMetaData & meta = FuncMetaData(),
-        bool raw_function_test = false);
+        const FuncMetaData & meta,
+        const TiDB::TiDBCollatorPtr & collator = nullptr);
 
     ColumnWithTypeAndName executeFunctionWithMetaData(
         const String & func_name,
         const ColumnNumbers & argument_column_numbers,
         const ColumnsWithTypeAndName & columns,
-        const TiDB::TiDBCollatorPtr & collator = nullptr,
-        const FuncMetaData & meta = FuncMetaData(),
-        bool raw_function_test = false);
+        const FuncMetaData & meta,
+        const TiDB::TiDBCollatorPtr & collator = nullptr);
 
     DAGContext & getDAGContext()
     {

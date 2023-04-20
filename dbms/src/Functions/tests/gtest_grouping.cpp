@@ -66,8 +66,8 @@ try
     // const
     {
         std::vector<UInt64> grouping_id{1, 1, 1, 4, 4, 4, 4};
-        std::vector<UInt64> meta_grouping_id{1, 2, 3, 1, 2, 4, 6};
-        std::vector<UInt64> expect{1, 0, 1, 0, 0, 1, 1};
+        std::vector<UInt64> meta_grouping_id{1, 2, 2, 1, 2, 4, 8};
+        std::vector<UInt64> expect{1, 0, 0, 0, 0, 1, 0};
 
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
@@ -79,24 +79,20 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
-                    collator,
                     func_meta,
-                    false));
+                    collator));
         }
     }
 
     // vector
     {
         std::vector<UInt64> grouping_id{1, 4};
-        std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
+        std::vector<UInt64> meta_grouping_id{1, 2, 4, 8};
         std::vector<std::vector<UInt64>> expects{
             {1, 0},
             {0, 0},
-            {1, 0},
             {0, 1},
-            {1, 1},
-            {0, 1},
-            {1, 1}};
+            {0, 0}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -107,9 +103,8 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
-                    nullptr,
                     func_meta,
-                    false));
+                    nullptr));
         }
     }
 }
@@ -138,9 +133,8 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
-                    collator,
                     func_meta,
-                    false));
+                    collator));
         }
     }
 
@@ -166,9 +160,8 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
-                    nullptr,
                     func_meta,
-                    false));
+                    nullptr));
         }
     }
 }
@@ -197,9 +190,8 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
-                    collator,
                     func_meta,
-                    false));
+                    collator));
         }
     }
 
@@ -222,9 +214,8 @@ try
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
-                    nullptr,
                     func_meta,
-                    false));
+                    nullptr));
         }
     }
 }

@@ -540,14 +540,14 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, "", raw_function_test);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator, const FuncMetaData & meta, bool raw_function_test)
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnsWithTypeAndName & columns, const FuncMetaData & meta, const TiDB::TiDBCollatorPtr & collator)
 {
-    return DB::tests::executeFunction(*context, func_name, columns, collator, meta.val, raw_function_test);
+    return DB::tests::executeFunction(*context, func_name, columns, collator, meta.val, false);
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator, const FuncMetaData & meta, bool raw_function_test)
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, const FuncMetaData & meta, const TiDB::TiDBCollatorPtr & collator)
 {
-    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, raw_function_test);
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, false);
 }
 
 } // namespace tests

@@ -181,9 +181,7 @@ void columnsToTiPBExpr(
     }
     else
     {
-        if (func_name == "grouping")
-            expr->set_val(val);
-
+        expr->set_val(val);
         expr->set_tp(tipb::ExprType::ScalarFunc);
         expr->set_sig(reverseGetFuncSigByFuncName(func_name));
         for (size_t i = 0; i < argument_column_number.size(); ++i)

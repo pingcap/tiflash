@@ -15,12 +15,14 @@
 #include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
 #include <common/types.h>
+#include <tipb/expression.pb.h>
 #include <tipb/metadata.pb.h>
 
 #include <magic_enum.hpp>
@@ -188,7 +190,7 @@ public:
     }
 
     String getName() const override { return name; }
-    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForNulls() const override { return true; }
     size_t getNumberOfArguments() const override { return 1; }
     void setExpr(const tipb::Expr & expr_)
     {
@@ -222,12 +224,14 @@ protected:
             const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg_data_type.get());
             assert(null_type != nullptr);
 
-            const auto & nested_type = null_type->getNestedType();
+            const auto & nested_type = removeNullable(arg_data_type);
+            assert(nested_type->getTypeId() == TypeIndex::UInt64);
             if (nested_type->isInteger())
                 return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
         }
         else if (arg_data_type->isInteger())
         {
+            assert(removeNullable(arg_data_type)->getTypeId() == TypeIndex::UInt64);
             return std::make_shared<DataTypeNumber<ResultType>>();
         }
 
