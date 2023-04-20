@@ -100,7 +100,7 @@ void SharedBucketDataLoader::loadBucket()
     assert(!bucket_inputs.empty());
     auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
-    RUNTIME_CHECK(event->prepareForSource());
+    RUNTIME_CHECK(event->prepare());
     event->schedule();
 }
 
