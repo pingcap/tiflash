@@ -37,6 +37,8 @@ SharedBucketDataLoader::SharedBucketDataLoader(
 
 SharedBucketDataLoader::~SharedBucketDataLoader()
 {
+    bucket_data_queue = {};
+    bucket_inputs.clear();
     // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedBucketDataLoader` is destructed.
     exec_status.onEventFinish();
 }
@@ -104,12 +106,6 @@ void SharedBucketDataLoader::loadBucket()
     event->schedule();
 }
 
-void SharedBucketDataLoader::tryLoadBucket()
-{
-    if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
-        loadBucket();
-}
-
 bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
     if unlikely (exec_status.isCancelled())
@@ -132,7 +128,8 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
             bucket_data_queue.pop();
         }
     }
-    tryLoadBucket();
+    if (switchStatus(SharedLoaderStatus::idle, SharedLoaderStatus::loading))
+        loadBucket();
     return result;
 }
 
