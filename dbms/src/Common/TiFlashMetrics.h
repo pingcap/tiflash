@@ -18,6 +18,7 @@
 #include <Common/ProcessCollector.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -64,6 +65,7 @@ namespace DB
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
         F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
         F(type_expand, {"type", "expand"}))                                                                                                         \
+    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                               \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
@@ -533,6 +535,11 @@ private:
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
+
+    prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
+    using KeyspaceID = UInt32;
+    std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
+    prometheus::Gauge * store_used_total_metric;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

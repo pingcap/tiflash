@@ -189,14 +189,10 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
     auto dt_file = dt_stream->getFile();
     assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
     const auto bytes_written = dt_file->getBytesOnDisk();
-    if (auto remote_data_store = context.getSharedContextDisagg()->remote_data_store;
-        !remote_data_store)
-    {
-        // Add the DTFile to StoragePathPool so that we can restore it later
-        storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
-    }
-    // else when remote data store is enabled, the file will be removed from local
-    // do not need to pre-ingest it to disk delegator
+
+    // If remote data store is not enabled, add the DTFile to StoragePathPool so that we can restore it later
+    // Else just add it's size to disk delegator
+    storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
 
     dt_stream.reset();
 

@@ -189,6 +189,13 @@ public:
         return DM::DMChecksumConfig::fromDBContext(global_context);
     }
 
+    static DM::PushDownFilterPtr buildPushDownFilter(const DM::RSOperatorPtr & rs_operator,
+                                                     const ColumnInfos & table_scan_column_info,
+                                                     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+                                                     const DM::ColumnDefines & columns_to_read,
+                                                     const Context & context,
+                                                     const LoggerPtr & tracing_logger);
+
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
@@ -228,6 +235,10 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
+    DM::RSOperatorPtr buildRSOperator(const SelectQueryInfo & query_info,
+                                      const DM::ColumnDefines & columns_to_read,
+                                      const Context & context,
+                                      const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.
     DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
                                               const DM::ColumnDefines & columns_to_read,

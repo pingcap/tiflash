@@ -38,13 +38,13 @@ using Joins = std::vector<JoinPtr>;
 struct RestoreInfo
 {
     JoinPtr join;
-    BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr scan_hash_map_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && non_joined_data_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
         : join(join_)
-        , non_joined_stream(std::move(non_joined_data_stream_))
+        , scan_hash_map_stream(std::move(scan_hash_map_stream_))
         , build_stream(std::move(build_stream_))
         , probe_stream(std::move(probe_stream_))
     {}
@@ -146,7 +146,8 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
-         const String & match_helper_name = "",
+         const String & match_helper_name_ = "",
+         const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
          bool is_test = true);
 
@@ -168,13 +169,11 @@ public:
 
     void checkTypes(const Block & block) const;
 
-    bool needReturnNonJoinedData() const;
-
-    /** For RIGHT and FULL JOINs.
-      * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
+    /**
+      * A stream that will scan and output rows from right table, might contain default values from left table
       * Use only after all calls to joinBlock was done.
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     bool isEnableSpill() const;
 
@@ -253,18 +252,24 @@ public:
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
+    static const String flag_mapped_entry_helper_prefix;
+    static const DataTypePtr flag_mapped_entry_helper_type;
 
-    // only use for left semi joins.
+    // only use for left outer semi joins.
     const String match_helper_name;
+    // only use for right semi, right anti joins with other conditions,
+    // used to name the column that records matched map entry before other conditions filter
+    const String flag_mapped_entry_helper_name;
 
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
 
 private:
-    friend class NonJoinedBlockInputStream;
+    friend class ScanHashMapAfterProbeBlockInputStream;
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    bool has_other_condition;
     ASTTableJoin::Strictness original_strictness;
     const bool may_probe_side_expanded_after_join;
 
@@ -314,7 +319,7 @@ private:
 
     BlockInputStreams restore_build_streams;
     BlockInputStreams restore_probe_streams;
-    BlockInputStreams restore_non_joined_data_streams;
+    BlockInputStreams restore_scan_hash_map_streams;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;

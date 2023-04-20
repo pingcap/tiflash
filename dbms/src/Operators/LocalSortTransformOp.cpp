@@ -105,6 +105,8 @@ OperatorStatus LocalSortTransformOp::fromPartialToSpill()
     // convert to restore phase.
     status = LocalSortStatus::SPILL;
     assert(!cached_handler);
+    if (!spiller->hasSpilledData())
+        LOG_INFO(log, "Begin spill in local sort");
     cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,

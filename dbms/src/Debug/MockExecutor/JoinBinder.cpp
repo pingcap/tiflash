@@ -146,7 +146,7 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
 
     join->set_join_type(tp);
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
-    join->set_inner_idx(1);
+    join->set_inner_idx(inner_index);
     join->set_is_null_aware_semi_join(is_null_aware_semi_join);
 
     for (const auto & key : join_cols)
@@ -292,14 +292,15 @@ ExecutorBinderPtr compileJoin(size_t & executor_index,
                               const ASTs & other_conds,
                               const ASTs & other_eq_conds_from_in,
                               uint64_t fine_grained_shuffle_stream_count,
-                              bool is_null_aware_semi_join)
+                              bool is_null_aware_semi_join,
+                              int64_t inner_index)
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
-    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join);
+    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join, inner_index);
     join->children.push_back(left);
     join->children.push_back(right);
 
@@ -322,10 +323,10 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
     case ASTTableJoin::Kind::Inner:
         tp = tipb::JoinType::TypeInnerJoin;
         break;
-    case ASTTableJoin::Kind::Left:
+    case ASTTableJoin::Kind::LeftOuter:
         tp = tipb::JoinType::TypeLeftOuterJoin;
         break;
-    case ASTTableJoin::Kind::Right:
+    case ASTTableJoin::Kind::RightOuter:
         tp = tipb::JoinType::TypeRightOuterJoin;
         break;
     default:

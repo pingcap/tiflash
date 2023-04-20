@@ -18,7 +18,7 @@ namespace DB
 {
 void ExchangeReceiverSourceOp::operateSuffix()
 {
-    LOG_INFO(log, "finish read {} rows from exchange", total_rows);
+    LOG_DEBUG(log, "finish read {} rows from exchange", total_rows);
 }
 
 Block ExchangeReceiverSourceOp::popFromBlockQueue()
