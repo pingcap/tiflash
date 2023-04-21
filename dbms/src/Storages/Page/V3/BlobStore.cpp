@@ -165,7 +165,7 @@ FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     PageEntriesEdit edit;
     for (auto & write : wb.getMutWrites())
@@ -175,52 +175,99 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         case WriteBatchWriteType::PUT:
         case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
-            ChecksumClass digest;
-            PageEntryV3 entry;
-
             auto [blob_id, offset_in_file] = getPosFromStats(write.size);
 
-            entry.file_id = blob_id;
-            entry.size = write.size;
-            entry.tag = write.tag;
-            entry.offset = offset_in_file;
-            // padding size won't work on big write batch
-            entry.padded_size = 0;
+            ChecksumClass digest;
+            // swap from WriteBatch instead of copying
+            PageFieldOffsetChecksums field_offset_and_checksum;
+            field_offset_and_checksum.swap(write.offsets);
 
-            BufferBase::Buffer data_buf = write.read_buffer->buffer();
-
-            digest.update(data_buf.begin(), write.size);
-            entry.checksum = digest.checksum();
-
-            UInt64 field_begin, field_end;
-
-            for (size_t i = 0; i < write.offsets.size(); ++i)
+            ChecksumClass field_digest;
+            size_t cur_field_index = 0;
+            UInt64 cur_field_begin = 0, cur_field_end = 0;
+            if (!field_offset_and_checksum.empty())
             {
-                ChecksumClass field_digest;
-                field_begin = write.offsets[i].first;
-                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
-
-                field_digest.update(data_buf.begin() + field_begin, field_end - field_begin);
-                write.offsets[i].second = field_digest.checksum();
-            }
-
-            if (!write.offsets.empty())
-            {
-                // we can swap from WriteBatch instead of copying
-                entry.field_offsets.swap(write.offsets);
+                cur_field_begin = field_offset_and_checksum[cur_field_index].first;
+                cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
             }
 
             try
             {
                 auto blob_file = getBlobFile(blob_id);
-                blob_file->write(data_buf.begin(), offset_in_file, write.size, write_limiter);
+                UInt64 buffer_begin_in_page = 0, buffer_end_in_page = 0;
+                while (true)
+                {
+                    BufferBase::Buffer data_buf = write.read_buffer->buffer();
+                    buffer_end_in_page = buffer_begin_in_page + data_buf.size();
+                    LOG_INFO(Logger::get(), "data_buf beg@{} end@{} size={}", fmt::ptr(data_buf.begin()), fmt::ptr(data_buf.end()), data_buf.size());
+
+                    digest.update(data_buf.begin(), data_buf.size()); // the checksum of the whole page
+                    if (!field_offset_and_checksum.empty())
+                    {
+                        if (cur_field_end > buffer_end_in_page)
+                        {
+                            /*
+                             * This piece of buffer does not contain all data of current field
+                             * PageBegin                                                            PageEnd
+                             *     │       │----------- Buffer Range -----------│                       │
+                             *     │    │------------- Current Field --------------│                    |
+                             *             ↑                                    ↑  Update field checksum
+                             */
+                            field_digest.update(data_buf.begin(), data_buf.size());
+                        }
+                        else
+                        {
+                            /*
+                             * This piece of buffer contains all data of current field, update
+                             * checksum and continue until this piece of buffer does not contain
+                             * all data of field.
+                             * PageBegin                                                            PageEnd
+                             *     │       │----------- Buffer Range -----------│                       │
+                             *     │     │---- Field i ----│---- Field j ----│--- Field k ---│        |
+                             *             ↑               ↑                 ↑  ↑ Update field checksum
+                             */
+                            do
+                            {
+                                auto field_begin_in_buf = cur_field_begin <= buffer_begin_in_page ? 0 : cur_field_begin - buffer_begin_in_page;
+                                auto field_length_in_buf = cur_field_end > buffer_end_in_page ? data_buf.size() - field_begin_in_buf : cur_field_end - cur_field_begin;
+                                field_digest.update(data_buf.begin() + field_begin_in_buf, field_length_in_buf);
+
+                                // this field is totally included in the current buffer
+                                field_offset_and_checksum[cur_field_index].second = field_digest.checksum();
+
+                                field_digest = ChecksumClass(); // reset
+                                cur_field_index += 1;
+                                cur_field_begin = field_offset_and_checksum[cur_field_index].first;
+                                cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
+                            } while (cur_field_end <= buffer_end_in_page);
+                        }
+                    }
+
+                    blob_file->write(data_buf.begin(), offset_in_file + buffer_begin_in_page, data_buf.size(), write_limiter);
+                    buffer_begin_in_page += data_buf.size();
+
+                    if (!write.read_buffer->next())
+                        break;
+                }
             }
             catch (DB::Exception & e)
             {
+                // TODO: fix the remove logic
                 removePosFromStats(blob_id, offset_in_file, write.size);
                 LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
+
+            PageEntryV3 entry;
+            entry.file_id = blob_id;
+            entry.size = write.size;
+            entry.tag = write.tag;
+            entry.offset = offset_in_file;
+            // padding size won't work on large write batch
+            entry.padded_size = 0;
+            entry.checksum = digest.checksum();
+            entry.field_offsets = std::move(field_offset_and_checksum);
+
             if (write.type == WriteBatchWriteType::PUT)
             {
                 edit.put(wb.getFullPageId(write.page_id), entry);
@@ -358,7 +405,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
     // This can avoid allocating a big buffer for writing data and can smooth memory usage.
     if (all_page_data_size > config.file_limit_size)
     {
-        return handleLargeWrite(wb, write_limiter);
+        return handleLargeWrite(std::move(wb), write_limiter);
     }
 
     char * buffer = static_cast<char *>(alloc(all_page_data_size));
