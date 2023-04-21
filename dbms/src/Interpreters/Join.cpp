@@ -346,7 +346,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
 }
 
 /// the block should be valid.
-BuildResult Join::insertFromBlock(const Block & block, size_t stream_index)
+void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrency());
@@ -365,7 +365,6 @@ BuildResult Join::insertFromBlock(const Block & block, size_t stream_index)
             original_blocks.push_back(block);
         }
         insertFromBlockInternal(stored_block, stream_index);
-        return {};
     }
     else
     {
@@ -398,7 +397,6 @@ BuildResult Join::insertFromBlock(const Block & block, size_t stream_index)
             }
         }
 
-        BuildResult result{build_spiller.get()};
         for (size_t j = stream_index; j < build_concurrency + stream_index; ++j)
         {
             stored_block = nullptr;
@@ -428,16 +426,14 @@ BuildResult Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            result.append(i, std::move(blocks_to_spill));
+            build_spiller->spillBlocks(std::move(blocks_to_spill), i);
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
         if (restore_round == 2)
             return result;
 #endif
-        spillMostMemoryUsedPartitionIfNeed(result);
-        LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
-        return result;
+        spillMostMemoryUsedPartitionIfNeed();
     }
 }
 
@@ -1856,7 +1852,7 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
-void Join::spillMostMemoryUsedPartitionIfNeed(BuildResult & result)
+void Join::spillMostMemoryUsedPartitionIfNeed()
 {
     Int64 target_partition_index = -1;
     size_t max_bytes = 0;
@@ -1903,7 +1899,8 @@ void Join::spillMostMemoryUsedPartitionIfNeed(BuildResult & result)
         blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
     }
-    result.append(target_partition_index, std::move(blocks_to_spill));
+    build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
+    LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
 bool Join::getPartitionSpilled(size_t partition_index)

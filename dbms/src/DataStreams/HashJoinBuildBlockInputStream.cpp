@@ -27,9 +27,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
             join->finishOneBuild();
             return block;
         }
-        auto ret = join->insertFromBlock(block, concurrency_build_index);
-        if (ret.needSpill())
-            ret.spill();
+        join->insertFromBlock(block, concurrency_build_index);
         return block;
     }
     catch (...)

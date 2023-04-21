@@ -26,9 +26,8 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
             join_ptr->finishOneBuild();
             return OperatorStatus::FINISHED;
         }
-        ret = join_ptr->insertFromBlock(block, concurrency_build_index);
+        join_ptr->insertFromBlock(block, concurrency_build_index);
         block.clear();
-        return ret.needSpill() ? OperatorStatus::IO : OperatorStatus::NEED_INPUT;
     }
     catch (...)
     {
