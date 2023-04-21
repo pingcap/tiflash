@@ -49,7 +49,7 @@ void registerFunctionsRegexpLike(FunctionFactory &);
 void registerFunctionsRegexpInstr(FunctionFactory &);
 void registerFunctionsRegexpSubstr(FunctionFactory &);
 void registerFunctionsRegexpReplace(FunctionFactory &);
-
+void registerFunctionsGrouping(FunctionFactory &);
 
 void registerFunctions()
 {
@@ -82,6 +82,7 @@ void registerFunctions()
     registerFunctionsRegexpReplace(factory);
     registerFunctionsJson(factory);
     registerFunctionsIsIPAddr(factory);
+    registerFunctionsGrouping(factory);
 }
 
 } // namespace DB
