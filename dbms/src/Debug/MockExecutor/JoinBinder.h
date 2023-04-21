@@ -35,8 +35,6 @@ public:
         , is_null_aware_semi_join(is_null_aware_semi_join)
         , inner_index(inner_index_)
     {
-        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
-            throw Exception("No join condition found.");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
