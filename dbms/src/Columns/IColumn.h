@@ -255,6 +255,13 @@ public:
         throw Exception(fmt::format("Method compareAt with collation is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    /// Compare the whole column with single value from rhs column.
+    /// If row_indexes is nullptr, it's ignored. Otherwise, it is a set of rows to compare.
+    /// compare_results[i] will be equal to compareAt(row_indexes[i], rhs_row_num, rhs, nan_direction_hint) * direction
+    /// row_indexes (if not ignored) will contain row numbers for which compare result is 0
+    /// see compareImpl for default implementation.
+    virtual void compareColumn(const IColumn & rhs, size_t rhs_row_num, PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results, int direction, int nan_direction_hint) const = 0;
+
     /** Returns a permutation that sorts elements of this column,
       *  i.e. perm[i]-th element of source column should be i-th element of sorted column.
       * reverse - reverse ordering (ascending).
@@ -457,6 +464,81 @@ protected:
 
         for (size_t i = 0; i < num_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
+    }
+
+    template <typename Derived, bool reversed, bool use_indexes>
+    void compareImpl(const Derived & rhs, size_t rhs_row_num, PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results, int nan_direction_hint) const
+    {
+        size_t num_rows = size();
+        size_t num_indexes = num_rows;
+        UInt64 * indexes [[maybe_unused]];
+        UInt64 * next_index [[maybe_unused]];
+
+        if constexpr (use_indexes)
+        {
+            num_indexes = row_indexes->size();
+            indexes = row_indexes->data();
+            next_index = indexes;
+        }
+
+        compare_results.resize(num_rows);
+
+        if (compare_results.empty())
+            compare_results.resize(num_rows);
+        else if (compare_results.size() != num_rows)
+            throw Exception(
+                "Size of compare_results: " + std::to_string(compare_results.size()) + " doesn't match rows_num: " + std::to_string(num_rows),
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+        for (size_t i = 0; i < num_indexes; ++i)
+        {
+            UInt64 row = i;
+
+            if constexpr (use_indexes)
+                row = indexes[i];
+
+            int res = static_cast<const Derived *>(this)->compareAt(row, rhs_row_num, rhs, nan_direction_hint);
+            assert(res == 1 || res == -1 || res == 0);
+            compare_results[row] = static_cast<Int8>(res);
+
+            if constexpr (reversed)
+                compare_results[row] = -compare_results[row];
+
+            if constexpr (use_indexes)
+            {
+                if (compare_results[row] == 0)
+                {
+                    *next_index = row;
+                    ++next_index;
+                }
+            }
+        }
+
+        if constexpr (use_indexes)
+        {
+            size_t equal_row_indexes_size = next_index - row_indexes->data();
+            row_indexes->resize(equal_row_indexes_size);
+        }
+    }
+
+
+    template <typename Derived>
+    void doCompareColumn(const Derived & rhs, size_t rhs_row_num, PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results, int direction, int nan_direction_hint) const
+    {
+        if (direction < 0)
+        {
+            if (row_indexes)
+                compareImpl<Derived, true, true>(rhs, rhs_row_num, row_indexes, compare_results, nan_direction_hint);
+            else
+                compareImpl<Derived, true, false>(rhs, rhs_row_num, row_indexes, compare_results, nan_direction_hint);
+        }
+        else
+        {
+            if (row_indexes)
+                compareImpl<Derived, false, true>(rhs, rhs_row_num, row_indexes, compare_results, nan_direction_hint);
+            else
+                compareImpl<Derived, false, false>(rhs, rhs_row_num, row_indexes, compare_results, nan_direction_hint);
+        }
     }
 };
 

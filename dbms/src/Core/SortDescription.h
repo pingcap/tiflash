@@ -81,4 +81,18 @@ struct SortColumnDescription
 /// Description of the sorting rule for several columns.
 using SortDescription = std::vector<SortColumnDescription>;
 
+struct SortColumnDescriptionWithColumnIndex
+{
+    SortColumnDescription base;
+    size_t column_number;
+
+    SortColumnDescriptionWithColumnIndex(SortColumnDescription description_, size_t column_number_)
+        : base(std::move(description_)), column_number(column_number_)
+    {
+    }
+};
+
+/// Description of the sorting rule for several columns.
+using SortDescriptionWithPositions = std::vector<SortColumnDescriptionWithColumnIndex>;
+
 } // namespace DB

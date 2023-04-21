@@ -38,6 +38,10 @@ public:
         , log(Logger::get(req_id))
     {
         children.push_back(input_);
+
+        assert(!description_.empty());
+        for (const auto & column_sort_desc : description)
+            description_with_positions.emplace_back(column_sort_desc, children.at(0)->getHeader().getPositionByName(column_sort_desc.column_name));
     }
 
     String getName() const override { return NAME; }
@@ -54,8 +58,18 @@ protected:
 
 private:
     SortDescription description;
+    SortDescriptionWithPositions description_with_positions;
     size_t limit;
     LoggerPtr log;
+
+    /// This are just buffers which reserve memory to reduce the number of allocations.
+    PaddedPODArray<UInt64> rows_to_compare;
+    PaddedPODArray<Int8> compare_results;
+    IColumn::Filter filter;
+
+    Columns sort_description_threshold_columns;
+
+    static constexpr size_t min_limit_for_partial_sort_optimization = 1500; // 1500
 };
 
 } // namespace DB

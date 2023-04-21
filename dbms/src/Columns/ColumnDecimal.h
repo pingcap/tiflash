@@ -144,6 +144,13 @@ public:
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override;
+    void compareColumn(
+        const IColumn & rhs,
+        size_t rhs_row_num,
+        PaddedPODArray<UInt64> * row_indexes,
+        PaddedPODArray<Int8> & compare_results,
+        int direction,
+        int nan_direction_hint) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 
     MutableColumnPtr cloneResized(size_t size) const override;

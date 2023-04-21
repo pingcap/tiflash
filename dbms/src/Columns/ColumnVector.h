@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/ColumnVectorHelper.h>
+#include <Common/assert_cast.h>
 #include <IO/Endian.h>
 
 #include <cmath>
@@ -347,6 +348,11 @@ public:
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override
     {
         return CompareHelper<T>::compare(data[n], static_cast<const Self &>(rhs_).data[m], nan_direction_hint);
+    }
+
+    void compareColumn(const IColumn & rhs, size_t rhs_row_num, PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results, int direction, int nan_direction_hint) const override
+    {
+        return this->template doCompareColumn<Self>(assert_cast<const Self &>(rhs), rhs_row_num, row_indexes, compare_results, direction, nan_direction_hint);
     }
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;

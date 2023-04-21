@@ -311,6 +311,15 @@ public:
     {
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }
+
+    void compareColumn(
+        const IColumn & rhs,
+        size_t rhs_row_num,
+        PaddedPODArray<UInt64> * row_indexes,
+        PaddedPODArray<Int8> & compare_results,
+        int direction,
+        int nan_direction_hint) const override;
+
     /// Variant of compareAt for string comparison with respect of collation.
     int compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const ICollator & collator) const;
 

@@ -83,6 +83,19 @@ ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
     return ColumnConst::create(data, limit);
 }
 
+void ColumnConst::compareColumn(
+    const IColumn & rhs,
+    size_t,
+    PaddedPODArray<UInt64> *,
+    PaddedPODArray<Int8> & compare_results,
+    int,
+    int nan_direction_hint)
+    const
+{
+    Int8 res = compareAt(1, 1, rhs, nan_direction_hint);
+    std::fill(compare_results.begin(), compare_results.end(), res);
+}
+
 MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
     if (s != selector.size())

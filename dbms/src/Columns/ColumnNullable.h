@@ -94,6 +94,13 @@ public:
     std::tuple<bool, int> compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint) const;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const override;
+    void compareColumn(
+        const IColumn & rhs,
+        size_t rhs_row_num,
+        PaddedPODArray<UInt64> * row_indexes,
+        PaddedPODArray<Int8> & compare_results,
+        int direction,
+        int nan_direction_hint) const override;
     void getPermutation(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void getPermutation(const ICollator & collator, bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const;

@@ -16,6 +16,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
+#include <Common/assert_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <common/memcpy.h>
@@ -322,6 +323,17 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
     auto b = rhs.getDataAt(m);
 
     return collator.compare(a.data, a.size, b.data, b.size);
+}
+
+void ColumnString::compareColumn(
+    const IColumn & rhs,
+    size_t rhs_row_num,
+    PaddedPODArray<UInt64> * row_indexes,
+    PaddedPODArray<Int8> & compare_results,
+    int direction,
+    int nan_direction_hint) const
+{
+    return doCompareColumn<ColumnString>(assert_cast<const ColumnString &>(rhs), rhs_row_num, row_indexes, compare_results, direction, nan_direction_hint);
 }
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.

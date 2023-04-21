@@ -23,6 +23,7 @@
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
+#include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <string.h> // memcpy
@@ -320,6 +321,11 @@ int ColumnArray::compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_dir
         : (lhs_size == rhs_size
                ? 0
                : 1);
+}
+
+void ColumnArray::compareColumn(const IColumn & rhs, size_t rhs_row_num, PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results, int direction, int nan_direction_hint) const
+{
+    return doCompareColumn<ColumnArray>(assert_cast<const ColumnArray &>(rhs), rhs_row_num, row_indexes, compare_results, direction, nan_direction_hint);
 }
 
 
