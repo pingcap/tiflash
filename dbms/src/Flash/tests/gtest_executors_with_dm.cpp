@@ -103,90 +103,94 @@ public:
 TEST_F(ExecutorsWithDMTestRunner, Basic)
 try
 {
-    // table scan
-    auto request = context
-                       .scan("test_db", "t0")
-                       .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+    std::vector<bool> keep_order_opt{false, true};
 
-    request = context
-                  .scan("test_db", "t1")
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
-         {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
+    for (auto keep_order : keep_order_opt)
+    {
+        auto request = context
+                           .scan("test_db", "t0", keep_order)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
-    request = context
-                  .scan("test_db", "t2")
-                  .build(context);
+        request = context
+                      .scan("test_db", "t1", keep_order)
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
+             {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
-    executeAndAssertColumnsEqual(
-        request,
-        {toNullableVec<Int64>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
-         toNullableVec<Int8>(col_tinyint),
-         toNullableVec<Int16>(col_smallint),
-         toNullableVec<Int32>(col_int),
-         toNullableVec<Int64>(col_bigint),
-         toNullableVec<Float32>(col_float),
-         toNullableVec<Float64>(col_double),
-         toNullableVec<MyDate>(col_mydate),
-         toNullableVec<MyDateTime>(col_mydatetime),
-         toNullableVec<String>(col_string)});
+        request = context
+                      .scan("test_db", "t2", keep_order)
+                      .build(context);
 
-    request = context
-                  .scan("test_db", "big_table")
-                  .build(context);
-    enablePlanner(false);
-    auto expect = executeStreams(request, 1);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
+             toNullableVec<Int8>(col_tinyint),
+             toNullableVec<Int16>(col_smallint),
+             toNullableVec<Int32>(col_int),
+             toNullableVec<Int64>(col_bigint),
+             toNullableVec<Float32>(col_float),
+             toNullableVec<Float64>(col_double),
+             toNullableVec<MyDate>(col_mydate),
+             toNullableVec<MyDateTime>(col_mydatetime),
+             toNullableVec<String>(col_string)});
 
-    executeAndAssertColumnsEqual(
-        request,
-        expect);
+        request = context
+                      .scan("test_db", "big_table", keep_order)
+                      .build(context);
+        enablePlanner(false);
+        auto expect = executeStreams(request, 1);
 
-    request = context
-                  .scan("test_db", "empty_table")
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {});
+        executeAndAssertColumnsEqual(
+            request,
+            expect);
 
-    // projection
-    request = context
-                  .scan("test_db", "t1")
-                  .project({col("col0")})
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+        request = context
+                      .scan("test_db", "empty_table", keep_order)
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {});
 
-    request = context
-                  .scan("test_db", "t1")
-                  .project({col("col1")})
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
+        // projection
+        request = context
+                      .scan("test_db", "t1", keep_order)
+                      .project({col("col0")})
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
-    // filter
-    request = context
-                  .scan("test_db", "t0")
-                  .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>("col0", {0, 1, 2, 3})}});
+        request = context
+                      .scan("test_db", "t1", keep_order)
+                      .project({col("col1")})
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
-    request = context
-                  .scan("test_db", "t1")
-                  .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
-         {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
+        // filter
+        request = context
+                      .scan("test_db", "t0", keep_order)
+                      .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3})}});
+
+        request = context
+                      .scan("test_db", "t1", keep_order)
+                      .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
+                      .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
+             {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
+    }
 }
 CATCH
 

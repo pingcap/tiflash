@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
+#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
+#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
+
 class PhysicalTableScan : public PhysicalLeaf
 {
 public:
@@ -44,15 +49,36 @@ public:
 
     const String & getFilterConditionsId() const;
 
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t concurrency) override;
+
+    // generate sourceOps in compile time
+    void buildPipeline(
+        PipelineBuilder & builder,
+        Context & context,
+        PipelineExecutorStatus & exec_status) override;
+
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
+    void buildProjection(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const NamesAndTypes & storage_schema);
 
 private:
     FilterConditions filter_conditions;
 
     TiDBTableScan tidb_table_scan;
 
+    std::unique_ptr<DAGStorageInterpreter> storage_interpreter;
+
     Block sample_block;
+
+    SourceOps source_ops;
 };
 } // namespace DB

@@ -38,13 +38,13 @@ using Joins = std::vector<JoinPtr>;
 struct RestoreInfo
 {
     JoinPtr join;
-    BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr scan_hash_map_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && non_joined_data_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
         : join(join_)
-        , non_joined_stream(std::move(non_joined_data_stream_))
+        , scan_hash_map_stream(std::move(scan_hash_map_stream_))
         , build_stream(std::move(build_stream_))
         , probe_stream(std::move(probe_stream_))
     {}
@@ -205,11 +205,11 @@ public:
 
     void checkTypes(const Block & block) const;
 
-    /** For RIGHT and FULL JOINs.
-      * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
+    /**
+      * A stream that will scan and output rows from right table, might contain default values from left table
       * Use only after all calls to joinBlock was done.
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     bool isEnableSpill() const;
 
@@ -355,7 +355,7 @@ private:
 
     BlockInputStreams restore_build_streams;
     BlockInputStreams restore_probe_streams;
-    BlockInputStreams restore_non_joined_data_streams;
+    BlockInputStreams restore_scan_hash_map_streams;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;

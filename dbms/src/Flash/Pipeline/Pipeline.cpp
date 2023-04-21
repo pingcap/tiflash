@@ -165,7 +165,9 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
     assert(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
+    {
         plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
+    }
     return builder.build();
 }
 
@@ -237,9 +239,6 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             switch (executor.tp())
             {
             case tipb::ExecType::TypeTableScan:
-                // TODO support keep order.
-                is_supported = !executor.tbl_scan().keep_order();
-                return is_supported;
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:

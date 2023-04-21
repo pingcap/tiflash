@@ -123,11 +123,19 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-local",
               "refId": "A",
+              "step": 10
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeUsedRemote{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-remote",
+              "refId": "B",
               "step": 10
             }
           ],

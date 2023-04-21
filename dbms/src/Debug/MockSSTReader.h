@@ -43,28 +43,71 @@ struct MockSSTReader
         Data() = default;
     };
 
-    explicit MockSSTReader(const Data & data_)
+    explicit MockSSTReader(const Data & data_, SSTFormatKind kind_)
         : iter(data_.begin())
+        , begin(data_.begin())
         , end(data_.end())
         , remained(iter != end)
-    {}
+        , kind(kind_)
+    {
+    }
 
-    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_) { return SSTReaderPtr{new MockSSTReader(data_)}; }
+    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_, SSTFormatKind kind_) { return SSTReaderPtr{new MockSSTReader(data_, kind_), kind_}; }
 
     bool ffi_remained() const { return iter != end; }
 
-    BaseBuffView ffi_key() const { return {iter->first.data(), iter->first.length()}; }
+    BaseBuffView ffi_key() const
+    {
+        return {iter->first.data(), iter->first.length()};
+    }
 
     BaseBuffView ffi_val() const { return {iter->second.data(), iter->second.length()}; }
 
-    void ffi_next() { ++iter; }
+    void ffi_next()
+    {
+        ++iter;
+    }
+
+    SSTFormatKind ffi_kind() { return kind; }
+
+    void ffi_seek(SSTReaderPtr, ColumnFamilyType, EngineIteratorSeekType et, BaseBuffView bf)
+    {
+        if (et == EngineIteratorSeekType::First)
+        {
+            remained = iter != end;
+            iter = begin;
+        }
+        else if (et == EngineIteratorSeekType::Last)
+        {
+            remained = iter != end;
+            iter = end;
+        }
+        else
+        {
+            // Seek the first key >= given key
+            iter = begin;
+            remained = iter != end;
+            auto thres = buffToStrView(bf);
+            while (ffi_remained())
+            {
+                auto && current_key = iter->first;
+                if (current_key >= thres)
+                {
+                    return;
+                }
+                ffi_next();
+            }
+        }
+    }
 
     static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
 
 private:
     Data::const_iterator iter;
+    Data::const_iterator begin;
     Data::const_iterator end;
     bool remained;
+    SSTFormatKind kind;
 
     // (region_id, cf) -> Data
     static std::map<Key, MockSSTReader::Data> MockSSTData;

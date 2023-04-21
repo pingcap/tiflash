@@ -74,7 +74,15 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageIdU64 
         return;
 
     auto delegator = path_pool->getStableDiskDelegator();
-    delegator.addDTFile(file_id, file_size, parent_path);
+    if (auto remote_data_store = global_context.getSharedContextDisagg()->remote_data_store;
+        !remote_data_store)
+    {
+        delegator.addDTFile(file_id, file_size, parent_path);
+    }
+    else
+    {
+        delegator.addRemoteDTFileWithGCDisabled(file_id, file_size);
+    }
 }
 
 Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
@@ -684,8 +692,17 @@ void DeltaMergeStore::ingestFiles(
     // Assume that one segment get compacted after file ingested, `gc_handle` gc the
     // DTFiles before they get applied to all segments. Then we will apply some
     // deleted DTFiles to other segments.
-    for (const auto & file : files)
-        file->enableGC();
+    if (auto data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+    {
+        for (auto & file : files)
+            file->enableGC();
+    }
+    else
+    {
+        auto delegator = dm_context->path_pool->getStableDiskDelegator();
+        for (auto & file : files)
+            delegator.enableGCForRemoteDTFile(file->fileId());
+    }
     // After the ingest DTFiles applied, remove the original page
     ingest_wbs.rollbackWrittenLogAndData();
 

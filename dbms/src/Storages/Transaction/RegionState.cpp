@@ -190,6 +190,24 @@ RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && star
         TiKVRangeKey::makeTiKVRangeKey<false>(std::move(end_key)));
 }
 
+std::string TiKVRangeKey::toDebugString() const
+{
+    if (this->state == MAX)
+    {
+        return "inf";
+    }
+    else if (this->state == MIN)
+    {
+        return "-inf";
+    }
+    return this->key.toDebugString();
+}
+
+std::string RegionRangeKeys::toDebugString() const
+{
+    return fmt::format("[{},{}]", this->ori.first.toDebugString(), this->ori.second.toDebugString());
+}
+
 int TiKVRangeKey::compare(const TiKVKey & tar) const
 {
     if (state != TiKVRangeKey::NORMAL)

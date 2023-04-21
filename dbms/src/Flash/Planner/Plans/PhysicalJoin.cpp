@@ -169,7 +169,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
+    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, scan_hash_map_after_probe = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
     join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
                         probe_pipeline.streams.size());
     size_t probe_index = 0;
@@ -247,7 +247,10 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
-void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
+void PhysicalJoin::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
 {
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
@@ -260,11 +263,11 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
         build_side_prepare_actions);
     auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder);
+    build()->buildPipeline(join_build_builder, context, exec_status);
     join_build_builder.build();
 
     // Join probe pipeline.
-    probe()->buildPipeline(builder);
+    probe()->buildPipeline(builder, context, exec_status);
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         schema,

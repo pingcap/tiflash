@@ -70,7 +70,10 @@ public:
         Context & /*context*/,
         size_t /*concurrency*/);
 
-    virtual void buildPipeline(PipelineBuilder & builder);
+    virtual void buildPipeline(
+        PipelineBuilder & /*builder*/,
+        Context & /*context*/,
+        PipelineExecutorStatus & /*exec_status*/);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();

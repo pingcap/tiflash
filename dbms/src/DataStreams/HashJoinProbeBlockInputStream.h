@@ -37,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t non_joined_stream_index,
+        size_t scan_hash_map_after_probe_stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 
@@ -60,47 +60,47 @@ private:
      *                                          |
      *                                          ▼
      *                                  -----------------
-     *              has non_joined data |               | no non_joined data
+     *        has scan_after_probe data |               | no scan_after_probe data
      *                                  ▼               ▼
      *                         WAIT_PROBE_FINISH     FINISHED
      *                                  |
      *                                  ▼
-     *                        READ_NON_JOINED_DATA
+     *                        READ_SCAN_HASH_MAP_DATA
      *                                  |
      *                                  ▼
      *                               FINISHED
      *
      *   spill enabled:
-     *                  |-------------------> WAIT_BUILD_FINISH
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                           PROBE
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                    WAIT_PROBE_FINISH
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                      ---------------
-     *                  |  has non_joined data |             | no non_joined data
-     *                  |                      ▼             |
-     *                  |             READ_NON_JOINED_DATA   |
-     *                  |                      \             /
-     *                  |                       \           /
-     *                  |                        \         /
-     *                  |                         \       /
-     *                  |                          \     /
-     *                  |                           \   /
-     *                  |                            \ /
-     *                  |                             ▼
-     *                  |                      GET_RESTORE_JOIN
-     *                  |                             |
-     *                  |                             ▼
-     *                  |                      ---------------
-     *                  |    has restored join |             | no restored join
-     *                  |                      ▼             ▼
-     *                  |                RESTORE_BUILD    FINISHED
-     *                  |                      |
-     *                  -----------------------|
+     *                  |------------------->  WAIT_BUILD_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                            PROBE
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     WAIT_PROBE_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |has scan_hash_map data |             | no scan_hash_map data
+     *                  |                       ▼             |
+     *                  |           READ_SCAN_HASH_MAP_DATA   |
+     *                  |                       \             /
+     *                  |                        \           /
+     *                  |                         \         /
+     *                  |                          \       /
+     *                  |                           \     /
+     *                  |                            \   /
+     *                  |                             \ /
+     *                  |                              ▼
+     *                  |                       GET_RESTORE_JOIN
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |     has restored join |             | no restored join
+     *                  |                       ▼             ▼
+     *                  |                 RESTORE_BUILD    FINISHED
+     *                  |                       |
+     *                  ------------------------|
      *
      */
     enum class ProbeStatus
@@ -110,7 +110,7 @@ private:
         WAIT_PROBE_FINISH, /// wait probe finish
         GET_RESTORE_JOIN, /// try to get restore join
         RESTORE_BUILD, /// build for restore join
-        READ_NON_JOINED_DATA, /// output non joined data
+        READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
         FINISHED, /// the final state
     };
 
@@ -119,7 +119,7 @@ private:
     std::tuple<size_t, Block> getOneProbeBlock();
     void onCurrentProbeDone();
     void onAllProbeDone();
-    void onCurrentReadNonJoinedDataDone();
+    void onCurrentScanHashMapDone();
     void tryGetRestoreJoin();
 
 private:
@@ -132,7 +132,7 @@ private:
     HashJoinProbeExecHolder probe_exec;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
-    size_t non_joined_rows = 0;
+    size_t scan_hash_map_rows = 0;
 
     Block header;
 };
