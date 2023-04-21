@@ -280,9 +280,11 @@ std::pair<ExpressionActionsPtr, String> buildFunction(
     const String & func_name,
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator)
+    const TiDB::TiDBCollatorPtr & collator,
+    const String & val)
 {
-    tipb::Expr tipb_expr = columnsToTiPBExpr(func_name, argument_column_numbers, columns, collator);
+    tipb::Expr tipb_expr = columnsToTiPBExpr(func_name, argument_column_numbers, columns, collator, val);
+
     NamesAndTypes source_columns;
     for (size_t index : argument_column_numbers)
         source_columns.emplace_back(columns[index].name, columns[index].type);
@@ -321,6 +323,7 @@ ColumnWithTypeAndName executeFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator,
+    const String & val,
     bool raw_function_test)
 {
     ColumnNumbers argument_column_numbers;
@@ -334,7 +337,7 @@ ColumnWithTypeAndName executeFunction(
     std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
     const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
-    return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
+    return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, val, raw_function_test);
 }
 
 ColumnWithTypeAndName executeFunction(
@@ -343,6 +346,7 @@ ColumnWithTypeAndName executeFunction(
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator,
+    const String & val,
     bool raw_function_test)
 {
     if (raw_function_test)
@@ -367,7 +371,7 @@ ColumnWithTypeAndName executeFunction(
     }
 
     auto columns_with_unique_name = toColumnsWithUniqueName(columns);
-    auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+    auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, val);
 
     Block block(columns_with_unique_name);
     actions->execute(block);
@@ -403,7 +407,7 @@ DataTypePtr getReturnTypeForFunction(
         for (size_t i = 0; i < columns.size(); ++i)
             argument_column_numbers.push_back(i);
         auto columns_with_unique_name = toColumnsWithUniqueName(columns);
-        auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+        auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator, "");
         return actions->getSampleBlock().getByName(result_name).type;
     }
 }
@@ -528,12 +532,22 @@ void FunctionTest::initializeDAGContext()
 
 ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
 {
-    return DB::tests::executeFunction(*context, func_name, columns, collator, raw_function_test);
+    return DB::tests::executeFunction(*context, func_name, columns, collator, "", raw_function_test);
 }
 
 ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
 {
-    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, raw_function_test);
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, "", raw_function_test);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnsWithTypeAndName & columns, const FuncMetaData & meta, const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, columns, collator, meta.val, false);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionWithMetaData(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, const FuncMetaData & meta, const TiDB::TiDBCollatorPtr & collator)
+{
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, meta.val, false);
 }
 
 } // namespace tests
