@@ -470,7 +470,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     genFile(local_fname, fsize, value);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::uploadFile(*client, local_fname, remote_fname);
+    S3::uploadFile(*client, local_fname, remote_fname, S3::ClientFactory::instance().verifyChecksumAfterUploading());
     addRemoteFname(remote_fname, fsize);
     s3_stat.addPutStat(remote_fname, sw.elapsedSeconds());
     std::filesystem::remove(local_fname);
@@ -484,7 +484,7 @@ void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     auto local_fname = fmt::format("{}/{}/{}", opts.s3_temp_dir, tid, index++);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::downloadFileByS3RandomAccessFile(client, local_fname, remote_fname);
+    S3::downloadFile(*client, local_fname, remote_fname, S3::ClientFactory::instance().verifyChecksumAfterDownloading());
     s3_stat.addGetStat(remote_fname, sw.elapsedSeconds());
     auto download_size = std::filesystem::file_size(local_fname);
     std::cout << fmt::format("GetObject {} bytes={} cost={:.3f}s", remote_fname, download_size, sw.elapsedSeconds()) << std::endl;

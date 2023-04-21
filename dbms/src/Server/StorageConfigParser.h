@@ -109,6 +109,8 @@ struct StorageS3Config
     UInt64 request_timeout_ms = 30000;
     UInt64 max_redirections = 10;
     String root;
+    bool verify_checksum_after_uploading = true;
+    bool verify_checksum_after_downloading = true;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";

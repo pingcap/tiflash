@@ -67,6 +67,7 @@ public:
 
         auto config = getConfig();
         mock_s3_client = ClientFactory::instance().sharedTiFlashClient();
+        verify_checksum_after_uploading = ClientFactory::instance().verifyChecksumAfterUploading();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
@@ -97,6 +98,7 @@ protected:
     String tmp_dir;
 
     std::shared_ptr<TiFlashS3Client> mock_s3_client;
+    bool verify_checksum_after_uploading;
     std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
 
@@ -658,7 +660,7 @@ try
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, manifest_file_path1, manifest_file_id1);
+        S3::uploadFile(*mock_s3_client, manifest_file_path1, manifest_file_id1, verify_checksum_after_uploading);
     }
     { // prepare the second manifest on S3
         const String entry_data = "cherry_value";
@@ -691,7 +693,7 @@ try
         LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, manifest_file_path2, manifest_file_id2);
+        S3::uploadFile(*mock_s3_client, manifest_file_path2, manifest_file_id2, verify_checksum_after_uploading);
     }
 
     // read from S3 key

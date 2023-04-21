@@ -248,8 +248,6 @@ public:
     void download(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
 
-    static String toTemporaryFilename(const String & fname);
-    static bool isTemporaryFilename(const String & fname);
     static void prepareDir(const String & dir_name);
     static void prepareParentDir(const String & local_fname);
     static bool isS3Filename(const String & fname);

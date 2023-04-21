@@ -344,9 +344,9 @@ TEST_F(FileCacheTest, FileSystem)
     auto tmp_remote_fname1 = file_cache.toS3Key(local_fname1);
     ASSERT_EQ(tmp_remote_fname1, remote_fname1);
 
-    auto tmp_local_fname1 = FileCache::toTemporaryFilename(local_fname1);
-    ASSERT_FALSE(FileCache::isTemporaryFilename(local_fname1));
-    ASSERT_TRUE(FileCache::isTemporaryFilename(tmp_local_fname1));
+    auto tmp_local_fname1 = toTemporaryFilename(local_fname1);
+    ASSERT_FALSE(isTemporaryFilename(local_fname1));
+    ASSERT_TRUE(isTemporaryFilename(tmp_local_fname1));
 
     FileCache::prepareParentDir(local_fname1);
     std::filesystem::path local_file1(local_fname1);

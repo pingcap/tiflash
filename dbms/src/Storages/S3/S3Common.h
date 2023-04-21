@@ -128,6 +128,16 @@ public:
 
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
+    bool verifyChecksumAfterUploading() const
+    {
+        return client_is_inited ? config.verify_checksum_after_uploading : false;
+    }
+
+    bool verifyChecksumAfterDownloading() const
+    {
+        return client_is_inited ? config.verify_checksum_after_downloading : false;
+    }
+
 private:
     ClientFactory() = default;
     DISALLOW_COPY_AND_MOVE(ClientFactory);
@@ -155,7 +165,7 @@ Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, con
 
 bool objectExists(const TiFlashS3Client & client, const String & key);
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times = 3);
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, bool verify_checksum, int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
@@ -166,7 +176,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
  */
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
-void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
+void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, bool verify_checksum);
 void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname);
 
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
@@ -218,6 +228,9 @@ void rawListPrefix(
 // the TiFlashS3Client `root`.
 void rawDeleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
 
+// Returns base64-encoded, 32-bit CRC32 checksum of the local file.
+String crc32OfFile(const String & fname, const DB::LoggerPtr & log);
+
 template <typename F, typename... T>
 void retryWrapper(F f, const T &... args)
 {
@@ -232,4 +245,8 @@ void retryWrapper(F f, const T &... args)
         ++i;
     }
 }
+
+bool isTemporaryFilename(const String & fname);
+String toTemporaryFilename(const String & fname);
+
 } // namespace DB::S3
