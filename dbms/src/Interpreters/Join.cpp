@@ -154,6 +154,8 @@ Join::Join(
         has_other_condition = false;
     }
 
+    if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
+        throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
@@ -781,7 +783,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 
     /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
       * For FULL/RIGHT/RIGHT_SEMI/RIGHT_ANTI_SEMI JOIN, the saved blocks contain keys;
-      *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
+      *  but they will not be used at this stage of joining (and will be in `ScanHashMapAfterProbe`), and they need to be skipped.
       */
     size_t num_columns_to_skip = 0;
     if (needScanHashMapAfterProbe(kind))
@@ -881,10 +883,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     /// handle other conditions
-    if (!non_equal_conditions.other_cond_name.empty() || !non_equal_conditions.other_eq_cond_from_in_name.empty())
+    if (non_equal_conditions.other_cond_expr != nullptr)
     {
-        if (!offsets_to_replicate)
-            throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
+        assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
         if (isRightSemiFamily(kind))
@@ -948,7 +949,18 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
             total_rows = std::min(total_rows, 1);
         return total_rows;
     }
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t total_right_rows)
+    static void addFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        const BlocksList & blocks,
+        IColumn::Filter *,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join [[maybe_unused]],
+        size_t total_right_rows)
     {
         size_t expanded_row_size = 0;
         for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
@@ -974,15 +986,24 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
                     break;
             }
         }
-        (*is_row_matched)[i - start_offset] = 0;
-        (*expanded_row_size_after_join)[i - start_offset] = current_offset + expanded_row_size;
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            (*expanded_row_size_after_join)[i - start_offset] = current_offset + expanded_row_size;
         current_offset += expanded_row_size;
     }
-    static void addNotFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */, size_t /* num_columns_to_add */, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addNotFound(
+        MutableColumns & /* dst_columns */,
+        size_t /* num_existing_columns */,
+        ColumnRawPtrs & /* src_left_columns */,
+        size_t /* num_columns_to_add */,
+        size_t start_offset,
+        size_t i [[maybe_unused]],
+        IColumn::Filter * /* is_row_matched */,
+        IColumn::Offset & current_offset [[maybe_unused]],
+        IColumn::Offsets * expanded_row_size_after_join [[maybe_unused]])
     {
         /// for inner all/any join, just skip this row
-        (*is_row_matched)[i - start_offset] = 0;
-        (*expanded_row_size_after_join)[i - start_offset] = current_offset;
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            (*expanded_row_size_after_join)[i - start_offset] = current_offset;
     }
     static bool allRightRowsMaybeAdded()
     {
@@ -992,15 +1013,46 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t total_right_rows)
+    static void addFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        const BlocksList & blocks,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join,
+        size_t total_right_rows)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join, total_right_rows);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add,
+            start_offset,
+            i,
+            blocks,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join,
+            total_right_rows);
     }
-    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addNotFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset [[maybe_unused]],
+        size_t i,
+        IColumn::Filter * /* is_row_matched */,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join [[maybe_unused]])
     {
         /// for left all/any join, mark this row as matched
-        (*is_row_matched)[i - start_offset] = 1;
-        (*expanded_row_size_after_join)[i - start_offset] = 1 + current_offset;
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            (*expanded_row_size_after_join)[i - start_offset] = 1 + current_offset;
         current_offset += 1;
         for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
             dst_columns[col_num]->insertFrom(*src_left_columns[col_num], i);
@@ -1015,14 +1067,43 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
 template <>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>
 {
-    static void addFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */, size_t /* num_columns_to_add */, size_t start_offset, size_t i, const BlocksList & /* blocks */, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t /* total_right_rows */)
+    static void addFound(
+        MutableColumns & /* dst_columns */,
+        size_t /* num_existing_columns */,
+        ColumnRawPtrs & /* src_left_columns */,
+        size_t /* num_columns_to_add */,
+        size_t start_offset,
+        size_t i,
+        const BlocksList & /* blocks */,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & /* current_offset */,
+        IColumn::Offsets * /* expanded_row_size_after_join */,
+        size_t /* total_right_rows */)
     {
         (*is_row_matched)[i - start_offset] = 0;
-        (*expanded_row_size_after_join)[i - start_offset] = current_offset;
     }
-    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addNotFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::Any>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
+        (*is_row_matched)[i - start_offset] = 1;
+        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::Any>::addNotFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add,
+            start_offset,
+            i,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join);
     }
     static bool allRightRowsMaybeAdded()
     {
@@ -1032,13 +1113,55 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
 template <>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t total_right_rows)
+    static void addFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        const BlocksList & blocks,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join,
+        size_t total_right_rows)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join, total_right_rows);
+        (*is_row_matched)[i - start_offset] = 0;
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>::addFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add,
+            start_offset,
+            i,
+            blocks,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join,
+            total_right_rows);
     }
-    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addNotFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::Any>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
+        (*is_row_matched)[i - start_offset] = 1;
+        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::All>::addNotFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add,
+            start_offset,
+            i,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join);
     }
     static bool allRightRowsMaybeAdded()
     {
@@ -1048,14 +1171,54 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
 {
-    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join, size_t total_right_rows)
+    static void addFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        const BlocksList & blocks,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join,
+        size_t total_right_rows)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join, total_right_rows);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add - 1,
+            start_offset,
+            i,
+            blocks,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join,
+            total_right_rows);
         dst_columns[num_existing_columns + num_columns_to_add - 1]->insert(FIELD_INT8_1);
     }
-    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    static void addNotFound(
+        MutableColumns & dst_columns,
+        size_t num_existing_columns,
+        ColumnRawPtrs & src_left_columns,
+        size_t num_columns_to_add,
+        size_t start_offset,
+        size_t i,
+        IColumn::Filter * is_row_matched,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * expanded_row_size_after_join)
     {
-        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add - 1, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
+        CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>::addNotFound(
+            dst_columns,
+            num_existing_columns,
+            src_left_columns,
+            num_columns_to_add - 1,
+            start_offset,
+            i,
+            is_row_matched,
+            current_offset,
+            expanded_row_size_after_join);
         dst_columns[num_existing_columns + num_columns_to_add - 1]->insert(FIELD_INT8_0);
     }
     static bool allRightRowsMaybeAdded()
@@ -1120,8 +1283,12 @@ void Join::joinBlockCrossImpl(Block & block, ConstNullMapPtr null_map [[maybe_un
                 dst_columns[i]->reserve(reserved_rows);
         }
         IColumn::Offset current_offset = 0;
-        std::unique_ptr<IColumn::Filter> is_row_matched = std::make_unique<IColumn::Filter>(end - start);
-        std::unique_ptr<IColumn::Offsets> expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(end - start);
+        std::unique_ptr<IColumn::Filter> is_row_matched;
+        if constexpr (KIND == ASTTableJoin::Kind::Cross_Anti)
+            is_row_matched = std::make_unique<IColumn::Filter>(end - start);
+        std::unique_ptr<IColumn::Offsets> expanded_row_size_after_join;
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+            expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(end - start);
         for (size_t i = start; i < end; ++i)
         {
             if constexpr (has_null_map)
@@ -1144,7 +1311,10 @@ void Join::joinBlockCrossImpl(Block & block, ConstNullMapPtr null_map [[maybe_un
         }
         auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
         if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            assert(expanded_row_size_after_join != nullptr);
             handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
+        }
         if (start == 0 || block_per_iter.rows() > 0)
             /// always need to generate at least one block
             result_blocks.push_back(block_per_iter);
@@ -1597,9 +1767,9 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     return block;
 }
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
+BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {
-    return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
+    return std::make_shared<ScanHashMapAfterProbeBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
 }
 
 Blocks Join::dispatchBlock(const Strings & key_columns_names, const Block & from_block)
@@ -1757,8 +1927,8 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         throw Exception(error_message);
     try
     {
-        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
-        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
+        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_scan_hash_map_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_scan_hash_map_streams.size()));
+        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_scan_hash_map_streams.size());
         auto get_back_stream = [](BlockInputStreams & streams) {
             BlockInputStreamPtr stream = streams.back();
             streams.pop_back();
@@ -1768,12 +1938,12 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         {
             auto build_stream = get_back_stream(restore_build_streams);
             auto probe_stream = get_back_stream(restore_probe_streams);
-            auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
+            auto scan_hash_map_stream = get_back_stream(restore_scan_hash_map_streams);
             if (restore_build_streams.empty())
             {
                 spilled_partition_indexes.pop_front();
             }
-            return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
+            return RestoreInfo{restore_join, std::move(scan_hash_map_stream), std::move(build_stream), std::move(probe_stream)};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -1788,7 +1958,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
+        restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
         RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
         auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
         restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
@@ -1808,16 +1978,16 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         if (needScanHashMapAfterProbe(kind))
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-                restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
+                restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
         }
-        auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return RestoreInfo{restore_join, std::move(non_joined_data_stream), std::move(build_stream), std::move(probe_stream)};
+        auto scan_hash_map_streams = get_back_stream(restore_scan_hash_map_streams);
+        return RestoreInfo{restore_join, std::move(scan_hash_map_streams), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
         restore_build_streams.clear();
         restore_probe_streams.clear();
-        restore_non_joined_data_streams.clear();
+        restore_scan_hash_map_streams.clear();
         auto err_message = getCurrentExceptionMessage(false, true);
         meetErrorImpl(err_message, lock);
         throw Exception(err_message);

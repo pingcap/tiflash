@@ -79,11 +79,13 @@ PhysicalMockTableScan::PhysicalMockTableScan(
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
-    Int64 table_id_)
+    Int64 table_id_,
+    bool keep_order_)
     : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
+    , keep_order(keep_order_)
 {}
 
 PhysicalPlanNodePtr PhysicalMockTableScan::build(
@@ -94,14 +96,14 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 {
     assert(context.isTest());
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
-
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
         log->identifier(),
         Block(schema),
         mock_streams,
-        table_scan.getLogicalTableID());
+        table_scan.getLogicalTableID(),
+        table_scan.keepOrder());
     return physical_mock_table_scan;
 }
 
@@ -111,29 +113,56 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
+void PhysicalMockTableScan::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
+{
+    buildSourceOps(context, exec_status);
+    PhysicalPlanNode::buildPipeline(builder, context, exec_status);
+}
+
+void PhysicalMockTableScan::buildSourceOps(Context & context, PipelineExecutorStatus & exec_status)
+{
+    if (context.mockStorage()->useDeltaMerge())
+    {
+        source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(
+            exec_status,
+            context,
+            table_id,
+            context.getMaxStreams(),
+            keep_order);
+    }
+    else
+    {
+        source_ops.clear();
+        for (const auto & stream : mock_streams)
+        {
+            source_ops.emplace_back(
+                std::make_unique<BlockInputStreamSourceOp>(
+                    exec_status,
+                    log->identifier(),
+                    stream));
+        }
+    }
+}
+
 void PhysicalMockTableScan::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t concurrency)
+    size_t)
 {
-    if (context.mockStorage()->useDeltaMerge())
+    // For simple operator tests in gtest_simple_operator.cpp
+    if (source_ops.empty())
     {
-        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
-        group_builder.init(source_ops.size());
-        size_t i = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::move(source_ops[i++]));
-        });
+        buildSourceOps(context, exec_status);
     }
-    else
-    {
-        group_builder.init(mock_streams.size());
-        size_t i = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
-        });
-    }
+    group_builder.init(source_ops.size());
+    size_t i = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::move(source_ops[i++]));
+    });
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)

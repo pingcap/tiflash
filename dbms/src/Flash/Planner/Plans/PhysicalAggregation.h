@@ -53,7 +53,10 @@ public:
         , expr_after_agg(expr_after_agg_)
     {}
 
-    void buildPipeline(PipelineBuilder & builder) override;
+    void buildPipeline(
+        PipelineBuilder & builder,
+        Context & context,
+        PipelineExecutorStatus & exec_status) override;
 
     void buildPipelineExecGroup(
         PipelineExecutorStatus & exec_status,

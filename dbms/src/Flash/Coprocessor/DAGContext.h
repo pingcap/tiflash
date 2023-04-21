@@ -55,7 +55,6 @@ struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
     JoinPtr join_ptr;
-    BlockInputStreams non_joined_streams;
     BlockInputStreams join_build_streams;
 };
 
