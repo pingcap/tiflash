@@ -27,7 +27,6 @@ void PhysicalJoinBuild::buildPipelineExecGroup(
 {
     executeExpression(exec_status, group_builder, prepare_actions, log);
 
-    // TODO support join_execute_info like IBlockInputStream.
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_status, log->identifier(), join_ptr, build_index++));

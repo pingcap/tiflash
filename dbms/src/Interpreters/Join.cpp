@@ -431,7 +431,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
         if (restore_round == 2)
-            return result;
+            return;
 #endif
         spillMostMemoryUsedPartitionIfNeed();
     }
@@ -1704,6 +1704,14 @@ void Join::waitUntilAllProbeFinished() const
     });
     if (meet_error)
         throw Exception(error_message);
+}
+
+bool Join::isAllProbeFinished() const
+{
+    if (0 == active_probe_threads)
+        return true;
+    std::lock_guard lock(build_probe_mutex);
+    return meet_error || skip_wait;
 }
 
 

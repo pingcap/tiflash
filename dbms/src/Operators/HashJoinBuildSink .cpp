@@ -28,6 +28,7 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
         }
         join_ptr->insertFromBlock(block, concurrency_build_index);
         block.clear();
+        return OperatorStatus::NEED_INPUT;
     }
     catch (...)
     {
@@ -36,11 +37,4 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
         throw Exception(error_message);
     }
 }
-
-OperatorStatus HashJoinBuildSink::executeIOImpl()
-{
-    ret.spill();
-    return OperatorStatus::NEED_INPUT;
-}
-
 } // namespace DB

@@ -23,6 +23,7 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Settings.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -230,7 +231,7 @@ PipelineEvents Pipeline::doToEvents(PipelineExecutorStatus & status, Context & c
     return self_events;
 }
 
-bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
+bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings & settings)
 {
     bool is_supported = true;
     traverseExecutors(
@@ -247,12 +248,15 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
-            case tipb::ExecType::TypeJoin:
                 return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
                 // TODO support non fine grained shuffle.
                 is_supported = FineGrainedShuffle(&executor).enable();
+                return is_supported;
+            case tipb::ExecType::TypeJoin:
+                // TODO support spill.
+                is_supported = (settings.max_bytes_before_external_join == 0);
                 return is_supported;
             default:
                 is_supported = false;

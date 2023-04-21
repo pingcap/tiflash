@@ -39,7 +39,7 @@ public:
     void buildPipelineExecGroup(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
-        Context & /*context*/,
+        Context & context,
         size_t /*concurrency*/) override;
 
 private:

@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -44,12 +43,8 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
-    OperatorStatus executeIOImpl() override;
-
 private:
     JoinPtr join_ptr;
     size_t concurrency_build_index;
-
-    BuildResult ret;
 };
 } // namespace DB
