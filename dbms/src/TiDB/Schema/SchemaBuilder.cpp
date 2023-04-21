@@ -939,7 +939,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 static ASTPtr parseCreateStatement(const String & statement)
 {
     ParserCreateQuery parser;
-    LOG_ERROR(DB::Logger::get("hyy"), "statement is {}", statement);
+    //LOG_ERROR(DB::Logger::get("hyy"), "statement is {}", statement);
     const char * pos = statement.data();
     std::string error_msg;
     auto ast = tryParseQuery(parser,
@@ -1385,7 +1385,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, TableID table_id)
 {
-    LOG_INFO(log, "INTO applyVariousDiff");
+    //LOG_INFO(log, "INTO applyVariousDiff");
     auto db_info = getter.getDatabase(db_id);
     if (db_info == nullptr)
     {
@@ -1431,7 +1431,7 @@ void SchemaBuilder<Getter, NameMapper>::applyVariousDiff(DatabaseID db_id, Table
     applySetTiFlashReplicaOnLogicalTable(db_info, table_info, storage);
     /// Alter if needed.
     applyAlterLogicalTable(db_info, table_info, storage);
-    LOG_DEBUG(log, "Table {} synced during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
+    //LOG_DEBUG(log, "Table {} synced during applyVariousDiff", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>

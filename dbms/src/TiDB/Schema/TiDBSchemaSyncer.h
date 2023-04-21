@@ -542,7 +542,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 for (const auto & create_database_id : create_database_ids)
                 {
-                    LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
+                    //LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
                     schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
                     //builder.applyCreateSchema(create_database_id);
                 }
@@ -555,7 +555,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 {
                     const auto & database_id = key.first;
                     const auto & table_id = key.second;
-                    LOG_INFO(DB::Logger::get("hyy"), "exchange_tables with database_id:{}, table_id:{}", database_id, table_id);
+                    //LOG_INFO(DB::Logger::get("hyy"), "exchange_tables with database_id:{}, table_id:{}", database_id, table_id);
                     builder.applyVariousDiff(database_id, table_id);
                 }
             }
@@ -567,7 +567,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 {
                     const auto & database_id = key.first;
                     const auto & table_id = key.second;
-                    LOG_INFO(DB::Logger::get("hyy"), "apply tables with database_id:{}, table_id:{}", database_id, table_id);
+                    //LOG_INFO(DB::Logger::get("hyy"), "apply tables with database_id:{}, table_id:{}", database_id, table_id);
                     schema_apply_wait_group->schedule([&] { builder.applyVariousDiff(database_id, table_id); });
                     //builder.applyVariousDiff(database_id, table_id);
                 }
