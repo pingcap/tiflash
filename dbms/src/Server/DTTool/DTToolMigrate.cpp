@@ -58,7 +58,7 @@ static constexpr char MIGRATE_HELP[] =
     "  --version     Target dtfile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
-    "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, none]\n"
+    "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, qpl, none]\n"
     "  --level       Compression level. [default: lz4: 1, lz4hc: 9, zstd: 1]\n"
     "  --file-id     Target file id.\n"
     "  --workdir     Target directory.\n"
@@ -335,6 +335,12 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
             {
                 args.compression_method = DB::CompressionMethod::ZSTD;
             }
+#ifdef ENABLE_QPL_COMPRESSION
+            else if (compression_method == "qpl")
+            {
+                args.compression_method = DB::CompressionMethod::QPL;
+            }
+#endif
             else if (compression_method == "none")
             {
                 args.compression_method = DB::CompressionMethod::NONE;
