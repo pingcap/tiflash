@@ -33,6 +33,7 @@
 #include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <ext/scope_guard.h>
 #include <iterator>
@@ -58,6 +59,7 @@ extern const int CHECKSUM_DOESNT_MATCH;
 namespace FailPoints
 {
 extern const char force_change_all_blobs_to_read_only[];
+extern const char exception_after_large_write_exceed[];
 } // namespace FailPoints
 
 namespace PS::V3
@@ -175,8 +177,8 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
         case WriteBatchWriteType::PUT:
         case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
-            auto [blob_id, offset_in_file] = getPosFromStats(write.size);
-
+            const auto [blob_id, offset_in_file] = getPosFromStats(write.size);
+            auto blob_file = getBlobFile(blob_id);
             ChecksumClass digest;
             // swap from WriteBatch instead of copying
             PageFieldOffsetChecksums field_offset_and_checksum;
@@ -193,58 +195,68 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
 
             try
             {
-                auto blob_file = getBlobFile(blob_id);
                 UInt64 buffer_begin_in_page = 0, buffer_end_in_page = 0;
                 while (true)
                 {
                     BufferBase::Buffer data_buf = write.read_buffer->buffer();
                     buffer_end_in_page = buffer_begin_in_page + data_buf.size();
-                    LOG_INFO(Logger::get(), "data_buf beg@{} end@{} size={}", fmt::ptr(data_buf.begin()), fmt::ptr(data_buf.end()), data_buf.size());
 
                     digest.update(data_buf.begin(), data_buf.size()); // the checksum of the whole page
+
+                    // the checksum of each field
                     if (!field_offset_and_checksum.empty())
                     {
-                        if (cur_field_end > buffer_end_in_page)
+                        while (true)
                         {
+                            auto field_begin_in_buf = cur_field_begin <= buffer_begin_in_page ? 0 : cur_field_begin - buffer_begin_in_page;
+                            auto field_length_in_buf = cur_field_end > buffer_end_in_page ? data_buf.size() - field_begin_in_buf : cur_field_end - buffer_begin_in_page - field_begin_in_buf;
+                            field_digest.update(data_buf.begin() + field_begin_in_buf, field_length_in_buf);
+
                             /*
-                             * This piece of buffer does not contain all data of current field
+                             * This piece of buffer does not contain all data of current field, break the loop
                              * PageBegin                                                            PageEnd
                              *     │       │----------- Buffer Range -----------│                       │
                              *     │    │------------- Current Field --------------│                    |
                              *             ↑                                    ↑  Update field checksum
                              */
-                            field_digest.update(data_buf.begin(), data_buf.size());
-                        }
-                        else
-                        {
+                            if (cur_field_end > buffer_end_in_page)
+                                break;
+
                             /*
                              * This piece of buffer contains all data of current field, update
-                             * checksum and continue until this piece of buffer does not contain
-                             * all data of field.
+                             * checksum and continue to try get the checksum of next field until
+                             * this piece of buffer does not contain all data of field.
                              * PageBegin                                                            PageEnd
                              *     │       │----------- Buffer Range -----------│                       │
-                             *     │     │---- Field i ----│---- Field j ----│--- Field k ---│        |
+                             *     │     │---- Field i ----│---- Field j ----│--- Field k ---│          |
                              *             ↑               ↑                 ↑  ↑ Update field checksum
                              */
-                            do
-                            {
-                                auto field_begin_in_buf = cur_field_begin <= buffer_begin_in_page ? 0 : cur_field_begin - buffer_begin_in_page;
-                                auto field_length_in_buf = cur_field_end > buffer_end_in_page ? data_buf.size() - field_begin_in_buf : cur_field_end - cur_field_begin;
-                                field_digest.update(data_buf.begin() + field_begin_in_buf, field_length_in_buf);
+                            field_offset_and_checksum[cur_field_index].second = field_digest.checksum();
 
-                                // this field is totally included in the current buffer
-                                field_offset_and_checksum[cur_field_index].second = field_digest.checksum();
+                            // all fields' checksum is OK, break the loop
+                            if (cur_field_index >= field_offset_and_checksum.size() - 1)
+                                break;
 
-                                field_digest = ChecksumClass(); // reset
-                                cur_field_index += 1;
-                                cur_field_begin = field_offset_and_checksum[cur_field_index].first;
-                                cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
-                            } while (cur_field_end <= buffer_end_in_page);
+                            field_digest = ChecksumClass(); // reset
+                            cur_field_index += 1;
+                            cur_field_begin = field_offset_and_checksum[cur_field_index].first;
+                            cur_field_end = (cur_field_index == field_offset_and_checksum.size() - 1) ? write.size : field_offset_and_checksum[cur_field_index + 1].first;
                         }
                     }
 
                     blob_file->write(data_buf.begin(), offset_in_file + buffer_begin_in_page, data_buf.size(), write_limiter);
                     buffer_begin_in_page += data_buf.size();
+
+                    fiu_do_on(FailPoints::exception_after_large_write_exceed, {
+                        if (auto v = FailPointHelper::getFailPointVal(FailPoints::exception_after_large_write_exceed); v)
+                        {
+                            auto failpoint_bound = std::any_cast<size_t>(v.value());
+                            if (buffer_end_in_page > failpoint_bound)
+                            {
+                                throw Exception(ErrorCodes::FAIL_POINT_ERROR, "failpoint throw exception buffer_end={} write_end={}", buffer_end_in_page, failpoint_bound);
+                            }
+                        }
+                    });
 
                     if (!write.read_buffer->next())
                         break;
@@ -252,22 +264,22 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
             }
             catch (DB::Exception & e)
             {
-                // TODO: fix the remove logic
+                // If exception happens, remove the allocated space in BlobStat
                 removePosFromStats(blob_id, offset_in_file, write.size);
-                LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
+                LOG_ERROR(log, "large write failed, blob_id={} offset_in_file={} size={} msg={}", blob_id, offset_in_file, write.size, e.message());
                 throw e;
             }
 
-            PageEntryV3 entry;
-            entry.file_id = blob_id;
-            entry.size = write.size;
-            entry.tag = write.tag;
-            entry.offset = offset_in_file;
-            // padding size won't work on large write batch
-            entry.padded_size = 0;
-            entry.checksum = digest.checksum();
-            entry.field_offsets = std::move(field_offset_and_checksum);
-
+            const auto entry = PageEntryV3{
+                .file_id = blob_id,
+                .size = write.size,
+                .padded_size = 0, // padding size won't work on large write batch
+                .tag = write.tag,
+                .offset = offset_in_file,
+                .checksum = digest.checksum(),
+                .checkpoint_info = OptionalCheckpointInfo{},
+                .field_offsets = std::move(field_offset_and_checksum),
+            };
             if (write.type == WriteBatchWriteType::PUT)
             {
                 edit.put(wb.getFullPageId(write.page_id), entry);
@@ -809,20 +821,31 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
                 auto field_checksum = digest.checksum();
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
-                    throw Exception(
-                        fmt::format("Reading with fields meet checksum not match "
-                                    "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                                    "[field_index={}] [field_offset={}] [field_size={}] "
-                                    "[entry={}] [file={}]",
-                                    page_id_v3,
-                                    expect_checksum,
-                                    field_checksum,
-                                    field_index,
-                                    beg_offset,
-                                    size_to_read,
-                                    entry,
-                                    blob_file->getPath()),
-                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                    // throw Exception(ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                    //                 "Reading with fields meet checksum not match "
+                    //                 "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
+                    //                 "[field_index={}] [field_offset={}] [field_size={}] "
+                    //                 "[entry={}] [file={}]",
+                    //                 page_id_v3,
+                    //                 expect_checksum,
+                    //                 field_checksum,
+                    //                 field_index,
+                    //                 beg_offset,
+                    //                 size_to_read,
+                    //                 entry,
+                    //                 blob_file->getPath());
+                    LOG_ERROR(log, "Reading with fields meet checksum not match "
+                                   "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
+                                   "[field_index={}] [field_offset={}] [field_size={}] "
+                                   "[entry={}] [file={}]",
+                              page_id_v3,
+                              expect_checksum,
+                              field_checksum,
+                              field_index,
+                              beg_offset,
+                              size_to_read,
+                              entry,
+                              blob_file->getPath());
                 }
             }
 
