@@ -30,6 +30,7 @@ struct SchemaBuilder
 
     Context & context;
 
+    std::mutex databases_mutex;
     KeyspaceDatabaseMap & databases;
 
     Int64 target_version;

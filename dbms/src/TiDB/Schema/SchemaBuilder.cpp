@@ -1014,7 +1014,9 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
+    databases_mutex.lock();
     databases.emplace(KeyspaceDatabaseID{keyspace_id, db_info->id}, db_info);
+    databases_mutex.unlock();
     LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
 }
 
@@ -1022,6 +1024,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 {
     auto ks_db_id = KeyspaceDatabaseID{keyspace_id, schema_id};
+    databases_mutex.lock();
     auto it = databases.find(ks_db_id);
     if (unlikely(it == databases.end()))
     {
@@ -1031,8 +1034,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
             schema_id);
         return;
     }
+    databases_mutex.unlock();
     applyDropSchema(name_mapper.mapDatabaseName(*it->second));
+    databases_mutex.lock();
     databases.erase(ks_db_id);
+    databases_mutex.unlock();
 }
 
 template <typename Getter, typename NameMapper>
