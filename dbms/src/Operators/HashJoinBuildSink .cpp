@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/ColumnNumbers.h>
-#include <Core/ColumnWithTypeAndName.h>
-#include <Core/ColumnsWithTypeAndName.h>
-#include <Core/Field.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
+#include <Interpreters/Join.h>
+#include <Operators/HashJoinBuildSink.h>
 
 namespace DB
 {
-namespace tests
+// TODO support spill.
+OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
-tipb::Expr columnsToTiPBExpr(
-    const String & func_name,
-    const ColumnNumbers & argument_column_number,
-    const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator,
-    const String & val);
-} // namespace tests
+    if unlikely (!block)
+    {
+        join_ptr->finishOneBuild();
+        return OperatorStatus::FINISHED;
+    }
+    join_ptr->insertFromBlock(block, concurrency_build_index);
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
+}
 } // namespace DB

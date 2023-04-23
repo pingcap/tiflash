@@ -28,6 +28,8 @@ class DAGRequest;
 
 namespace DB
 {
+struct Settings;
+
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
 using Pipelines = std::vector<PipelinePtr>;
@@ -72,7 +74,7 @@ public:
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
-    static bool isSupported(const tipb::DAGRequest & dag_request);
+    static bool isSupported(const tipb::DAGRequest & dag_request, const Settings & settings);
 
     Block getSampleBlock() const;
 
@@ -87,6 +89,8 @@ private:
 private:
     const UInt32 id;
     LoggerPtr log;
+
+    bool is_fine_grained_mode = true;
 
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;

@@ -1721,6 +1721,12 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception(error_message);
 }
 
+bool Join::isAllProbeFinished() const
+{
+    std::lock_guard lock(build_probe_mutex);
+    return active_probe_threads == 0 || meet_error || skip_wait;
+}
+
 
 void Join::finishOneNonJoin(size_t partition_index)
 {

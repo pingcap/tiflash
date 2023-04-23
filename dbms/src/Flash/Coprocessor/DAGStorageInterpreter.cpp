@@ -492,8 +492,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        //auto source_num = group_builder.group.size();
-        //assert(remote_read_sources_start_index <= source_num);
+        assert(remote_read_sources_start_index <= group_builder.group.size());
         size_t i = 0;
         // local sources
         while (i < remote_read_sources_start_index)
