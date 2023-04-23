@@ -59,12 +59,10 @@ public:
     static constexpr auto task_num = 10;
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
-        return tasks;
+            addTask(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
     }
 
     void finishImpl() override
@@ -108,15 +106,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
             return {};
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -151,7 +147,7 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
         {
@@ -160,10 +156,8 @@ protected:
             return {};
         }
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -180,10 +174,9 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         exec_status.onErrorOccurred(err_msg);
-        return {};
     }
 };
 
@@ -195,10 +188,9 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         assert(mem_tracker.get() == current_memory_tracker);
-        return {};
     }
 
     void finishImpl() override
@@ -234,15 +226,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_task)
             throw Exception("throw exception in scheduleImpl");
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
     }
 
     void finishImpl() override
@@ -266,15 +256,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (0 == task_num)
-            return {};
+            return;
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -294,11 +282,9 @@ public:
     }
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
-        std::vector<TaskPtr> tasks;
-        tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
     void finishImpl() override

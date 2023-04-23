@@ -99,6 +99,13 @@ bool Event::prepare()
     }
 }
 
+void Event::addTask(TaskPtr && task) noexcept
+{
+    assert(status == EventStatus::SCHEDULED);
+    ++unfinished_tasks;
+    tasks.push_back(std::move(task));
+}
+
 void Event::schedule() noexcept
 {
     assert(0 == unfinished_inputs);
@@ -113,22 +120,44 @@ void Event::schedule() noexcept
         exec_status.onEventSchedule();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    std::vector<TaskPtr> tasks;
     try
     {
-        tasks = scheduleImpl();
+        scheduleImpl();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    scheduleTasks();
+}
+
+void Event::scheduleTasks() noexcept
+{
+    assert(status == EventStatus::SCHEDULED);
     if (!tasks.empty())
     {
-        scheduleTasks(tasks);
+        // If query has already been cancelled, we can skip scheduling tasks.
+        // And then tasks will be destroyed and call `onTaskFinish`.
+        if (likely(!exec_status.isCancelled()))
+        {
+            LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
+            TaskScheduler::instance->submit(tasks);
+        }
+        tasks.clear();
     }
     else
     {
         // if no task is scheduled here, we should call finish directly.
         finish();
     }
+}
+
+void Event::onTaskFinish() noexcept
+{
+    assert(status != EventStatus::FINISHED);
+    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+    assert(remaining_tasks >= 0);
+    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+    if (0 == remaining_tasks)
+        finish();
 }
 
 void Event::finish() noexcept
@@ -160,31 +189,6 @@ void Event::finish() noexcept
     // since `exec_status.onEventSchedule()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
     exec_status.onEventFinish();
-}
-
-void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
-{
-    assert(!tasks.empty());
-    assert(0 == unfinished_tasks);
-    unfinished_tasks = tasks.size();
-    assert(status != EventStatus::FINISHED);
-    // If query has already been cancelled, we can skip scheduling tasks.
-    // And then tasks will be destroyed and call `onTaskFinish`.
-    if (likely(!exec_status.isCancelled()))
-    {
-        LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-        TaskScheduler::instance->submit(tasks);
-    }
-}
-
-void Event::onTaskFinish() noexcept
-{
-    assert(status != EventStatus::FINISHED);
-    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    assert(remaining_tasks >= 0);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
-    if (0 == remaining_tasks)
-        finish();
 }
 
 void Event::switchStatus(EventStatus from, EventStatus to) noexcept
