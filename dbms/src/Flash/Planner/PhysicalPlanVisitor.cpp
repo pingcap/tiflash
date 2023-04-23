@@ -27,7 +27,7 @@ void addPrefix(FmtBuffer & buffer, size_t level)
 void doVisitToString(FmtBuffer & buffer, const PhysicalPlanNodePtr & physical_plan, size_t level)
 {
     visit(physical_plan, [&buffer, &level](const PhysicalPlanNodePtr & plan) {
-        assert(plan);
+        RUNTIME_CHECK(plan);
         addPrefix(buffer, level);
         buffer.fmtAppend("{}\n", plan->toString());
         ++level;

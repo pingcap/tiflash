@@ -31,7 +31,7 @@ PhysicalPlanNodePtr PhysicalLimit::build(
     const tipb::Limit & limit,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
     auto physical_limit = std::make_shared<PhysicalLimit>(
         executor_id,
         child->getSchema(),

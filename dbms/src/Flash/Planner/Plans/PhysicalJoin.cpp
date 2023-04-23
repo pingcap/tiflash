@@ -51,7 +51,7 @@ void recordJoinExecuteInfo(
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
     join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 
@@ -66,8 +66,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
-    assert(left);
-    assert(right);
+    RUNTIME_CHECK(left);
+    RUNTIME_CHECK(right);
 
     left->finalize();
     right->finalize();
@@ -241,9 +241,9 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
         /// it is guaranteed by its children physical plan nodes
         schema_project_cols.emplace_back(c.name, c.name);
     }
-    assert(!schema_project_cols.empty());
+    RUNTIME_CHECK(!schema_project_cols.empty());
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
-    assert(schema_project && !schema_project->getActions().empty());
+    RUNTIME_CHECK(schema_project && !schema_project->getActions().empty());
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
