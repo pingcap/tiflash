@@ -66,7 +66,7 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
 
 void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty());
+    RUNTIME_CHECK(pipeline.streams.empty());
 
     auto & dag_context = *context.getDAGContext();
     // todo choose a more reasonable stream number
