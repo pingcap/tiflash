@@ -32,7 +32,96 @@ public:
     {
         ExecutorTest::initializeContext();
     }
+
+    static constexpr size_t join_type_num = 7;
+
+    static constexpr tipb::JoinType join_types[join_type_num] = {
+        tipb::JoinType::TypeInnerJoin,
+        tipb::JoinType::TypeLeftOuterJoin,
+        tipb::JoinType::TypeRightOuterJoin,
+        tipb::JoinType::TypeSemiJoin,
+        tipb::JoinType::TypeAntiSemiJoin,
+        tipb::JoinType::TypeLeftOuterSemiJoin,
+        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+    };
 };
+
+TEST_F(SpillJoinTestRunner, SimpleJoinSpill)
+try
+{
+    constexpr size_t simple_test_num = 4;
+
+    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+    context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+
+    // names of left table, right table and join key column
+    const std::tuple<String, String, String> join_cases[simple_test_num] = {
+        std::make_tuple("t1", "t2", "a"),
+        std::make_tuple("t2", "t1", "a"),
+        std::make_tuple("t1", "t2", "b"),
+        std::make_tuple("t2", "t1", "b"),
+    };
+
+    const ColumnsWithTypeAndName expected_cols[simple_test_num * join_type_num] = {
+        // inner join
+        {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})},
+        {toNullableVec<String>({{}, "1", "2", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "3", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})},
+        {toNullableVec<String>({{}, "1", "3", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "2", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})},
+        // left join
+        {toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
+        {toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})},
+        {toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        // right join
+        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
+        {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})},
+        {toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})},
+        // semi join
+        {toNullableVec<String>({"1", "1"}), toNullableVec<String>({"3", {}})},
+        {toNullableVec<String>({"1", "1"}), toNullableVec<String>({"3", {}})},
+        {toNullableVec<String>({"1", "2", {}}), toNullableVec<String>({"3", "4", "3"})},
+        {toNullableVec<String>({"1", "3", {}}), toNullableVec<String>({"3", "4", "3"})},
+        // anti semi join
+        {toNullableVec<String>({"2", {}, {}}), toNullableVec<String>({"4", "3", {}})},
+        {toNullableVec<String>({"3", {}, {}}), toNullableVec<String>({"4", "3", {}})},
+        {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
+        {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
+        // left outer semi join
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 0, 0, 1, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 0, 0, 1, 0})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 1, 1, 0, 0})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({1, 1, 1, 0, 0})},
+        // anti left outer semi join
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 1, 1, 0, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 1, 1, 0, 1})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
+    };
+
+    for (size_t i = 0; i < join_type_num; ++i)
+    {
+        for (size_t j = 0; j < simple_test_num; ++j)
+        {
+            const auto & [l, r, k] = join_cases[j];
+            auto request = context.scan("simple_test", l)
+                               .join(context.scan("simple_test", r), join_types[i], {col(k)})
+                               .build(context);
+
+            {
+                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+                ASSERT_THROW(executeStreams(request), Exception);
+                auto concurrences = {2, 5, 10};
+                for (auto concurrency : concurrences)
+                {
+                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
+                }
+            }
+        }
+    }
+}
+CATCH
 
 TEST_F(SpillJoinTestRunner, SpillToDisk)
 try

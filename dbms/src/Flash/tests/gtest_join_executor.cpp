@@ -118,6 +118,9 @@ public:
         context.addExchangeReceiver("right_exchange_receiver_3_concurrency", right_column_infos, right_column_data, 3, right_partition_column_infos);
         context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
         context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
+
+        /// disable spill
+        context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     }
 
     static constexpr size_t join_type_num = 7;
@@ -205,19 +208,7 @@ try
                                .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                .build(context);
 
-            {
-                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
-
-                // for spill to disk tests
-                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-                ASSERT_THROW(executeStreams(request), Exception);
-                auto concurrences = {2, 5, 10};
-                for (auto concurrency : concurrences)
-                {
-                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
-                }
-            }
+            executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
         }
     }
 }
@@ -1050,33 +1041,6 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, SpillToDisk)
-try
-{
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})});
-
-    auto request = context
-                       .scan("split_test", "t1")
-                       .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
-                       .build(context);
-
-    auto join_restore_concurrences = {-1, 0, 1, 5};
-    auto concurrences = {2, 5, 10};
-    const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-    for (const auto & join_restore_concurrency : join_restore_concurrences)
-    {
-        context.context->setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
-        ASSERT_THROW(executeStreams(request), Exception);
-        for (auto concurrency : concurrences)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, concurrency));
-        }
-    }
-}
-CATCH
-
 TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeData)
 try
 {
@@ -1086,8 +1050,6 @@ try
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
-    /// disable spill
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
