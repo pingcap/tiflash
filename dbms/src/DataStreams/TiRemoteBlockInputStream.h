@@ -66,6 +66,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         while (true)
         {
+            if (isCancelled())
+                return false;
             auto result = remote_reader->nextResult(block_queue, sample_block, stream_id, decoder_ptr);
             if (result.meet_error)
             {

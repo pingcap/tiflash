@@ -87,7 +87,8 @@ struct SortColumnDescriptionWithColumnIndex
     size_t column_number;
 
     SortColumnDescriptionWithColumnIndex(SortColumnDescription description_, size_t column_number_)
-        : base(std::move(description_)), column_number(column_number_)
+        : base(std::move(description_))
+        , column_number(column_number_)
     {
     }
 };

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnTuple.h>
-#include <DataStreams/ColumnGathererStream.h>
 #include <Common/assert_cast.h>
+#include <DataStreams/ColumnGathererStream.h>
 
 #include <ext/map.h>
 #include <ext/range.h>

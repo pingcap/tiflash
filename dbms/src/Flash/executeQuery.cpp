@@ -112,7 +112,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
-std::optional<QueryExecutorPtr> executeAsPipeline[[maybe_unused]](Context & context, bool internal)
+std::optional<QueryExecutorPtr> executeAsPipeline [[maybe_unused]] (Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
