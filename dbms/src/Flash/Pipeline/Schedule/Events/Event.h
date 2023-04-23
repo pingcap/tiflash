@@ -50,7 +50,7 @@ public:
     {}
     virtual ~Event() = default;
 
-    void addInput(const EventPtr & input);
+    void addInput(const EventPtr & input) noexcept;
 
     // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
     // so these functions must be noexcept.
@@ -59,7 +59,7 @@ public:
     void onTaskFinish() noexcept;
 
     // return true for source event.
-    bool prepare();
+    bool prepare() noexcept;
 
 protected:
     // add task ready to be scheduled.
@@ -80,7 +80,7 @@ private:
 
     void finish() noexcept;
 
-    void addOutput(const EventPtr & output);
+    void addOutput(const EventPtr & output) noexcept;
 
     void onInputFinish() noexcept;
 
