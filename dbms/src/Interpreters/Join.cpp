@@ -1708,10 +1708,8 @@ void Join::waitUntilAllProbeFinished() const
 
 bool Join::isAllProbeFinished() const
 {
-    if (0 == active_probe_threads)
-        return true;
     std::lock_guard lock(build_probe_mutex);
-    return meet_error || skip_wait;
+    return active_probe_threads == 0 || meet_error || skip_wait;
 }
 
 
