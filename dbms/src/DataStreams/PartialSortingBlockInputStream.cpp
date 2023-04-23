@@ -21,7 +21,7 @@ namespace DB
 {
 namespace
 {
-ColumnRawPtrs extractRawColumns(const Block & block, const SortDescriptionWithPositions & description)
+ColumnRawPtrs extractRawColumns [[maybe_unused]] (const Block & block, const SortDescriptionWithPositions & description)
 {
     size_t size = description.size();
     ColumnRawPtrs result(size);
@@ -32,7 +32,7 @@ ColumnRawPtrs extractRawColumns(const Block & block, const SortDescriptionWithPo
     return result;
 }
 
-size_t getFilterMask(
+size_t getFilterMask [[maybe_unused]] (
     const ColumnRawPtrs & raw_block_columns,
     const Columns & threshold_columns,
     const SortDescription & description,
@@ -90,7 +90,7 @@ size_t getFilterMask(
     return result_size_hint;
 }
 
-bool compareWithThreshold(
+bool compareWithThreshold [[maybe_unused]] (
     const ColumnRawPtrs & raw_block_columns,
     size_t min_block_index,
     const Columns & threshold_columns,
@@ -120,9 +120,7 @@ Block PartialSortingBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
     if (block.rows() == 0)
-    {
-        return {};
-    }
+        return block;
 
     size_t block_rows_before_filter = block.rows();
 
@@ -156,41 +154,43 @@ Block PartialSortingBlockInputStream::readImpl()
 
     sortBlock(block, description, limit);
 
-    size_t block_rows_after_filter = block.rows();
-
-    /// Check if we can use this block for optimization.
-    if (min_limit_for_partial_sort_optimization <= limit
-        && block_rows_after_filter > 0 && limit <= block_rows_before_filter)
     {
-        /** If we filtered more than limit rows from block take block last row.
+        size_t block_rows_after_filter = block.rows();
+
+        /// Check if we can use this block for optimization.
+        if (min_limit_for_partial_sort_optimization <= limit
+            && block_rows_after_filter > 0 && limit <= block_rows_before_filter)
+        {
+            /** If we filtered more than limit rows from block take block last row.
           * Otherwise take last limit row.
           *
           * If current threshold value is empty, update current threshold value.
           * If min block value is less than current threshold value, update current threshold value.
           */
-        //
-        size_t min_row_to_compare = limit <= block_rows_after_filter ? (limit - 1) : (block_rows_after_filter - 1);
-        auto raw_block_columns = extractRawColumns(block, description_with_positions);
+            //
+            size_t min_row_to_compare = limit <= block_rows_after_filter ? (limit - 1) : (block_rows_after_filter - 1);
+            auto raw_block_columns = extractRawColumns(block, description_with_positions);
 
-        if (sort_description_threshold_columns.empty()
-            || compareWithThreshold(
-                raw_block_columns,
-                min_row_to_compare,
-                sort_description_threshold_columns,
-                description))
-        {
-            // update the threshold value
-            size_t raw_block_columns_size = raw_block_columns.size();
-            Columns sort_description_threshold_columns_updated(raw_block_columns_size);
-
-            for (size_t i = 0; i < raw_block_columns_size; ++i)
+            if (sort_description_threshold_columns.empty()
+                || compareWithThreshold(
+                    raw_block_columns,
+                    min_row_to_compare,
+                    sort_description_threshold_columns,
+                    description))
             {
-                MutableColumnPtr sort_description_threshold_column_updated = raw_block_columns[i]->cloneEmpty();
-                sort_description_threshold_column_updated->insertFrom(*raw_block_columns[i], min_row_to_compare);
-                sort_description_threshold_columns_updated[i] = std::move(sort_description_threshold_column_updated);
-            }
+                // update the threshold value
+                size_t raw_block_columns_size = raw_block_columns.size();
+                Columns sort_description_threshold_columns_updated(raw_block_columns_size);
 
-            sort_description_threshold_columns = std::move(sort_description_threshold_columns_updated);
+                for (size_t i = 0; i < raw_block_columns_size; ++i)
+                {
+                    MutableColumnPtr sort_description_threshold_column_updated = raw_block_columns[i]->cloneEmpty();
+                    sort_description_threshold_column_updated->insertFrom(*raw_block_columns[i], min_row_to_compare);
+                    sort_description_threshold_columns_updated[i] = std::move(sort_description_threshold_column_updated);
+                }
+
+                sort_description_threshold_columns = std::move(sort_description_threshold_columns_updated);
+            }
         }
     }
     return block;
