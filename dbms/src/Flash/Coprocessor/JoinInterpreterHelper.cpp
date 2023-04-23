@@ -232,7 +232,7 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
 
 String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const
 {
-    if (!isRightSemiFamily(kind) || !has_other_condition)
+    if ((!isRightSemiFamily(kind) && kind != ASTTableJoin::Kind::RightOuter) || !has_other_condition)
     {
         return "";
     }

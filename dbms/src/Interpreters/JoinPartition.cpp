@@ -229,7 +229,7 @@ void JoinPartition::initMap()
             initImpl(maps_any_full, join_map_method);
         else if (kind == ASTTableJoin::Kind::RightOuter && has_other_condition)
             initImpl(maps_all_full_with_row_flag, join_map_method);
-	else
+        else
             initImpl(maps_all_full, join_map_method);
     }
 }
@@ -680,7 +680,7 @@ Map & JoinPartition::getHashMap()
     {
         if (strictness == ASTTableJoin::Strictness::Any)
             return getMapImpl<Map>(maps_any_full, join_map_method);
-	else if (kind == ASTTableJoin::Kind::RightOuter && has_other_condition)
+        else if (kind == ASTTableJoin::Kind::RightOuter && has_other_condition)
             return getMapImpl<Map>(maps_all_full_with_row_flag, join_map_method);
         else
             return getMapImpl<Map>(maps_all_full, join_map_method);
@@ -728,7 +728,7 @@ void JoinPartition::insertBlockIntoMaps(
     {
         if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAnyFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
-	else if (current_kind == ASTTableJoin::Kind::RightOuter && current_join_partition->has_other_condition)
+        else if (current_kind == ASTTableJoin::Kind::RightOuter && current_join_partition->has_other_condition)
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
@@ -906,6 +906,21 @@ struct Adder<ASTTableJoin::Kind::RightAnti, ASTTableJoin::Strictness::All, Map>
     }
 };
 
+template <typename Map>
+struct Adder<ASTTableJoin::Kind::RightOuter, ASTTableJoin::Strictness::All, Map>
+{
+    static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & ptr_col)
+    {
+        return Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>::addFound(it, num_columns_to_add, added_columns, i, filter, current_offset, offsets, right_indexes, probe_process_info, ptr_col);
+    }
+
+    static bool addNotFound(size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, ProbeProcessInfo & /*probe_process_info*/)
+    {
+        (*offsets)[i] = current_offset;
+        return false;
+    }
+};
+
 template <ASTTableJoin::Kind KIND, typename Map>
 struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 {
@@ -1028,9 +1043,9 @@ void NO_INLINE probeBlockImplTypeCase(
     {
         if (has_null_map && (*null_map)[i])
         {
-            if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
+            if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti || KIND == ASTTableJoin::Kind::RightOuter)
             {
-                if (record_mapped_entry_column)
+                if (record_mapped_entry_column || KIND == ASTTableJoin::Kind::RightOuter)
                     block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                         num_columns_to_add,
                         added_columns,
@@ -1118,6 +1133,36 @@ void NO_INLINE probeBlockImplTypeCase(
                     else
                         it->getMapped().setUsed();
                 }
+                else if constexpr (KIND == ASTTableJoin::Kind::RightOuter)
+                {
+                    if (record_mapped_entry_column)
+                        block_full = Adder<KIND, STRICTNESS, Map>::addFound(
+                            it,
+                            num_columns_to_add,
+                            added_columns,
+                            i,
+                            filter.get(),
+                            current_offset,
+                            offsets_to_replicate.get(),
+                            right_indexes,
+                            probe_process_info,
+                            record_mapped_entry_column);
+                    else
+                    {
+                        it->getMapped().setUsed();
+                        block_full = Adder<ASTTableJoin::Kind::Inner, STRICTNESS, Map>::addFound(
+                            it,
+                            num_columns_to_add,
+                            added_columns,
+                            i,
+                            filter.get(),
+                            current_offset,
+                            offsets_to_replicate.get(),
+                            right_indexes,
+                            probe_process_info,
+                            record_mapped_entry_column);
+                    }
+                }
                 else
                 {
                     it->getMapped().setUsed();
@@ -1136,9 +1181,9 @@ void NO_INLINE probeBlockImplTypeCase(
             }
             else
             {
-                if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
+                if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti || KIND == ASTTableJoin::Kind::RightOuter)
                 {
-                    if (record_mapped_entry_column)
+                    if (record_mapped_entry_column || KIND == ASTTableJoin::Kind::RightOuter)
                         block_full = Adder<KIND, STRICTNESS, Map>::addNotFound(
                             num_columns_to_add,
                             added_columns,
@@ -1467,8 +1512,10 @@ void JoinPartition::probeBlock(
         CALL(Inner, Any, MapsAnyFull)
     else if (kind == Full && strictness == All)
         CALL(LeftOuter, All, MapsAllFull)
-    else if (kind == RightOuter && strictness == All)
+    else if (kind == RightOuter && strictness == All && !record_mapped_entry_column)
         CALL(Inner, All, MapsAllFull)
+    else if (kind == RightOuter && strictness == All && record_mapped_entry_column)
+        CALL(RightOuter, All, MapsAllFullWithRowFlag)
     else if (kind == Anti && strictness == Any)
         CALL(Anti, Any, MapsAny)
     else if (kind == Anti && strictness == All)

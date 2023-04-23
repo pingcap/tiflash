@@ -218,6 +218,12 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
             else
                 fillColumnsUsingCurrentPartition<false, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
             break;
+        case ASTTableJoin::Kind::RightOuter:
+            if (parent.has_other_condition)
+                fillColumnsUsingCurrentPartition<true, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+            else
+                fillColumnsUsingCurrentPartition<false, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
+            break;
         default:
             fillColumnsUsingCurrentPartition<false, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
         }
