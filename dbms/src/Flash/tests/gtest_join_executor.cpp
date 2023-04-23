@@ -1210,7 +1210,7 @@ ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithT
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", type);
     return res;
 }
-}
+} // namespace
 
 TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
