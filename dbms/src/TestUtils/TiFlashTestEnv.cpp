@@ -177,4 +177,10 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
 }
+
+FileProviderPtr TiFlashTestEnv::getMockFileProvider()
+{
+    bool encryption_enabled = false;
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
+}
 } // namespace DB::tests
