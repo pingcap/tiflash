@@ -60,8 +60,7 @@ Block PipelineExecBuilder::getCurrentHeader() const
 
 void PipelineExecGroupBuilder::init(size_t init_concurrency)
 {
-    RUNTIME_CHECK(concurrency == 0);
-    RUNTIME_CHECK(init_concurrency > 0);
+    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
     concurrency = init_concurrency;
     group.resize(concurrency);
 }
