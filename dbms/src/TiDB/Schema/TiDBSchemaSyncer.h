@@ -412,9 +412,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         //LOG_ERROR(log, "hyy tryLoadSchemaDiffs cur_version is {}, latest_version is {}", cur_version, latest_version);
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> apply_tables;
-        std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables;
+        std::unordered_map<std::pair<DatabaseID, TableID>, bool> drop_tables; //db_info, table_id
         std::unordered_map<std::pair<DatabaseID, TableID>, bool> exchange_tables;
-        std::vector<DatabaseID> create_database_ids;
+        std::vector<DatabaseID> create_database_ids; // 这个存 db_info 更好
+        std::vector<std::pair<TiDB::DBInfoPtr, TiDB::TableInfoPtr>> create_tables; // 存 启动时候的 tables;
+        std::vector<TiDB::DBInfoPtr> create_databases;
         std::vector<DatabaseID> drop_database_ids;
         int used_version = 0;
         if (cur_version <= 0)
@@ -430,18 +432,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             for (const auto & db : all_schemas)
             {
                 create_database_ids.push_back(db->id);
-
-                // std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
-                // for (auto & table : tables)
-                // {
-                //     /// Ignore view and sequence.
-                //     if (table->is_view || table->is_sequence)
-                //     {
-                //         continue;
-                //     }
-                //     apply_tables.emplace(std::make_pair(db->id, table->id), true);
-                //     LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
-                // }
+                create_databases.push_back(db);
             }
 
             size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
@@ -451,26 +442,36 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             auto get_table_wait_group = get_table_thread_pool.waitGroup();
 
             std::mutex apply_mutex;
-            for (const auto& db_id : create_database_ids)
+            // for (const auto& db_id : create_database_ids)
+            for (size_t index = 0; index < create_database_ids.size(); index++)
             {
-                auto task = [db_id, &getter, &apply_tables, &apply_mutex] {
+                auto db_id = create_database_ids[index];
+                const auto & db = create_databases[index];
+                auto task = [db_id, db, &getter, &create_tables, &apply_mutex] {
                     std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db_id);
-                    std::vector<TableID> table_ids;
-                    table_ids.reserve(tables.size());
-                    for (auto & table : tables)
+                    std::vector<bool> check(tables.size(), true);
+                    // for (auto & table : tables)
+                    for (size_t table_index = 0; table_index < tables.size(); table_index++)
                     {
+                        auto & table = tables[table_index];
                         /// Ignore view and sequence.
                         if (table->is_view || table->is_sequence)
                         {
-                            continue;
+                            // continue;
+                            check[table_index] = false;
                         }
-                        table_ids.push_back(table->id);
+                        //tables.push_back(table);
                         ///apply_tables.emplace(std::make_pair(db->id, table->id), true);
                         //LOG_INFO(log, " db->id is {}, table->id is {}, db_name is {}, table name is {}", db->id, table->id, db->name, table->name);
                     };
                     std::lock_guard<std::mutex> lock(apply_mutex);
-                    for (const auto & table_id : table_ids) {
-                        apply_tables.emplace(std::make_pair(db_id, table_id), true);
+                    // for (const auto & table : tables) {
+                    for (size_t table_index = 0; table_index < tables.size(); table_index++)
+                    {
+                        if (check[table_index])
+                        {
+                            create_tables.emplace_back(db, tables[table_index]);
+                        }
                     }
                 };
                 get_table_wait_group->schedule(task);
@@ -540,13 +541,26 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // create databases
             {
                 auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
-                for (const auto & create_database_id : create_database_ids)
+                // for (const auto & create_database_id : create_database_ids)
+                for (const auto & database : create_databases)
                 {
                     //LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
-                    schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
+                    schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(database); });
                     //builder.applyCreateSchema(create_database_id);
                 }
 
+                schema_apply_wait_group->wait();
+            }
+
+            {
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                for (const auto & table_info : create_tables)
+                {
+                    //LOG_INFO(DB::Logger::get("hyy"), "exchange_tables with database_id:{}, table_id:{}", database_id, table_id);
+                    const auto & db = table_info.first;
+                    const auto & table = table_info.second;
+                    schema_apply_wait_group->schedule([&db, &table, &builder] { builder.applyCreateLogicalTable(db, table); });
+                }
                 schema_apply_wait_group->wait();
             }
 
