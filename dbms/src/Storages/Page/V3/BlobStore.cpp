@@ -424,6 +424,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
     // This can avoid allocating a big buffer for writing data and can smooth memory usage.
     if (all_page_data_size > config.file_limit_size)
     {
+        LOG_INFO(log, "handling large write, all_page_data_size={}", all_page_data_size);
         return handleLargeWrite(std::move(wb), write_limiter);
     }
 
