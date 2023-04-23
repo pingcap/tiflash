@@ -34,7 +34,7 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
 
-    ~EventTask();
+    ~EventTask() override;
 
 protected:
     ExecTaskStatus executeImpl() noexcept override;

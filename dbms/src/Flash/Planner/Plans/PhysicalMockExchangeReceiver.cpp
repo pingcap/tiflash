@@ -61,7 +61,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
 
 void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
-    assert(pipeline.streams.empty());
+    RUNTIME_CHECK(pipeline.streams.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 

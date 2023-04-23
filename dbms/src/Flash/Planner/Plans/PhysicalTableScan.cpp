@@ -56,7 +56,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
 
 void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty());
+    RUNTIME_CHECK(pipeline.streams.empty());
 
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
@@ -154,7 +154,7 @@ bool PhysicalTableScan::hasFilterConditions() const
 
 const String & PhysicalTableScan::getFilterConditionsId() const
 {
-    assert(hasFilterConditions());
+    RUNTIME_CHECK(hasFilterConditions());
     return filter_conditions.executor_id;
 }
 } // namespace DB
