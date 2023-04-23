@@ -60,7 +60,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
 

@@ -208,6 +208,7 @@ class RegionPersisterTest : public ::testing::Test
 public:
     RegionPersisterTest()
         : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_test"))
+        , log(Logger::get())
     {
     }
 
@@ -235,6 +236,7 @@ protected:
     String dir_path;
 
     std::unique_ptr<PathPool> mocked_path_pool;
+    LoggerPtr log;
 };
 
 TEST_F(RegionPersisterTest, persister)

@@ -17,9 +17,7 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
-#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -169,17 +167,17 @@ try
 
         // write blob 1
         write_batch.putPage(page_id, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
 
         // write blob 2
         write_batch.putPage(page_id + 1, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
 
         // write blob 3
         write_batch.putPage(page_id + 2, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
     };
 
@@ -342,7 +340,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -432,7 +430,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     AtomicStopwatch write_watch;
     for (size_t i = 0; i < wb_nums; ++i)
     {
-        edits[i] = blob_store.write(wbs[i], write_limiter);
+        edits[i] = blob_store.write(std::move(wbs[i]), write_limiter);
     }
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
@@ -537,7 +535,7 @@ try
     wb.putPage(page_id1, /* tag */ 0, buff1, buff_size, {20, 40, 40, 20});
     wb.putPage(page_id2, /* tag */ 0, buff2, buff_size, {10, 50, 20, 20, 20});
     wb.putPage(page_id3, /* tag */ 0, buff3, buff_size, {10, 5, 20, 20, 15, 5, 15, 30});
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), 3);
 
     BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
@@ -613,7 +611,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -674,7 +672,7 @@ try
         wb.putPage(page_id, /*tag*/ 0, buff1, buff_size);
         wb.putPage(page_id, /*tag*/ 0, buff2, buff_size);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 2);
 
         auto records = edit.getRecords();
@@ -701,7 +699,7 @@ try
         wb.delPage(page_id + 1);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 3);
 
         auto records = edit.getRecords();
@@ -734,7 +732,7 @@ try
         wb.putRefPage(page_id + 1, page_id);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         auto records = edit.getRecords();
 
         auto record = records[0];
@@ -774,7 +772,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
         bool catch_exception = false;
         try
         {
-            blob_store.write(wb, nullptr);
+            blob_store.write(std::move(wb), nullptr);
         }
         catch (DB::Exception & e)
         {
@@ -799,7 +797,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
         wb.putPage(50, /*tag*/ 0, buff1, buf_size);
 
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 1);
 
         auto records = edit.getRecords();
@@ -812,7 +810,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
         wb.clear();
         wb.putPage(51, /*tag*/ 0, buff2, buf_size);
-        edit = blob_store.write(wb, nullptr);
+        edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 1);
 
         records = edit.getRecords();
@@ -849,7 +847,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
         }
     }
 
-    auto edit = blob_store.write(wb, nullptr);
+    auto edit = blob_store.write(std::move(wb), nullptr);
 
     size_t idx = 0;
     PageEntriesV3 entries_del1, entries_del2, remain_entries;
@@ -944,7 +942,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
         }
     }
 
-    auto edit = blob_store.write(wb, nullptr);
+    auto edit = blob_store.write(std::move(wb), nullptr);
 
     size_t idx = 0;
     PageEntriesV3 entries_del;
@@ -1004,7 +1002,7 @@ TEST_F(BlobStoreTest, GC)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     PageIdAndVersionedEntries versioned_pageid_entries;
@@ -1071,7 +1069,7 @@ try
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1122,7 +1120,7 @@ try
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1398,7 +1396,7 @@ try
             BlobStore::FieldReadInfos to_read{
                 BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6, 7, 8}),
             };
-            BlobStore::PageMap page_map = blob_store.read(to_read, nullptr);
+            PageMap page_map = blob_store.read(to_read, nullptr);
             ASSERT_NE(page_map.find(page_id), page_map.end());
             ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
         }
@@ -1408,7 +1406,7 @@ try
             BlobStore::FieldReadInfos to_read{
                 BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6}),
             };
-            BlobStore::PageMap page_map = blob_store.read(to_read, nullptr);
+            PageMap page_map = blob_store.read(to_read, nullptr);
             ASSERT_NE(page_map.find(page_id), page_map.end());
             ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
         }
@@ -1418,7 +1416,7 @@ try
             BlobStore::FieldReadInfos to_read{
                 BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {1, 2, 3, 5, 6, 8}),
             };
-            BlobStore::PageMap page_map = blob_store.read(to_read, nullptr);
+            PageMap page_map = blob_store.read(to_read, nullptr);
             ASSERT_NE(page_map.find(page_id), page_map.end());
             ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
         }

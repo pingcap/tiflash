@@ -304,7 +304,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch && wb, const WriteLim
     return edit;
 }
 
-PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+PageEntriesEdit BlobStore::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
