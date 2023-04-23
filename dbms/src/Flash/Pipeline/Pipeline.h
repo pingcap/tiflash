@@ -90,6 +90,8 @@ private:
     const UInt32 id;
     LoggerPtr log;
 
+    bool is_fine_grained_mode = true;
+
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
