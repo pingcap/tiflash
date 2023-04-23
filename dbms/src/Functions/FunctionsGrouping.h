@@ -36,7 +36,7 @@ extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 } // namespace ErrorCodes
 
-static bool isPowerOf2(uint64_t num)
+[[maybe_unused]] static bool isPowerOf2(uint64_t num)
 {
     return (num & (num - 1)) == 0;
 }
