@@ -539,6 +539,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // 并发处理 drop tables
             // 并发处理 drop databases
             // create databases
+
             {
                 auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
                 // for (const auto & create_database_id : create_database_ids)
@@ -546,6 +547,19 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 {
                     //LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
                     schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(database); });
+                    //builder.applyCreateSchema(create_database_id);
+                }
+
+                schema_apply_wait_group->wait();
+            }
+
+            if (create_databases.empty() && !create_database_ids.empty())
+            {
+                auto schema_apply_wait_group = schema_apply_thread_pool.waitGroup();
+                for (const auto & create_database_id : create_database_ids)
+                {
+                    //LOG_INFO(DB::Logger::get("hyy"), "create database {}", create_database_id);
+                    schema_apply_wait_group->schedule([&] { builder.applyCreateSchema(create_database_id); });
                     //builder.applyCreateSchema(create_database_id);
                 }
 
