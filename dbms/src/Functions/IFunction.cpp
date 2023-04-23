@@ -231,9 +231,13 @@ void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
     size_t expected_number_of_arguments = getNumberOfArguments();
 
     if (number_of_arguments != expected_number_of_arguments)
-        throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                            + toString(number_of_arguments) + ", should be " + toString(expected_number_of_arguments),
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            fmt::format(
+                "Number of arguments for function {} doesn't match: passed {} , should be {}",
+                getName(),
+                toString(number_of_arguments),
+                toString(expected_number_of_arguments)),
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
 FunctionBasePtr IFunctionBuilder::build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const
