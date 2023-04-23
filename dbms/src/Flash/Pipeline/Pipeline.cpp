@@ -195,21 +195,13 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
-EventPtr Pipeline::finalize(PipelineExecutorStatus & exec_status)
+EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
 {
+    assert(!isFineGrainedMode());
     if unlikely (exec_status.isCancelled())
         return nullptr;
     assert(!plan_nodes.empty());
-    /// This method will not be called for fine grained pipeline.
-    /// This method is used to execute two-stage logic and is not suitable for fine grained execution mode,
-    /// such as local/global join build and local/final agg spill.
-    ///  ┌─stage1─┐      ┌─stage2─┐
-    ///     task1──┐    ┌──►task1
-    ///     task2──┼──►─┼──►task2
-    ///     ...    │    │   ...
-    ///     taskn──┘    └──►taskm
-    assert(!isFineGrainedMode());
-    return plan_nodes.back()->sinkFinalize(exec_status);
+    return plan_nodes.back()->sinkComplete(exec_status);
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)

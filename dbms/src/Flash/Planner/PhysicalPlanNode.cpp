@@ -108,14 +108,14 @@ void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & contex
     builder.addPlanNode(shared_from_this());
 }
 
-EventPtr PhysicalPlanNode::sinkFinalize(PipelineExecutorStatus & exec_status)
+EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorStatus & exec_status)
 {
     if (getFineGrainedShuffle().enable())
         return nullptr;
-    return doSinkFinalize(exec_status);
+    return doSinkComplete(exec_status);
 }
 
-EventPtr PhysicalPlanNode::doSinkFinalize(PipelineExecutorStatus & /*exec_status*/)
+EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorStatus & /*exec_status*/)
 {
     return nullptr;
 }

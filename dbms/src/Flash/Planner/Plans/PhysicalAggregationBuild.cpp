@@ -63,7 +63,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     });
 }
 
-EventPtr PhysicalAggregationBuild::doSinkFinalize(PipelineExecutorStatus & exec_status)
+EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_status)
 {
     if (!aggregate_context->hasSpilledData())
         return nullptr;

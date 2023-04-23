@@ -56,7 +56,7 @@ public:
         size_t /*concurrency*/) override;
 
 private:
-    EventPtr doSinkFinalize(PipelineExecutorStatus & exec_status) override;
+    EventPtr doSinkComplete(PipelineExecutorStatus & exec_status) override;
 
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 

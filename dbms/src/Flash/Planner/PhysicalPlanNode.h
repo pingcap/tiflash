@@ -78,7 +78,7 @@ public:
         Context & /*context*/,
         PipelineExecutorStatus & /*exec_status*/);
 
-    EventPtr sinkFinalize(PipelineExecutorStatus & exec_status);
+    EventPtr sinkComplete(PipelineExecutorStatus & exec_status);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -100,7 +100,7 @@ public:
 
 protected:
     /// Used for non-fine grained shuffle sink plan node to trigger two-stage execution logic.
-    virtual EventPtr doSinkFinalize(PipelineExecutorStatus & /*exec_status*/);
+    virtual EventPtr doSinkComplete(PipelineExecutorStatus & /*exec_status*/);
 
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 
