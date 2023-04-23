@@ -40,8 +40,8 @@ extern const char random_pipeline_model_event_finish_failpoint[];
 
 void Event::addInput(const EventPtr & input)
 {
-    assert(status == EventStatus::INIT);
-    assert(input.get() != this);
+    RUNTIME_CHECK(status == EventStatus::INIT);
+    RUNTIME_CHECK(input.get() != this);
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
@@ -50,8 +50,8 @@ void Event::addInput(const EventPtr & input)
 void Event::addOutput(const EventPtr & output)
 {
     /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
-    assert(status == EventStatus::INIT || status == EventStatus::FINISHED);
-    assert(output.get() != this);
+    RUNTIME_CHECK(status == EventStatus::INIT || status == EventStatus::FINISHED);
+    RUNTIME_CHECK(output.get() != this);
     outputs.push_back(output);
 }
 
@@ -81,7 +81,7 @@ void Event::onInputFinish() noexcept
 
 bool Event::prepare()
 {
-    assert(status == EventStatus::INIT);
+    RUNTIME_CHECK(status == EventStatus::INIT);
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.

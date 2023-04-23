@@ -39,18 +39,18 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     BlockInputStreams mock_streams;
     auto & dag_context = *context.getDAGContext();
     size_t max_streams = getMockSourceStreamConcurrency(dag_context.initialize_concurrency, context.mockStorage()->getScanConcurrencyHint(table_scan.getLogicalTableID()));
-    assert(max_streams > 0);
+    RUNTIME_CHECK(max_streams > 0);
 
     if (context.mockStorage()->useDeltaMerge())
     {
-        assert(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
+        RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
         mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
     }
     else
     {
         /// build from user input blocks.
-        assert(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
+        RUNTIME_CHECK(context.mockStorage()->tableExists(table_scan.getLogicalTableID()));
         NamesAndTypes names_and_types;
         std::vector<std::shared_ptr<DB::MockTableScanBlockInputStream>> mock_table_scan_streams;
         if (context.isMPPTest())
@@ -65,8 +65,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
 
-    assert(!schema.empty());
-    assert(!mock_streams.empty());
+    RUNTIME_CHECK(!schema.empty());
+    RUNTIME_CHECK(!mock_streams.empty());
 
     // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
     return {std::move(schema), std::move(mock_streams)};
@@ -94,7 +94,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
-    assert(context.isTest());
+    RUNTIME_CHECK(context.isTest());
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
@@ -109,7 +109,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 
 void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
-    assert(pipeline.streams.empty());
+    RUNTIME_CHECK(pipeline.streams.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
@@ -178,7 +178,7 @@ const Block & PhysicalMockTableScan::getSampleBlock() const
 void PhysicalMockTableScan::updateStreams(Context & context)
 {
     mock_streams.clear();
-    assert(context.mockStorage()->tableExistsForDeltaMerge(table_id));
+    RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_id));
     mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &filter_conditions));
 }
 
@@ -200,7 +200,7 @@ bool PhysicalMockTableScan::hasFilterConditions() const
 
 const String & PhysicalMockTableScan::getFilterConditionsId() const
 {
-    assert(hasFilterConditions());
+    RUNTIME_CHECK(hasFilterConditions());
     return filter_conditions.executor_id;
 }
 

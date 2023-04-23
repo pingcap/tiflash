@@ -14,30 +14,37 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
-class FineGrainedPipelineEvent : public Event
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+
+class HashJoinBuildSink : public SinkOp
 {
 public:
-    FineGrainedPipelineEvent(
+    HashJoinBuildSink(
         PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        PipelineExecPtr && pipeline_exec_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
-        , pipeline_exec(std::move(pipeline_exec_))
+        const JoinPtr & join_ptr_,
+        size_t concurrency_build_index_)
+        : SinkOp(exec_status_, req_id)
+        , join_ptr(join_ptr_)
+        , concurrency_build_index(concurrency_build_index_)
     {
-        RUNTIME_CHECK(pipeline_exec);
+    }
+
+    String getName() const override
+    {
+        return "HashJoinBuildSink";
     }
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override;
+    OperatorStatus writeImpl(Block && block) override;
 
 private:
-    // The pipeline exec for executing the specific fine-grained partition.
-    PipelineExecPtr pipeline_exec;
+    JoinPtr join_ptr;
+    size_t concurrency_build_index;
 };
 } // namespace DB
