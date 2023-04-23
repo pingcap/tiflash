@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
@@ -27,6 +28,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 #include <memory>
@@ -106,6 +108,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     }
 
     auto read_buf = buffer.tryGetReadBuffer();
+    RUNTIME_CHECK_MSG(read_buf != nullptr, "failed to gen buffer for {}", region.toString(true));
     DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_writer->write(std::move(wb), global_context.getWriteLimiter());
