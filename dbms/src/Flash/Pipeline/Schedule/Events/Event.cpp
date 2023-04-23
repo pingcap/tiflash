@@ -132,6 +132,7 @@ void Event::schedule() noexcept
 void Event::scheduleTasks() noexcept
 {
     assert(status == EventStatus::SCHEDULED);
+    assert(tasks.size() == static_cast<size_t>(unfinished_tasks));
     if (!tasks.empty())
     {
         // If query has already been cancelled, we can skip scheduling tasks.
@@ -152,7 +153,7 @@ void Event::scheduleTasks() noexcept
 
 void Event::onTaskFinish() noexcept
 {
-    assert(status != EventStatus::FINISHED);
+    assert(status == EventStatus::SCHEDULED);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     assert(remaining_tasks >= 0);
     LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);

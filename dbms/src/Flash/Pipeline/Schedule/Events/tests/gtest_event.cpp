@@ -109,7 +109,7 @@ protected:
     void scheduleImpl() override
     {
         if (!with_tasks)
-            return {};
+            return;
 
         for (size_t i = 0; i < 10; ++i)
             addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
@@ -153,7 +153,7 @@ protected:
         {
             while (!exec_status.isCancelled())
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            return {};
+            return;
         }
 
         for (size_t i = 0; i < 10; ++i)
