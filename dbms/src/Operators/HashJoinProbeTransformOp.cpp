@@ -107,20 +107,17 @@ OperatorStatus HashJoinProbeTransformOp::scanHashMapData(Block & block)
 OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(const Block & block)
 {
     assert(status == ProbeStatus::PROBE);
-    auto rows = block.rows();
-    joined_rows += rows;
-    return rows > 0
-        ? OperatorStatus::HAS_OUTPUT
-        : OperatorStatus::NEED_INPUT;
+    if unlikely (!block)
+        return onProbeFinish(block);
+
+    joined_rows += block.rows();
+    return OperatorStatus::HAS_OUTPUT;
 }
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
-    probeOnTransform(block);
-    if unlikely (!block)
-        return onProbeFinish(block);
-
+    probeOnTransform(block); 
     return handleProbedBlock(block);
 }
 
@@ -133,9 +130,6 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
             return OperatorStatus::NEED_INPUT;
 
         block = join->joinBlock(probe_process_info);
-        if unlikely (!block)
-            return onProbeFinish(block);
-
         return handleProbedBlock(block);
     case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
         return scanHashMapData(block);
