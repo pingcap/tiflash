@@ -117,7 +117,7 @@ OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(const Block & block)
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
-    probeOnTransform(block); 
+    probeOnTransform(block);
     return handleProbedBlock(block);
 }
 
