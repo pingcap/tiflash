@@ -18,6 +18,7 @@
 
 namespace DB
 {
+// TODO support spill.
 HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     PipelineExecutorStatus & exec_status_,
     const String & req_id,

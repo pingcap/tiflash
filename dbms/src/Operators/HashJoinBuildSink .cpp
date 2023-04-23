@@ -17,6 +17,7 @@
 
 namespace DB
 {
+// TODO support spill.
 OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     try
