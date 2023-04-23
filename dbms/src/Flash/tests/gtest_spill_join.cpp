@@ -12,38 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
-#include <Functions/FunctionHelpers.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/ColumnGenerator.h>
-#include <TestUtils/ExecutorTestUtils.h>
-
-#include <ext/enumerate.h>
-#include <tuple>
+#include <Flash/tests/gtests_join.h>
 
 namespace DB
 {
 namespace tests
 {
-class SpillJoinTestRunner : public DB::tests::ExecutorTest
+class SpillJoinTestRunner : public DB::tests::JoinTestRunner
 {
 public:
     void initializeContext() override
     {
-        ExecutorTest::initializeContext();
+        JoinTestRunner::initializeContext();
     }
-
-    static constexpr size_t join_type_num = 7;
-
-    static constexpr tipb::JoinType join_types[join_type_num] = {
-        tipb::JoinType::TypeInnerJoin,
-        tipb::JoinType::TypeLeftOuterJoin,
-        tipb::JoinType::TypeRightOuterJoin,
-        tipb::JoinType::TypeSemiJoin,
-        tipb::JoinType::TypeAntiSemiJoin,
-        tipb::JoinType::TypeLeftOuterSemiJoin,
-        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-    };
 };
 
 TEST_F(SpillJoinTestRunner, SimpleJoinSpill)
