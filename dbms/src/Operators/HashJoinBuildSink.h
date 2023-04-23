@@ -25,7 +25,7 @@ class HashJoinBuildSink : public SinkOp
 {
 public:
     HashJoinBuildSink(
-       PipelineExecutorStatus & exec_status_,
+        PipelineExecutorStatus & exec_status_,
         const String & req_id,
         const JoinPtr & join_ptr_,
         size_t concurrency_build_index_)
