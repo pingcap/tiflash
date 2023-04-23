@@ -227,7 +227,9 @@ void JoinPartition::initMap()
     {
         if (strictness == ASTTableJoin::Strictness::Any)
             initImpl(maps_any_full, join_map_method);
-        else
+        else if (kind == ASTTableJoin::Kind::RightOuter && has_other_condition)
+            initImpl(maps_all_full_with_row_flag, join_map_method);
+	else
             initImpl(maps_all_full, join_map_method);
     }
 }
@@ -678,6 +680,8 @@ Map & JoinPartition::getHashMap()
     {
         if (strictness == ASTTableJoin::Strictness::Any)
             return getMapImpl<Map>(maps_any_full, join_map_method);
+	else if (kind == ASTTableJoin::Kind::RightOuter && has_other_condition)
+            return getMapImpl<Map>(maps_all_full_with_row_flag, join_map_method);
         else
             return getMapImpl<Map>(maps_all_full, join_map_method);
     }
@@ -724,6 +728,8 @@ void JoinPartition::insertBlockIntoMaps(
     {
         if (current_join_partition->strictness == ASTTableJoin::Strictness::Any)
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::Any, MapsAnyFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
+	else if (current_kind == ASTTableJoin::Kind::RightOuter && current_join_partition->has_other_condition)
+            insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFull>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
     }
