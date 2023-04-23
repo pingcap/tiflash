@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
@@ -86,7 +87,7 @@ struct SortCursorImpl
 
             sort_columns.push_back(block.safeGetByPosition(column_number).column.get());
 
-            need_collation[j] = desc[j].collator != nullptr && typeid_cast<const ColumnString *>(sort_columns.back()); /// TODO Nullable(String)
+            need_collation[j] = desc[j].collator != nullptr && typeid_cast<const ColumnString *>(std::get<0>(removeNullable(sort_columns.back())));
             has_collation |= need_collation[j];
         }
 

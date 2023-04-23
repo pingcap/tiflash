@@ -178,6 +178,8 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
+
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
 }
 
 
