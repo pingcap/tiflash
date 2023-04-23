@@ -386,17 +386,19 @@ try
             persister.persist(*region);
             regions.emplace(region->id(), region);
         }
+        ASSERT_EQ(regions.size(), test_scales.size());
     }
 
-    RegionMap new_regions;
+    RegionMap restored_regions;
     {
         RegionPersister persister(ctx, region_manager);
-        new_regions = persister.restore(*mocked_path_pool, nullptr, config);
+        restored_regions = persister.restore(*mocked_path_pool, nullptr, config);
     }
+    ASSERT_EQ(restored_regions.size(), regions.size());
     for (const auto & [region_id, region] : regions)
     {
-        ASSERT_NE(new_regions.find(region_id), new_regions.end()) << region_id;
-        auto & new_region = new_regions.at(region_id);
+        ASSERT_NE(restored_regions.find(region_id), restored_regions.end()) << region_id;
+        auto & new_region = restored_regions.at(region_id);
         ASSERT_EQ(new_region->id(), region_id);
         ASSERT_EQ(new_region->confVer(), region->confVer()) << region_id;
         ASSERT_EQ(new_region->dataSize(), region->dataSize()) << region_id;
