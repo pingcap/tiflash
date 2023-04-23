@@ -69,6 +69,7 @@ static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 using BlobStatPtr = BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
 static_assert(!std::is_same_v<ChecksumClass, Digest::XXH3>, "The checksum must support streaming checksum");
+static_assert(!std::is_same_v<ChecksumClass, Digest::City128>, "The checksum must support streaming checksum");
 
 /**********************
   * BlobStore methods *
@@ -573,7 +574,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
+        LOG_ERROR(log, "write failed, blob_id={} offset_in_file={} size={} actually_allocated_size={} msg={}", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
