@@ -237,6 +237,7 @@ public:
 
     void finishOneProbe();
     void waitUntilAllProbeFinished() const;
+    bool isAllProbeFinished() const;
 
     void finishOneNonJoin(size_t partition_index);
 

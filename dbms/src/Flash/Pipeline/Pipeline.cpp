@@ -23,6 +23,7 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Settings.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -104,7 +105,7 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
          *     ```
          */
 
-        // If the outputs is fine grained model, the intputs must also be.
+        // If the outputs is fine grained mode, the intputs must also be.
         RUNTIME_CHECK(inputs.is_fine_grained || !is_fine_grained);
         for (const auto & output : events)
         {
@@ -116,6 +117,10 @@ void PipelineEvents::mapInputs(const PipelineEvents & inputs)
 
 void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
+    assert(plan_node);
+    /// For fine grained mode, all plan node should enable fine grained shuffle.
+    if (!plan_node->getFineGrainedShuffle().enable())
+        is_fine_grained_mode = false;
     plan_nodes.push_back(plan_node);
 }
 
@@ -188,9 +193,7 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
  */
 bool Pipeline::isFineGrainedMode() const
 {
-    RUNTIME_CHECK(!plan_nodes.empty());
-    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
-    return plan_nodes.front()->getFineGrainedShuffle().enable();
+    return is_fine_grained_mode;
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
@@ -211,12 +214,12 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
-        LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
+        LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
         self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
-        LOG_DEBUG(log, "Execute in non fine grained model and generate one plain pipeline event");
+        LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
 }
@@ -230,7 +233,7 @@ PipelineEvents Pipeline::doToEvents(PipelineExecutorStatus & status, Context & c
     return self_events;
 }
 
-bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
+bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings & settings)
 {
     bool is_supported = true;
     traverseExecutors(
@@ -252,6 +255,10 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeSort:
                 // TODO support non fine grained shuffle.
                 is_supported = FineGrainedShuffle(&executor).enable();
+                return is_supported;
+            case tipb::ExecType::TypeJoin:
+                // TODO support spill.
+                is_supported = (settings.max_bytes_before_external_join == 0);
                 return is_supported;
             default:
                 is_supported = false;

@@ -27,6 +27,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
+#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -251,16 +253,29 @@ void PhysicalJoin::buildPipeline(
     PipelineExecutorStatus & exec_status)
 {
     // Break the pipeline for join build.
-    // FIXME: Should be newly created PhysicalJoinBuild.
-    auto join_build_builder = builder.breakPipeline(shared_from_this());
+    auto join_build = std::make_shared<PhysicalJoinBuild>(
+        executor_id,
+        build()->getSchema(),
+        fine_grained_shuffle,
+        log->identifier(),
+        build(),
+        join_ptr,
+        build_side_prepare_actions);
+    auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
     build()->buildPipeline(join_build_builder, context, exec_status);
     join_build_builder.build();
+
     // Join probe pipeline.
     probe()->buildPipeline(builder, context, exec_status);
-    // FIXME: Should be newly created PhysicalJoinProbe.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    auto join_probe = std::make_shared<PhysicalJoinProbe>(
+        executor_id,
+        schema,
+        log->identifier(),
+        probe(),
+        join_ptr,
+        probe_side_prepare_actions);
+    builder.addPlanNode(join_probe);
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)
