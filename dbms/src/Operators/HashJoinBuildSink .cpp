@@ -20,22 +20,13 @@ namespace DB
 // TODO support spill.
 OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
-    try
+    if unlikely (!block)
     {
-        if (!block)
-        {
-            join_ptr->finishOneBuild();
-            return OperatorStatus::FINISHED;
-        }
-        join_ptr->insertFromBlock(block, concurrency_build_index);
-        block.clear();
-        return OperatorStatus::NEED_INPUT;
+        join_ptr->finishOneBuild();
+        return OperatorStatus::FINISHED;
     }
-    catch (...)
-    {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        join_ptr->meetError(error_message);
-        throw Exception(error_message);
-    }
+    join_ptr->insertFromBlock(block, concurrency_build_index);
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB

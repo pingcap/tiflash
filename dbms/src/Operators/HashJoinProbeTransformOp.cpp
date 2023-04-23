@@ -54,7 +54,7 @@ void HashJoinProbeTransformOp::probeOnTransform(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
-    if (block)
+    if likely (block)
     {
         join->checkTypes(block);
         probe_process_info.resetBlock(std::move(block), 0);
