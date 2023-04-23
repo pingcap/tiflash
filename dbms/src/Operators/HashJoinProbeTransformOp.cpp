@@ -104,7 +104,7 @@ OperatorStatus HashJoinProbeTransformOp::scanHashMapData(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(const Block & block)
+OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     if unlikely (!block)

@@ -53,7 +53,7 @@ private:
 
     OperatorStatus onProbeFinish(Block & block);
 
-    OperatorStatus handleProbedBlock(const Block & block);
+    OperatorStatus handleProbedBlock(Block & block);
 
 private:
     JoinPtr join;
