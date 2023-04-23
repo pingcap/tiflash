@@ -68,6 +68,7 @@ static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
 using BlobStatPtr = BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
+static_assert(!std::is_same_v<ChecksumClass, Digest::XXH3>, "The checksum must support streaming checksum");
 
 /**********************
   * BlobStore methods *
@@ -196,11 +197,16 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, const Write
             try
             {
                 UInt64 buffer_begin_in_page = 0, buffer_end_in_page = 0;
+
                 while (true)
                 {
+                    // The write batch data size is large, we do NOT copy the data into a temporary buffer in order to
+                    // make the memory usage of tiflash more smooth. Instead, we process the data in ReadBuffer in a
+                    // streaming manner.
                     BufferBase::Buffer data_buf = write.read_buffer->buffer();
                     buffer_end_in_page = buffer_begin_in_page + data_buf.size();
 
+                    // TODO: Add static check to make sure the checksum support streaming
                     digest.update(data_buf.begin(), data_buf.size()); // the checksum of the whole page
 
                     // the checksum of each field
@@ -821,31 +827,19 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
                 auto field_checksum = digest.checksum();
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
-                    // throw Exception(ErrorCodes::CHECKSUM_DOESNT_MATCH,
-                    //                 "Reading with fields meet checksum not match "
-                    //                 "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                    //                 "[field_index={}] [field_offset={}] [field_size={}] "
-                    //                 "[entry={}] [file={}]",
-                    //                 page_id_v3,
-                    //                 expect_checksum,
-                    //                 field_checksum,
-                    //                 field_index,
-                    //                 beg_offset,
-                    //                 size_to_read,
-                    //                 entry,
-                    //                 blob_file->getPath());
-                    LOG_ERROR(log, "Reading with fields meet checksum not match "
-                                   "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                                   "[field_index={}] [field_offset={}] [field_size={}] "
-                                   "[entry={}] [file={}]",
-                              page_id_v3,
-                              expect_checksum,
-                              field_checksum,
-                              field_index,
-                              beg_offset,
-                              size_to_read,
-                              entry,
-                              blob_file->getPath());
+                    throw Exception(ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                                    "Reading with fields meet checksum not match "
+                                    "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
+                                    "[field_index={}] [field_offset={}] [field_size={}] "
+                                    "[entry={}] [file={}]",
+                                    page_id_v3,
+                                    expect_checksum,
+                                    field_checksum,
+                                    field_index,
+                                    beg_offset,
+                                    size_to_read,
+                                    entry,
+                                    blob_file->getPath());
                 }
             }
 
