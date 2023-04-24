@@ -1058,10 +1058,10 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
     bool ok = true;
     while (ok)
     {
-        typename MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -1078,8 +1078,9 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
                     return PageIdAndEntry{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -1125,10 +1126,10 @@ PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds 
         bool ok = true;
         while (ok)
         {
-            typename MVCCMapType::const_iterator iter;
+            VersionedPageEntriesPtr iter_v;
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter = mvcc_table_directory.find(id_to_resolve);
+                auto iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
                     if (throw_on_not_exist)
@@ -1140,8 +1141,9 @@ PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds 
                         return false;
                     }
                 }
+                iter_v = iter->second;
             }
-            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
             switch (resolve_state)
             {
             case ResolveResult::TO_NORMAL:
@@ -1196,10 +1198,10 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
     bool keep_resolve = true;
     while (keep_resolve)
     {
-        typename MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -1211,8 +1213,9 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
                     return Trait::PageIdTrait::getInvalidID();
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -1731,20 +1734,22 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
     std::map<PageId, std::tuple<PageId, PageVersion>> ref_ids_maybe_rewrite;
 
     {
-        typename MVCCMapType::const_iterator iter;
+        PageId page_id;
+        VersionedPageEntriesPtr version_entries;
+
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.cbegin();
+            auto iter = mvcc_table_directory.cbegin();
             if (iter == mvcc_table_directory.end())
                 return {blob_versioned_entries, total_page_size};
+            page_id = iter->first;
+            version_entries = iter->second;
         }
 
         while (true)
         {
             // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
             // do scan on the version list without lock on `mvcc_table_directory`.
-            auto page_id = iter->first;
-            const auto & version_entries = iter->second;
             fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
                 if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
                 {
@@ -1761,9 +1766,11 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter++;
+                auto iter = mvcc_table_directory.upper_bound(page_id);
                 if (iter == mvcc_table_directory.end())
                     break;
+                page_id = iter->first;
+                version_entries = iter->second;
             }
         }
     }
@@ -1775,13 +1782,14 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
     {
         const auto ori_id = std::get<0>(ori_id_ver);
         const auto ver = std::get<1>(ori_id_ver);
-        typename MVCCMapType::const_iterator page_iter;
+
+        VersionedPageEntriesPtr version_entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            page_iter = mvcc_table_directory.find(ori_id);
+            auto page_iter = mvcc_table_directory.find(ori_id);
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
+            version_entries = page_iter->second;
         }
-        const auto & version_entries = page_iter->second;
         // After storing all data in one PageStorage instance, we will run full gc
         // with external pages. Skip rewriting if it is an external pages.
         if (version_entries->isExternalPage())
