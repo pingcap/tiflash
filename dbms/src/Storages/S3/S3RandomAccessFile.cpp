@@ -100,6 +100,7 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
         return -1;
     }
     auto elapsed_ns = sw.elapsed();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
     if (elapsed_ns > 10000000) // 10ms
     {
         LOG_DEBUG(
@@ -154,6 +155,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         return -1;
     }
     auto elapsed_ns = sw.elapsed();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
     if (elapsed_ns > 10000000) // 10ms
     {
         LOG_DEBUG(
