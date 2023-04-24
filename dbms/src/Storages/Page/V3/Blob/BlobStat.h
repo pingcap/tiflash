@@ -39,18 +39,6 @@ public:
         READ_ONLY = 2
     };
 
-    static String blobTypeToString(BlobStatType type)
-    {
-        switch (type)
-        {
-        case BlobStatType::NORMAL:
-            return "normal";
-        case BlobStatType::READ_ONLY:
-            return "read only";
-        }
-        return "Invalid";
-    }
-
     struct BlobStat
     {
         const BlobFileId id;

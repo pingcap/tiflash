@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
@@ -128,6 +129,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     }
 
     auto read_buf = buffer.tryGetReadBuffer();
+    RUNTIME_CHECK_MSG(read_buf != nullptr, "failed to gen buffer for {}", region.toString(true));
     if (page_writer)
     {
         DB::WriteBatch wb{ns_id};
