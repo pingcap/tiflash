@@ -126,13 +126,13 @@ void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 
 void Pipeline::addChild(const PipelinePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
     children.push_back(child);
 }
 
 Block Pipeline::getSampleBlock() const
 {
-    assert(!plan_nodes.empty());
+    RUNTIME_CHECK(!plan_nodes.empty());
     return plan_nodes.back()->getSampleBlock();
 }
 
@@ -160,14 +160,14 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 
 void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
 {
-    assert(!plan_nodes.empty());
+    RUNTIME_CHECK(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_queue, log, plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
-    assert(!plan_nodes.empty());
+    RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
     {
@@ -200,7 +200,7 @@ Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, si
 {
     Events all_events;
     doToEvents(status, context, concurrency, all_events);
-    assert(!all_events.empty());
+    RUNTIME_CHECK(!all_events.empty());
     return all_events;
 }
 
@@ -208,7 +208,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
 {
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
-    assert(!plan_nodes.empty());
+    RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);

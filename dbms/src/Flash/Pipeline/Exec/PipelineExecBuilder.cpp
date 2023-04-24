@@ -18,19 +18,19 @@ namespace DB
 {
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
-    assert(!source_op && source_op_);
+    RUNTIME_CHECK(!source_op && source_op_);
     source_op = std::move(source_op_);
 }
 void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
-    assert(source_op && transform_op);
+    RUNTIME_CHECK(source_op && transform_op);
     Block header = getCurrentHeader();
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
-    assert(!sink_op && sink_op_);
+    RUNTIME_CHECK(!sink_op && sink_op_);
     Block header = getCurrentHeader();
     sink_op_->setHeader(header);
     sink_op = std::move(sink_op_);
@@ -38,7 +38,7 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 
 PipelineExecPtr PipelineExecBuilder::build()
 {
-    assert(source_op && sink_op);
+    RUNTIME_CHECK(source_op && sink_op);
     return std::make_unique<PipelineExec>(
         std::move(source_op),
         std::move(transform_ops),
@@ -53,22 +53,21 @@ Block PipelineExecBuilder::getCurrentHeader() const
         return transform_ops.back()->getHeader();
     else
     {
-        assert(source_op);
+        RUNTIME_CHECK(source_op);
         return source_op->getHeader();
     }
 }
 
 void PipelineExecGroupBuilder::init(size_t init_concurrency)
 {
-    assert(concurrency == 0);
-    assert(init_concurrency > 0);
+    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
     concurrency = init_concurrency;
     group.resize(concurrency);
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    assert(concurrency > 0);
+    RUNTIME_CHECK(concurrency > 0);
     PipelineExecGroup pipeline_exec_group;
     for (auto & builder : group)
         pipeline_exec_group.push_back(builder.build());
@@ -77,7 +76,7 @@ PipelineExecGroup PipelineExecGroupBuilder::build()
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    assert(!group.empty());
+    RUNTIME_CHECK(!group.empty());
     return group.back().getCurrentHeader();
 }
 } // namespace DB

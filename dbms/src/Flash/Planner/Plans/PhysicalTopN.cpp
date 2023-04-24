@@ -33,7 +33,7 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     const tipb::TopN & top_n,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     if (unlikely(top_n.order_by_size() == 0))
     {
