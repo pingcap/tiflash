@@ -532,6 +532,7 @@ void benchS3(WorkloadOptions & opts)
     }
 
     DB::StorageS3Config config = {
+        .verbose = true,
         .endpoint = opts.s3_endpoint,
         .bucket = opts.s3_bucket,
         .access_key_id = opts.s3_access_key_id,
@@ -541,6 +542,19 @@ void benchS3(WorkloadOptions & opts)
     std::cout << fmt::format("StorageS3Config: {}", config.toString()) << std::endl;
     DB::S3::ClientFactory::instance().init(config);
 
+    String local_fname = "checksum";
+    {
+        std::ofstream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
+        ostr << "0123456789abcdefghijklmnopq";
+    }
+    S3::uploadFile(*DB::S3::ClientFactory::instance().sharedTiFlashClient(), local_fname, local_fname, config.verify_checksum_after_uploading);
+    
+    S3::downloadFile(
+        *DB::S3::ClientFactory::instance().sharedTiFlashClient(), 
+        "checksum_download",
+        local_fname,
+        DB::S3::ClientFactory::instance().verifyChecksumAfterDownloading());
+    return;
     // Threads for GetObject
     S3FileCachePool::initialize(
         /*max_threads*/ opts.s3_get_concurrency,
