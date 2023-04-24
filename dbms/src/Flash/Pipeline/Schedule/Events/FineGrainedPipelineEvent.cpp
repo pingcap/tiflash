@@ -17,10 +17,8 @@
 
 namespace DB
 {
-std::vector<TaskPtr> FineGrainedPipelineEvent::scheduleImpl()
+void FineGrainedPipelineEvent::scheduleImpl()
 {
-    std::vector<TaskPtr> tasks;
-    tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
-    return tasks;
+    addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
 }
 } // namespace DB
