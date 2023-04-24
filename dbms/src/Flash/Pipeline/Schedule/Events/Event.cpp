@@ -41,7 +41,7 @@ extern const char random_pipeline_model_event_finish_failpoint[];
 void Event::addInput(const EventPtr & input) noexcept
 {
     RUNTIME_ASSERT(status == EventStatus::INIT);
-    assert(input.get() != this);
+    RUNTIME_ASSERT(input.get() != this);
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
@@ -51,20 +51,20 @@ void Event::addOutput(const EventPtr & output) noexcept
 {
     /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
     RUNTIME_ASSERT(status == EventStatus::INIT || status == EventStatus::FINISHED);
-    assert(output.get() != this);
+    RUNTIME_ASSERT(output.get() != this);
     outputs.push_back(output);
 }
 
 void Event::insertEvent(const EventPtr & insert_event) noexcept
 {
     RUNTIME_ASSERT(status == EventStatus::FINISHED);
-    assert(insert_event);
+    RUNTIME_ASSERT(insert_event);
     /// eventA───────►eventB ===> eventA─────────────►eventB
     ///                             │                    ▲
     ///                             └────►insert_event───┘
     for (const auto & output : outputs)
     {
-        assert(output);
+        RUNTIME_ASSERT(output);
         output->addInput(insert_event);
     }
     insert_event->addInput(shared_from_this());
@@ -177,7 +177,7 @@ void Event::finish() noexcept
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {
-            assert(output);
+            RUNTIME_ASSERT(output);
             output->onInputFinish();
             output.reset();
         }
