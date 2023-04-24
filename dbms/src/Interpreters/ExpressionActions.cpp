@@ -366,6 +366,8 @@ void ExpressionAction::execute(Block & block) const
 
     case CONVERT_TO_NULLABLE:
     {
+        // for expand usage, when original col is const non-null value, the inserted null value will break its const attribute in global scope.
+        block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst();
         if (!block.getByName(col_need_to_nullable).column->isColumnNullable())
             convertColumnToNullable(block.getByName(col_need_to_nullable));
         break;

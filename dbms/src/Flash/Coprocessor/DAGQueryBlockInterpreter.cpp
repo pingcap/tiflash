@@ -570,8 +570,13 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
     for (auto i = 0; i < first_proj_level.exprs().size(); i++)
     {
         auto expr = first_proj_level.exprs().Get(i);
-        // record the ref-col nullable attributes for header.
-        if (static_cast<size_t>(i) < input_col_size && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
+        /// record the ref-col nullable attributes for header.
+        /// case1: origin col is a normal col, if it's not-null, make it nullable if expr specified.
+        /// case2: origin col is a const col, <non-null value>, it's must be not-null, make it nullable and break const attribute if expr specified.
+        /// case3: origin col is a const col, <null value>, it's must be nullable, nothing to do.
+        if (static_cast<size_t>(i) < input_col_size
+            && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0)
+            && !dag_analyzer.getCurrentInputColumns()[i].type->isNullable())
             dag_analyzer.addNullableActionForColumnRef(expr, header_step.actions);
     }
     NamesAndTypes new_source_cols;

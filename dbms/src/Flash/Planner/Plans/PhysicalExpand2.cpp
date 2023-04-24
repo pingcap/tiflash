@@ -60,7 +60,9 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     {
         auto expr = first_proj_level.exprs().Get(i);
         // record the ref-col nullable attributes for header.
-        if (static_cast<size_t>(i) < input_col_size && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
+        if (static_cast<size_t>(i) < input_col_size
+            && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0)
+            && !child->getSchema()[i].type->isNullable())
             analyzer.addNullableActionForColumnRef(expr, header_actions);
     }
     NamesAndTypes new_source_cols;
