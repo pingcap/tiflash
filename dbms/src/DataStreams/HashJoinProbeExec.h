@@ -32,7 +32,7 @@ public:
     static HashJoinProbeExecPtr build(
         const JoinPtr & join,
         const BlockInputStreamPtr & probe_stream,
-        size_t non_joined_stream_index,
+        size_t scan_hash_map_after_probe_stream_index,
         size_t max_block_size);
 
     using CancellationHook = std::function<bool()>;
@@ -41,9 +41,9 @@ public:
         const JoinPtr & join_,
         const BlockInputStreamPtr & restore_build_stream_,
         const BlockInputStreamPtr & probe_stream_,
-        bool need_output_non_joined_data_,
-        size_t non_joined_stream_index_,
-        const BlockInputStreamPtr & non_joined_stream_,
+        bool need_scan_hash_map_after_probe_,
+        size_t scan_hash_map_after_probe_stream_index,
+        const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
         size_t max_block_size_);
 
     void waitUntilAllBuildFinished();
@@ -65,12 +65,12 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onProbeFinish();
 
-    bool needOutputNonJoinedData() { return need_output_non_joined_data; }
-    void onNonJoinedStart();
-    Block fetchNonJoined();
+    bool needScanHashMap() { return need_scan_hash_map_after_probe; }
+    void onScanHashMapAfterProbeStart();
+    Block fetchScanHashMapData();
     // Returns true if the probe_exec ends.
     // Returns false if the probe_exec continues to execute.
-    bool onNonJoinedFinish();
+    bool onScanHashMapAfterProbeFinish();
 
     void setCancellationHook(CancellationHook cancellation_hook)
     {
@@ -89,9 +89,9 @@ private:
 
     const BlockInputStreamPtr probe_stream;
 
-    const bool need_output_non_joined_data;
-    const size_t non_joined_stream_index;
-    const BlockInputStreamPtr non_joined_stream;
+    const bool need_scan_hash_map_after_probe;
+    const size_t scan_hash_map_after_probe_stream_index;
+    const BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     const size_t max_block_size;
 

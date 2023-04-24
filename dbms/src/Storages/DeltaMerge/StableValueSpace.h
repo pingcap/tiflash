@@ -110,7 +110,7 @@ public:
      */
     size_t getDMFilesBytes() const;
 
-    void enableDMFilesGC();
+    void enableDMFilesGC(DMContext & context);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 

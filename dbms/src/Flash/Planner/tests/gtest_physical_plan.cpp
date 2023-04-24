@@ -403,7 +403,7 @@ CreatingSets
     MockExchangeReceiver
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
     Expression: <append join key and join filters for probe side>
      Expression: <final projection>
       MockExchangeReceiver)",
@@ -430,7 +430,7 @@ CreatingSets
     MockExchangeReceiver
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>
     Expression: <append join key and join filters for probe side>
      Expression: <final projection>
       MockExchangeReceiver)",
@@ -457,7 +457,7 @@ CreatingSets
     MockExchangeReceiver
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
+   HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = true>
     Expression: <append join key and join filters for probe side>
      Expression: <final projection>
       MockExchangeReceiver)",
@@ -502,16 +502,16 @@ CreatingSets
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = true>
+     HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
       Expression: <append join key and join filters for probe side>
        Expression: <final projection>
         MockTableScan
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = true>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = true>
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan)",
@@ -562,16 +562,16 @@ CreatingSets
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = true>
+     HashJoinProbe: <join probe, join_executor_id = Join_5, scan_hash_map_after_probe = true>
       Expression: <append join key and join filters for probe side>
        Expression: <final projection>
         MockTableScan
  Expression: <final projection>
   Expression: <remove useless column after join>
-   HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
+   HashJoinProbe: <join probe, join_executor_id = Join_6, scan_hash_map_after_probe = false>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = true>
+      HashJoinProbe: <join probe, join_executor_id = Join_4, scan_hash_map_after_probe = true>
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan)",

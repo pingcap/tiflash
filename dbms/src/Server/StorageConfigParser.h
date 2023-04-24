@@ -126,6 +126,7 @@ struct StorageRemoteCacheConfig
     UInt64 capacity = 0;
     UInt64 dtfile_level = 100;
     double delta_rate = 0.1;
+    double reserved_rate = 0.1;
 
     bool isCacheEnabled() const;
     void initCacheDir() const;
@@ -133,7 +134,10 @@ struct StorageRemoteCacheConfig
     String getPageCacheDir() const;
     UInt64 getDTFileCapacity() const;
     UInt64 getPageCapacity() const;
+    UInt64 getReservedCapacity() const;
     void parse(const String & content, const LoggerPtr & log);
+
+    std::pair<Strings, std::vector<size_t>> getCacheDirInfos(bool is_compute_mode) const;
 };
 
 struct TiFlashStorageConfig

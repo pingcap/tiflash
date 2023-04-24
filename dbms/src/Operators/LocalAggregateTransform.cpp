@@ -15,14 +15,16 @@
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Operators/LocalAggregateTransform.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace
 {
-/// for local agg, the concurrency of build and convert must both be 1.
+/// for local agg, the concurrency of build and convergent must both be 1.
 constexpr size_t local_concurrency = 1;
 
-/// for local agg, the task_index of build and convert must both be 0.
+/// for local agg, the task_index of build and convergent must both be 0.
 constexpr size_t task_index = 0;
 } // namespace
 
@@ -42,24 +44,55 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     switch (status)
     {
     case LocalAggStatus::build:
-        if (unlikely(!block))
+        if unlikely (!block)
         {
-            // status from build to convert.
-            status = LocalAggStatus::convert;
-            agg_context.initConvergent();
-            if likely (!agg_context.useNullSource())
-            {
-                RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
-                block = agg_context.readForConvergent(task_index);
-            }
-            return OperatorStatus::HAS_OUTPUT;
+            return agg_context.hasSpilledData()
+                ? fromBuildToFinalSpillOrRestore()
+                : fromBuildToConvergent(block);
         }
         agg_context.buildOnBlock(task_index, block);
         block.clear();
-        return OperatorStatus::NEED_INPUT;
-    case LocalAggStatus::convert:
-        throw Exception("Unexpected status: convert");
+        return tryFromBuildToSpill();
+    default:
+        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
+}
+
+OperatorStatus LocalAggregateTransform::fromBuildToConvergent(Block & block)
+{
+    // status from build to convergent.
+    assert(status == LocalAggStatus::build);
+    status = LocalAggStatus::convergent;
+    agg_context.initConvergent();
+    RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
+    block = agg_context.readForConvergent(task_index);
+    return OperatorStatus::HAS_OUTPUT;
+}
+
+OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
+{
+    assert(status == LocalAggStatus::build);
+    if (agg_context.needSpill(task_index, /*try_mark_need_spill=*/true))
+    {
+        status = LocalAggStatus::final_spill;
+    }
+    else
+    {
+        restorer = agg_context.buildLocalRestorer();
+        status = LocalAggStatus::restore;
+    }
+    return OperatorStatus::IO;
+}
+
+OperatorStatus LocalAggregateTransform::tryFromBuildToSpill()
+{
+    assert(status == LocalAggStatus::build);
+    if (agg_context.needSpill(task_index))
+    {
+        status = LocalAggStatus::spill;
+        return OperatorStatus::IO;
+    }
+    return OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
@@ -68,10 +101,43 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     {
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
-    case LocalAggStatus::convert:
-        if likely (!agg_context.useNullSource())
-            block = agg_context.readForConvergent(task_index);
+    case LocalAggStatus::convergent:
+        block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
+    case LocalAggStatus::restore:
+        return restorer->tryPop(block)
+            ? OperatorStatus::HAS_OUTPUT
+            : OperatorStatus::IO;
+    default:
+        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
+    }
+}
+
+OperatorStatus LocalAggregateTransform::executeIOImpl()
+{
+    switch (status)
+    {
+    case LocalAggStatus::spill:
+    {
+        agg_context.spillData(task_index);
+        status = LocalAggStatus::build;
+        return OperatorStatus::NEED_INPUT;
+    }
+    case LocalAggStatus::final_spill:
+    {
+        agg_context.spillData(task_index);
+        restorer = agg_context.buildLocalRestorer();
+        status = LocalAggStatus::restore;
+        return OperatorStatus::IO;
+    }
+    case LocalAggStatus::restore:
+    {
+        assert(restorer);
+        restorer->loadBucketData();
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    default:
+        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
 }
 

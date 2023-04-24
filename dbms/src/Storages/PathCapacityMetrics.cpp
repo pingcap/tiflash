@@ -24,6 +24,7 @@
 #include <sys/statvfs.h>
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,7 @@ namespace CurrentMetrics
 extern const Metric StoreSizeCapacity;
 extern const Metric StoreSizeAvailable;
 extern const Metric StoreSizeUsed;
+extern const Metric StoreSizeUsedRemote;
 } // namespace CurrentMetrics
 
 
@@ -48,8 +50,8 @@ PathCapacityMetrics::PathCapacityMetrics(
     const std::vector<size_t> & main_capacity_quota_,
     const Strings & latest_paths_,
     const std::vector<size_t> & latest_capacity_quota_,
-    String remote_cache_path,
-    size_t remote_cache_capacity)
+    const Strings & remote_cache_paths,
+    const std::vector<size_t> & remote_cache_capacity_quota_)
     : capacity_quota(capacity_quota_)
     , log(Logger::get())
 {
@@ -81,9 +83,9 @@ PathCapacityMetrics::PathCapacityMetrics(
             all_paths[latest_paths_[i]] = safeGetQuota(latest_capacity_quota_, i);
         }
     }
-    if (!remote_cache_path.empty())
+    for (size_t i = 0; i < remote_cache_paths.size(); ++i)
     {
-        all_paths[remote_cache_path] = remote_cache_capacity;
+        all_paths[remote_cache_paths[i]] = safeGetQuota(remote_cache_capacity_quota_, i);
     }
 
     for (auto && [path, quota] : all_paths)
@@ -117,6 +119,52 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
 
     // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes -= used_bytes;
+}
+
+void PathCapacityMetrics::addRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes)
+{
+    if (used_bytes == 0)
+        return;
+    std::unique_lock<std::mutex> lock(mutex);
+    auto iter = keyspace_id_to_used_bytes.emplace(keyspace_id, 0);
+    iter.first->second += used_bytes;
+}
+
+void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes)
+{
+    std::unique_lock<std::mutex> lock(mutex);
+    auto iter = keyspace_id_to_used_bytes.find(keyspace_id);
+    RUNTIME_CHECK(iter != keyspace_id_to_used_bytes.end(), keyspace_id);
+    iter->second -= used_bytes;
+    RUNTIME_CHECK_MSG(iter->second >= 0, "Remote size {} is invalid after remove {} bytes for keyspace {}", iter->second, used_bytes, keyspace_id);
+    if (iter->second == 0)
+        keyspace_id_to_used_bytes.erase(iter);
+}
+
+std::unordered_map<KeyspaceID, UInt64> PathCapacityMetrics::getKeyspaceUsedSizes()
+{
+    size_t local_toal_size = 0;
+    for (auto & path_info : path_infos)
+    {
+        local_toal_size += path_info.used_bytes;
+    }
+
+    std::unordered_map<KeyspaceID, UInt64> keyspace_id_to_total_size;
+
+    std::unique_lock<std::mutex> lock(mutex);
+
+    size_t remote_total_size = 0;
+    for (auto & [keyspace_id, size] : keyspace_id_to_used_bytes)
+    {
+        remote_total_size += size;
+    }
+
+    for (auto & [keyspace_id, size] : keyspace_id_to_used_bytes)
+    {
+        // cannot get accurate local used size for each keyspace, so we use a simple way to estimate it.
+        keyspace_id_to_total_size.emplace(keyspace_id, size + static_cast<size_t>(size * 1.0 / remote_total_size * local_toal_size));
+    }
+    return keyspace_id_to_total_size;
 }
 
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
@@ -187,7 +235,6 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
         total_stat.capacity_size = capacity_quota;
         total_stat.avail_size = std::min(total_stat.avail_size, total_stat.capacity_size - total_stat.used_size);
     }
-
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
 
@@ -201,19 +248,33 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
             formatReadableSizeWithBinarySuffix(total_stat.avail_size),
             formatReadableSizeWithBinarySuffix(total_stat.used_size),
             formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
-    total_stat.ok = 1;
 
+    // Just report local disk capacity and available size is enough
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
 
+    size_t remote_used_size = 0;
     if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
     {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            for (const auto & [keyspace_id, used_bytes] : keyspace_id_to_used_bytes)
+            {
+                UNUSED(keyspace_id);
+                total_stat.used_size += used_bytes;
+                remote_used_size += used_bytes;
+            }
+        }
+
         // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
         // EiB is not supported by TiUP now. https://github.com/pingcap/tiup/issues/2139
         total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
         total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     }
+    CurrentMetrics::set(CurrentMetrics::StoreSizeUsedRemote, remote_used_size);
+
+    total_stat.ok = 1;
 
     return total_stat;
 }

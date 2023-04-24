@@ -680,6 +680,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
+
+    {tipb::ScalarFuncSig::GroupingSig, "grouping"},
 });
 
 template <typename GetColumnsFunc, typename GetDataTypeFunc>

@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
+#include <Operators/LocalAggregateRestorer.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -50,6 +51,14 @@ public:
 
     void buildOnBlock(size_t task_index, const Block & block);
 
+    bool hasSpilledData() const;
+
+    bool needSpill(size_t task_index, bool try_mark_need_spill = false);
+
+    void spillData(size_t task_index);
+
+    LocalAggregateRestorerPtr buildLocalRestorer();
+
     void initConvergent();
 
     // Called before convergent to trace aggregate statistics and handle empty table with result case.
@@ -61,18 +70,29 @@ public:
 
     Block getHeader() const;
 
-    bool useNullSource();
-
-private:
-    bool isTwoLevel();
-
 private:
     std::unique_ptr<Aggregator> aggregator;
     bool keys_size = false;
     bool empty_result_for_aggregation_by_empty_set = false;
 
-    std::atomic_bool inited_build = false;
-    std::atomic_bool inited_convergent = false;
+    /**
+     * init────►build───┬───►convergent
+     *                  │
+     *                  ▼
+     *               restore
+     */
+    enum class AggStatus
+    {
+        init,
+        build,
+        convergent,
+        restore,
+    };
+    std::atomic<AggStatus> status{AggStatus::init};
+
+    Aggregator::CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;

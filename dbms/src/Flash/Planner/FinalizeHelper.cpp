@@ -27,7 +27,7 @@ namespace DB::FinalizeHelper
 {
 void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_from_previous)
 {
-    assert(columns_from_previous >= actions->getRequiredColumnsWithTypes().size());
+    RUNTIME_CHECK(columns_from_previous >= actions->getRequiredColumnsWithTypes().size());
     if (!actions->getRequiredColumnsWithTypes().empty()
         && columns_from_previous > actions->getRequiredColumnsWithTypes().size())
     {

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -22,13 +24,14 @@ namespace DB
 PipelineExecutor::PipelineExecutor(
     const MemoryTrackerPtr & memory_tracker_,
     Context & context_,
-    const String & req_id,
-    const PipelinePtr & root_pipeline_)
+    const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
-    , root_pipeline(root_pipeline_)
     , status(req_id)
 {
-    assert(root_pipeline);
+    PhysicalPlan physical_plan{context, log->identifier()};
+    physical_plan.build(context.getDAGContext()->dag_request());
+    physical_plan.outputAndOptimize();
+    root_pipeline = physical_plan.toPipeline(status, context);
 }
 
 void PipelineExecutor::scheduleEvents()
@@ -38,7 +41,7 @@ void PipelineExecutor::scheduleEvents()
     Events sources;
     for (const auto & event : events)
     {
-        if (event->prepareForSource())
+        if (event->prepare())
             sources.push_back(event);
     }
     for (const auto & event : sources)

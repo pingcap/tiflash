@@ -99,11 +99,11 @@ void PhysicalPlanNode::buildPipelineExecGroup(
     throw Exception("Unsupport");
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)
 {
-    assert(childrenSize() <= 1);
+    RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder);
+        children(0)->buildPipeline(builder, context, exec_status);
     builder.addPlanNode(shared_from_this());
 }
 } // namespace DB

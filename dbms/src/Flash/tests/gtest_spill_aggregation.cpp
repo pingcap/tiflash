@@ -58,36 +58,34 @@ try
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-    auto ref_columns = executeStreams(request, original_max_streams, true);
+    auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// test single thread aggregation
-    /// need to enable memory tracker since currently, the memory usage in aggregator is
-    /// calculated by memory tracker, if memory tracker is not enabled, spill will never be triggered.
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1, true));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     /// test parallel aggregation
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams, true));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
     /// test single thread aggregation
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1, true));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
     /// test parallel aggregation
-    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams, true));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// test spill with small max_block_size
     /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 300
     /// is enough to test the output spilt
     size_t small_max_block_size = 300;
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(small_max_block_size)));
-    auto blocks = getExecuteStreamsReturnBlocks(request, 1, true);
+    auto blocks = getExecuteStreamsReturnBlocks(request, 1);
     for (auto & block : blocks)
     {
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
-    blocks = getExecuteStreamsReturnBlocks(request, original_max_streams, true);
+    blocks = getExecuteStreamsReturnBlocks(request, original_max_streams);
     for (auto & block : blocks)
     {
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
@@ -166,10 +164,7 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-                /// here has to enable memory tracker otherwise the processList in the context is the last query's processList
-                /// and may cause segment fault, maybe a bug but should not happens in TiDB because all the tasks from tidb
-                /// enable memory tracker
-                auto reference = executeStreams(request, 1, true);
+                auto reference = executeStreams(request, 1);
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -198,7 +193,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency, true);
+                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
                         block.checkNumberOfRows();
@@ -302,10 +297,7 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-                /// here has to enable memory tracker otherwise the processList in the context is the last query's processList
-                /// and may cause segment fault, maybe a bug but should not happens in TiDB because all the tasks from tidb
-                /// enable memory tracker
-                auto reference = executeStreams(request, 1, true);
+                auto reference = executeStreams(request, 1);
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -334,7 +326,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency, true);
+                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
                         block.checkNumberOfRows();
@@ -358,5 +350,59 @@ try
     }
 }
 CATCH
+
+TEST_F(SpillAggregationTestRunner, FineGrainedShuffle)
+try
+{
+    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
+    DB::MockColumnInfoVec partition_column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}};
+    ColumnsWithTypeAndName column_datas;
+    size_t table_rows = 5120;
+    size_t duplicated_rows = 2560;
+    UInt64 max_block_size = 100;
+    size_t total_data_size = 0;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        column_datas.push_back(ColumnGenerator::instance().generate(opts));
+        total_data_size += column_datas.back().column->byteSize();
+    }
+    for (auto & column_data : column_datas)
+        column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
+    context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_datas, 1, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_datas, 3, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_datas, 5, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_datas, 10, partition_column_infos);
+    std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
+
+    auto gen_request = [&](size_t exchange_concurrency) {
+        return context
+            .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+            .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")}, exchange_concurrency)
+            .build(context);
+    };
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+    /// disable spill
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    enablePipeline(false);
+    auto baseline = executeStreams(gen_request(1), 1);
+
+    /// enable spill
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
+    for (size_t exchange_concurrency : exchange_receiver_concurrency)
+    {
+        /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
+        auto request = gen_request(exchange_concurrency);
+        enablePipeline(false);
+        ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+        enablePipeline(true);
+        ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

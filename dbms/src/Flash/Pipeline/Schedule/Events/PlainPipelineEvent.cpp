@@ -20,7 +20,7 @@ namespace DB
 {
 std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
 {
-    assert(pipeline);
+    RUNTIME_CHECK(pipeline);
     auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
@@ -36,4 +36,5 @@ void PlainPipelineEvent::finishImpl()
     // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
     pipeline.reset();
 }
+
 } // namespace DB
