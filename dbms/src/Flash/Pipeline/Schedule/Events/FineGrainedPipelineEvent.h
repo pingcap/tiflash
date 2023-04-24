@@ -34,7 +34,7 @@ public:
     }
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override;
+    void scheduleImpl() override;
 
 private:
     // The pipeline exec for executing the specific fine-grained partition.
