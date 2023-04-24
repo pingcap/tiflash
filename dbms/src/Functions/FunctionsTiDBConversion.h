@@ -951,8 +951,8 @@ struct TiDBConvertToDecimal
         }
         else if (v_scale > scale)
         {
-            context.getDAGContext()->handleTruncateError("cast decimal as decimal");
             const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+            auto old_value = value;
             value /= scale_mul;
             if (need_to_round)
             {
@@ -961,6 +961,8 @@ struct TiDBConvertToDecimal
                 else
                     ++value;
             }
+            if (old_value != value * scale_mul)
+                context.getDAGContext()->appendWarning("Truncate in cast decimal as decimal");
         }
         else
         {
