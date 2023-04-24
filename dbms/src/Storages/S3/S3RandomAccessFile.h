@@ -48,6 +48,7 @@ public:
     S3RandomAccessFile(
         std::shared_ptr<TiFlashS3Client> client_ptr_,
         const String & remote_fname_,
+        bool lazy_init_,
         std::optional<std::pair<UInt64, UInt64>> offset_and_size_ = std::nullopt);
 
     // Can only seek forward.
@@ -98,6 +99,7 @@ private:
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
+    void initializeIfNeccessary();
 
     // When reading, it is necessary to pass the extra information of file, such file size, the merged file information to S3RandomAccessFile::create.
     // It is troublesome to pass parameters layer by layer. So currently, use thread_local global variable to pass parameters.
@@ -119,6 +121,8 @@ private:
 
     Int32 cur_retry = 0;
     static constexpr Int32 max_retry = 3;
+
+    bool is_inited = false;
 };
 
 } // namespace DB::S3

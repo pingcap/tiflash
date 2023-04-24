@@ -646,10 +646,10 @@ void downloadFile(const TiFlashS3Client & client, const String & local_fname, co
 }
 
 
-void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname)
+void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname, bool lazy_init_s3_file)
 {
     Stopwatch sw;
-    S3RandomAccessFile file(client, remote_fname);
+    S3RandomAccessFile file(client, remote_fname, lazy_init_s3_file);
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
     RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
 

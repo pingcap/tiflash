@@ -78,6 +78,7 @@ public:
         std::iota(buf_unit.begin(), buf_unit.end(), 0);
 
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        lazy_init_s3_file = S3::ClientFactory::instance().getConfig().lazy_init_s3_file;
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
@@ -122,7 +123,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, key);
+        S3RandomAccessFile file(s3_client, key, lazy_init_s3_file);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -186,6 +187,7 @@ protected:
     LoggerPtr log;
     std::vector<char> buf_unit;
     std::shared_ptr<TiFlashS3Client> s3_client;
+    bool lazy_init_s3_file;
     S3WritableFile::UploadInfo last_upload_info;
     Remote::IDataStorePtr data_store;
 };
@@ -231,7 +233,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, key);
+    S3RandomAccessFile file(s3_client, key, lazy_init_s3_file);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());

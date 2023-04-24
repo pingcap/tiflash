@@ -41,6 +41,7 @@ namespace DB::S3
 S3RandomAccessFile::S3RandomAccessFile(
     std::shared_ptr<TiFlashS3Client> client_ptr_,
     const String & remote_fname_,
+    bool lazy_init_,
     std::optional<std::pair<UInt64, UInt64>> offset_and_size_in_object_)
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
@@ -48,7 +49,10 @@ S3RandomAccessFile::S3RandomAccessFile(
     , cur_offset(0)
     , log(Logger::get(remote_fname))
 {
-    RUNTIME_CHECK(initialize(), remote_fname);
+    if (!lazy_init_)
+    {
+        initializeIfNeccessary();
+    }
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -63,6 +67,7 @@ bool isRetryableError(int e)
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
+    initializeIfNeccessary();
     while (true)
     {
         auto n = readImpl(buf, size);
@@ -118,6 +123,7 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 
 off_t S3RandomAccessFile::seek(off_t offset_, int whence)
 {
+    initializeIfNeccessary();
     while (true)
     {
         auto off = seekImpl(offset_, whence);
@@ -220,6 +226,15 @@ bool S3RandomAccessFile::initialize()
     return request_succ;
 }
 
+void S3RandomAccessFile::initializeIfNeccessary()
+{
+    if (unlikely(!is_inited))
+    {
+        RUNTIME_CHECK(initialize(), remote_fname);
+        is_inited = true;
+    }
+}
+
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)
 {
     try
@@ -242,14 +257,18 @@ inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fna
         return file;
     }
     auto & ins = S3::ClientFactory::instance();
-    return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
+    return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname, ins.getConfig().lazy_init_s3_file);
 }
 
 inline static String readMergedSubFilesFromS3(const S3RandomAccessFile::ReadFileInfo & read_file_info_)
 {
     auto & ins = S3::ClientFactory::instance();
     auto s3_key = S3::S3FilenameView::fromKeyWithPrefix(read_file_info_.merged_filename).toFullKey();
-    auto s3_file = std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), s3_key, std::pair{read_file_info_.read_merged_offset, read_file_info_.read_merged_size});
+    auto s3_file = std::make_shared<S3RandomAccessFile>(
+        ins.sharedTiFlashClient(),
+        s3_key,
+        ins.getConfig().lazy_init_s3_file,
+        std::pair{read_file_info_.read_merged_offset, read_file_info_.read_merged_size});
     String s;
     s.resize(read_file_info_.read_merged_size);
     auto n = s3_file->read(s.data(), read_file_info_.read_merged_size);
