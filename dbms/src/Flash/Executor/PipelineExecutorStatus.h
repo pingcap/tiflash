@@ -96,6 +96,12 @@ public:
                 break;
             }
         }
+        // In order to ensure that `onEventFinish` has finished calling at this point
+        // and avoid referencing the already destructed `mu` in `onEventFinish`.
+        {
+            std::lock_guard lock(mu);
+            RUNTIME_ASSERT(0 == active_event_count);
+        }
         LOG_DEBUG(log, "query finished and consume done");
     }
 
