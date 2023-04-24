@@ -1748,8 +1748,6 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 
         while (true)
         {
-            // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
-            // do scan on the version list without lock on `mvcc_table_directory`.
             fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
                 if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
                 {
