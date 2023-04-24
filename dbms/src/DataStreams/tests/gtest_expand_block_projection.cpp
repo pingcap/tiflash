@@ -45,22 +45,26 @@ try
     // mock stream, col1<nullable<Int64>>, col2<UInt64>
     std::vector<std::optional<Int64>> values1{1, 2, 3, 4, 5, 6, 7, 8, 9};
     std::vector<UInt64> values2{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    Block source_block{toNullVec(values1), toVec(values2)};
-    source_block.getByPosition(0).name = "test_int_col_1";
-    source_block.getByPosition(1).name = "test_int_col_2";
+    Block source_block;
+    auto col1 = toNullVec(values1);
+    col1.name = "test_int_col_1";
+    auto col2 = toVec(values2);
+    col2.name = "test_int_col_2";
+    source_block.insert(0, col1);
+    source_block.insert(1, col2);
     auto one_block_input_stream = std::make_shared<OneBlockInputStream>(source_block);
 
     // level-1 projection: nullable<int64><col1> as literal(null), colref-col2
     auto [level_1_actions, level_1_names] = buildProjection(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{0}, std::vector<Field>{Field(Null())}, ColumnNumbers{1});
     NamesWithAliases level_1_project_cols;
-    level_1_project_cols.emplace_back(level_1_names[0], "test_int_col_1_after_expand");
-    level_1_project_cols.emplace_back(level_1_names[1], "test_int_col_2_after_expand");
+    level_1_project_cols.emplace_back(level_1_names[0], "test_int_col_1");
+    level_1_project_cols.emplace_back(level_1_names[1], "test_int_col_2");
 
     // level-2 projection: colref-col1, <UInt64><col2> as literal(9)
     auto [level_2_actions, level_2_names] = buildProjection(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{1}, std::vector<Field>{Field(static_cast<UInt64>(9))}, ColumnNumbers{0});
     NamesWithAliases level_2_project_cols;
-    level_2_project_cols.emplace_back(level_2_names[1], "test_int_col_1_after_expand");
-    level_2_project_cols.emplace_back(level_2_names[0], "test_int_col_2_after_expand");
+    level_2_project_cols.emplace_back(level_2_names[1], "test_int_col_1");
+    level_2_project_cols.emplace_back(level_2_names[0], "test_int_col_2");
 
     // construct leveled-projections.
     ExpressionActionsPtrVec level_projections;
@@ -69,15 +73,16 @@ try
     NamesWithAliasesVec level_alias;
     level_alias.emplace_back(level_1_project_cols);
     level_alias.emplace_back(level_2_project_cols);
-    auto expand2 = std::make_shared<Expand2>(level_projections, level_alias);
-    NamesAndTypes source_columns;
-    NamesAndTypes expand_output_names_types;
-    expand_output_names_types.emplace_back("test_int_col_1_after_expand", source_block.getColumnsWithTypeAndName()[0].type);
-    expand_output_names_types.emplace_back("test_int_col_2_after_expand", source_block.getColumnsWithTypeAndName()[1].type);
-    source_columns.emplace_back(source_block.getColumnsWithTypeAndName()[0].name, source_block.getColumnsWithTypeAndName()[0].type);
-    source_columns.emplace_back(source_block.getColumnsWithTypeAndName()[1].name, source_block.getColumnsWithTypeAndName()[1].type);
 
-    ExpandBlockInputStream expand_block_input_stream(one_block_input_stream, expand2, expand_output_names_types, "test_request_id");
+    // construct before-expand-actions.
+    ExpressionActionsPtr before_expand_actions = buildChangeNullable(*context, source_block.getColumnsWithTypeAndName(), ColumnNumbers{0});
+
+    auto expand2 = std::make_shared<Expand2>(level_projections, before_expand_actions, level_alias);
+
+    // mock header.
+    auto header = one_block_input_stream->getHeader();
+    before_expand_actions->execute(header);
+    ExpandBlockInputStream expand_block_input_stream(one_block_input_stream, expand2, header, "test_request_id");
 
     // read stream
     auto res1 = expand_block_input_stream.read();

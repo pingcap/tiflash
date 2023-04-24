@@ -43,10 +43,11 @@ public:
     ///
     /// \param leveled_projections_actions
     /// \param level_alias_projections
-    explicit Expand2(ExpressionActionsPtrVec leveled_projections_actions, NamesWithAliasesVec level_alias_projections);
+    explicit Expand2(ExpressionActionsPtrVec projections_actions_, ExpressionActionsPtr before_expand_actions_, NamesWithAliasesVec projections_);
     Block next(const Block & block_cache, size_t i_th_projection);
     String getLevelProjectionDes() const;
     size_t getLevelProjectionNum() const;
+    ExpressionActionsPtr & getBeforeExpandActions();
 
 private:
     // for every leveled projection, make sure the colRef/literal has the correct fieldType.
@@ -58,8 +59,10 @@ private:
     //   +--projection: a#1, a'#2, b#3           +------------- ref-col should be changed as nullable and expand null literal should be constructed with based-col field type.
     //                        ^
     //                        +---------- below projection will cast a as a' for column copy usage.
-    //
     ExpressionActionsPtrVec leveled_projections_actions;
+    // before_expand_actions serve as some nullable column preparation and prepend projection if needed.
+    // (besides it will additional add generated column for header usage, while the expand logic itself doesn't use it)
+    ExpressionActionsPtr before_expand_actions;
     // expand leveled projections should have a unified alias name to output
     NamesWithAliasesVec leveled_alias_projections;
 };

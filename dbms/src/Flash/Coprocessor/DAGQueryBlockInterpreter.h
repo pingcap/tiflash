@@ -77,7 +77,7 @@ private:
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr);
-    void executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand, NamesAndTypes output_columns);
+    void executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand);
     void executeWindow(
         DAGPipeline & pipeline,
         WindowDescription & window_description,

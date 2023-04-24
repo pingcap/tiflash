@@ -31,6 +31,11 @@ ColumnsWithTypeAndName executeLiteralProjection(
     std::vector<String> literals,
     const ColumnsWithTypeAndName & columns);
 
+ExpressionActionsPtr buildChangeNullable(
+    Context & context,
+    const ColumnsWithTypeAndName & columns,
+    const ColumnNumbers & column_nullable_numbers);
+
 std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,

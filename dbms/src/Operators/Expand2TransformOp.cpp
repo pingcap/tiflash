@@ -26,7 +26,7 @@ OperatorStatus Expand2TransformOp::transformImpl(Block & block)
 
 OperatorStatus Expand2TransformOp::tryOutputImpl(Block & block)
 {
-    if (expand_transform_action.try_output(block))
+    if (expand_transform_action.tryOutput(block))
         return OperatorStatus::HAS_OUTPUT;
     // current cached block is exhausted, need a new one.
     return OperatorStatus::NEED_INPUT;

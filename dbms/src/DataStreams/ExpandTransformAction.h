@@ -27,7 +27,7 @@ public:
         const Expand2Ptr & expand_);
 
     void transform(Block & block);
-    bool try_output(Block & block);
+    bool tryOutput(Block & block);
     Block getHeader() const;
 
 private:

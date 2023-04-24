@@ -743,10 +743,11 @@ CreatingSets
         Expression: <remove useless column after join>
          HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
           Expression: <final projection>
-           Expand2: <expand2, expand_executor_id = expand_2: leveled projections: [[CHANGE_NULLABLE(count(exchange_receiver_0)_collator_46 ),ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
+           Expand2: <expand2, expand_executor_id = expand_2: leveled projections: [[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
 [ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 2_UInt64 UInt64 Const(UInt64)]]>
             Expression: <expr after aggregation>
              SharedQuery: <restore concurrency>
               ParallelAggregating, max_threads: 10, final: true
-               MockExchangeReceiver x 10
+               Expression x 10: <before aggregation>
+                MockExchangeReceiver
 @

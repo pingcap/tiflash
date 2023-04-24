@@ -24,6 +24,26 @@ namespace DB
 namespace tests
 {
 
+ExpressionActionsPtr buildChangeNullable(
+    Context & context,
+    const ColumnsWithTypeAndName & columns,
+    const ColumnNumbers & column_nullable_numbers)
+{
+    NamesAndTypes source_columns;
+    for (const auto & column : columns)
+    {
+        source_columns.emplace_back(column.name, column.type);
+    }
+    DAGExpressionAnalyzer analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    auto & last_step = analyzer.initAndGetLastStep(chain);
+    for (auto column_ref_number : column_nullable_numbers)
+    {
+        last_step.actions->add(ExpressionAction::addNullable(columns[column_ref_number].name));
+    }
+    return last_step.actions;
+}
+
 std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,

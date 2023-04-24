@@ -497,7 +497,7 @@ CreatingSets
          Expression: <remove useless column after join>
           HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
            Expression: <final projection>
-            Expand2: <expand: leveled projection: [[CHANGE_NULLABLE(__QB_4_count(exchange_receiver_0)_collator_46 ),ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
+            Expand2: <expand: leveled projection: [[ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 1_UInt64 UInt64 Const(UInt64)];
 [ADD NULL_Nullable(String) Nullable(String) Const(Nullable(String)),ADD 2_UInt64 UInt64 Const(UInt64)]]>
              Expression: <final projection>
               SharedQuery: <restore concurrency>

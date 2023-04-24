@@ -34,9 +34,9 @@ Block ExpandTransformAction::getHeader() const
     return header;
 }
 
-bool ExpandTransformAction::try_output(Block & block)
+bool ExpandTransformAction::tryOutput(Block & block)
 {
-    if (i_th_project >= expand->getLevelProjectionNum())
+    if (!block_cache || i_th_project >= expand->getLevelProjectionNum())
         return false;
     auto res_block = expand->next(block_cache, i_th_project++);
     block.swap(res_block);
@@ -51,9 +51,10 @@ void ExpandTransformAction::transform(Block & block)
 
     // when calling this function, that means we read a new block from source OP, and pull it up through lower to upper OP incrementally.
     // so just caching this new block here and handle expansion, notice: Expand never accumulate blocks.
+    expand->getBeforeExpandActions()->execute(block);
     block_cache = block;
     i_th_project = 0;
-    auto res_block = expand->next(block_cache, i_th_project);
+    auto res_block = expand->next(block_cache, i_th_project++);
     block.swap(res_block);
 }
 } // namespace DB

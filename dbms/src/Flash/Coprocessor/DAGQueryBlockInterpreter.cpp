@@ -543,7 +543,7 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
-    auto & last_step = dag_analyzer.initAndGetLastStep(chain);
+    NamesAndTypes gen_columns;
     NamesAndTypes output_columns;
     NamesWithAliasesVec project_cols_vec;
     UniqueNameGenerator unique_name_generator;
@@ -561,18 +561,36 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
     /// projection example: [#col1, #col2, uint64_literal(grouping id)]
     /// projection      L1: [#col1, null, 1]
     ///                 L2: [null, col#2, 2]
+    // pre-detect the nullability change action in the first projection level and generate the pre-actions.
+    chain.clear();
+    // strong ref here to avoid internal actions to be cleaned.
+    auto header_step = dag_analyzer.initAndGetLastStep(chain);
+    assert(!expand2.proj_exprs().empty());
+    auto first_proj_level = expand2.proj_exprs().Get(0);
+    for (auto i = 0; i < first_proj_level.exprs().size(); i++)
+    {
+        auto expr = first_proj_level.exprs().Get(i);
+        // record the ref-col nullable attributes for header.
+        if (static_cast<size_t>(i) < input_col_size && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
+            dag_analyzer.addNullableActionForColumnRef(expr, header_step.actions);
+    }
+    NamesAndTypes new_source_cols;
+    for (const auto & origin_col : header_step.actions->getSampleBlock().getNamesAndTypesList())
+        new_source_cols.emplace_back(origin_col.name, origin_col.type);
+    dag_analyzer.reset(new_source_cols);
+
     // generate N level projections separately.
     for (auto i = 0; i < expand2.proj_exprs().size(); i++)
     {
         chain.clear();
         NamesWithAliases project_cols;
-        last_step = dag_analyzer.initAndGetLastStep(chain);
+        auto & last_step = dag_analyzer.initAndGetLastStep(chain);
         const auto & project_expr = expand2.proj_exprs().Get(i);
         // output name is composed of source column name from child and generated column name.
         for (auto j = 0; j < project_expr.exprs().size(); j++)
         {
+            // the original col-ref may be changed as nullable column-ref in planner side.
             auto expr = project_expr.exprs().Get(j);
-            dag_analyzer.addNullableActionForColumnRef(expr, last_step.actions);
 
             auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
             last_step.required_output.emplace_back(expr_name);
@@ -584,18 +602,33 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
             if (i == 0)
             {
                 // just collect the output schema in the first projection level is enough.
+                // output name is composed of two parts: origin base col names + specified generated col names.
+                // the first part is absolutely unique while the second part is guaranteed by planner, the func below is just in case.
                 String alias = unique_name_generator.toUniqueName(output_name);
+                // record the generated appended schema.
+                if (static_cast<size_t>(j) >= input_col_size)
+                    gen_columns.emplace_back(alias, col.type);
                 output_columns.emplace_back(alias, col.type);
             }
         }
         // cache this N level projection actions for expand output control.
-        ExpressionActionsPtr actions = chain.getLastActions();
-        expression_actions_ptr_vec.emplace_back(actions);
+        expression_actions_ptr_vec.emplace_back(last_step.actions);
         project_cols_vec.emplace_back(project_cols);
     }
+    // add column that used to for header, append it to the pre-actions as well (convenient for header generation).
+    for (const auto & gen_col : gen_columns)
+    {
+        ColumnWithTypeAndName column;
+        column.column = gen_col.type->createColumn();
+        column.name = gen_col.name;
+        column.type = gen_col.type;
+        header_step.actions->add(ExpressionAction::addColumn(column));
+    }
+    header_step.actions->finalize(toNames(output_columns));
+
     // unified these N level actions as one expand action.
-    auto ep2 = std::make_shared<Expand2>(expression_actions_ptr_vec, project_cols_vec);
-    executeExpand2(pipeline, ep2, output_columns);
+    auto ep2 = std::make_shared<Expand2>(expression_actions_ptr_vec, header_step.actions, project_cols_vec);
+    executeExpand2(pipeline, ep2);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -846,11 +879,15 @@ void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const Expre
     });
 }
 
-void DAGQueryBlockInterpreter::executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand, NamesAndTypes output_columns)
+void DAGQueryBlockInterpreter::executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand)
 {
     String expand_extra_info = fmt::format("expand: leveled projection: {}", expand->getLevelProjectionDes());
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpandBlockInputStream>(stream, expand, output_columns, log->identifier());
+        // make expand2 header ahead for every stream.
+        auto header = stream->getHeader();
+        expand->getBeforeExpandActions()->execute(header);
+        // construct ExpandBlockInputStream.
+        stream = std::make_shared<ExpandBlockInputStream>(stream, expand, header, log->identifier());
         stream->setExtraInfo(expand_extra_info);
     });
 }

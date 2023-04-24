@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Interpreters/Expand2.h>
 
 
@@ -42,7 +43,7 @@ public:
     ExpandBlockInputStream(
         const BlockInputStreamPtr & input,
         const Expand2Ptr & expand2_,
-        const NamesAndTypes & names_and_types,
+        const Block & header_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -53,8 +54,8 @@ protected:
 
 private:
     Expand2Ptr expand2;
-    // for header
-    NamesAndTypes names_and_types;
+    // for header change
+    Block header;
     // the expanding state is control by local variable block_cache and i_th_project in ExpandBlockInputStream.
     Block block_cache;
     // the i_th projection pointer.

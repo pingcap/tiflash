@@ -21,10 +21,10 @@ namespace DB
 ExpandBlockInputStream::ExpandBlockInputStream(
     const BlockInputStreamPtr & input,
     const Expand2Ptr & expand2_,
-    const NamesAndTypes & names_and_types,
+    const Block & header_,
     const String & req_id)
     : expand2(expand2_)
-    , names_and_types(names_and_types)
+    , header(header_)
     , log(Logger::get(req_id))
 {
     children.push_back(input);
@@ -33,8 +33,7 @@ ExpandBlockInputStream::ExpandBlockInputStream(
 
 Block ExpandBlockInputStream::getHeader() const
 {
-    Block res(names_and_types);
-    return res;
+    return header;
 }
 
 Block ExpandBlockInputStream::readImpl()
@@ -47,6 +46,8 @@ Block ExpandBlockInputStream::readImpl()
         block_cache = children.back()->read();
         if (!block_cache)
             return block_cache;
+        // apply before_expand_action when meeting a valid a block.
+        expand2->getBeforeExpandActions()->execute(block_cache);
     }
     return expand2->next(block_cache, i_th_project++);
 }

@@ -17,9 +17,10 @@
 namespace DB
 {
 
-Expand2::Expand2(ExpressionActionsPtrVec projections_actions, NamesWithAliasesVec projections)
-    : leveled_projections_actions(projections_actions)
-    , leveled_alias_projections(projections)
+Expand2::Expand2(ExpressionActionsPtrVec projections_actions_, ExpressionActionsPtr before_expand_actions_, NamesWithAliasesVec projections_)
+    : leveled_projections_actions(projections_actions_)
+    , before_expand_actions(before_expand_actions_)
+    , leveled_alias_projections(projections_)
 {
 }
 
@@ -97,5 +98,10 @@ String Expand2::getLevelProjectionDes() const
 size_t Expand2::getLevelProjectionNum() const
 {
     return leveled_projections_actions.size();
+}
+
+ExpressionActionsPtr & Expand2::getBeforeExpandActions()
+{
+    return before_expand_actions;
 }
 } // namespace DB
