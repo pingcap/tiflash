@@ -80,6 +80,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
+    Stopwatch sw;
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
@@ -89,13 +90,25 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     {
         LOG_ERROR(
             log,
-            "Cannot read from istream, gcount={}, eof={}, cur_offset={}, content_length={} errmsg={}",
+            "Cannot read from istream, gcount={}, eof={}, cur_offset={}, content_length={}, errmsg={}, cost={}ns",
             gcount,
             istr.eof(),
             cur_offset,
             content_length,
-            strerror(errno));
+            strerror(errno),
+            sw.elapsed());
         return -1;
+    }
+    auto elapsed_ns = sw.elapsed();
+    if (elapsed_ns > 10000000) // 10ms
+    {
+        LOG_DEBUG(
+            log,
+            "gcount={} cur_offset={} content_length={} cost={}ns",
+            gcount,
+            cur_offset,
+            content_length,
+            elapsed_ns);
     }
     cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
@@ -133,11 +146,23 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         return cur_offset;
     }
+    Stopwatch sw;
     auto & istr = read_result.GetBody();
     if (!istr.ignore(offset_ - cur_offset))
     {
-        LOG_ERROR(log, "Cannot ignore from istream, errmsg={}", strerror(errno));
+        LOG_ERROR(log, "Cannot ignore from istream, errmsg={}, cost={}ns", strerror(errno), sw.elapsed());
         return -1;
+    }
+    auto elapsed_ns = sw.elapsed();
+    if (elapsed_ns > 10000000) // 10ms
+    {
+        LOG_DEBUG(
+            log,
+            "ignore_count={} cur_offset={} content_length={} cost={}ns",
+            offset_ - cur_offset,
+            cur_offset,
+            content_length,
+            elapsed_ns);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, offset_ - cur_offset);
     cur_offset = offset_;
