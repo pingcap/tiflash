@@ -15,6 +15,7 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
