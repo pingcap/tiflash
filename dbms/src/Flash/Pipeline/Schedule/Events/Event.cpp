@@ -136,7 +136,7 @@ void Event::scheduleTasks() noexcept
     if (!tasks.empty())
     {
         // If query has already been cancelled, we can skip scheduling tasks.
-        // And then tasks will be destroyed and call `onTaskFinish`.
+        // Then tasks will be destroyed and call `onTaskFinish`.
         if (likely(!exec_status.isCancelled()))
         {
             LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());

@@ -297,6 +297,23 @@ protected:
 private:
     std::atomic_int16_t & counter;
 };
+
+class CreateTaskFailEvent : public Event
+{
+public:
+    explicit CreateTaskFailEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_, nullptr)
+    {
+    }
+
+protected:
+    void scheduleImpl() override
+    {
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        throw Exception("create task fail");
+    }
+};
 } // namespace
 
 class EventTestRunner : public ::testing::Test
@@ -549,6 +566,19 @@ try
     ASSERT_EQ(0, counter1);
     ASSERT_EQ(0, counter2);
     ASSERT_EQ(0, counter3);
+}
+CATCH
+
+TEST_F(EventTestRunner, createTaskFail)
+try
+{
+    PipelineExecutorStatus exec_status;
+    auto event = std::make_shared<CreateTaskFailEvent>(exec_status);
+    if (event->prepare())
+        event->schedule();
+    wait(exec_status);
+    auto exception_ptr = exec_status.getExceptionPtr();
+    ASSERT_TRUE(exception_ptr);
 }
 CATCH
 
