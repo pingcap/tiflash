@@ -77,7 +77,7 @@ private:
 
     void wait();
 
-    void consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler);
+    void consume(ResultHandler & result_handler);
 
 private:
     PipelinePtr root_pipeline;
