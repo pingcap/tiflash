@@ -2050,22 +2050,28 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
     }
 
     PageEntriesEdit edit;
-    typename MVCCMapType::iterator iter;
+
+    PageId iter_k;
+    VersionedPageEntriesPtr iter_v;
     {
         std::shared_lock read_lock(table_rw_mutex);
-        iter = mvcc_table_directory.begin();
+        auto iter = mvcc_table_directory.begin();
         if (iter == mvcc_table_directory.end())
             return edit;
+        iter_k = iter->first;
+        iter_v = iter->second;
     }
     while (true)
     {
-        iter->second->collapseTo(snap->sequence, iter->first, edit);
+        iter_v->collapseTo(snap->sequence, iter_k, edit);
 
         {
             std::shared_lock read_lock(table_rw_mutex);
-            ++iter;
+            auto iter = mvcc_table_directory.upper_bound(iter_k);
             if (iter == mvcc_table_directory.end())
                 break;
+            iter_k = iter->first;
+            iter_v = iter->second;
         }
     }
 
