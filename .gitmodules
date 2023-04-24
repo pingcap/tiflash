@@ -134,3 +134,6 @@
 [submodule "contrib/aws-s2n-tls"]
 	path = contrib/aws-s2n-tls
 	url = https://github.com/aws/s2n-tls.git
+[submodule "contrib/qpl"]
+	path = contrib/qpl
+	url = https://github.com/intel/qpl.git

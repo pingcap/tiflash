@@ -23,6 +23,8 @@
 
 #include <memory>
 
+#include "CodecDeflateQpl.h"
+
 
 namespace DB
 {
@@ -111,6 +113,30 @@ size_t CompressionEncode(
 
         break;
     }
+#ifdef ENABLE_QPL_COMPRESSION
+    case CompressionMethod::QPL:
+    {
+        static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
+
+        compressed_buffer.resize(header_size + QPL_Compressbound(source.size()));
+
+        compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::QPL);
+        int res = QPL::QPL_compress(source.data(), source.size(), &compressed_buffer[header_size], QPL_Compressbound(source.size()));
+
+        if (res == -1)
+            throw Exception("Cannot compress block with QplCompressData", ErrorCodes::CANNOT_COMPRESS);
+
+        compressed_size = header_size + res;
+
+        UInt32 compressed_size_32 = compressed_size;
+        UInt32 uncompressed_size_32 = source.size();
+
+        unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
+        unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
+
+        break;
+    }
+#endif
     default:
         throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }

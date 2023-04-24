@@ -772,15 +772,19 @@ public:
             return CompressionMethod::LZ4HC;
         if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
+#ifdef ENABLE_QPL_COMPRESSION
+        if (lower_str == "qpl")
+            return CompressionMethod::QPL;
+#endif
 
-        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }
 
     String toString() const
     {
-        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
 
-        if (value < CompressionMethod::LZ4 || value > CompressionMethod::ZSTD)
+        if (value < CompressionMethod::LZ4 || value > CompressionMethod::QPL)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 
         return strings[static_cast<size_t>(value)];

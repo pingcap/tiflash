@@ -43,6 +43,10 @@ int CompressionSettings::getDefaultLevel(CompressionMethod method)
         return LZ4HC_CLEVEL_DEFAULT;
     case CompressionMethod::ZSTD:
         return 1;
+#ifdef ENABLE_QPL_COMPRESSION
+    case CompressionMethod::QPL:
+        return 1;
+#endif
     default:
         return -1;
     }
