@@ -100,7 +100,8 @@ namespace DB
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
-    M(skip_seek_before_read_dmfile)
+    M(skip_seek_before_read_dmfile)                          \
+    M(exception_after_large_write_exceed)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
