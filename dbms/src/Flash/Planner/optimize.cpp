@@ -40,12 +40,12 @@ public:
 
 PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log)
 {
-    assert(plan);
+    RUNTIME_CHECK(plan);
     static std::vector<RulePtr> rules{FinalizeRule::create()};
     for (const auto & rule : rules)
     {
         plan = rule->apply(context, plan, log);
-        assert(plan);
+        RUNTIME_CHECK(plan);
     }
     return plan;
 }

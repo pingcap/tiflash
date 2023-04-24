@@ -27,6 +27,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
+#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -49,7 +51,7 @@ void recordJoinExecuteInfo(
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
     join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 
@@ -64,8 +66,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
-    assert(left);
-    assert(right);
+    RUNTIME_CHECK(left);
+    RUNTIME_CHECK(right);
 
     left->finalize();
     right->finalize();
@@ -239,9 +241,9 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
         /// it is guaranteed by its children physical plan nodes
         schema_project_cols.emplace_back(c.name, c.name);
     }
-    assert(!schema_project_cols.empty());
+    RUNTIME_CHECK(!schema_project_cols.empty());
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
-    assert(schema_project && !schema_project->getActions().empty());
+    RUNTIME_CHECK(schema_project && !schema_project->getActions().empty());
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
@@ -251,16 +253,29 @@ void PhysicalJoin::buildPipeline(
     PipelineExecutorStatus & exec_status)
 {
     // Break the pipeline for join build.
-    // FIXME: Should be newly created PhysicalJoinBuild.
-    auto join_build_builder = builder.breakPipeline(shared_from_this());
+    auto join_build = std::make_shared<PhysicalJoinBuild>(
+        executor_id,
+        build()->getSchema(),
+        fine_grained_shuffle,
+        log->identifier(),
+        build(),
+        join_ptr,
+        build_side_prepare_actions);
+    auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
     build()->buildPipeline(join_build_builder, context, exec_status);
     join_build_builder.build();
+
     // Join probe pipeline.
     probe()->buildPipeline(builder, context, exec_status);
-    // FIXME: Should be newly created PhysicalJoinProbe.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    auto join_probe = std::make_shared<PhysicalJoinProbe>(
+        executor_id,
+        schema,
+        log->identifier(),
+        probe(),
+        join_ptr,
+        probe_side_prepare_actions);
+    builder.addPlanNode(join_probe);
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)

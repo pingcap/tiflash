@@ -11,34 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
-#include <Operators/AggregateConvergentSourceOp.h>
-#include <Operators/NullSourceOp.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
+#include <Operators/HashJoinBuildSink.h>
 
 namespace DB
 {
-void PhysicalAggregationConvergent::buildPipelineExecGroup(
+void PhysicalJoinBuild::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
-    // So only non fine grained shuffle is considered here.
-    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+    executeExpression(exec_status, group_builder, prepare_actions, log);
 
-    aggregate_context->initConvergent();
-    group_builder.init(aggregate_context->getConvergentConcurrency());
-    size_t index = 0;
+    size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-            exec_status,
-            aggregate_context,
-            index++,
-            log->identifier()));
+        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_status, log->identifier(), join_ptr, build_index++));
     });
-
-    executeExpression(exec_status, group_builder, expr_after_agg, log);
+    join_ptr->initBuild(group_builder.getCurrentHeader(), group_builder.concurrency);
+    join_ptr->setInitActiveBuildThreads();
 }
 } // namespace DB

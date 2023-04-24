@@ -33,7 +33,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     const tipb::Projection & projection,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -63,7 +63,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     const String & column_prefix,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -71,11 +71,11 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
     NamesAndTypes schema = child->getSchema();
-    assert(final_project_aliases.size() == schema.size());
+    RUNTIME_CHECK(final_project_aliases.size() == schema.size());
     // replace column name of schema by alias.
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
-        assert(schema[i].name == final_project_aliases[i].first);
+        RUNTIME_CHECK(schema[i].name == final_project_aliases[i].first);
         schema[i].name = final_project_aliases[i].second;
     }
 
@@ -101,7 +101,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     bool keep_session_timezone_info,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -115,12 +115,12 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
 
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
-    assert(final_project_aliases.size() == output_offsets.size());
+    RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
     NamesAndTypes schema;
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
         const auto & alias = final_project_aliases[i].second;
-        assert(!alias.empty());
+        RUNTIME_CHECK(!alias.empty());
         const auto & type = analyzer.getCurrentInputColumns()[output_offsets[i]].type;
         schema.emplace_back(alias, type);
     }
