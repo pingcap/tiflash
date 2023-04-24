@@ -216,7 +216,10 @@ public:
     bool addConsumedMsg()
     {
         num_msg_consumed += 1;
-        RUNTIME_CHECK(num_msg_consumed <= num_msg_to_consume);
+        RUNTIME_CHECK(
+            num_msg_consumed <= num_msg_to_consume,
+            num_msg_consumed,
+            num_msg_to_consume);
 
         // return there are more pending msg or not
         return num_msg_consumed < num_msg_to_consume;
