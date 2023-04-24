@@ -37,7 +37,7 @@ void LocalAggregateRestorer::storeToBucketData()
     assert(!bucket_inputs.empty());
 
     // get min bucket num.
-    Int32 min_bucket_num = BucketInput::getMinBucketNum(bucket_inputs);
+    Int32 min_bucket_num = SpilledBucketInput::getMinBucketNum(bucket_inputs);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
         assert(!finished);
@@ -47,7 +47,7 @@ void LocalAggregateRestorer::storeToBucketData()
     }
 
     // store bucket data of min bucket num.
-    bucket_data = BucketInput::moveOutputs(bucket_inputs, min_bucket_num);
+    bucket_data = SpilledBucketInput::popOutputs(bucket_inputs, min_bucket_num);
 }
 
 void LocalAggregateRestorer::loadBucketData()

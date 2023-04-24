@@ -18,7 +18,7 @@
 
 namespace DB
 {
-class BucketInput;
+class SpilledBucketInput;
 
 class LoadBucketTask : public IOEventTask
 {
@@ -28,7 +28,7 @@ public:
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
-        BucketInput & input_)
+        SpilledBucketInput & input_)
         : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
         , input(input_)
     {
@@ -38,6 +38,6 @@ private:
     ExecTaskStatus doExecuteIOImpl() override;
 
 private:
-    BucketInput & input;
+    SpilledBucketInput & input;
 };
 } // namespace DB

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Operators/BucketInput.h>
+#include <Operators/SpilledBucketInput.h>
 
 #include <atomic>
 #include <memory>
@@ -46,7 +46,7 @@ enum class SharedLoaderStatus
  *                      ▲ 
  *                      │ 1 concurrency loop
  *                      ▼
- *             SharedBucketDataLoader
+ *             SharedSpilledBucketDataLoader
  *                      │
  *                      │    ┌─────►SharedAggregateRestorer1
  *                      │    ├─────►SharedAggregateRestorer2
@@ -54,22 +54,22 @@ enum class SharedLoaderStatus
  *                           ...
  *                           └─────►SharedAggregateRestorern
  */
-class SharedBucketDataLoader : public std::enable_shared_from_this<SharedBucketDataLoader>
+class SharedSpilledBucketDataLoader : public std::enable_shared_from_this<SharedSpilledBucketDataLoader>
 {
 public:
-    SharedBucketDataLoader(
+    SharedSpilledBucketDataLoader(
         PipelineExecutorStatus & exec_status_,
         const BlockInputStreams & bucket_streams,
         const String & req_id,
         size_t max_queue_size_);
 
-    ~SharedBucketDataLoader();
+    ~SharedSpilledBucketDataLoader();
 
     // return true if pop success
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
 
-    std::vector<BucketInput *> getNeedLoadInputs();
+    std::vector<SpilledBucketInput *> getNeedLoadInputs();
 
     void storeBucketData();
 
@@ -88,20 +88,20 @@ private:
     std::queue<BlocksList> bucket_data_queue;
 
     // `bucket_inputs` will only be modified in `toFinishStatus` and `storeFromInputToBucketData` and always in `SharedLoaderStatus::loading`.
-    // The unique_ptr of spilled file is held by BucketInput, so don't need to care about agg_context.
-    BucketInputs bucket_inputs;
+    // The unique_ptr of spilled file is held by SpilledBucketInput, so don't need to care about agg_context.
+    SpilledBucketInputs bucket_inputs;
     static constexpr Int32 NUM_BUCKETS = 256;
 
     std::atomic<SharedLoaderStatus> status{SharedLoaderStatus::idle};
 };
-using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
+using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketDataLoader>;
 
 class SharedAggregateRestorer
 {
 public:
     SharedAggregateRestorer(
         Aggregator & aggregator_,
-        SharedBucketDataLoaderPtr loader_);
+        SharedSpilledBucketDataLoaderPtr loader_);
 
     // return true if pop success
     // return false means that `tryLoadBucketData` need to be called.
@@ -116,7 +116,7 @@ private:
     BlocksList bucket_data;
     BlocksList restored_blocks;
 
-    SharedBucketDataLoaderPtr loader;
+    SharedSpilledBucketDataLoaderPtr loader;
 
     bool finished = false;
 };

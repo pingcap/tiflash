@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/LoadBucketTask.h>
-#include <Operators/BucketInput.h>
+#include <Operators/SpilledBucketInput.h>
 
 namespace DB
 {

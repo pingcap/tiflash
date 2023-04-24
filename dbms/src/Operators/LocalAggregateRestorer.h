@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Operators/BucketInput.h>
+#include <Operators/SpilledBucketInput.h>
 
 #include <memory>
 
@@ -70,7 +70,7 @@ private:
     // bucket_inputs --> bucket_data --> restored_blocks.
     BlocksList bucket_data;
     BlocksList restored_blocks;
-    BucketInputs bucket_inputs;
+    SpilledBucketInputs bucket_inputs;
 
     static constexpr Int32 NUM_BUCKETS = 256;
 };

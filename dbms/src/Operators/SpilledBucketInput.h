@@ -20,23 +20,23 @@
 namespace DB
 {
 /// Used to reading spilled bucket data of aggregator.
-class BucketInput;
-using BucketInputs = std::vector<BucketInput>;
-class BucketInput
+class SpilledBucketInput;
+using SpilledBucketInputs = std::vector<SpilledBucketInput>;
+class SpilledBucketInput
 {
 public:
-    explicit BucketInput(const BlockInputStreamPtr & stream_);
+    explicit SpilledBucketInput(const BlockInputStreamPtr & stream_);
 
     bool needLoad() const;
     void load();
 
     bool hasOutput() const;
     Int32 bucketNum() const;
-    Block moveOutput();
+    Block popOutput();
 
-    static Int32 getMinBucketNum(const BucketInputs & inputs);
+    static Int32 getMinBucketNum(const SpilledBucketInputs & inputs);
 
-    static BlocksList moveOutputs(BucketInputs & inputs, Int32 target_bucket_num);
+    static BlocksList popOutputs(SpilledBucketInputs & inputs, Int32 target_bucket_num);
 
 public:
     static constexpr Int32 NUM_BUCKETS = 256;

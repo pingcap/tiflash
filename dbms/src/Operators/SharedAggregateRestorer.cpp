@@ -19,7 +19,7 @@
 
 namespace DB
 {
-SharedBucketDataLoader::SharedBucketDataLoader(
+SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
     PipelineExecutorStatus & exec_status_,
     const BlockInputStreams & bucket_streams,
     const String & req_id,
@@ -35,23 +35,23 @@ SharedBucketDataLoader::SharedBucketDataLoader(
     exec_status.onEventSchedule();
 }
 
-SharedBucketDataLoader::~SharedBucketDataLoader()
+SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
 {
     bucket_data_queue = {};
     bucket_inputs.clear();
-    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedBucketDataLoader` is destructed.
+    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
     exec_status.onEventFinish();
 }
 
-bool SharedBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
+bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)
 {
     return status.compare_exchange_strong(from, to);
 }
 
-std::vector<BucketInput *> SharedBucketDataLoader::getNeedLoadInputs()
+std::vector<SpilledBucketInput *> SharedSpilledBucketDataLoader::getNeedLoadInputs()
 {
     assert(!bucket_inputs.empty());
-    std::vector<BucketInput *> load_inputs;
+    std::vector<SpilledBucketInput *> load_inputs;
     for (auto & bucket_input : bucket_inputs)
     {
         if (bucket_input.needLoad())
@@ -61,7 +61,7 @@ std::vector<BucketInput *> SharedBucketDataLoader::getNeedLoadInputs()
     return load_inputs;
 }
 
-void SharedBucketDataLoader::storeBucketData()
+void SharedSpilledBucketDataLoader::storeBucketData()
 {
     assert(status == SharedLoaderStatus::loading);
 
@@ -70,7 +70,7 @@ void SharedBucketDataLoader::storeBucketData()
         return;
 
     // get min bucket num.
-    Int32 min_bucket_num = BucketInput::getMinBucketNum(bucket_inputs);
+    Int32 min_bucket_num = SpilledBucketInput::getMinBucketNum(bucket_inputs);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
         RUNTIME_CHECK(switchStatus(SharedLoaderStatus::loading, SharedLoaderStatus::finished));
@@ -79,7 +79,7 @@ void SharedBucketDataLoader::storeBucketData()
     }
 
     // store bucket data of min bucket num.
-    BlocksList bucket_data = BucketInput::moveOutputs(bucket_inputs, min_bucket_num);
+    BlocksList bucket_data = SpilledBucketInput::popOutputs(bucket_inputs, min_bucket_num);
     {
         std::lock_guard lock(queue_mu);
         bucket_data_queue.push(std::move(bucket_data));
@@ -92,7 +92,7 @@ void SharedBucketDataLoader::storeBucketData()
     loadBucket();
 }
 
-void SharedBucketDataLoader::loadBucket()
+void SharedSpilledBucketDataLoader::loadBucket()
 {
     assert(status == SharedLoaderStatus::loading);
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
@@ -106,7 +106,7 @@ void SharedBucketDataLoader::loadBucket()
     event->schedule();
 }
 
-bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
+bool SharedSpilledBucketDataLoader::tryPop(BlocksList & bucket_data)
 {
     if unlikely (exec_status.isCancelled())
         return true;
@@ -114,8 +114,8 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
     bool result = true;
     {
         std::lock_guard lock(queue_mu);
-        // If `SharedBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
-        // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that `SharedBucketDataLoader` is finished.
+        // If `SharedSpilledBucketDataLoader` is finished, return true after the bucket_data_queue is exhausted.
+        // When `tryPop` returns true and `bucket_data` is still empty, the caller knows that `SharedSpilledBucketDataLoader` is finished.
         if (bucket_data_queue.empty())
         {
             if unlikely (status == SharedLoaderStatus::finished)
@@ -135,7 +135,7 @@ bool SharedBucketDataLoader::tryPop(BlocksList & bucket_data)
 
 SharedAggregateRestorer::SharedAggregateRestorer(
     Aggregator & aggregator_,
-    SharedBucketDataLoaderPtr loader_)
+    SharedSpilledBucketDataLoaderPtr loader_)
     : aggregator(aggregator_)
     , loader(std::move(loader_))
 {

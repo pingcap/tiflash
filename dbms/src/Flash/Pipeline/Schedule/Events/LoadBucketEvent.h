@@ -18,8 +18,8 @@
 
 namespace DB
 {
-class SharedBucketDataLoader;
-using SharedBucketDataLoaderPtr = std::shared_ptr<SharedBucketDataLoader>;
+class SharedSpilledBucketDataLoader;
+using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketDataLoader>;
 
 class LoadBucketEvent : public Event
 {
@@ -28,7 +28,7 @@ public:
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        SharedBucketDataLoaderPtr loader_)
+        SharedSpilledBucketDataLoaderPtr loader_)
         : Event(exec_status_, std::move(mem_tracker_), req_id)
         , loader(std::move(loader_))
     {
@@ -41,6 +41,6 @@ protected:
     void finishImpl() override;
 
 private:
-    SharedBucketDataLoaderPtr loader;
+    SharedSpilledBucketDataLoaderPtr loader;
 };
 } // namespace DB
