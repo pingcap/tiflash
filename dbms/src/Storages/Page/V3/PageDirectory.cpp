@@ -1888,18 +1888,18 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
 
         // TODO: Improve from O(nlogn) to O(n).
 
-        typename MVCCMapType::iterator iter;
+        VersionedPageEntriesPtr entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(rec.page_id);
+            auto iter = mvcc_table_directory.find(rec.page_id);
             if (iter == mvcc_table_directory.end())
                 // There may be obsolete entries deleted.
                 // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
                 // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
                 continue;
+            entries = iter->second;
         }
 
-        auto & entries = iter->second;
         entries->copyCheckpointInfoFromEdit(rec);
     }
 }
