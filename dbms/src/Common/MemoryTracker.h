@@ -59,7 +59,7 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     CurrentMetrics::Metric metric = CurrentMetrics::MemoryTracking;
 
     /// This description will be used as prefix into log messages (if isn't nullptr)
-    const char * description = nullptr;
+    std::atomic<const char *> description = nullptr;
 
     /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
     MemoryTracker() = default;
