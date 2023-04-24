@@ -56,14 +56,19 @@ std::string S3RandomAccessFile::getFileName() const
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
+bool isRetryableError(int e)
+{
+    return e == ECONNRESET || e == EAGAIN;
+}
+
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
     while (true)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && errno == ECONNRESET))
+        if (unlikely(n < 0 && isRetryableError(errno)))
         {
-            // If it is a "Connection reset by peer" error, then initialize again
+            // If it is a retryable error, then initialize again
             if (initialize())
             {
                 continue;
@@ -102,9 +107,9 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     while (true)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && errno == ECONNRESET))
+        if (unlikely(off < 0 && isRetryableError(errno)))
         {
-            // If it is a "Connection reset by peer" error, then initialize again
+            // If it is a retryable error, then initialize again
             if (initialize())
             {
                 continue;
