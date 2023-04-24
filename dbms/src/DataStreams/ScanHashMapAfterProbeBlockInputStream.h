@@ -28,7 +28,7 @@ public:
 
     String getName() const override { return "ScanHashMapAfterProbe"; }
 
-    Block getHeader() const override { return result_sample_block; };
+    Block getHeader() const override { return projected_sample_block; };
 
     size_t getIndex() const { return index; }
 
@@ -54,6 +54,7 @@ private:
 
 
     Block result_sample_block;
+    Block projected_sample_block; /// same schema with join's final schema
     /// Indices of columns in result_sample_block that come from the left-side table (except key columns).
     ColumnNumbers column_indices_left;
     /// Indices of columns that come from the right-side table.

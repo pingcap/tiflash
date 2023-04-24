@@ -127,6 +127,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
     String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, right_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
+    Names join_output_column_names;
+    for (const auto & col : join_output_schema)
+        join_output_column_names.emplace_back(col.name);
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -139,6 +142,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_spill_config,
         probe_spill_config,
         settings.join_restore_concurrency,
+        join_output_column_names,
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
@@ -227,24 +231,6 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
         probe()->buildBlockInputStream(probe_pipeline, context, max_streams);
         probeSideTransform(probe_pipeline, context);
     }
-
-    doSchemaProject(pipeline);
-}
-
-void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
-{
-    /// add a project to remove all the useless column
-    NamesWithAliases schema_project_cols;
-    for (auto & c : schema)
-    {
-        /// do not need to care about duplicated column names because
-        /// it is guaranteed by its children physical plan nodes
-        schema_project_cols.emplace_back(c.name, c.name);
-    }
-    RUNTIME_CHECK(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
-    RUNTIME_CHECK(schema_project && !schema_project->getActions().empty());
-    executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
 void PhysicalJoin::buildPipeline(
