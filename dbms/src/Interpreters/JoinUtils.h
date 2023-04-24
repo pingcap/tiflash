@@ -74,6 +74,15 @@ inline bool needScanHashMapAfterProbe(ASTTableJoin::Kind kind)
 {
     return getFullness(kind) || isRightSemiFamily(kind);
 }
+inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_condition)
+{
+    return has_other_condition && (isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter);
+}
+
+inline bool useRowFlaggedHashMapIfHasOtherCondition(ASTTableJoin::Kind kind)
+{
+    return isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter;
+}
 
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 

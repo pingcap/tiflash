@@ -172,7 +172,7 @@ public:
         const JoinBuildInfo & join_build_info,
         ProbeProcessInfo & probe_process_info,
         MutableColumnPtr & record_mapped_entry_column);
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps, bool row_flagged_map>
     static void probeBlockImpl(
         const JoinPartitions & join_partitions,
         size_t rows,

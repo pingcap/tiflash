@@ -156,6 +156,7 @@ Join::Join(
 
     if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
+    RUNTIME_CHECK(!(useRowFlaggedHashMapIfHasOtherCondition(kind) && strictness == ASTTableJoin::Strictness::Any));
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
@@ -820,7 +821,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
     /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
     MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
-    if ((isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter) && non_equal_conditions.other_cond_expr != nullptr)
+    if (useRowFlaggedHashMap(kind, has_other_condition))
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
         flag_mapped_entry_helper_column->reserve(rows);
@@ -883,12 +884,12 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     /// handle other conditions
-    if (non_equal_conditions.other_cond_expr != nullptr)
+    if (has_other_condition)
     {
         assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter)
+        if (useRowFlaggedHashMapIfHasOtherCondition(kind))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
