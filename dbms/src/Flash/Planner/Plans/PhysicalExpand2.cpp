@@ -40,7 +40,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
 
     if (unlikely(expand.proj_exprs().empty()))
     {
-        //should not reach here
+        // should not reach here
         throw TiFlashException("Expand executor without projections indicated by grouping sets", Errors::Planner::BadRequest);
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,13 +61,13 @@ Block Expand2::next(const Block & block_cache, size_t i_th_project)
     /// step4: unfold the constant column which is not meaningful in global scope.
     for (size_t i = 0; i < new_block.getColumnsWithTypeAndName().size(); i++)
     {
-        auto new_col = new_block.getColumnsWithTypeAndName()[i];
-        if (new_col.column->isColumnConst())
+        auto col = new_block.getColumnsWithTypeAndName()[i];
+        if (col.column->isColumnConst())
         {
-            // if it's a new literal constant column, unfold it, and if it's a not an origin constant column, unfold it.
+            // if it's a new literal constant column, unfold it, and if it's not an origin constant column, unfold it.
             // eg: grouping id projection(1) and grouping set column projection(null)
-            if (!block_cache.has(new_col.name) || !block_cache.getByName(new_col.name).column->isColumnConst())
-                new_block.safeGetByPosition(i).column = new_col.column->convertToFullColumnIfConst();
+            if (!block_cache.getByName(col.name).column->isColumnConst())
+                new_block.safeGetByPosition(i).column = col.column->convertToFullColumnIfConst();
         }
     }
     return new_block;

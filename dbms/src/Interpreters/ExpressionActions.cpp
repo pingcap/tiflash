@@ -149,11 +149,11 @@ ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
     return a;
 }
 
-ExpressionAction ExpressionAction::addNullable(const std::string & col_name)
+ExpressionAction ExpressionAction::convertToNullable(const std::string & col_name)
 {
     ExpressionAction a;
-    a.type = CHANGE_NULLABLE;
-    a.col_to_nullable = col_name;
+    a.type = CONVERT_TO_NULLABLE;
+    a.col_need_to_nullable = col_name;
     return a;
 }
 
@@ -265,10 +265,10 @@ void ExpressionAction::prepare(Block & sample_block)
         sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
         break;
     }
-    case CHANGE_NULLABLE:
+    case CONVERT_TO_NULLABLE:
     {
-        if (!sample_block.getByName(col_to_nullable).type->isNullable())
-            convertColumnToNullable(sample_block.getByName(col_to_nullable));
+        if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
+            convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
         break;
     }
 
@@ -363,10 +363,10 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
-    case CHANGE_NULLABLE:
+    case CONVERT_TO_NULLABLE:
     {
-        if (!block.getByName(col_to_nullable).column->isColumnNullable())
-            convertColumnToNullable(block.getByName(col_to_nullable));
+        if (!block.getByName(col_need_to_nullable).column->isColumnNullable())
+            convertColumnToNullable(block.getByName(col_need_to_nullable));
         break;
     }
 
@@ -460,9 +460,9 @@ String ExpressionAction::toString() const
                 ss << " AS " << projections[i].second;
         }
         break;
-    case CHANGE_NULLABLE:
-        ss << "CHANGE_NULLABLE(";
-        ss << col_to_nullable << ")";
+    case CONVERT_TO_NULLABLE:
+        ss << "CONVERT_TO_NULLABLE(";
+        ss << col_need_to_nullable << ")";
         break;
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);

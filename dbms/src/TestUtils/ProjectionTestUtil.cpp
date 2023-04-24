@@ -39,7 +39,7 @@ ExpressionActionsPtr buildChangeNullable(
     auto & last_step = analyzer.initAndGetLastStep(chain);
     for (auto column_ref_number : column_nullable_numbers)
     {
-        last_step.actions->add(ExpressionAction::addNullable(columns[column_ref_number].name));
+        last_step.actions->add(ExpressionAction::convertToNullable(columns[column_ref_number].name));
     }
     return last_step.actions;
 }

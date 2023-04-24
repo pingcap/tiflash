@@ -1518,7 +1518,7 @@ void DAGExpressionAnalyzer::addNullableActionForColumnRef(const tipb::Expr & exp
         auto col = getColumnNameAndTypeForColumnExpr(expr, getCurrentInputColumns());
         if (!col.type->isNullable() && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
             // when the original col is not null and current columnRef is nullable, add convert nullable action here.
-            actions->add(ExpressionAction::addNullable(col.name));
+            actions->add(ExpressionAction::convertToNullable(col.name));
     }
 }
 
