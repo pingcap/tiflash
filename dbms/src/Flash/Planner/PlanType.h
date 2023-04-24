@@ -39,7 +39,9 @@ struct PlanType
         AggregationBuild = 14,
         AggregationConvergent = 15,
         Expand = 16,
-        GetResult = 17
+        JoinBuild = 17,
+        JoinProbe = 18,
+        GetResult = 19,
     };
     PlanTypeEnum enum_value;
 

@@ -25,7 +25,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
     const LoggerPtr & log,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     auto physical_mock_exchange_sender = std::make_shared<PhysicalMockExchangeSender>(
         executor_id,
