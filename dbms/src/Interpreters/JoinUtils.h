@@ -85,7 +85,6 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
     return has_other_condition && isNecessaryKindToUseRowFlaggedHashMap(kind);
 }
 
-
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 
 struct ProbeProcessInfo
