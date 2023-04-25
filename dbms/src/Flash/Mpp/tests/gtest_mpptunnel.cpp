@@ -354,8 +354,8 @@ try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->close("Canceled", false);
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    // GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), false);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), false);
 }
 CATCH
 
@@ -364,9 +364,9 @@ try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->close("Canceled", false);
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     mpp_tunnel_ptr->close("Canceled", false);
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 }
 CATCH
 
