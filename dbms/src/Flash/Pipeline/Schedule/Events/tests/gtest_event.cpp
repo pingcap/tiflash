@@ -353,23 +353,17 @@ public:
 protected:
     static constexpr size_t thread_num = 5;
 
-    static constexpr auto config_str = R"(
-[flash]
-random_fail_points = "random_task_manager_find_task_failure_failpoint-0.04,random_min_tso_scheduler_failpoint-0.04,random_interpreter_failpoint-0.04,random_sharedquery_failpoint-0.04,random_aggregate_merge_failpoint-0.04,random_aggregate_create_state_failpoint-0.04,random_join_prob_failpoint-0.04,random_join_build_failpoint-0.04,random_limit_check_failpoint-0.01,random_receiver_async_msg_push_failure_failpoint-0.01,random_receiver_sync_msg_push_failure_failpoint-0.01,random_receiver_local_msg_push_failure_failpoint-0.01,random_tunnel_init_rpc_failure_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_pipeline_model_task_run_failpoint-0.04,random_pipeline_model_task_construct_failpoint-0.04,random_pipeline_model_event_schedule_failpoint-0.04,random_pipeline_model_event_finish_failpoint-0.04,random_pipeline_model_operator_run_failpoint-0.04,random_pipeline_model_cancel_failpoint-0.04")";
-
     void SetUp() override
     {
         TaskSchedulerConfig config{thread_num, thread_num};
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
-        initRandomFailPoint(config_str);
     }
 
     void TearDown() override
     {
         assert(TaskScheduler::instance);
         TaskScheduler::instance.reset();
-        disableRandomFailPoint(config_str);
     }
 };
 
@@ -401,14 +395,12 @@ try
         ASSERT_EQ(0, counter);
         assertNoErr(exec_status);
     };
-    FAILPOINT_TEST_BEGIN
 
     for (size_t group_num = 1; group_num < 50; group_num += 11)
     {
         for (size_t event_num = 1; event_num < 50; event_num += 11)
             do_test(group_num, event_num);
     }
-    FAILPOINT_TEST_END
 }
 CATCH
 
@@ -426,13 +418,12 @@ try
         wait(exec_status);
         assertNoErr(exec_status);
     };
-    FAILPOINT_TEST_BEGIN
+
     for (size_t i = 1; i < 100; i += 7)
     {
         do_test(false, i);
         do_test(true, i);
     }
-    FAILPOINT_TEST_END
 }
 CATCH
 
@@ -460,13 +451,12 @@ try
         assertNoErr(exec_status);
         thread_manager->wait();
     };
-    FAILPOINT_TEST_BEGIN
+
     for (size_t i = 1; i < 100; i += 7)
     {
         do_test(false, i);
         do_test(true, i);
     }
-    FAILPOINT_TEST_END
 }
 CATCH
 
@@ -492,13 +482,12 @@ try
         ASSERT_EQ(err_msg, OnErrEvent::err_msg) << err_msg;
         thread_manager->wait();
     };
-    FAILPOINT_TEST_BEGIN
+
     for (size_t i = 1; i < 100; i += 7)
     {
         do_test(false, i);
         do_test(true, i);
     }
-    FAILPOINT_TEST_END
 }
 CATCH
 

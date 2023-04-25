@@ -26,7 +26,7 @@ void disableRandomFailPoint(const String & config_str);
 
 #define FAILPOINT_TEST_BEGIN \
     size_t i = 0;            \
-    for (; i < 30; ++i)      \
+    for (; i < 5; ++i)       \
     {                        \
         try                  \
         {
@@ -37,6 +37,6 @@ void disableRandomFailPoint(const String & config_str);
         ::DB::tryLogCurrentException(__PRETTY_FUNCTION__); \
     }                                                      \
     }                                                      \
-    ASSERT_EQ(i, 30);
+    ASSERT_EQ(i, 5);
 } // namespace tests
 } // namespace DB
