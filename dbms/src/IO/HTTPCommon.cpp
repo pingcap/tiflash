@@ -18,6 +18,8 @@
 #include <Common/PoolBase.h>
 #include <Common/ProfileEvents.h>
 #include <Common/SipHash.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/config.h>
 #include <IO/HTTPCommon.h>
 #include <Poco/Net/HTTPClientSession.h>
@@ -84,6 +86,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 {
     HTTPSessionPtr session;
 
+    Stopwatch watch;
     if (https)
     {
 #if Poco_NetSSL_FOUND
@@ -102,6 +105,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
         session = std::make_shared<Poco::Net::HTTPClientSession>(resolved_host, port);
     }
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_dns).Observe(watch.elapsedSeconds());
 
     ProfileEvents::increment(ProfileEvents::CreatedHTTPConnections);
 
@@ -109,7 +113,6 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
     session->setKeepAlive(keep_alive);
     return session;
 }
-
 
 class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
 {
@@ -288,7 +291,6 @@ public:
     }
 };
 } // namespace
-
 
 void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_alive_timeout)
 {
