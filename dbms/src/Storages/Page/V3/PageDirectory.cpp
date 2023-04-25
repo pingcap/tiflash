@@ -929,10 +929,10 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
     bool ok = true;
     while (ok)
     {
-        MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -949,8 +949,9 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
                     return PageIDAndEntryV3{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -994,10 +995,10 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV
         bool ok = true;
         while (ok)
         {
-            MVCCMapType::const_iterator iter;
+            VersionedPageEntriesPtr iter_v;
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter = mvcc_table_directory.find(id_to_resolve);
+                auto iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
                     if (throw_on_not_exist)
@@ -1009,8 +1010,9 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV
                         return false;
                     }
                 }
+                iter_v = iter->second;
             }
-            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
             switch (resolve_state)
             {
             case ResolveResult::TO_NORMAL:
@@ -1064,10 +1066,10 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
     bool keep_resolve = true;
     while (keep_resolve)
     {
-        MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -1079,8 +1081,9 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
                     return buildV3Id(0, INVALID_PAGE_ID);
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -1391,20 +1394,19 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> ref_ids_maybe_rewrite;
 
     {
-        MVCCMapType::const_iterator iter;
+        PageIdV3Internal page_id;
+        VersionedPageEntriesPtr version_entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.cbegin();
+            auto iter = mvcc_table_directory.cbegin();
             if (iter == mvcc_table_directory.end())
                 return {blob_versioned_entries, total_page_size};
+            page_id = iter->first;
+            version_entries = iter->second;
         }
 
         while (true)
         {
-            // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
-            // do scan on the version list without lock on `mvcc_table_directory`.
-            auto page_id = iter->first;
-            const auto & version_entries = iter->second;
             fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
                 if (page_id.low == 101)
                     SYNC_FOR("before_PageDirectory::getEntriesByBlobIds_id_101");
@@ -1418,9 +1420,11 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
 
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter++;
+                auto iter = mvcc_table_directory.upper_bound(page_id);
                 if (iter == mvcc_table_directory.end())
                     break;
+                page_id = iter->first;
+                version_entries = iter->second;
             }
         }
     }
@@ -1432,13 +1436,13 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     {
         const auto ori_id = std::get<0>(ori_id_ver);
         const auto ver = std::get<1>(ori_id_ver);
-        MVCCMapType::const_iterator page_iter;
+        VersionedPageEntriesPtr version_entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            page_iter = mvcc_table_directory.find(ori_id);
+            auto page_iter = mvcc_table_directory.find(ori_id);
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
+            version_entries = page_iter->second;
         }
-        const auto & version_entries = page_iter->second;
         // the latest entry with version.seq <= ref_id.create_ver.seq
         auto entry = version_entries->getLastEntry(ver.sequence);
         RUNTIME_CHECK(entry.has_value(), ref_id, ori_id, ver);
