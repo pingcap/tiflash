@@ -12477,6 +12477,14 @@
               "interval": "",
               "legendFormat": "S3ReadBytes",
               "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "S3WriteDMFileBytes",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -12643,6 +12651,14 @@
               "interval": "",
               "legendFormat": "S3CompleteMultipartUpload",
               "refId": "I"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFile{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "S3PutDMFile",
+              "refId": "J"
             }
           ],
           "thresholds": [],
@@ -12753,6 +12769,14 @@
               "interval": "",
               "legendFormat": "S3PutObjectRetry",
               "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "S3PutDMFileRetry",
+              "refId": "C"
             }
           ],
           "thresholds": [],
