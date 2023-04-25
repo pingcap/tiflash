@@ -18,8 +18,6 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
-#include "mockExecutor.h"
-
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num);

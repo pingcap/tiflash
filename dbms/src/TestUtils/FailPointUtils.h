@@ -26,7 +26,7 @@ void disableRandomFailPoint(const String & config_str);
 
 #define FAILPOINT_TEST_BEGIN \
     size_t i = 0;            \
-    for (; i < 30; ++i)     \
+    for (; i < 30; ++i)      \
     {                        \
         try                  \
         {
