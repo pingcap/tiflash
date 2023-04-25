@@ -962,7 +962,7 @@ struct TiDBConvertToDecimal
                     ++value;
             }
             if (old_value != value * scale_mul)
-                context.getDAGContext()->appendWarning("Truncate in cast decimal as decimal");
+                context.getDAGContext().appendWarning("Truncate in cast decimal as decimal");
         }
         else
         {
