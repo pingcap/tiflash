@@ -721,10 +721,6 @@ random_fail_points = "random_task_manager_find_task_failure_failpoint-0.04,rando
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
     WRAP_FOR_SERVER_TEST_END
-    String config_str = R"(
-[flash]
-random_fail_points = "random_task_manager_find_task_failure_failpoint-0.04,random_min_tso_scheduler_failpoint-0.04,random_interpreter_failpoint-0.04,random_sharedquery_failpoint-0.04,random_aggregate_merge_failpoint-0.04,random_aggregate_create_state_failpoint-0.04,random_join_prob_failpoint-0.04,random_join_build_failpoint-0.04,random_limit_check_failpoint-0.01,random_receiver_async_msg_push_failure_failpoint-0.01,random_receiver_sync_msg_push_failure_failpoint-0.01,random_receiver_local_msg_push_failure_failpoint-0.01,random_tunnel_init_rpc_failure_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_pipeline_model_task_run_failpoint-0.04,random_pipeline_model_task_construct_failpoint-0.04,random_pipeline_model_event_schedule_failpoint-0.04,random_pipeline_model_event_finish_failpoint-0.04,random_pipeline_model_operator_run_failpoint-0.04,random_pipeline_model_cancel_failpoint-0.04")";
-    initRandomFailPoint(config_str);
     FAILPOINT_TEST_END
 }
 CATCH
