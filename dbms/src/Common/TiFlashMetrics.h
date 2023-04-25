@@ -261,7 +261,7 @@ namespace DB
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
-        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+        F(type_mpp_query_count, {"type", "mpp_query_count"})) \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

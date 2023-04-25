@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -27,6 +28,11 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+namespace DB::FailPoints
+{
+extern const char exception_after_large_write_exceed[];
+} // namespace DB::FailPoints
 
 namespace DB::PS::V3::tests
 {
@@ -47,6 +53,11 @@ public:
             paths.emplace_back(fmt::format("{}/{}", path, i));
         }
         delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
+
+        for (size_t i = 0; i < fixed_buffer_size; ++i)
+        {
+            fixed_buffer[i] = i % 0xff;
+        }
     }
 
     static size_t getTotalStatsNum(const BlobStats::StatsMap & stats_map)
@@ -62,6 +73,9 @@ public:
 protected:
     BlobConfig config;
     PSDiskDelegatorPtr delegator;
+
+    char fixed_buffer[1024]{};
+    const size_t fixed_buffer_size = sizeof(fixed_buffer);
 };
 
 TEST_F(BlobStoreTest, Restore)
@@ -153,17 +167,17 @@ try
 
         // write blob 1
         write_batch.putPage(page_id, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
 
         // write blob 2
         write_batch.putPage(page_id + 1, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
 
         // write blob 3
         write_batch.putPage(page_id + 2, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
-        blob_store.write(write_batch, nullptr);
+        blob_store.write(std::move(write_batch), nullptr);
         write_batch.clear();
     };
 
@@ -326,7 +340,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -416,7 +430,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     AtomicStopwatch write_watch;
     for (size_t i = 0; i < wb_nums; ++i)
     {
-        edits[i] = blob_store.write(wbs[i], write_limiter);
+        edits[i] = blob_store.write(std::move(wbs[i]), write_limiter);
     }
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
@@ -521,7 +535,7 @@ try
     wb.putPage(page_id1, /* tag */ 0, buff1, buff_size, {20, 40, 40, 20});
     wb.putPage(page_id2, /* tag */ 0, buff2, buff_size, {10, 50, 20, 20, 20});
     wb.putPage(page_id3, /* tag */ 0, buff3, buff_size, {10, 5, 20, 20, 15, 5, 15, 30});
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), 3);
 
     BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
@@ -597,7 +611,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -658,7 +672,7 @@ try
         wb.putPage(page_id, /*tag*/ 0, buff1, buff_size);
         wb.putPage(page_id, /*tag*/ 0, buff2, buff_size);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 2);
 
         auto records = edit.getRecords();
@@ -685,7 +699,7 @@ try
         wb.delPage(page_id + 1);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 3);
 
         auto records = edit.getRecords();
@@ -718,7 +732,7 @@ try
         wb.putRefPage(page_id + 1, page_id);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
         auto records = edit.getRecords();
 
         auto record = records[0];
@@ -758,7 +772,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
         bool catch_exception = false;
         try
         {
-            blob_store.write(wb, nullptr);
+            blob_store.write(std::move(wb), nullptr);
         }
         catch (DB::Exception & e)
         {
@@ -783,7 +797,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
         wb.putPage(50, /*tag*/ 0, buff1, buf_size);
 
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 1);
 
         auto records = edit.getRecords();
@@ -796,7 +810,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
         wb.clear();
         wb.putPage(51, /*tag*/ 0, buff2, buf_size);
-        edit = blob_store.write(wb, nullptr);
+        edit = blob_store.write(std::move(wb), nullptr);
         ASSERT_EQ(edit.size(), 1);
 
         records = edit.getRecords();
@@ -833,7 +847,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
         }
     }
 
-    auto edit = blob_store.write(wb, nullptr);
+    auto edit = blob_store.write(std::move(wb), nullptr);
 
     size_t idx = 0;
     PageEntriesV3 entries_del1, entries_del2, remain_entries;
@@ -928,7 +942,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
         }
     }
 
-    auto edit = blob_store.write(wb, nullptr);
+    auto edit = blob_store.write(std::move(wb), nullptr);
 
     size_t idx = 0;
     PageEntriesV3 entries_del;
@@ -988,7 +1002,7 @@ TEST_F(BlobStoreTest, GC)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     PageIdAndVersionedEntries versioned_pageid_entries;
@@ -1055,7 +1069,7 @@ try
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1106,7 +1120,7 @@ try
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1126,85 +1140,96 @@ try
 }
 CATCH
 
-TEST_F(BlobStoreTest, TestBigBlob)
+TEST_F(BlobStoreTest, LargeWrite)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
     PageId fixed_page_id = 50;
     PageId page_id = fixed_page_id;
 
-    BlobConfig config_with_small_file_limit_size;
-    config_with_small_file_limit_size.file_limit_size = 400;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    BlobConfig test_config;
+    test_config.file_limit_size = 4 * MB;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, test_config);
 
-    // PUT page_id 50 into blob 1 range [0,200]
+    // PUT page_id 50 into blob 1 (normal write)
     {
-        size_t size_200 = 200;
-        char c_buff[size_200];
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 200;
+        buffer.write(fixed_buffer, serialized_size);
 
         WriteBatch wb;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_200);
-        wb.putPage(page_id, /* tag */ 0, buff, size_200);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 1);
         ASSERT_EQ(records[0].entry.offset, 0);
-        ASSERT_EQ(records[0].entry.size, 200);
+        ASSERT_EQ(records[0].entry.size, serialized_size);
 
         const auto & stat = blob_store.blob_stats.blobIdToStat(1);
         ASSERT_TRUE(stat->isNormal());
-        ASSERT_EQ(stat->sm_max_caps, 200);
+        ASSERT_EQ(stat->sm_max_caps, test_config.file_limit_size - serialized_size);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
-        ASSERT_EQ(stat->sm_valid_size, 200);
-        ASSERT_EQ(stat->sm_total_size, 200);
+        ASSERT_EQ(stat->sm_valid_size, serialized_size);
+        ASSERT_EQ(stat->sm_total_size, serialized_size);
+
+        // Verify read
+        Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ(page.data.size(), serialized_size);
 
         page_id++;
-        wb.clear();
     }
 
-    // PUT page_id 51 into blob 2 range [0,500]
+    // PUT page_id 51 into blob 2 (large write)
     {
-        size_t size_500 = 500;
-        char c_buff[size_500];
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 0;
+        while (buffer.count() < test_config.file_limit_size * 2)
+        {
+            buffer.write(fixed_buffer, fixed_buffer_size);
+            serialized_size += fixed_buffer_size;
+        }
 
         WriteBatch wb;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_500);
-        wb.putPage(page_id, /* tag */ 0, buff, size_500);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 2);
         ASSERT_EQ(records[0].entry.offset, 0);
-        ASSERT_EQ(records[0].entry.size, 500);
+        ASSERT_EQ(records[0].entry.size, serialized_size);
 
         // verify blobstat
         const auto & stat = blob_store.blob_stats.blobIdToStat(2);
+        ASSERT_TRUE(stat->isReadOnly()); // large write, this stat is read only
         ASSERT_EQ(stat->sm_max_caps, 0);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
-        ASSERT_EQ(stat->sm_valid_size, 500);
-        ASSERT_EQ(stat->sm_total_size, 500);
+        ASSERT_EQ(stat->sm_valid_size, serialized_size);
+        ASSERT_EQ(stat->sm_total_size, serialized_size);
 
         // Verify read
         Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
         ASSERT_TRUE(page.isValid());
-        ASSERT_EQ(page.data.size(), size_500);
+        ASSERT_EQ(page.data.size(), serialized_size);
 
         page_id++;
-        wb.clear();
     }
 
-    // PUT page_id 52 into blob 1 range [200,100]
+    // PUT page_id 52 into blob 1 (normal write)
     {
-        size_t size_100 = 100;
-        char c_buff[size_100];
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 100;
+        buffer.write(fixed_buffer, serialized_size);
 
         WriteBatch wb;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_100);
-        wb.putPage(page_id, /* tag */ 0, buff, size_100);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1214,88 +1239,277 @@ try
 
         const auto & stat = blob_store.blob_stats.blobIdToStat(1);
         ASSERT_TRUE(stat->isNormal());
-        ASSERT_EQ(stat->sm_max_caps, 100);
+        ASSERT_EQ(stat->sm_max_caps, test_config.file_limit_size - 200 - 100);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
         ASSERT_EQ(stat->sm_valid_size, 300);
         ASSERT_EQ(stat->sm_total_size, 300);
 
+        // Verify read
+        Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ(page.data.size(), serialized_size);
+
         page_id++;
-        wb.clear();
     }
 
     // PUT page_id 53 into blob 3 range [0,300]
     {
-        size_t size_300 = 300;
-        char c_buff[size_300];
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 0;
+        while (buffer.count() < test_config.file_limit_size * 1.5)
+        {
+            buffer.write(fixed_buffer, fixed_buffer_size);
+            serialized_size += fixed_buffer_size;
+        }
 
         WriteBatch wb;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_300);
-        wb.putPage(page_id, /* tag */ 0, buff, size_300);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 3);
         ASSERT_EQ(records[0].entry.offset, 0);
-        ASSERT_EQ(records[0].entry.size, 300);
+        ASSERT_EQ(records[0].entry.size, serialized_size);
 
         const auto & stat = blob_store.blob_stats.blobIdToStat(3);
-        ASSERT_TRUE(stat->isNormal());
-        ASSERT_EQ(stat->sm_max_caps, 100);
+        ASSERT_TRUE(stat->isReadOnly()); // large write, this stat is read only
+        ASSERT_EQ(stat->sm_max_caps, 0);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
-        ASSERT_EQ(stat->sm_valid_size, 300);
-        ASSERT_EQ(stat->sm_total_size, 300);
+        ASSERT_EQ(stat->sm_valid_size, serialized_size);
+        ASSERT_EQ(stat->sm_total_size, serialized_size);
+
+        // Verify read
+        Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ(page.data.size(), serialized_size);
 
         page_id++;
     }
 
-    // Test mix BigBlob
+    // Large write compose by multiple puts
     {
-        char c_buff1[600];
-        char c_buff2[10];
-        char c_buff3[500];
-        char c_buff4[200];
+        std::vector<double> test_scales = {1.5, 0.2, 0.4, 1.1};
+        std::vector<size_t> actual_size;
 
         WriteBatch wb;
-        wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), sizeof(c_buff1)), sizeof(c_buff1));
-        wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), sizeof(c_buff2)), sizeof(c_buff2));
-        wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff3), sizeof(c_buff3)), sizeof(c_buff3));
-        wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff4), sizeof(c_buff4)), sizeof(c_buff4));
+        for (const auto & scale : test_scales)
+        {
+            size_t serialized_size = 0;
+            MemoryWriteBuffer buffer;
+            while (buffer.count() < test_config.file_limit_size * scale)
+            {
+                buffer.write(fixed_buffer, fixed_buffer_size);
+                serialized_size += fixed_buffer_size;
+            }
+            wb.putPage(page_id++, /* tag */ 0, buffer.tryGetReadBuffer(), serialized_size);
+            actual_size.emplace_back(serialized_size);
+        }
+        ASSERT_EQ(test_scales.size(), actual_size.size());
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 4);
 
-        // PUT page_id 54 into blob 4 range [0,600]
+        // PUT page_id 54 into blob 4 (large write)
         ASSERT_EQ(records[0].page_id.low, 54);
         ASSERT_EQ(records[0].entry.file_id, 4);
         ASSERT_EQ(records[0].entry.offset, 0);
-        ASSERT_EQ(records[0].entry.size, 600);
+        ASSERT_EQ(records[0].entry.size, actual_size[0]);
 
         // PUT page_id 55 into blob 1 or 3
         ASSERT_EQ(records[1].page_id.low, 55);
         ASSERT_TRUE(records[1].entry.file_id == 1 || records[1].entry.file_id == 3);
+        ASSERT_EQ(records[1].entry.size, actual_size[1]);
 
-        // PUT page_id 56 into blob 5 range [0,600]
+        // PUT page_id 56 into blob 5
         ASSERT_EQ(records[2].page_id.low, 56);
-        ASSERT_EQ(records[2].entry.file_id, 5);
-        ASSERT_EQ(records[2].entry.offset, 0);
-        ASSERT_EQ(records[2].entry.size, 500);
+        ASSERT_TRUE(records[2].entry.file_id == 1 || records[2].entry.file_id == 3);
+        ASSERT_EQ(records[2].entry.size, actual_size[2]);
 
-        // PUT page_id 57 into blob 6 range [0,200]
+        // PUT page_id 57 into blob 6 (large write)
         ASSERT_EQ(records[3].page_id.low, 57);
-        ASSERT_EQ(records[3].entry.file_id, 6);
+        ASSERT_EQ(records[3].entry.file_id, 5);
         ASSERT_EQ(records[3].entry.offset, 0);
-        ASSERT_EQ(records[3].entry.size, 200);
+        ASSERT_EQ(records[3].entry.size, actual_size[3]);
     }
 }
 CATCH
 
-TEST_F(BlobStoreTest, TestBigBlobRemove)
+TEST_F(BlobStoreTest, LargeWriteWithFields)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
+
+    BlobConfig test_config;
+    test_config.file_limit_size = 4 * MB;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, test_config);
+
+    // PUT page_id 50 into blob 1 (large write)
+    {
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 0;
+        while (buffer.count() < test_config.file_limit_size * 2)
+        {
+            buffer.write(fixed_buffer, fixed_buffer_size);
+            serialized_size += fixed_buffer_size;
+        }
+
+        WriteBatch wb;
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        PageFieldSizes field_sizes = [&]() {
+            PageFieldSizes sizes{1035, 1 * MB + 24, 30, 50, 70, 67, 89, 97};
+            auto sum_of_sizes = std::accumulate(field_sizes.begin(), field_sizes.end(), 0UL);
+            field_sizes.emplace_back(serialized_size - sum_of_sizes);
+            return sizes;
+        }();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size, field_sizes);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
+
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        ASSERT_EQ(records[0].entry.file_id, 1);
+        ASSERT_EQ(records[0].entry.offset, 0);
+        ASSERT_EQ(records[0].entry.size, serialized_size);
+
+        // verify blobstat
+        const auto & stat = blob_store.blob_stats.blobIdToStat(1);
+        ASSERT_TRUE(stat->isReadOnly()); // large write, this stat is read only
+        ASSERT_EQ(stat->sm_max_caps, 0);
+        ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
+        ASSERT_EQ(stat->sm_valid_size, serialized_size);
+        ASSERT_EQ(stat->sm_total_size, serialized_size);
+
+        // Verify read
+        {
+            Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+            ASSERT_TRUE(page.isValid());
+            ASSERT_EQ(page.data.size(), serialized_size);
+        }
+
+        // Verify read with fields
+        {
+            BlobStore::FieldReadInfos to_read{
+                BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6, 7, 8}),
+            };
+            PageMap page_map = blob_store.read(to_read, nullptr);
+            ASSERT_NE(page_map.find(page_id), page_map.end());
+            ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
+        }
+
+        // Verify read with fields
+        {
+            BlobStore::FieldReadInfos to_read{
+                BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4, 5, 6}),
+            };
+            PageMap page_map = blob_store.read(to_read, nullptr);
+            ASSERT_NE(page_map.find(page_id), page_map.end());
+            ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
+        }
+
+        // Verify read with fields
+        {
+            BlobStore::FieldReadInfos to_read{
+                BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {1, 2, 3, 5, 6, 8}),
+            };
+            PageMap page_map = blob_store.read(to_read, nullptr);
+            ASSERT_NE(page_map.find(page_id), page_map.end());
+            ASSERT_EQ(page_map.at(page_id).fieldSize(), to_read[0].fields.size());
+        }
+
+        page_id++;
+    }
+}
+CATCH
+
+
+TEST_F(BlobStoreTest, LargeWriteWithFailed)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
+    PageId fixed_page_id = 50;
+    PageId page_id = fixed_page_id;
+
+    BlobConfig test_config;
+    test_config.file_limit_size = 4 * MB;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, test_config);
+
+    // PUT page_id 50 into blob 1 (normal write)
+    {
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 200;
+        buffer.write(fixed_buffer, serialized_size);
+
+        WriteBatch wb;
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
+
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        ASSERT_EQ(records[0].entry.file_id, 1);
+        ASSERT_EQ(records[0].entry.offset, 0);
+        ASSERT_EQ(records[0].entry.size, serialized_size);
+
+        const auto & stat = blob_store.blob_stats.blobIdToStat(1);
+        ASSERT_TRUE(stat->isNormal());
+        ASSERT_EQ(stat->sm_max_caps, test_config.file_limit_size - serialized_size);
+        ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
+        ASSERT_EQ(stat->sm_valid_size, serialized_size);
+        ASSERT_EQ(stat->sm_total_size, serialized_size);
+
+        // Verify read
+        Page page = blob_store.read(std::make_pair(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry), nullptr);
+        ASSERT_TRUE(page.isValid());
+        ASSERT_EQ(page.data.size(), serialized_size);
+
+        page_id++;
+    }
+
+    // PUT page_id 51 into blob 2 (large write, fail happen)
+    {
+        MemoryWriteBuffer buffer;
+        size_t serialized_size = 0;
+        while (buffer.count() < test_config.file_limit_size * 2)
+        {
+            buffer.write(fixed_buffer, fixed_buffer_size);
+            serialized_size += fixed_buffer_size;
+        }
+
+        const auto num_stats = blob_store.blob_stats.getStats().size();
+        ASSERT_EQ(num_stats, 1);
+
+        WriteBatch wb;
+        ReadBufferPtr read_buff = buffer.tryGetReadBuffer();
+        wb.putPage(page_id, /* tag */ 0, read_buff, serialized_size);
+
+        // throw an exception after write exceed `test_config.file_limit_size`
+        FailPointHelper::enableFailPoint(FailPoints::exception_after_large_write_exceed, static_cast<size_t>(test_config.file_limit_size));
+        try
+        {
+            blob_store.write(std::move(wb), nullptr);
+        }
+        catch (DB::Exception & e)
+        {
+            ASSERT_EQ(e.code(), ErrorCodes::FAIL_POINT_ERROR);
+        }
+
+        // no new-added stat
+        ASSERT_EQ(blob_store.blob_stats.blobIdToStat(2, /*ignore_not_exist*/ true), nullptr);
+
+        page_id++;
+    }
+}
+CATCH
+
+TEST_F(BlobStoreTest, LargeWriteRemove)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
     PageId fixed_page_id = 50;
     PageId page_id = fixed_page_id;
 
@@ -1310,7 +1524,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_500);
         wb.putPage(page_id, /* tag */ 0, buff, size_500);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        PageEntriesEdit edit = blob_store.write(std::move(wb), nullptr);
 
         const auto & gc_info = blob_store.getGCStats();
         ASSERT_TRUE(gc_info.empty());
@@ -1324,10 +1538,10 @@ try
 }
 CATCH
 
-TEST_F(BlobStoreTest, TestBigBlobRegisterPath)
+TEST_F(BlobStoreTest, LargeWriteRegisterPath)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
     PageId fixed_page_id = 50;
     PageId page_id = fixed_page_id;
 
@@ -1343,7 +1557,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_500);
         wb.putPage(page_id, /* tag */ 0, buff, size_500);
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         entry_from_write = records[0].entry;
@@ -1367,7 +1581,7 @@ CATCH
 TEST_F(BlobStoreTest, TestRestartWithSmallerFileLimitSize)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
     PageId page_id = 50;
 
     BlobConfig config_with_small_file_limit_size;
@@ -1387,7 +1601,7 @@ try
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), size_200);
         wb.putPage(page_id, /* tag */ 0, buff1, size_500);
         wb.putPage(page_id + 1, /* tag */ 0, buff2, size_200);
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 2);
         entry_from_write1 = records[0].entry;
@@ -1421,7 +1635,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_100);
         wb.putPage(page_id, /* tag */ 0, buff, size_100);
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 2);
@@ -1434,10 +1648,10 @@ try
 }
 CATCH
 
-TEST_F(BlobStoreTest, TestBigBlobGC)
+TEST_F(BlobStoreTest, LargeWriteGC)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getMockFileProvider();
     PageId page_id1 = 50;
     PageId page_id2 = 51;
     PageId page_id3 = 52;
@@ -1464,7 +1678,7 @@ try
         wb.putPage(page_id1, /* tag */ 0, buff1, size_100);
         wb.putPage(page_id2, /* tag */ 0, buff2, size_500);
         wb.putPage(page_id3, /* tag */ 0, buff3, size_200);
-        auto edit = blob_store.write(wb, nullptr);
+        auto edit = blob_store.write(std::move(wb), nullptr);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 3);
         entry_from_write1 = records[0].entry;
