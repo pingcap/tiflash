@@ -209,7 +209,7 @@ void JoinPartition::initMap()
     if (isCrossJoin(kind))
         return;
 
-    if (useRowFlaggedHashMapIfHasOtherCondition(kind))
+    if (isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
         if (has_other_condition)
             initImpl(maps_all_full_with_row_flag, join_map_method);
@@ -667,7 +667,7 @@ template <typename Map>
 Map & JoinPartition::getHashMap()
 {
     assert(!spill);
-    if (useRowFlaggedHashMapIfHasOtherCondition(kind))
+    if (isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
         if (has_other_condition)
             return getMapImpl<Map>(maps_all_full_with_row_flag, join_map_method);
@@ -713,7 +713,7 @@ void JoinPartition::insertBlockIntoMaps(
         else
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAll>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);
     }
-    else if (useRowFlaggedHashMapIfHasOtherCondition(current_kind))
+    else if (isNecessaryKindToUseRowFlaggedHashMap(current_kind))
     {
         if (current_join_partition->has_other_condition)
             insertBlockIntoMapsImpl<ASTTableJoin::Strictness::All, MapsAllFullWithRowFlag>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, insert_concurrency, enable_fine_grained_shuffle, enable_join_spill);

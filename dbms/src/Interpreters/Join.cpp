@@ -156,7 +156,7 @@ Join::Join(
 
     if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
-    RUNTIME_CHECK(!(useRowFlaggedHashMapIfHasOtherCondition(kind) && strictness == ASTTableJoin::Strictness::Any));
+    RUNTIME_CHECK(!(isNecessaryKindToUseRowFlaggedHashMap(kind) && strictness == ASTTableJoin::Strictness::Any));
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
@@ -697,7 +697,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
-    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || useRowFlaggedHashMapIfHasOtherCondition(kind))
+    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
         /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
@@ -890,7 +890,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (useRowFlaggedHashMapIfHasOtherCondition(kind))
+        if (isNecessaryKindToUseRowFlaggedHashMap(kind))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
@@ -902,22 +902,23 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
-        }
-        if (isRightSemiFamily(kind))
-        {
-            // Return build table header for right semi/anti join
-            block = sample_block_with_columns_to_add;
-        }
-        else if (kind == ASTTableJoin::Kind::RightOuter)
-        {
-            block.erase(flag_mapped_entry_helper_name);
-            if (!non_equal_conditions.other_cond_name.empty())
+
+            if (isRightSemiFamily(kind))
             {
-                block.erase(non_equal_conditions.other_cond_name);
+                // Return build table header for right semi/anti join
+                block = sample_block_with_columns_to_add;
             }
-            if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
+            else if (kind == ASTTableJoin::Kind::RightOuter)
             {
-                block.erase(non_equal_conditions.other_eq_cond_from_in_name);
+                block.erase(flag_mapped_entry_helper_name);
+                if (!non_equal_conditions.other_cond_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_cond_name);
+                }
+                if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_eq_cond_from_in_name);
+                }
             }
         }
     }
