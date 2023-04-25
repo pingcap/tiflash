@@ -208,7 +208,7 @@ public:
 
     void addNullableActionForColumnRef(
         const tipb::Expr & expr,
-        const ExpressionActionsPtr & actions);
+        const ExpressionActionsPtr & actions) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

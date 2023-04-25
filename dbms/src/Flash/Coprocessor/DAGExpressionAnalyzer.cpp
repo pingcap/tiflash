@@ -1511,7 +1511,7 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-void DAGExpressionAnalyzer::addNullableActionForColumnRef(const tipb::Expr & expr, const ExpressionActionsPtr & actions)
+void DAGExpressionAnalyzer::addNullableActionForColumnRef(const tipb::Expr & expr, const ExpressionActionsPtr & actions) const
 {
     if (isColumnExpr(expr))
     {
