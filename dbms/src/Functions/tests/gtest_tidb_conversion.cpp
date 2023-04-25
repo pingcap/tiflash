@@ -1311,7 +1311,7 @@ CATCH
 TEST_F(TestTidbConversion, truncateInCastDecimalAsDecimal)
 try
 {
-    DAGContext * dag_context = context->getDAGContext();
+    DAGContext * dag_context = context.getDAGContext();
     UInt64 ori_flags = dag_context->getFlags();
     dag_context->addFlag(TiDBSQLFlags::IN_INSERT_STMT | TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT);
     dag_context->clearWarnings();
