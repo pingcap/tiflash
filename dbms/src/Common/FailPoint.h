@@ -22,6 +22,8 @@
 #include <any>
 #include <unordered_map>
 
+#include "Logger.h"
+
 namespace Poco
 {
 namespace Util
@@ -65,8 +67,10 @@ public:
      * 3. Call enableRandomFailPoint method with parsed FailPointName and Rate
      */
     static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    static void disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
+
 
 private:
 #ifdef FIU_ENABLE

@@ -318,6 +318,22 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
     LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+{
+    String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
+    if (random_fail_point_cfg.empty())
+        return;
+
+    Poco::StringTokenizer string_tokens(random_fail_point_cfg, ",");
+    for (const auto & string_token : string_tokens)
+    {
+        Poco::StringTokenizer pair_tokens(string_token, "-");
+        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        disableFailPoint(pair_tokens[0]);
+    }
+    LOG_INFO(log, "Disable RandomFailPoints: {}", random_fail_point_cfg);
+}
+
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
 {
 #define SUB_M(NAME)                                               \

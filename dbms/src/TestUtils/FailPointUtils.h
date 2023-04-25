@@ -22,15 +22,14 @@ namespace DB
 namespace tests
 {
 void initRandomFailPoint(const String & config_str);
+void disableRandomFailPoint(const String & config_str);
 
 #define FAILPOINT_TEST_BEGIN \
     size_t i = 0;            \
-    for (; i < 100; ++i)   \
+    for (; i < 30; ++i)     \
     {                        \
         try                  \
-        {\
-
-
+        {
 #define FAILPOINT_TEST_END                                 \
     }                                                      \
     catch (...)                                            \
@@ -38,6 +37,6 @@ void initRandomFailPoint(const String & config_str);
         ::DB::tryLogCurrentException(__PRETTY_FUNCTION__); \
     }                                                      \
     }                                                      \
-    ASSERT_EQ(i, 100);
+    ASSERT_EQ(i, 30);
 } // namespace tests
 } // namespace DB

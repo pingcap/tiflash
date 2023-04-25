@@ -17,6 +17,7 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+
 #include "mockExecutor.h"
 
 namespace DB::tests

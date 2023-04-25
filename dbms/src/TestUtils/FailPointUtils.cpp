@@ -25,5 +25,11 @@ void initRandomFailPoint(const String & config_str)
     FailPointHelper::initRandomFailPoints(*config, Logger::get("test"));
 }
 
+void disableRandomFailPoint(const String & config_str)
+{
+    auto config = loadConfigFromString(config_str);
+    FailPointHelper::disableRandomFailPoints(*config, Logger::get("test"));
+}
+
 } // namespace tests
 } // namespace DB

@@ -20,7 +20,6 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -767,11 +766,6 @@ catch (Exception & e)
 
 TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
 {
-   String config_str = R"(
-[flash]
-random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_tunnel_init_rpc_failure_failpoint-0.04,random_exception_when_connect_local_tunnel-0.04")";
-    initRandomFailPoint(config_str);
-    FAILPOINT_TEST_BEGIN
     MockExchangeReceiverPtr receiver_ptr;
     MPPTunnelPtr tunnel = nullptr;
     try
@@ -779,106 +773,81 @@ random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_time
         auto [receiver, tunnels] = prepareLocal(1);
         receiver_ptr = receiver;
         tunnel = tunnels[0];
-        // GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
+        GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
         tunnel->close("", false);
         tunnel->write(newDataPacket("First"));
-        // GTEST_FAIL();
+        GTEST_FAIL();
     }
     catch (Exception & e)
     {
-        // GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
     }
     if (tunnel != nullptr)
         tunnel->waitForFinish();
-    FAILPOINT_TEST_END
 }
 
 TEST_F(TestMPPTunnel, SyncTunnelNonBlockingWrite)
 {
-    String config_str = R"(
-[flash]
-random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_tunnel_init_rpc_failure_failpoint-0.04,random_exception_when_connect_local_tunnel-0.04")";
-    initRandomFailPoint(config_str);
-    FAILPOINT_TEST_BEGIN
     auto writer_ptr = std::make_unique<MockPacketWriter>();
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
-    // GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
-    // ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
-    FAILPOINT_TEST_END
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 
-    // GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.size(), 1);
-    // GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.back(), "First");
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.back(), "First");
 }
 
 TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
 {
-    String config_str = R"(
-[flash]
-random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_tunnel_init_rpc_failure_failpoint-0.04,random_exception_when_connect_local_tunnel-0.04")";
-    initRandomFailPoint(config_str);
-    FAILPOINT_TEST_BEGIN
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
     mpp_tunnel_ptr->connectAsync(call_data.get());
-    // GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockAsyncCallData::run, call_data.get());
 
-    // ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
 
-    // GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
-    // GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
-    FAILPOINT_TEST_END
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
 }
 
 TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
 {
-    String config_str = R"(
-[flash]
-random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_tunnel_init_rpc_failure_failpoint-0.04,random_exception_when_connect_local_tunnel-0.04")";
-    initRandomFailPoint(config_str);
-    FAILPOINT_TEST_BEGIN
     auto [receiver, tunnels] = prepareLocal(1);
     const auto & mpp_tunnel_ptr = tunnels.back();
-    // GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
-    // ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
-    // GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
-    FAILPOINT_TEST_END
 
-    // GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
-    // GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
 }
 
 TEST_F(TestMPPTunnel, isReadyForWriteTimeout)
 try
 {
-    String config_str = R"(
-[flash]
-random_fail_points = "random_tunnel_write_failpoint-0.04,random_tunnel_wait_timeout_failpoint-0.04,random_tunnel_init_rpc_failure_failpoint-0.04,random_exception_when_connect_local_tunnel-0.04")";
-    initRandomFailPoint(config_str);
-    FAILPOINT_TEST_BEGIN
     timeout = std::chrono::seconds(1);
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     while (stop_watch.elapsedSeconds() < 3 * timeout.count())
     {
-        // ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
+        ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
     }
-    FAILPOINT_TEST_END
-    // GTEST_FAIL();
+    GTEST_FAIL();
 }
 catch (Exception & e)
 {
