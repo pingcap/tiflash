@@ -62,42 +62,39 @@ void PipelineExecutor::wait()
     }
 }
 
-void PipelineExecutor::consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler)
+void PipelineExecutor::consume(ResultHandler & result_handler)
 {
-    Block ret;
+    assert(result_handler);
     if (unlikely(context.isTest()))
     {
         // In test mode, a single query should take no more than 5 minutes to execute.
         static std::chrono::minutes timeout(5);
-        while (result_queue->popTimeout(ret, timeout) == MPMCQueueResult::OK)
-            result_handler(ret);
+        status.consumeFor(result_handler, timeout);
     }
     else
     {
-        while (result_queue->pop(ret) == MPMCQueueResult::OK)
-            result_handler(ret);
+        status.consume(result_handler);
     }
 }
 
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
-    if (result_handler.isIgnored())
-    {
-        scheduleEvents();
-        wait();
-    }
-    else
+    if (result_handler)
     {
         ///                                 ┌──get_result_sink
         /// result_handler◄──result_queue◄──┼──get_result_sink
         ///                                 └──get_result_sink
 
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
-        auto result_queue = status.registerResultQueue(/*queue_size=*/context.getMaxStreams() * 5);
         assert(root_pipeline);
-        root_pipeline->addGetResultSink(result_queue);
+        root_pipeline->addGetResultSink(status.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
         scheduleEvents();
-        consume(result_queue, std::move(result_handler));
+        consume(result_handler);
+    }
+    else
+    {
+        scheduleEvents();
+        wait();
     }
     return status.toExecutionResult();
 }
