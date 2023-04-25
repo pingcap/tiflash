@@ -524,11 +524,14 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     }
     for (size_t i = 0; i < rows; ++i)
     {
-        if (has_null_map && (*null_map)[i])
+        if constexpr (has_null_map)
         {
-            if (rows_not_inserted_to_map)
-                segment_index_info[segment_index_info.size() - 1].push_back(i);
-            continue;
+            if ((*null_map)[i])
+            {
+                if (rows_not_inserted_to_map)
+                    segment_index_info[segment_index_info.size() - 1].push_back(i);
+                continue;
+            }
         }
         auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
         SCOPE_EXIT(keyHolderDiscardKey(key_holder));
@@ -551,6 +554,13 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes[i] = insert_index;
     }
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
+    auto insert_segment = [&](size_t segment_index) {
+        auto & current_map = join_partitions[segment_index]->getHashMap<Map>();
+        for (auto & i : segment_index_info[segment_index])
+        {
+            Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
+        }
+    };
     while (!insert_indexes.empty())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
@@ -571,15 +581,20 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         {
             if (auto spin_lock = join_partitions[segment_index]->spinLockPartition(); spin_lock)
             {
-                auto & current_map = join_partitions[segment_index]->getHashMap<Map>();
-                for (auto & i : segment_index_info[segment_index])
-                {
-                    Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
-                }
+                insert_segment(segment_index);
             }
             else
             {
-                insert_indexes.push_front(segment_index);
+                if (insert_indexes.empty())
+                {
+                    join_partitions[segment_index]->lockPartition();
+                    insert_segment(segment_index);
+                    break;
+                }
+                else
+                {
+                    insert_indexes.push_front(segment_index);
+                }
             }
         }
     }
