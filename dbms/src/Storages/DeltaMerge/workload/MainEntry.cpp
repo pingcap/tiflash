@@ -470,7 +470,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     genFile(local_fname, fsize, value);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::uploadFile(*client, local_fname, remote_fname);
+    S3::uploadFile(*client, local_fname, remote_fname, S3::ClientFactory::instance().verifyChecksumAfterUploading());
     addRemoteFname(remote_fname, fsize);
     s3_stat.addPutStat(remote_fname, sw.elapsedSeconds());
     std::filesystem::remove(local_fname);
@@ -484,7 +484,7 @@ void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     auto local_fname = fmt::format("{}/{}/{}", opts.s3_temp_dir, tid, index++);
     auto client = getS3Client(opts);
     Stopwatch sw;
-    S3::downloadFileByS3RandomAccessFile(client, local_fname, remote_fname);
+    S3::downloadFile(*client, local_fname, remote_fname, S3::ClientFactory::instance().verifyChecksumAfterDownloading());
     s3_stat.addGetStat(remote_fname, sw.elapsedSeconds());
     auto download_size = std::filesystem::file_size(local_fname);
     std::cout << fmt::format("GetObject {} bytes={} cost={:.3f}s", remote_fname, download_size, sw.elapsedSeconds()) << std::endl;
@@ -532,6 +532,7 @@ void benchS3(WorkloadOptions & opts)
     }
 
     DB::StorageS3Config config = {
+        .verbose = true,
         .endpoint = opts.s3_endpoint,
         .bucket = opts.s3_bucket,
         .access_key_id = opts.s3_access_key_id,
@@ -541,6 +542,19 @@ void benchS3(WorkloadOptions & opts)
     std::cout << fmt::format("StorageS3Config: {}", config.toString()) << std::endl;
     DB::S3::ClientFactory::instance().init(config);
 
+    String local_fname = "checksum";
+    {
+        std::ofstream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
+        ostr << "0123456789abcdefghijklmnopq";
+    }
+    S3::uploadFile(*DB::S3::ClientFactory::instance().sharedTiFlashClient(), local_fname, local_fname, config.verify_checksum_after_uploading);
+    
+    S3::downloadFile(
+        *DB::S3::ClientFactory::instance().sharedTiFlashClient(), 
+        "checksum_download",
+        local_fname,
+        DB::S3::ClientFactory::instance().verifyChecksumAfterDownloading());
+    return;
     // Threads for GetObject
     S3FileCachePool::initialize(
         /*max_threads*/ opts.s3_get_concurrency,

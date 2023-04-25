@@ -44,6 +44,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     LOG_DEBUG(log, "Start upload DMFile, local_dir={} remote_dir={} local_files={}", local_dir, remote_dir, local_files);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto verify_checksum = S3::ClientFactory::instance().verifyChecksumAfterUploading();
 
     std::vector<std::future<void>> upload_results;
     for (const auto & [fname, fsize] : local_files)
@@ -58,7 +59,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
             [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(*s3_client, local_fname, remote_fname);
+                S3::uploadFile(*s3_client, local_fname, remote_fname, verify_checksum);
             });
         upload_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
@@ -71,7 +72,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
     auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-    S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname);
+    S3::uploadFile(*s3_client, local_meta_fname, remote_meta_fname, verify_checksum);
 
     if (remove_local)
     {
@@ -83,6 +84,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto verify_checksum = S3::ClientFactory::instance().verifyChecksumAfterUploading();
 
     /// First upload all CheckpointData files and their locks,
     /// then upload the CheckpointManifest to make the files within
@@ -96,7 +98,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
             const auto & local_datafile = local_files.data_files[idx];
             auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
             auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
-            S3::uploadFile(*s3_client, local_datafile, s3key.toFullKey());
+            S3::uploadFile(*s3_client, local_datafile, s3key.toFullKey(), verify_checksum);
             S3::uploadEmptyFile(*s3_client, lock_key);
         });
         upload_results.push_back(task->get_future());
@@ -109,7 +111,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
 
     // upload manifest after all CheckpointData uploaded
     auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
-    S3::uploadFile(*s3_client, local_files.manifest_file, s3key.toFullKey());
+    S3::uploadFile(*s3_client, local_files.manifest_file, s3key.toFullKey(), verify_checksum);
 
     return true; // upload success
 }
@@ -162,6 +164,7 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesIn
 void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vector<String> & target_short_fnames, const String & local_dir)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    bool verify_checksum = S3::ClientFactory::instance().verifyChecksumAfterDownloading();
     const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
     std::vector<std::future<void>> results;
     results.reserve(target_short_fnames.size());
@@ -171,9 +174,7 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto task = std::make_shared<std::packaged_task<void()>>(
             [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                auto tmp_fname = fmt::format("{}.tmp", local_fname);
-                S3::downloadFile(*s3_client, tmp_fname, remote_fname);
-                Poco::File(tmp_fname).renameTo(local_fname);
+                S3::downloadFile(*s3_client, local_fname, remote_fname, verify_checksum);
             });
         results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });

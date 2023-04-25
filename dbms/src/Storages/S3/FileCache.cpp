@@ -168,7 +168,7 @@ void FileCache::removeDiskFile(const String & local_fname)
                 std::filesystem::remove(p); // If p is a directory, remove success only when it is empty.
                 // Temporary files are not reported size to metrics until they are renamed.
                 // So we don't need to free its size here.
-                if (s == local_fname && !isTemporaryFilename(local_fname))
+                if (s == local_fname && !S3::isTemporaryFilename(local_fname))
                 {
                     capacity_metrics->freeUsedSize(local_fname, fsize);
                 }
@@ -213,7 +213,7 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable
     }
     const auto & local_fname = f->getLocalFileName();
     removeDiskFile(local_fname);
-    auto temp_fname = toTemporaryFilename(local_fname);
+    auto temp_fname = S3::toTemporaryFilename(local_fname);
     removeDiskFile(temp_fname);
 
     auto release_size = f->getSize();
@@ -418,6 +418,10 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Aws::S3::Model::GetObjectRequest req;
+    if (S3::ClientFactory::instance().verifyChecksumAfterDownloading())
+    {
+        req.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
+    }
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client->GetObject(req);
@@ -439,7 +443,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
 
     const auto & local_fname = file_seg->getLocalFileName();
     prepareParentDir(local_fname);
-    auto temp_fname = toTemporaryFilename(local_fname);
+    auto temp_fname = S3::toTemporaryFilename(local_fname);
     {
         Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
@@ -452,12 +456,27 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
             ostr.flush();
         }
     }
+    const auto & remote_checksum = result.GetChecksumCRC32();
+    if (!remote_checksum.empty())
+    {
+        auto local_checksum = S3::crc32OfFile(temp_fname, log);
+        RUNTIME_CHECK(local_checksum == remote_checksum, local_checksum, remote_checksum, s3_key);
+        LOG_DEBUG(log, "s3_key={} local_checksum={} remote_checksum={}", s3_key, local_fname, remote_checksum);
+    }
+
     std::filesystem::rename(temp_fname, local_fname);
     auto fsize = std::filesystem::file_size(local_fname);
     capacity_metrics->addUsedSize(local_fname, fsize);
-    RUNTIME_CHECK_MSG(fsize == static_cast<UInt64>(content_length), "local_fname={}, file_size={}, content_length={}", local_fname, fsize, content_length);
+    RUNTIME_CHECK(fsize == static_cast<UInt64>(content_length), local_fname, fsize, content_length);
     file_seg->setStatus(FileSegment::Status::Complete);
-    LOG_DEBUG(log, "Download s3_key={} to local={} size={} cost={}ms", s3_key, local_fname, content_length, sw.elapsedMilliseconds());
+    LOG_DEBUG(
+        log,
+        "downloadImpl s3_key={} to local={} content_length={} checksum={} cost={:.3f}s",
+        s3_key,
+        local_fname,
+        content_length,
+        remote_checksum,
+        sw.elapsedSeconds());
 }
 
 void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
@@ -510,25 +529,6 @@ String FileCache::toLocalFilename(const String & s3_key)
 String FileCache::toS3Key(const String & local_fname)
 {
     return local_fname.substr(cache_dir.size() + 1);
-}
-
-String FileCache::toTemporaryFilename(const String & fname)
-{
-    std::filesystem::path p(fname);
-    if (p.extension() != ".tmp")
-    {
-        return fmt::format("{}.tmp", fname);
-    }
-    else
-    {
-        return fname;
-    }
-}
-
-bool FileCache::isTemporaryFilename(const String & fname)
-{
-    std::filesystem::path p(fname);
-    return p.extension() == ".tmp";
 }
 
 void FileCache::prepareDir(const String & dir)
@@ -597,7 +597,7 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
     {
         RUNTIME_CHECK_MSG(file_entry.is_regular_file(), "{} is not a regular file", file_entry.path());
         auto fname = file_entry.path().string();
-        if (unlikely(isTemporaryFilename(fname)))
+        if (unlikely(S3::isTemporaryFilename(fname)))
         {
             removeDiskFile(fname);
         }

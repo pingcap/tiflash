@@ -20,6 +20,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>
@@ -74,6 +75,7 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <thread>
 
@@ -577,12 +579,65 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
     retryWrapper(doUploadEmptyFile, client, key, tagging, max_retry_times);
 }
 
-static bool doUploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, Int32 max_retry_times, Int32 current_retry)
+String crc32OfFile(const String & fname, const DB::LoggerPtr & log)
+{
+    Stopwatch sw;
+    Digest::CRC32 digest;
+    auto file = PosixRandomAccessFile::create(fname);
+    thread_local char buf[DBMS_DEFAULT_BUFFER_SIZE];
+    size_t fsize = 0;
+    for (;;)
+    {
+        auto n = file->read(buf, DBMS_DEFAULT_BUFFER_SIZE);
+        RUNTIME_CHECK(n >= 0, errno, strerror(errno), fname);
+        if (n > 0)
+        {
+            fsize += n;
+            digest.update(buf, n);
+        }
+        else
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+    auto output = std::ostringstream{};
+    {
+        auto checksum = digest.checksum();
+        // Big endian is required in S3 SDK.
+        auto n = ::htonl(checksum);
+        auto encoder = Poco::Base64Encoder{output};
+        encoder.write(reinterpret_cast<const char *>(&n), sizeof(n));
+    }
+    auto base64_checksum = output.str();
+    auto elapsed_seconds = sw.elapsedSeconds();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_crc32_checksum).Observe(elapsed_seconds);
+    LOG_DEBUG(log, "crc32OfFile fname={} fsize={} checksum={} cost={:.3f}s", fname, fsize, base64_checksum, elapsed_seconds);
+    return base64_checksum;
+}
+
+static bool doUploadFile(
+    const TiFlashS3Client & client,
+    const String & local_fname,
+    const String & remote_fname,
+    const std::optional<String> & local_checksum,
+    Int32 max_retry_times,
+    Int32 current_retry)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
     client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
+    if (local_checksum)
+    {
+        req.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
+    }
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
     auto write_bytes = std::filesystem::file_size(local_fname);
@@ -592,57 +647,98 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     {
         ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
     }
-    auto result = client.PutObject(req);
-    if (!result.IsSuccess())
+    auto outcome = client.PutObject(req);
+    if (!outcome.IsSuccess())
     {
         if (current_retry == max_retry_times - 1) // Last request
         {
-            throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            throw fromS3Error(
+                outcome.GetError(), 
+                "S3 PutObject failed, local_fname={} remote_fname={} bucket={} root={}",
+                local_fname,
+                remote_fname,
+                client.bucket(),
+                client.root());
         }
         else
         {
-            const auto & e = result.GetError();
+            const auto & e = outcome.GetError();
             LOG_ERROR(
                 client.log,
-                "S3 PutObject failed: {}, request_id={} local_fname={} bucket={} root={} key={}",
+                "S3 PutObject failed: {}, request_id={} local_fname={} remote_fname={}",
                 e.GetMessage(),
                 e.GetRequestId(),
                 local_fname,
-                client.bucket(),
-                client.root(),
                 remote_fname);
             return false;
         }
     }
+    if (local_checksum)
+    {
+        const auto & remote_checksum = outcome.GetResult().GetChecksumCRC32();
+        RUNTIME_CHECK(*local_checksum == remote_checksum, local_fname, remote_fname, *local_checksum, remote_checksum);
+    }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.3f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(
+        client.log,
+        "doUploadFile local_fname={} remote_fname={} write_bytes={} cost={:.3f}s checksum={}",
+        local_fname,
+        remote_fname,
+        write_bytes,
+        elapsed_seconds,
+        local_checksum ? *local_checksum : "");
     return true;
 }
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times)
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, bool verify_checksum, int max_retry_times)
 {
-    retryWrapper(doUploadFile, client, local_fname, remote_fname, max_retry_times);
+    auto checksum = verify_checksum ? std::optional<String>(crc32OfFile(local_fname, client.log)) : std::nullopt;
+    retryWrapper(doUploadFile, client, local_fname, remote_fname, checksum, max_retry_times);
 }
 
-void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
+void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, bool verify_checksum)
 {
     Stopwatch sw;
     Aws::S3::Model::GetObjectRequest req;
+    if (verify_checksum)
+    {
+        req.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
+    }
     client.setBucketAndKeyWithRoot(req, remote_fname);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client.GetObject(req);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "S3 GetObject failed, bucket={} root={} key={}", client.bucket(), client.root(), remote_fname);
+        throw fromS3Error(outcome.GetError(), "S3 GetObject failed, remote_fname={}", remote_fname);
     }
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, outcome.GetResult().GetContentLength());
+    auto content_length = outcome.GetResult().GetContentLength();
+    ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
-    Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
-    RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
-    ostr << outcome.GetResult().GetBody().rdbuf();
-    RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+
+    auto tmp_local_fname = toTemporaryFilename(local_fname);
+    {
+        Aws::OFStream ostr(tmp_local_fname, std::ios_base::out | std::ios_base::binary);
+        RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", tmp_local_fname, strerror(errno));
+        ostr << outcome.GetResult().GetBody().rdbuf();
+        RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", tmp_local_fname, strerror(errno));
+    }
+
+    if (const auto & remote_checksum = outcome.GetResult().GetChecksumCRC32(); !remote_checksum.empty())
+    {
+        auto local_checksum = crc32OfFile(tmp_local_fname, client.log);
+        RUNTIME_CHECK(local_checksum == remote_checksum, local_fname, remote_fname, local_checksum, remote_checksum, content_length);
+    }
+    std::filesystem::rename(tmp_local_fname, local_fname);
+    LOG_DEBUG(
+        client.log,
+        "local_fname={} remote_fname={} checksum={} content_length={} cost={:.3f}s",
+        local_fname,
+        remote_fname,
+        outcome.GetResult().GetChecksumCRC32(),
+        outcome.GetResult().GetContentLength(),
+        sw.elapsedSeconds());
 }
 
 
@@ -1068,6 +1164,16 @@ void rawDeleteObject(const Aws::S3::S3Client & client, const String & bucket, co
     const auto & res = o.GetResult();
     UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
+}
+
+bool isTemporaryFilename(const String & fname)
+{
+    return std::filesystem::path(fname).extension() == ".tmp";
+}
+
+String toTemporaryFilename(const String & fname)
+{
+    return isTemporaryFilename(fname) ? fname : fmt::format("{}.tmp", fname);
 }
 
 } // namespace DB::S3

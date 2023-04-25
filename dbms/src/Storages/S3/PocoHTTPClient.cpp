@@ -266,9 +266,24 @@ void PocoHTTPClient::makeRequestInternal(
 
             /// Headers coming from SDK are lower-cased.
             for (const auto & [header_name, header_value] : request.GetHeaders())
+            {
                 poco_request.set(header_name, header_value);
+                if (header_name == "x-amz-sdk-checksum-algorithm")
+                {
+                    poco_request.set("X-Amz-Checksum-Algorithm", "CRC32C");
+                }
+            }
             for (const auto & [header_name, header_value] : extra_headers)
                 poco_request.set(boost::algorithm::to_lower_copy(header_name), header_value);
+
+            {
+                WriteBufferFromOwnString headers_ss;
+                for (const auto & [header_name, header_value] : poco_request)
+                {
+                    headers_ss << header_name << ": " << header_value << "; ";
+                }
+                LOG_DEBUG(log, "URI={}, Request headers: {}", uri, headers_ss.str());
+            }
 
             Poco::Net::HTTPResponse poco_response;
 
