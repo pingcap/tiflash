@@ -185,4 +185,5 @@ ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuild
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     return executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
 }
+
 } // namespace DB::tests

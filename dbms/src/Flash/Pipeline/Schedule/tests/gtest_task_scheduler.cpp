@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -25,7 +26,7 @@ namespace
 class Waiter
 {
 public:
-    Waiter(size_t init_value)
+    explicit Waiter(size_t init_value)
         : counter(init_value)
     {}
     void notify()
@@ -58,7 +59,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleTask()
+    ~SimpleTask() override
     {
         waiter.notify();
     }
@@ -83,7 +84,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleWaitingTask()
+    ~SimpleWaitingTask() override
     {
         waiter.notify();
     }
@@ -131,7 +132,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleBlockedTask()
+    ~SimpleBlockedTask() override
     {
         waiter.notify();
     }
@@ -187,7 +188,7 @@ public:
         , waiter(waiter_)
     {}
 
-    ~MemoryTraceTask()
+    ~MemoryTraceTask() override
     {
         waiter.notify();
     }
@@ -261,7 +262,15 @@ class TaskSchedulerTestRunner : public ::testing::Test
 public:
     static constexpr size_t thread_num = 5;
 
-    void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
+    void SetUp() override
+    {
+        String config_str = R"(
+[flash]
+random_fail_points = "random_pipeline_model_task_run_failpoint-0.04,random_pipeline_model_task_construct_failpoint-0.04,random_pipeline_model_event_schedule_failpoint-0.04,random_pipeline_model_event_finish_failpoint-0.04,random_pipeline_model_operator_run_failpoint-0.04,random_pipeline_model_cancel_failpoint-0.04")";
+        initRandomFailPoint(config_str);
+    }
+
+    static void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
         TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
@@ -270,9 +279,10 @@ public:
     }
 };
 
-TEST_F(TaskSchedulerTestRunner, simple_task)
+TEST_F(TaskSchedulerTestRunner, simpleTask)
 try
 {
+    FAILPOINT_TEST_BEGIN
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         Waiter waiter(task_num);
@@ -281,12 +291,14 @@ try
             tasks.push_back(std::make_unique<SimpleTask>(waiter));
         submitAndWait(tasks, waiter);
     }
+    FAILPOINT_TEST_END
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
+TEST_F(TaskSchedulerTestRunner, simpleWaitingTask)
 try
 {
+    FAILPOINT_TEST_BEGIN
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         Waiter waiter(task_num);
@@ -295,12 +307,14 @@ try
             tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
         submitAndWait(tasks, waiter);
     }
+    FAILPOINT_TEST_END
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, test_memory_trace)
+TEST_F(TaskSchedulerTestRunner, testMemoryTrace)
 try
 {
+    FAILPOINT_TEST_BEGIN
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
         auto tracker = MemoryTracker::create();
@@ -312,12 +326,14 @@ try
         submitAndWait(tasks, waiter);
         // The value of the memory tracer is not checked here because of `std::memory_order_relaxed`.
     }
+    FAILPOINT_TEST_END
 }
 CATCH
 
 TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
+    FAILPOINT_TEST_BEGIN
     auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
         TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
         TaskScheduler task_scheduler{config};
@@ -333,6 +349,7 @@ try
         for (auto task_num : task_nums)
             do_test(task_thread_pool_size, task_num);
     }
+    FAILPOINT_TEST_END
 }
 CATCH
 

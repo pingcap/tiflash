@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -372,6 +373,11 @@ CATCH
 TEST_F(ComputeServerRunner, runJoinThenAggTasks)
 try
 {
+    String config_str = R"(
+[flash]
+random_fail_points = "random_pipeline_model_task_run_failpoint-0.04,random_pipeline_model_task_construct_failpoint-0.04,random_pipeline_model_event_schedule_failpoint-0.04,random_pipeline_model_event_finish_failpoint-0.04,random_pipeline_model_operator_run_failpoint-0.04,random_pipeline_model_cancel_failpoint-0.04")";
+    initRandomFailPoint(config_str);
+    FAILPOINT_TEST_BEGIN
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     {
@@ -462,6 +468,7 @@ try
         }
     }
     WRAP_FOR_SERVER_TEST_END
+    FAILPOINT_TEST_END
 }
 CATCH
 

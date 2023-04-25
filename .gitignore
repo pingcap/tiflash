@@ -22,6 +22,7 @@ compile_commands.json
 /build
 /build-debug
 /build-release
+/release
 /docs/en_single_page/
 /docs/ru_single_page/
 /docs/venv/
