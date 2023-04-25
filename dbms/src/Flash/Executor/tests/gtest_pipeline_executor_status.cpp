@@ -23,7 +23,7 @@ class PipelineExecutorStatusTestRunner : public ::testing::Test
 {
 };
 
-TEST_F(PipelineExecutorStatusTestRunner, timeout)
+TEST_F(PipelineExecutorStatusTestRunner, waitTimeout)
 try
 {
     PipelineExecutorStatus status;
@@ -32,6 +32,29 @@ try
         status.onEventSchedule();
         std::chrono::milliseconds timeout(10);
         status.waitFor(timeout);
+        GTEST_FAIL();
+    }
+    catch (DB::Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), PipelineExecutorStatus::timeout_err_msg);
+        auto err_msg = status.getExceptionMsg();
+        ASSERT_EQ(err_msg, PipelineExecutorStatus::timeout_err_msg);
+    }
+}
+CATCH
+
+TEST_F(PipelineExecutorStatusTestRunner, popTimeout)
+try
+{
+    PipelineExecutorStatus status;
+    status.toConsumeMode(1);
+    try
+    {
+        status.onEventSchedule();
+        std::chrono::milliseconds timeout(10);
+        ResultHandler result_handler{[](const Block &) {
+        }};
+        status.consumeFor(result_handler, timeout);
         GTEST_FAIL();
     }
     catch (DB::Exception & e)
