@@ -58,6 +58,7 @@ struct PocoHTTPClientConfiguration
     std::shared_ptr<RemoteHostFilter> remote_host_filter;
     UInt32 s3_max_redirects;
     bool enable_s3_requests_logging;
+    bool enable_session_pool = true;
     HTTPHeaderEntries extra_headers;
 
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
@@ -65,7 +66,8 @@ struct PocoHTTPClientConfiguration
     PocoHTTPClientConfiguration(
         const std::shared_ptr<RemoteHostFilter> & remote_host_filter_,
         UInt32 s3_max_redirects_,
-        bool enable_s3_requests_logging_);
+        bool enable_s3_requests_logging_,
+        bool enable_session_pool_);
 
     /// Constructor of Aws::Client::ClientConfiguration must be called after AWS SDK initialization.
     friend ClientFactory;
@@ -173,6 +175,7 @@ private:
     const HTTPHeaderEntries extra_headers;
     UInt32 s3_max_redirects;
     bool enable_s3_requests_logging;
+    bool enable_session_pool;
 };
 
 } // namespace DB::S3

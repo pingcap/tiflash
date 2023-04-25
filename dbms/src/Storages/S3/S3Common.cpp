@@ -290,7 +290,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
         PocoHTTPClientConfiguration poco_cfg(
             std::make_shared<RemoteHostFilter>(),
             config_.max_redirections,
-            /*enable_s3_requests_logging_*/ config_.verbose);
+            /*enable_s3_requests_logging_*/ config_.verbose,
+            config_.enable_http_pool);
         return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
     };
     Aws::InitAPI(aws_options);
