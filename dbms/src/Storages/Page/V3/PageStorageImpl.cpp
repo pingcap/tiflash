@@ -133,7 +133,7 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
 
     // Persist Page data to BlobStore
-    auto edit = blob_store.write(write_batch, write_limiter);
+    auto edit = blob_store.write(std::move(write_batch), write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
 
