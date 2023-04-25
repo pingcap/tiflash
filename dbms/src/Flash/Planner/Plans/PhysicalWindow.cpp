@@ -35,7 +35,7 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
     /// The plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- ... <-- PhysicalSort`.
     /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
@@ -82,7 +82,7 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     {
         /// If there are several streams, we merge them into one.
         executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
-        assert(pipeline.streams.size() == 1);
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
@@ -96,7 +96,7 @@ void PhysicalWindow::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
-    assert(fine_grained_shuffle.enable());
+    RUNTIME_CHECK(fine_grained_shuffle.enable());
 
     executeExpression(exec_status, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();

@@ -12,13 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#include <Interpreters/Join.h>
+#include <Operators/HashJoinBuildSink.h>
 
 namespace DB
 {
-void FineGrainedPipelineEvent::scheduleImpl()
+// TODO support spill.
+OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
-    addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
+    if unlikely (!block)
+    {
+        join_ptr->finishOneBuild();
+        return OperatorStatus::FINISHED;
+    }
+    join_ptr->insertFromBlock(block, concurrency_build_index);
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB

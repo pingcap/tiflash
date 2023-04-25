@@ -14,37 +14,37 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
-class Pipeline;
-using PipelinePtr = std::shared_ptr<Pipeline>;
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
 
-class PlainPipelineEvent : public Event
+class HashJoinBuildSink : public SinkOp
 {
 public:
-    PlainPipelineEvent(
+    HashJoinBuildSink(
         PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        Context & context_,
-        const PipelinePtr & pipeline_,
-        size_t concurrency_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
-        , context(context_)
-        , pipeline(pipeline_)
-        , concurrency(concurrency_)
-    {}
+        const JoinPtr & join_ptr_,
+        size_t concurrency_build_index_)
+        : SinkOp(exec_status_, req_id)
+        , join_ptr(join_ptr_)
+        , concurrency_build_index(concurrency_build_index_)
+    {
+    }
+
+    String getName() const override
+    {
+        return "HashJoinBuildSink";
+    }
 
 protected:
-    void scheduleImpl() override;
-
-    void finishImpl() override;
+    OperatorStatus writeImpl(Block && block) override;
 
 private:
-    Context & context;
-    PipelinePtr pipeline;
-    size_t concurrency;
+    JoinPtr join_ptr;
+    size_t concurrency_build_index;
 };
 } // namespace DB
