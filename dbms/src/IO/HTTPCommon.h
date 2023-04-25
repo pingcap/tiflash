@@ -30,41 +30,6 @@
 namespace DB
 {
 
-class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
-{
-private:
-    const std::string host;
-    const UInt16 port;
-    bool https;
-    const String proxy_host;
-    const UInt16 proxy_port;
-    bool proxy_https;
-    bool resolve_host;
-    using Base = PoolBase<Poco::Net::HTTPClientSession>;
-
-    ObjectPtr allocObject() override;
-
-public:
-    SingleEndpointHTTPSessionPool(
-        const std::string & host_,
-        UInt16 port_,
-        bool https_,
-        const std::string & proxy_host_,
-        UInt16 proxy_port_,
-        bool proxy_https_,
-        size_t max_pool_size_,
-        bool resolve_host_ = true)
-        : Base(static_cast<unsigned>(max_pool_size_), &Poco::Logger::get("HTTPSessionPool"))
-        , host(host_)
-        , port(port_)
-        , https(https_)
-        , proxy_host(proxy_host_)
-        , proxy_port(proxy_port_)
-        , proxy_https(proxy_https_)
-        , resolve_host(resolve_host_)
-    {
-    }
-};
 
 class HTTPException : public Exception
 {
@@ -98,7 +63,7 @@ private:
     const char * className() const noexcept override { return "DB::HTTPException"; }
 };
 
-using PooledHTTPSessionPtr = SingleEndpointHTTPSessionPool::Entry;
+using PooledHTTPSessionPtr = PoolBase<Poco::Net::HTTPClientSession>::Entry; // SingleEndpointHTTPSessionPool::Entry
 using HTTPSessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
 void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_alive_timeout);

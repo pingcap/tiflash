@@ -111,6 +111,62 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 }
 
 
+class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
+{
+private:
+    const std::string host;
+    const UInt16 port;
+    const bool https;
+    const String proxy_host;
+    const UInt16 proxy_port;
+    const bool proxy_https;
+    const bool resolve_host;
+    using Base = PoolBase<Poco::Net::HTTPClientSession>;
+
+    ObjectPtr allocObject() override
+    {
+        auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
+#if 1
+        RUNTIME_CHECK_MSG(proxy_host.empty(), "proxy is not yet supported");
+        UNUSED(proxy_host, proxy_port, proxy_https);
+#else
+        if (!proxy_host.empty())
+        {
+            const String proxy_scheme = proxy_https ? "https" : "http";
+            session->setProxyHost(proxy_host);
+            session->setProxyPort(proxy_port);
+
+            session->setProxyProtocol(proxy_scheme);
+
+            /// Turn on tunnel mode if proxy scheme is HTTP while endpoint scheme is HTTPS.
+            session->setProxyTunnel(!proxy_https && https);
+        }
+#endif
+        return session;
+    }
+
+public:
+    SingleEndpointHTTPSessionPool(
+        const std::string & host_,
+        UInt16 port_,
+        bool https_,
+        const std::string & proxy_host_,
+        UInt16 proxy_port_,
+        bool proxy_https_,
+        size_t max_pool_size_,
+        bool resolve_host_ = true)
+        : Base(static_cast<unsigned>(max_pool_size_), &Poco::Logger::get("HTTPSessionPool"))
+        , host(host_)
+        , port(port_)
+        , https(https_)
+        , proxy_host(proxy_host_)
+        , proxy_port(proxy_port_)
+        , proxy_https(proxy_https_)
+        , resolve_host(resolve_host_)
+    {
+    }
+};
+
 class HTTPSessionPool : private boost::noncopyable
 {
 public:
@@ -150,6 +206,8 @@ private:
     };
 
     std::mutex mutex;
+    // TODO: one session pool for each endpoint seems not reasonable,
+    //       use a single pool for all endpoints maybe better.
     std::unordered_map<Key, PoolPtr, Hasher> endpoints_pool;
 
 protected:
@@ -231,27 +289,6 @@ public:
 };
 } // namespace
 
-SingleEndpointHTTPSessionPool::ObjectPtr SingleEndpointHTTPSessionPool::allocObject()
-{
-    auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
-#if 1
-    RUNTIME_CHECK_MSG(proxy_host.empty(), "proxy is not yet supported");
-    UNUSED(proxy_host, proxy_port, proxy_https);
-#else
-    if (!proxy_host.empty())
-    {
-        const String proxy_scheme = proxy_https ? "https" : "http";
-        session->setProxyHost(proxy_host);
-        session->setProxyPort(proxy_port);
-
-        session->setProxyProtocol(proxy_scheme);
-
-        /// Turn on tunnel mode if proxy scheme is HTTP while endpoint scheme is HTTPS.
-        session->setProxyTunnel(!proxy_https && https);
-    }
-#endif
-    return session;
-}
 
 void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_alive_timeout)
 {
@@ -273,7 +310,6 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     setTimeouts(*session, timeouts);
     return session;
 }
-
 
 PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
 {

@@ -40,8 +40,6 @@
 #include <functional>
 #include <utility>
 
-#include "Poco/Environment.h"
-
 static const int SUCCESS_RESPONSE_MIN = 200;
 static const int SUCCESS_RESPONSE_MAX = 299;
 
@@ -82,10 +80,12 @@ namespace DB::S3
 PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
     const std::shared_ptr<RemoteHostFilter> & remote_host_filter_,
     UInt32 s3_max_redirects_,
-    bool enable_s3_requests_logging_)
+    bool enable_s3_requests_logging_,
+    bool enable_session_pool_)
     : remote_host_filter(remote_host_filter_)
     , s3_max_redirects(s3_max_redirects_)
     , enable_s3_requests_logging(enable_s3_requests_logging_)
+    , enable_session_pool(enable_session_pool_)
     , error_report(nullptr)
 {
 }
@@ -102,6 +102,7 @@ PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_c
     , extra_headers(poco_configuration.extra_headers)
     , s3_max_redirects(poco_configuration.s3_max_redirects)
     , enable_s3_requests_logging(poco_configuration.enable_s3_requests_logging)
+    , enable_session_pool(poco_configuration.enable_session_pool)
 {
 }
 
@@ -193,7 +194,6 @@ void PocoHTTPClient::makeRequestInternal(
     Aws::Utils::RateLimits::RateLimiterInterface *,
     Aws::Utils::RateLimits::RateLimiterInterface *) const
 {
-    auto enable_session_pool = Poco::Environment::get("S3_SESSION_POOL", "1") == "1"; // REMOVE this
     auto uri = request.GetUri().GetURIString();
     LoggerPtr tracing_logger = Logger::get(fmt::format("URI={} pool={}", uri, enable_session_pool));
     if (enable_s3_requests_logging)
@@ -213,15 +213,15 @@ void PocoHTTPClient::makeRequestInternal(
             RUNTIME_CHECK_MSG(request_configuration.proxy_host.empty(), "http proxy is not supported, proxy_host={}", request_configuration.proxy_host);
 
             std::optional<String> redirect_uri;
-            if (!enable_session_pool)
-            {
-                HTTPSessionPtr session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
-                redirect_uri = makeRequestOnce(target_uri, request, request_configuration, session, response, tracing_logger);
-            }
-            else
+            if (enable_session_pool)
             {
                 PooledHTTPSessionPtr pooled_session = makePooledHTTPSession(target_uri, timeouts, /* per_endpoint_pool_size = */ 1024, /* resolve_host = */ true);
                 redirect_uri = makeRequestOnce(target_uri, request, request_configuration, pooled_session, response, tracing_logger);
+            }
+            else
+            {
+                HTTPSessionPtr session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
+                redirect_uri = makeRequestOnce(target_uri, request, request_configuration, session, response, tracing_logger);
             }
 
             if (redirect_uri)
@@ -232,6 +232,7 @@ void PocoHTTPClient::makeRequestInternal(
             }
             else
             {
+                // request finish normally
                 return;
             }
         }
@@ -325,7 +326,7 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
 
     Stopwatch watch;
 
-    Poco::Net::HTTPMetrics metrics;
+    Poco::Net::HTTPSendMetrics metrics;
     auto & request_body_stream = session->sendRequest(poco_request, &metrics);
     GET_METRIC(tiflash_storage_s3_http_request_seconds, type_connect).Observe(metrics.connect_ms / 1000.0);
     LOG_DEBUG(tracing_logger, "connect cost {}ms", metrics.connect_ms);
@@ -346,15 +347,15 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
             LOG_DEBUG(tracing_logger, "Written {} bytes to request body", size);
     }
 
+    const auto elapsed_ms_connect_and_send = watch.elapsedMilliseconds();
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_request).Observe((elapsed_ms_connect_and_send - metrics.connect_ms) / 1000.0);
+
     if (enable_s3_requests_logging)
         LOG_DEBUG(tracing_logger, "Receiving response...");
     auto & response_body_stream = session->receiveResponse(poco_response);
-
-    watch.stop();
-    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_send).Observe((watch.elapsedMilliseconds() - metrics.connect_ms) / 1000.0);
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_response).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     int status_code = static_cast<int>(poco_response.getStatus());
-
     if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX)
     {
         if (enable_s3_requests_logging)
@@ -365,7 +366,6 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
         /// Error statuses are more important so we show them even if `enable_s3_requests_logging == false`.
         LOG_INFO(tracing_logger, "Response status: {}, {}", status_code, poco_response.getReason());
     }
-
     if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
     {
         auto location = poco_response.get("location");
@@ -375,6 +375,7 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
 
         addMetric(request, S3MetricType::Redirects);
 
+        // Return the redirection location, upper should retry the request with `location`
         return location;
     }
 
