@@ -1308,6 +1308,22 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, truncateInCastDecimalAsDecimal)
+try
+{
+    DAGContext * dag_context = context.getDAGContext();
+    UInt64 ori_flags = dag_context->getFlags();
+    dag_context->addFlag(TiDBSQLFlags::IN_INSERT_STMT | TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT);
+    dag_context->clearWarnings();
+
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_EQ(dag_context->getWarningCount(), 4);
+    dag_context->setFlags(ori_flags);
+    dag_context->clearWarnings();
+}
+CATCH
+
 TEST_F(TestTidbConversion, castDecimalAsDecimalWithRound)
 try
 {
