@@ -256,6 +256,10 @@ std::unique_lock<std::mutex> JoinPartition::lockPartition()
 {
     return std::unique_lock(partition_mutex);
 }
+SpinLock JoinPartition::spinLockPartition()
+{
+    return SpinLock(partition_mutex);
+}
 void JoinPartition::releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &)
 {
     auto released_bytes = build_partition.bytes;
@@ -539,9 +543,13 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         segment_index_info[segment_index].push_back(i);
     }
 
+    std::vector<size_t> insert_indexes;
+    for (size_t insert_index = 0; insert_index < segment_index_info.size(); ++insert_index)
+        insert_indexes.push_back(insert_index);
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
-    for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
+    while (!insert_indexes.empty())
     {
+        auto insert_index = insert_indexes.back();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
         if (segment_index == segment_size)
@@ -554,14 +562,18 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
                 RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
                 rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
             }
+            insert_indexes.pop_back();
         }
         else
         {
-            auto lock = join_partitions[segment_index]->lockPartition();
-            auto & current_map = join_partitions[segment_index]->getHashMap<Map>();
-            for (auto & i : segment_index_info[segment_index])
+            if (auto spin_lock = join_partitions[segment_index]->spinLockPartition(); spin_lock)
             {
-                Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
+                auto & current_map = join_partitions[segment_index]->getHashMap<Map>();
+                for (auto & i : segment_index_info[segment_index])
+                {
+                    Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
+                }
+                insert_indexes.pop_back();
             }
         }
     }
