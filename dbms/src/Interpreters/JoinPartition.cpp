@@ -563,12 +563,10 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         {
             /// null value
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
+            /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
+            RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
             for (auto index : segment_index_info[segment_index])
-            {
-                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
-                RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
                 rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
-            }
         }
         else
         {
