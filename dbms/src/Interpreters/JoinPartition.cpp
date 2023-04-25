@@ -543,15 +543,18 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         segment_index_info[segment_index].push_back(i);
     }
 
-    std::vector<size_t> insert_indexes;
-    for (size_t insert_index = 0; insert_index < segment_index_info.size(); ++insert_index)
+    std::deque<size_t> insert_indexes;
+    for (size_t i = 0; i < segment_index_info.size(); ++i)
+    {
+        size_t insert_index = (i + stream_index) % segment_index_info.size();
         insert_indexes.push_back(insert_index);
+    }
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
     while (!insert_indexes.empty())
     {
-        auto insert_index = insert_indexes.back();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
-        size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
+        size_t segment_index = insert_indexes.back();
+        insert_indexes.pop_back();
         if (segment_index == segment_size)
         {
             /// null value
@@ -562,7 +565,6 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
                 RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
                 rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
             }
-            insert_indexes.pop_back();
         }
         else
         {
@@ -573,7 +575,10 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
                 {
                     Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
                 }
-                insert_indexes.pop_back();
+            }
+            else
+            {
+                insert_indexes.pop_front(segment_index);
             }
         }
     }
