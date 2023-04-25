@@ -35,7 +35,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     const tipb::Expand & expand,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     if (unlikely(expand.grouping_sets().empty()))
     {

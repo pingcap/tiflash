@@ -32,7 +32,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     const tipb::Selection & selection,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());

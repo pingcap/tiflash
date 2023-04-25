@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsGrouping.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -401,6 +402,32 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
 
+String DAGExpressionAnalyzerHelper::buildGroupingFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+
+    String result_name = genFuncString(func_name, argument_names, {getCollatorFromExpr(expr)});
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(func_name, analyzer->getContext());
+    auto * function_builder_grouping = dynamic_cast<FunctionBuilderGrouping *>(function_builder.get());
+    function_builder_grouping->setExpr(expr);
+
+    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
+}
+
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
@@ -457,6 +484,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
      {"regexp", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"replaceRegexpAll", DAGExpressionAnalyzerHelper::buildRegexpFunction},
-     {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
+     {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction},
+     {"grouping", DAGExpressionAnalyzerHelper::buildGroupingFunction}});
 
 } // namespace DB

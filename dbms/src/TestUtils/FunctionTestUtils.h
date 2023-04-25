@@ -610,6 +610,7 @@ ColumnWithTypeAndName executeFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
+    const String & val = "",
     bool raw_function_test = false);
 
 ColumnWithTypeAndName executeFunction(
@@ -618,6 +619,7 @@ ColumnWithTypeAndName executeFunction(
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
+    const String & val = "",
     bool raw_function_test = false);
 
 template <typename... Args>
@@ -764,6 +766,11 @@ ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, 
 
 ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
 
+struct FuncMetaData
+{
+    String val; // This is for the val field of tipb::expr
+};
+
 class FunctionTest : public ::testing::Test
 {
 protected:
@@ -815,6 +822,19 @@ public:
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, argument_column_numbers, vec);
     }
+
+    ColumnWithTypeAndName executeFunctionWithMetaData(
+        const String & func_name,
+        const ColumnsWithTypeAndName & columns,
+        const FuncMetaData & meta,
+        const TiDB::TiDBCollatorPtr & collator = nullptr);
+
+    ColumnWithTypeAndName executeFunctionWithMetaData(
+        const String & func_name,
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnsWithTypeAndName & columns,
+        const FuncMetaData & meta,
+        const TiDB::TiDBCollatorPtr & collator = nullptr);
 
     DAGContext & getDAGContext()
     {
