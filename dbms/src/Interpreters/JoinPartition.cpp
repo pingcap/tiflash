@@ -554,13 +554,6 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes[i] = insert_index;
     }
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
-    auto insert_segment = [&](size_t segment_index) {
-        auto & current_map = join_partitions[segment_index]->getHashMap<Map>();
-        for (auto & i : segment_index_info[segment_index])
-        {
-            Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
-        }
-    };
     while (!insert_indexes.empty())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
@@ -579,16 +572,21 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         }
         else
         {
-            if (auto spin_lock = join_partitions[segment_index]->spinLockPartition(); spin_lock)
+            auto & join_partition = join_partitions[segment_index];
+            if (auto spin_lock = join_partition->spinLockPartition(); spin_lock)
             {
-                insert_segment(segment_index);
+                auto & current_map = join_partition->getHashMap<Map>();
+                for (auto & i : segment_index_info[segment_index])
+                    Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
             }
             else
             {
                 if (insert_indexes.empty())
                 {
-                    join_partitions[segment_index]->lockPartition();
-                    insert_segment(segment_index);
+                    auto lock = join_partition->lockPartition();
+                    auto & current_map = join_partition->getHashMap<Map>();
+                    for (auto & i : segment_index_info[segment_index])
+                        Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
                     break;
                 }
                 else
