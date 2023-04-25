@@ -544,10 +544,11 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     }
 
     std::deque<size_t> insert_indexes;
+    insert_indexes.resize(segment_index_info.size());
     for (size_t i = 0; i < segment_index_info.size(); ++i)
     {
         size_t insert_index = (i + stream_index) % segment_index_info.size();
-        insert_indexes.push_back(insert_index);
+        insert_indexes[i] = insert_index;
     }
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
     while (!insert_indexes.empty())
@@ -578,7 +579,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
             }
             else
             {
-                insert_indexes.pop_front(segment_index);
+                insert_indexes.push_front(segment_index);
             }
         }
     }

@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <mutex>
 
 namespace DB
 {
-class SpinLock
+class SpinLock : private boost::noncopyable
 {
 public:
     SpinLock(std::mutex & mu_) noexcept
