@@ -115,14 +115,14 @@ static void writeRegionDataToStorage(
         /// Read region data as block.
         Stopwatch watch;
 
-        Int64 block_decoding_schema_version = -1;
+        Int64 block_decoding_schema_epoch = -1;
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
             LOG_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
-            block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
+            block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
             if (!reader.read(*block_ptr, data_list_read, force_decode))
@@ -155,7 +155,7 @@ static void writeRegionDataToStorage(
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
         if (need_decode)
-            storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
+            storage->releaseDecodingBlock(block_decoding_schema_epoch, std::move(block_ptr));
 
         LOG_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
