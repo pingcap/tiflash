@@ -196,6 +196,15 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
+EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
+{
+    assert(!isFineGrainedMode());
+    if unlikely (exec_status.isCancelled())
+        return nullptr;
+    assert(!plan_nodes.empty());
+    return plan_nodes.back()->sinkComplete(exec_status);
+}
+
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;

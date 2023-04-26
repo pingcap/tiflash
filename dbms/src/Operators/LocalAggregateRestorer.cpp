@@ -37,12 +37,7 @@ void LocalAggregateRestorer::storeToBucketData()
     assert(!bucket_inputs.empty());
 
     // get min bucket num.
-    Int32 min_bucket_num = NUM_BUCKETS;
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if (bucket_input.hasOutput())
-            min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
-    }
+    Int32 min_bucket_num = SpilledBucketInput::getMinBucketNum(bucket_inputs);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
         assert(!finished);
@@ -52,12 +47,7 @@ void LocalAggregateRestorer::storeToBucketData()
     }
 
     // store bucket data of min bucket num.
-    for (auto & bucket_input : bucket_inputs)
-    {
-        if (bucket_input.hasOutput() && min_bucket_num == bucket_input.bucketNum())
-            bucket_data.push_back(bucket_input.moveOutput());
-    }
-    assert(!bucket_data.empty());
+    bucket_data = SpilledBucketInput::popOutputs(bucket_inputs, min_bucket_num);
 }
 
 void LocalAggregateRestorer::loadBucketData()

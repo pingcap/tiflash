@@ -13,32 +13,35 @@
 // limitations under the License.
 
 #include <Operators/AggregateContext.h>
-#include <Operators/AggregateConvergentSourceOp.h>
+#include <Operators/AggregateRestoreSourceOp.h>
 
 namespace DB
 {
-AggregateConvergentSourceOp::AggregateConvergentSourceOp(
+AggregateRestoreSourceOp::AggregateRestoreSourceOp(
     PipelineExecutorStatus & exec_status_,
     const AggregateContextPtr & agg_context_,
-    size_t index_,
+    SharedAggregateRestorerPtr && restorer_,
     const String & req_id)
     : SourceOp(exec_status_, req_id)
     , agg_context(agg_context_)
-    , index(index_)
+    , restorer(std::move(restorer_))
 {
+    assert(restorer);
     setHeader(agg_context->getHeader());
 }
 
-OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
+OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 {
-    block = agg_context->readForConvergent(index);
-    total_rows += block.rows();
-    return OperatorStatus::HAS_OUTPUT;
+    return restorer->tryPop(block)
+        ? OperatorStatus::HAS_OUTPUT
+        : OperatorStatus::WAITING;
 }
 
-void AggregateConvergentSourceOp::operateSuffix()
+OperatorStatus AggregateRestoreSourceOp::awaitImpl()
 {
-    LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
+    return restorer->tryLoadBucketData()
+        ? OperatorStatus::HAS_OUTPUT
+        : OperatorStatus::WAITING;
 }
 
 } // namespace DB
