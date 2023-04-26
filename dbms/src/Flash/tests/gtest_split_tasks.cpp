@@ -123,10 +123,9 @@ try
         "  Expression: <final projection>\n"
         "   MergeSorting, limit = 2\n"
         "    PartialSorting: limit = 2\n"
-        "     Expression: <remove useless column after join>\n"
-        "      HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>\n"
-        "       Expression: <final projection>\n"
-        "        MockExchangeReceiver"};
+        "     HashJoinProbe: <join probe, join_executor_id = Join_2, scan_hash_map_after_probe = false>\n"
+        "      Expression: <final projection>\n"
+        "         MockExchangeReceiver"};
     for (size_t i = 0; i < task_size; ++i)
     {
         ASSERT_BLOCKINPUTSTREAM_EQAUL(res[i], tasks[i].dag_request, 1);
