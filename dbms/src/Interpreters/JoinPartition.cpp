@@ -572,19 +572,19 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         {
 #define INSERT(join_partition, segment_index)                 \
     auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & i : segment_index_info[(segment_index)])      \
+    for (auto & i : (segment_index))                          \
         Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
             auto & join_partition = join_partitions[segment_index];
             if (auto spin_lock = join_partition->spinLockPartition(); spin_lock)
             {
-                INSERT(join_partition, segment_index);
+                INSERT(join_partition, segment_index_info[segment_index]);
             }
             else
             {
                 if (insert_indexes.empty())
                 {
                     auto lock = join_partition->lockPartition();
-                    INSERT(join_partition, segment_index);
+                    INSERT(join_partition, segment_index_info[segment_index]);
                     break;
                 }
                 insert_indexes.push_front(segment_index);
