@@ -26,7 +26,9 @@ namespace
 class PlainTask : public Task
 {
 public:
-    PlainTask(): Task() {}
+    PlainTask()
+        : Task()
+    {}
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };

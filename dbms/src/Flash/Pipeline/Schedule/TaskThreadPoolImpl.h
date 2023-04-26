@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
@@ -53,11 +54,11 @@ struct IOImpl
         return task->executeIO();
     }
 
-    using QueueType = std::unique_ptr<IOMultiLevelFeedbackQueue>;
+    using QueueType = std::unique_ptr<FIFOTaskQueue>;
 
     static QueueType newTaskQueue()
     {
-        return std::make_unique<IOMultiLevelFeedbackQueue>();
+        return std::make_unique<FIFOTaskQueue>();
     }
 };
 } // namespace DB
