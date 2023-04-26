@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/AggregateBuildSinkOp.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
@@ -22,7 +23,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
     {
         if (agg_context->hasSpilledData() && agg_context->needSpill(index, /*try_mark_need_spill=*/true))
         {
-            assert(!is_final_spill);
+            RUNTIME_CHECK(!is_final_spill);
             is_final_spill = true;
             return OperatorStatus::IO;
         }

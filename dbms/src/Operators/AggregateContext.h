@@ -18,7 +18,6 @@
 #include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
-#include <Operators/Operator.h>
 #include <Operators/SharedAggregateRestorer.h>
 
 namespace DB

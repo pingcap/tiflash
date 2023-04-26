@@ -12,10 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Operators/AggregateContext.h>
 #include <Operators/AggregateRestoreSourceOp.h>
 
 namespace DB
 {
+AggregateRestoreSourceOp::AggregateRestoreSourceOp(
+    PipelineExecutorStatus & exec_status_,
+    const AggregateContextPtr & agg_context_,
+    SharedAggregateRestorerPtr && restorer_,
+    const String & req_id)
+    : SourceOp(exec_status_, req_id)
+    , agg_context(agg_context_)
+    , restorer(std::move(restorer_))
+{
+    assert(restorer);
+    setHeader(agg_context->getHeader());
+}
+
 OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 {
     return restorer->tryPop(block)

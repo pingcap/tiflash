@@ -14,11 +14,14 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
+#include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
 class AggregateRestoreSourceOp : public SourceOp
 {
 public:
@@ -26,14 +29,7 @@ public:
         PipelineExecutorStatus & exec_status_,
         const AggregateContextPtr & agg_context_,
         SharedAggregateRestorerPtr && restorer_,
-        const String & req_id)
-        : SourceOp(exec_status_, req_id)
-        , agg_context(agg_context_)
-        , restorer(std::move(restorer_))
-    {
-        assert(restorer);
-        setHeader(agg_context->getHeader());
-    }
+        const String & req_id);
 
     String getName() const override
     {

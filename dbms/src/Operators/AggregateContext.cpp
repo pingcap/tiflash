@@ -83,7 +83,7 @@ std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(Pi
 {
     assert(status.load() == AggStatus::build);
     aggregator->finishSpill();
-    LOG_INFO(log, "Begin restore data from disk for aggregation.");
+    LOG_INFO(log, "Begin restore data from disk for shared aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
     auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
@@ -136,7 +136,7 @@ void AggregateContext::initConvergentPrefix()
         /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.
         many_data[0]->need_spill = false;
-        assert(!aggregator->hasSpilledData());
+        RUNTIME_CHECK(!aggregator->hasSpilledData());
     }
 }
 

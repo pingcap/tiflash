@@ -18,15 +18,12 @@
 
 namespace DB
 {
-std::vector<TaskPtr> LoadBucketEvent::scheduleImpl()
+void LoadBucketEvent::scheduleImpl()
 {
     assert(loader);
-    std::vector<TaskPtr> tasks;
     auto load_inputs = loader->getNeedLoadInputs();
-    tasks.reserve(load_inputs.size());
     for (const auto & input : load_inputs)
-        tasks.push_back(std::make_unique<LoadBucketTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input));
-    return tasks;
+        addTask(std::make_unique<LoadBucketTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), *input));
 }
 
 void LoadBucketEvent::finishImpl()

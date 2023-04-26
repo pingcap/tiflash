@@ -17,14 +17,11 @@
 
 namespace DB
 {
-std::vector<TaskPtr> AggregateFinalSpillEvent::scheduleImpl()
+void AggregateFinalSpillEvent::scheduleImpl()
 {
     assert(agg_context);
-    std::vector<TaskPtr> tasks;
-    tasks.reserve(indexes.size());
     for (auto index : indexes)
-        tasks.push_back(std::make_unique<AggregateFinalSpillTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), agg_context, index));
-    return tasks;
+        addTask(std::make_unique<AggregateFinalSpillTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), agg_context, index));
 }
 
 void AggregateFinalSpillEvent::finishImpl()

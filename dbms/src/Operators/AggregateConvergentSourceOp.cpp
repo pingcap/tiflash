@@ -12,10 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Operators/AggregateContext.h>
 #include <Operators/AggregateConvergentSourceOp.h>
 
 namespace DB
 {
+AggregateConvergentSourceOp::AggregateConvergentSourceOp(
+    PipelineExecutorStatus & exec_status_,
+    const AggregateContextPtr & agg_context_,
+    size_t index_,
+    const String & req_id)
+    : SourceOp(exec_status_, req_id)
+    , agg_context(agg_context_)
+    , index(index_)
+{
+    setHeader(agg_context->getHeader());
+}
+
 OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
     block = agg_context->readForConvergent(index);

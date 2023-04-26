@@ -14,11 +14,13 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
 class AggregateBuildSinkOp : public SinkOp
 {
 public:
