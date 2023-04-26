@@ -108,6 +108,7 @@ Join::Join(
     const SpillConfig & build_spill_config_,
     const SpillConfig & probe_spill_config_,
     Int64 join_restore_concurrency_,
+    const Names & tidb_output_column_names_,
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
@@ -135,6 +136,7 @@ Join::Join(
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
+    , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
@@ -302,6 +304,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         createSpillConfigWithNewSpillId(build_spill_config, fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
         createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
+        tidb_output_column_names,
         collators,
         non_equal_conditions,
         max_block_size,
@@ -1788,7 +1791,14 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 
-    return block;
+    /// remove useless columns
+    Block projected_block;
+    for (const auto & name : tidb_output_column_names)
+    {
+        auto & column = block.getByName(name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
 }
 
 BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const

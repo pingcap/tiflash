@@ -65,8 +65,6 @@ private:
 
     void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
 
-    void doSchemaProject(DAGPipeline & pipeline);
-
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     /// the right side is the build side.
