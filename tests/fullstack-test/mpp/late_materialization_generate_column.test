@@ -28,9 +28,17 @@ mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) selec
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
+mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) values (NULL, NULL, 'r2Ic', NULL, NULL, NULL);
 mysql> alter table test.IDT_26539 set tiflash replica 1;
 func> wait_table test IDT_26539
+
+mysql> set tidb_isolation_read_engines='tiflash'; select count(*) from test.IDT_26539;
++----------+
+| count(*) |
++----------+
+|    16385 |
++----------+
 
 mysql> set tidb_isolation_read_engines='tiflash'; select * from test.IDT_26539 where col2 = 'r2Ic';
 +--------+--------+------+------+------+------+------+
