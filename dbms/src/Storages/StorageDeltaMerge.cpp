@@ -748,7 +748,9 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
 {
     if (!pushed_down_filters.empty())
     {
+        RUNTIME_CHECK_MSG(table_scan_column_info.size() == columns_to_read.size(), "table_scan_column_info.size() != columns_to_read.size()");
         NamesAndTypes columns_to_read_name_and_type;
+        columns_to_read_name_and_type.reserve(columns_to_read.size());
         for (const auto & col : columns_to_read)
         {
             columns_to_read_name_and_type.emplace_back(col.name, col.type);
