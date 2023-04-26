@@ -890,7 +890,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (isNecessaryKindToUseRowFlaggedHashMap(kind))
+        if (useRowFlaggedHashMap(kind, has_other_condition))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
