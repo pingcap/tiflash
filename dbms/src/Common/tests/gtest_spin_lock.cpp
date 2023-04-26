@@ -12,32 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Common/SpinLock.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
-#include <boost/noncopyable.hpp>
 #include <mutex>
 
 namespace DB
 {
-class SpinLock : private boost::noncopyable
+namespace tests
 {
-public:
-    explicit SpinLock(std::mutex & mu_) noexcept
-        : mu(mu_)
-    {
-        locked = mu.try_lock();
-    }
-
-    ~SpinLock() noexcept
-    {
-        if (locked)
-            mu.unlock();
-    }
-
-    explicit operator bool() const noexcept { return locked; }
-
-private:
-    std::mutex & mu;
-    bool locked{false};
+class SpinLockTest : public testing::Test
+{
 };
+
+TEST_F(SpinLockTest, base)
+{
+    std::mutex mu;
+    mu.lock();
+    {
+        SpinLock spin_lock{mu};
+        ASSERT_FALSE(spin_lock);
+    }
+    mu.unlock();
+    {
+        SpinLock spin_lock{mu};
+        ASSERT_TRUE(spin_lock);
+        SpinLock spin_lock2{mu};
+        ASSERT_FALSE(spin_lock2);
+    }
+    {
+        SpinLock spin_lock{mu};
+        ASSERT_TRUE(spin_lock);
+    }
+}
+
+} // namespace tests
 } // namespace DB
