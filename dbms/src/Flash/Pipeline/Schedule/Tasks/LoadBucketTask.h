@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,29 +14,30 @@
 
 #pragma once
 
-#include <Core/Block.h>
-#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Pipeline/Schedule/Tasks/IOEventTask.h>
 
 namespace DB
 {
-/// Used to reading spilled bucket data of aggregator.
-class BucketInput
+class SpilledBucketInput;
+
+class LoadBucketTask : public IOEventTask
 {
 public:
-    explicit BucketInput(const BlockInputStreamPtr & stream_);
-
-    bool needLoad() const;
-    void load();
-
-    bool hasOutput() const;
-    Int32 bucketNum() const;
-    Block moveOutput();
+    LoadBucketTask(
+        MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_,
+        SpilledBucketInput & input_)
+        : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        , input(input_)
+    {
+    }
 
 private:
-    BlockInputStreamPtr stream;
-    std::optional<Block> output;
-    bool is_exhausted = false;
-};
-using BucketInputs = std::vector<BucketInput>;
+    ExecTaskStatus doExecuteIOImpl() override;
 
+private:
+    SpilledBucketInput & input;
+};
 } // namespace DB

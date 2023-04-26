@@ -16,7 +16,7 @@
 
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Operators/BucketInput.h>
+#include <Operators/SpilledBucketInput.h>
 
 #include <memory>
 
@@ -26,11 +26,11 @@ class Aggregator;
 
 /**
  * ┌──────────────────────────────────────────────────┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file0──┼────┐
- * │  {bucket0, bucket1, ... bucket256}spilled_file1──┼────┤
- * │  {bucket0, bucket1, ... bucket256}spilled_file2──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file0──┼────┐
+ * │  {bucket0, bucket1, ... bucket255}spilled_file1──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_file2──┼────┤
  * │  ...                                             │    │
- * │  {bucket0, bucket1, ... bucket256}spilled_filen──┼────┤
+ * │  {bucket0, bucket1, ... bucket255}spilled_filen──┼────┤
  * └──────────────────────────────────────────────────┘    │
  *                                                         │ loadBucketData
  *                   bucket_data◄──────────────────────────┘
@@ -70,7 +70,7 @@ private:
     // bucket_inputs --> bucket_data --> restored_blocks.
     BlocksList bucket_data;
     BlocksList restored_blocks;
-    BucketInputs bucket_inputs;
+    SpilledBucketInputs bucket_inputs;
 
     static constexpr Int32 NUM_BUCKETS = 256;
 };
