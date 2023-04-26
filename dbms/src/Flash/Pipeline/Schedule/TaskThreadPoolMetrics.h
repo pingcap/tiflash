@@ -20,7 +20,6 @@
 
 namespace DB
 {
-// TODO support more metrics after profile info of task has supported.
 template <bool is_cpu>
 class TaskThreadPoolMetrics
 {

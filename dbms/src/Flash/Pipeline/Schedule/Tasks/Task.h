@@ -50,7 +50,7 @@ public:
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
-    virtual ~Task() = default;
+    virtual ~Task();
 
     MemoryTrackerPtr getMemTracker() const
     {

@@ -71,6 +71,11 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
+Task::~Task()
+{
+    LOG_TRACE(log, "task finish with profile info: {}", profile_info.toJson());
+}
+
 ExecTaskStatus Task::execute() noexcept
 {
     assert(getMemTracker().get() == current_memory_tracker);
