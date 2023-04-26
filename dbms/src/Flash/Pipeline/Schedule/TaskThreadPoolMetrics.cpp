@@ -81,6 +81,15 @@ void TaskThreadPoolMetrics<is_cpu>::decPendingTask()
 }
 
 template <bool is_cpu>
+void TaskThreadPoolMetrics<is_cpu>::elapsedPendingTime(TaskPtr & task)
+{
+    if constexpr (is_cpu)
+        task->profile_info.elapsedCPUPendingTime();
+    else
+        task->profile_info.elapsedIOPendingTime();
+}
+
+template <bool is_cpu>
 void TaskThreadPoolMetrics<is_cpu>::incExecutingTask()
 {
     INC_METRIC(executing_tasks_count, 1);
@@ -90,6 +99,15 @@ template <bool is_cpu>
 void TaskThreadPoolMetrics<is_cpu>::decExecutingTask()
 {
     DEC_METRIC(executing_tasks_count, 1);
+}
+
+template <bool is_cpu>
+void TaskThreadPoolMetrics<is_cpu>::addExecuteTime(TaskPtr & task, UInt64 value)
+{
+    if constexpr (is_cpu)
+        task->profile_info.addCPUExecuteTime(value);
+    else
+        task->profile_info.addIOExecuteTime(value);
 }
 
 template <bool is_cpu>

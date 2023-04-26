@@ -82,21 +82,24 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
     TRACE_MEMORY(task);
 
     metrics.incExecutingTask();
+    metrics.elapsedPendingTime(task);
 
-    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
+    UInt64 total_time_spent = 0;
     while (true)
     {
         status = Impl::exec(task);
-        auto execute_time_ns = stopwatch.elapsed();
+        auto inc_time_spent = task->profile_info.elapsedFromPrev();
+        task_queue->updateStatistics(task, inc_time_spent);
+        total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != Impl::TargetStatus || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
         {
-            metrics.updateTaskMaxtimeOnRound(execute_time_ns);
+            metrics.updateTaskMaxtimeOnRound(total_time_spent);
             break;
         }
     }
-
+    metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (status)
     {

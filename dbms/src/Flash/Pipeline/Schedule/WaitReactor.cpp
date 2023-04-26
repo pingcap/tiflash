@@ -44,14 +44,17 @@ public:
         switch (status)
         {
         case ExecTaskStatus::RUNNING:
+            task->profile_info.elapsedAwaitTime();
             running_tasks.push_back(std::move(task));
             return true;
         case ExecTaskStatus::IO:
+            task->profile_info.elapsedAwaitTime();
             io_tasks.push_back(std::move(task));
             return true;
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
+            task->profile_info.elapsedAwaitTime();
             task.reset();
             return true;
         default:

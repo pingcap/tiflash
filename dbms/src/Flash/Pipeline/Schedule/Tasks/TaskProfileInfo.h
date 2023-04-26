@@ -14,39 +14,43 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Common/Stopwatch.h>
 
 #include <atomic>
 
 namespace DB
 {
-// TODO support more metrics after profile info of task has supported.
-template <bool is_cpu>
-class TaskThreadPoolMetrics
+#define PROFILE_MEMBER(UnitType)   \
+    UnitType cpu_execute_time = 0; \
+    UnitType cpu_pending_time = 0; \
+    UnitType io_execute_time = 0;  \
+    UnitType io_pending_time = 0;  \
+    UnitType await_time = 0;
+
+class LocalTaskProfileInfo
 {
 public:
-    TaskThreadPoolMetrics();
+    PROFILE_MEMBER(UInt64)
 
-    void incPendingTask(size_t task_count);
+public:
+    void startTimer() noexcept;
 
-    void decPendingTask();
+    UInt64 elapsedFromPrev() noexcept;
 
-    void elapsedPendingTime(TaskPtr & task);
+    void addCPUExecuteTime(UInt64 value) noexcept;
 
-    void incExecutingTask();
+    void elapsedCPUPendingTime() noexcept;
 
-    void decExecutingTask();
+    void addIOExecuteTime(UInt64 value) noexcept;
 
-    void addExecuteTime(TaskPtr & task, UInt64 value);
+    void elapsedIOPendingTime() noexcept;
 
-    void incThreadCnt();
+    void elapsedAwaitTime() noexcept;
 
-    void decThreadCnt();
-
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+    String toJson() const;
 
 private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
 };
 
 } // namespace DB
