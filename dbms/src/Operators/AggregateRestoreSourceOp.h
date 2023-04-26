@@ -15,34 +15,34 @@
 #pragma once
 
 #include <Operators/Operator.h>
+#include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateConvergentSourceOp : public SourceOp
+class AggregateRestoreSourceOp : public SourceOp
 {
 public:
-    AggregateConvergentSourceOp(
+    AggregateRestoreSourceOp(
         PipelineExecutorStatus & exec_status_,
         const AggregateContextPtr & agg_context_,
-        size_t index_,
+        SharedAggregateRestorerPtr && restorer_,
         const String & req_id);
 
     String getName() const override
     {
-        return "AggregateConvergentSourceOp";
+        return "AggregateRestoreSourceOp";
     }
-
-    void operateSuffix() override;
 
 protected:
     OperatorStatus readImpl(Block & block) override;
 
+    OperatorStatus awaitImpl() override;
+
 private:
     AggregateContextPtr agg_context;
-    uint64_t total_rows{};
-    const size_t index;
+    SharedAggregateRestorerPtr restorer;
 };
 } // namespace DB
