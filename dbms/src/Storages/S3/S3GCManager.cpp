@@ -196,6 +196,11 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     removeOutdatedManifest(manifests, &gc_timepoint);
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_manifests).Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
+    if (config.verify_locks)
+    {
+        verifyLocks(valid_lock_files);
+    }
+
     switch (config.method)
     {
     case S3GCMethod::Lifecycle:
@@ -213,6 +218,7 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
         break;
     }
     }
+    LOG_INFO(log, "gc on store done, gc_store_id={}", gc_store_id);
 }
 
 void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
@@ -258,6 +264,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
         break;
     }
     }
+    LOG_INFO(log, "gc on tombstone store done, gc_store_id={}", gc_store_id);
 }
 
 void S3GCManager::cleanUnusedLocks(
@@ -565,6 +572,30 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key, const Logg
         });
         LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted");
     }
+}
+
+void S3GCManager::verifyLocks(const std::unordered_set<String> & valid_lock_files)
+{
+    for (const auto & lock_key : valid_lock_files)
+    {
+        const auto lock_view = S3FilenameView::fromKey(lock_key);
+        RUNTIME_CHECK(lock_view.isLockFile(), lock_key, magic_enum::enum_name(lock_view.type));
+        const auto data_file_view = lock_view.asDataFile();
+        auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+        String data_file_check_key;
+        if (!data_file_view.isDMFile())
+        {
+            data_file_check_key = data_file_view.toFullKey();
+        }
+        else
+        {
+            data_file_check_key = data_file_view.toFullKey() + "/meta";
+        }
+        LOG_INFO(log, "Checking consistency, lock_key={} data_file_key={}", lock_key, data_file_check_key);
+        auto object_info = S3::tryGetObjectInfo(*client, data_file_check_key);
+        RUNTIME_ASSERT(object_info.exist, log, "S3 file has already been removed! lock_key={} data_file={}", lock_key, data_file_check_key);
+    }
+    LOG_INFO(log, "All valid lock consistency check passed, num_locks={}", valid_lock_files.size());
 }
 
 std::vector<UInt64> S3GCManager::getAllStoreIds()
