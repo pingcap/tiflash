@@ -158,6 +158,7 @@ Join::Join(
 
     if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
+    RUNTIME_CHECK(!(isNecessaryKindToUseRowFlaggedHashMap(kind) && strictness == ASTTableJoin::Strictness::Any));
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
@@ -583,11 +584,12 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
 
 /**
  * handle other join conditions
- * Join Kind/Strictness               ALL               ANY
- *     INNER                    TiDB inner join    TiDB semi join
- *     LEFT                     TiDB left join     should not happen
- *     RIGHT                    should not happen  should not happen
- *     ANTI                     should not happen  TiDB anti semi join
+ * Join Kind/Strictness               ALL                 ANY
+ *     INNER                    TiDB inner join      TiDB semi join
+ *     LEFT                     TiDB left join       should not happen
+ *     RIGHT                    TiDB right join      should not happen
+ *     RIGHT_SEMI/ANTI          TiDB semi/anti join  should not happen
+ *     ANTI                     should not happen    TiDB anti semi join
  * @param block
  * @param offsets_to_replicate
  * @param left_table_columns
@@ -698,9 +700,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
-    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isRightSemiFamily(kind))
+    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
-        /// inner | rightSemi | rightAnti join,  just use other_filter_column to filter result
+        /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
         return;
@@ -823,7 +825,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
     /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
     MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
-    if (isRightSemiFamily(kind) && non_equal_conditions.other_cond_expr != nullptr)
+    if (useRowFlaggedHashMap(kind, has_other_condition))
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
         flag_mapped_entry_helper_column->reserve(rows);
@@ -886,12 +888,12 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     /// handle other conditions
-    if (non_equal_conditions.other_cond_expr != nullptr)
+    if (has_other_condition)
     {
         assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (isRightSemiFamily(kind))
+        if (useRowFlaggedHashMap(kind, has_other_condition))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
@@ -903,8 +905,24 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
-            // Return build table header for right semi/anti join
-            block = sample_block_with_columns_to_add;
+
+            if (isRightSemiFamily(kind))
+            {
+                // Return build table header for right semi/anti join
+                block = sample_block_with_columns_to_add;
+            }
+            else if (kind == ASTTableJoin::Kind::RightOuter)
+            {
+                block.erase(flag_mapped_entry_helper_name);
+                if (!non_equal_conditions.other_cond_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_cond_name);
+                }
+                if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_eq_cond_from_in_name);
+                }
+            }
         }
     }
 
