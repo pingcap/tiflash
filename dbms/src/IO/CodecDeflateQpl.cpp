@@ -35,7 +35,14 @@ CodecDeflateQpl::CodecDeflateQpl(qpl_path_t path)
             {
                 job_pool_ready = false;
                 delete[] jobs_buffer;
-                throw Exception(std::string("Initialization of ") + qpl_excute_path + "DeflateQpl codec failed:" + std::to_string(status), ErrorCodes::QPL_INIT_JOB_FAILED);
+                if (path == qpl_path_hardware)
+                {
+                    throw Exception(std::string("Initialization of IAA hardware failed:") + std::to_string(status) + " will attempt to use software DeflateQpl codec instead of hardware DeflateQpl codec.", ErrorCodes::QPL_INIT_JOB_FAILED);
+                }
+                else
+                {
+                    throw Exception(std::string("Initialization of software DeflateQpl codec failed:") + std::to_string(status) + " QPL compression/decompression cannot be enabled.", ErrorCodes::QPL_INIT_JOB_FAILED);
+                }
             }
         }
         catch (...)
