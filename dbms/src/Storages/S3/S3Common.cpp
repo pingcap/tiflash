@@ -757,14 +757,12 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     std::vector<Aws::S3::Model::Tag> filter_tags{Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")};
     Aws::S3::Model::LifecycleRuleFilter filter;
     filter.WithAnd(Aws::S3::Model::LifecycleRuleAndOperator()
-                       .WithPrefix("")
                        .WithTags(filter_tags));
 
     Aws::S3::Model::LifecycleRule rule;
     rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
         .WithFilter(filter)
         .WithExpiration(Aws::S3::Model::LifecycleExpiration()
-                            .WithExpiredObjectDeleteMarker(false)
                             .WithDays(expire_days))
         .WithID("tiflashgc");
 
