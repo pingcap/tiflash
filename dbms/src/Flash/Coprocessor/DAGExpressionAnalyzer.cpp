@@ -39,7 +39,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -686,8 +685,6 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     if (conditions.size() == 1)
     {
         filter_column_name = getActions(conditions[0], actions, true);
-        LOG_DEBUG(Logger::get("DAGExpressionAnalyzer"), "filter column name: {}", filter_column_name);
-        LOG_DEBUG(Logger::get("DAGExpressionAnalyzer"), "actions before convertToUInt8", actions->dumpActions());
         if (isColumnExpr(conditions[0])
             && (!exprHasValidFieldType(conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
@@ -698,7 +695,6 @@ String DAGExpressionAnalyzer::buildFilterColumn(
             /// for queries like select c1 from t where c1 will got wrong result
             /// as after FilterBlockInputStream, c1 will become a const column of 1
             filter_column_name = convertToUInt8(actions, filter_column_name);
-            LOG_DEBUG(Logger::get("DAGExpressionAnalyzer"), "actions after convertToUInt8", actions->dumpActions());
         }
     }
     else
