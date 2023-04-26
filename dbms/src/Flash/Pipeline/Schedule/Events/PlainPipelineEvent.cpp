@@ -18,16 +18,13 @@
 
 namespace DB
 {
-std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
+void PlainPipelineEvent::scheduleImpl()
 {
-    assert(pipeline);
+    RUNTIME_CHECK(pipeline);
     auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
-    std::vector<TaskPtr> tasks;
-    tasks.reserve(pipeline_exec_group.size());
     for (auto & pipeline_exec : pipeline_exec_group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
-    return tasks;
+        addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
 }
 
 void PlainPipelineEvent::finishImpl()
