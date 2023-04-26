@@ -30,6 +30,15 @@ public:
     }
 };
 
+#define WRAP_FOR_SPILL_TEST_BEGIN                  \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SPILL_TEST_END \
+    }
+
 /// todo add more tests
 TEST_F(SpillAggregationTestRunner, SimpleCase)
 try
@@ -58,8 +67,10 @@ try
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    enablePipeline(false);
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
+    WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
     context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
@@ -91,6 +102,7 @@ try
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+    WRAP_FOR_SPILL_TEST_END
 }
 CATCH
 
@@ -151,7 +163,6 @@ try
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);
-                SortDescription sd;
                 bool has_string_key = false;
                 MockAstVec key_vec;
                 for (const auto & key : keys)
@@ -164,7 +175,9 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+                enablePipeline(false);
                 auto reference = executeStreams(request, 1);
+                SortDescription sd;
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -193,6 +206,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+                    WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -211,6 +225,7 @@ try
                     {
                         ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                     }
+                    WRAP_FOR_SPILL_TEST_END
                 }
             }
         }
@@ -284,7 +299,6 @@ try
                 context.setCollation(collator_id);
                 const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
                 ASSERT_TRUE(current_collator != nullptr);
-                SortDescription sd;
                 bool has_string_key = false;
                 MockAstVec key_vec;
                 for (const auto & key : keys)
@@ -297,7 +311,9 @@ try
                 context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
                 context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+                enablePipeline(false);
                 auto reference = executeStreams(request, 1);
+                SortDescription sd;
                 if (current_collator->isCI())
                 {
                     /// for ci collation, need to sort and compare the result manually
@@ -326,6 +342,7 @@ try
                     context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
                     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(max_bytes_before_external_agg)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+                    WRAP_FOR_SPILL_TEST_BEGIN
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -344,6 +361,7 @@ try
                     {
                         ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                     }
+                    WRAP_FOR_SPILL_TEST_END
                 }
             }
         }
@@ -396,13 +414,15 @@ try
     {
         /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
         auto request = gen_request(exchange_concurrency);
-        enablePipeline(false);
+        WRAP_FOR_SPILL_TEST_BEGIN
         ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
-        enablePipeline(true);
-        ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+        WRAP_FOR_SPILL_TEST_END
     }
 }
 CATCH
+
+#undef WRAP_FOR_SPILL_TEST_BEGIN
+#undef WRAP_FOR_SPILL_TEST_END
 
 } // namespace tests
 } // namespace DB
