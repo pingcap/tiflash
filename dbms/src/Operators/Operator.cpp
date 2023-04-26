@@ -37,7 +37,7 @@ OperatorStatus Operator::await()
     // TODO collect operator profile info here.
     auto op_status = awaitImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
@@ -49,7 +49,7 @@ OperatorStatus Operator::executeIO()
     // TODO collect operator profile info here.
     auto op_status = executeIOImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;

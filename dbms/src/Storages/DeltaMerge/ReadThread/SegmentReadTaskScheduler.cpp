@@ -33,6 +33,7 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
     Stopwatch sw_add;
+    std::lock_guard add_lock(add_mtx);
     std::lock_guard lock(mtx);
     Stopwatch sw_do_add;
     read_pools.add(pool);
