@@ -33,7 +33,9 @@ private:
     void memCheckJob();
 
     std::mutex mu;
+    std::condition_variable cv;
     bool is_already_begin = false;
-    std::atomic<bool> end_syn{false}, end_fin{false};
+    bool end_fin = false;
+    std::atomic<bool> end_syn{false};
 };
 } // namespace DB

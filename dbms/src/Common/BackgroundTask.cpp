@@ -17,6 +17,8 @@
 #include <fstream>
 namespace DB
 {
+namespace
+{
 bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
 {
     resident_set = 0.0;
@@ -53,10 +55,11 @@ bool isProcStatSupported()
     std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
     return stat_stream.is_open();
 }
+}
 
 void CollectProcInfoBackgroundTask::begin()
 {
-    std::unique_lock lk(mu);
+    std::lock_guard lk(mu);
     if (!is_already_begin)
     {
         if (!isProcStatSupported())
@@ -85,13 +88,16 @@ void CollectProcInfoBackgroundTask::memCheckJob()
         baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
         usleep(100000); // sleep 100ms
     }
+
+    std::lock_guard lk(mu);
     end_fin = true;
+    cv.notify_all();
 }
 
 void CollectProcInfoBackgroundTask::end()
 {
     end_syn = true;
-    while (!end_fin)
-        usleep(1000); // Just ok since it is called only when TiFlash shutdown.
+    std::unique_lock lock(mu);
+    cv.wait(lock, [&] { return end_fin; });
 }
 } // namespace DB
