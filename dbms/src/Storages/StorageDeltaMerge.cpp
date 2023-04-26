@@ -764,12 +764,12 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             const auto cid = ci.id;
             if (ci.hasGeneratedColumnFlag())
             {
-                LOG_DEBUG(tracing_logger, "got column({}) with generated column flag", i);
                 const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
                 const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
                 source_columns_of_analyzer.emplace_back(col_name, data_type);
                 continue;
             }
+            RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
             source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
         }
         // Get the columns of the filter, is a subset of columns_to_read
