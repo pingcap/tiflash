@@ -749,7 +749,11 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
 {
     if (!pushed_down_filters.empty())
     {
+<<<<<<< HEAD
         // Note: table_scan_column_info is a light copy of column_info from TiDB, so some attributes are missing.
+=======
+        // Note: table_scan_column_info is a light copy of column_info from TiDB, so some attributes are missing, like name.
+>>>>>>> b8420c6903 (fix lm query fail when there are generated columns (#7386))
         std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
         for (const auto & column : columns_to_read)
             columns_to_read_map.emplace(column.id, column);
