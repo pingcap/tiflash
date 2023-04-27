@@ -67,7 +67,6 @@ namespace DB
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
     M(exception_between_schema_change_in_the_same_diff)           \
-    M(exception_when_construct_async_request_handler)             \
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
@@ -148,7 +147,8 @@ namespace DB
     M(random_pipeline_model_cancel_failpoint)           \
     M(random_spill_to_disk_failpoint)                   \
     M(random_restore_from_disk_failpoint)               \
-    M(random_exception_when_connect_local_tunnel)
+    M(random_exception_when_connect_local_tunnel)       \
+    M(random_exception_when_construct_async_request_handler)
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";
