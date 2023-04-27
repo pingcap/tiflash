@@ -25,7 +25,7 @@
 namespace DB
 {
 ///    +------------+     +------------+       +------------+           +------------+
-///    | UnitQueue 1|     | UnitQueue 3|       | UnitQueue 3|    ...    | UnitQueue 8|
+///    | UnitQueue 1|     | UnitQueue 2|       | UnitQueue 3|    ...    | UnitQueue 8|
 ///    +------------+     +------------+       +------------+           +------------+
 ///          ^                   ^                   ^                        ^
 ///          |                   |                   |                        |
