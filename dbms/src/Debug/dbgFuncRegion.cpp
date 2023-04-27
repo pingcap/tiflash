@@ -98,12 +98,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     }
 }
 
-void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
+void dbgFuncTryFlush(Context &, const ASTs &, DBGInvoker::Printer output)
 {
-    TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().writeBlockForAllRegionAndFlush();
-
-    output("region_table try flush regions");
+    output("DEPRECATED region_table try flush regions");
 }
 
 void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
