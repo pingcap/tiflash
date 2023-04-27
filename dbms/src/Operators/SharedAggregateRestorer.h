@@ -98,9 +98,9 @@ using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketData
 
 enum class SharedLoadResult
 {
-    success,
-    retry,
-    finished,
+    SUCCESS,
+    RETRY,
+    FINISHED,
 };
 
 class SharedAggregateRestorer

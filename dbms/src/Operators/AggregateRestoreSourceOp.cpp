@@ -39,7 +39,7 @@ OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 
 OperatorStatus AggregateRestoreSourceOp::awaitImpl()
 {
-    return restorer->tryLoadBucketData() == SharedLoadResult::retry
+    return restorer->tryLoadBucketData() == SharedLoadResult::RETRY
         ? OperatorStatus::WAITING
         : OperatorStatus::HAS_OUTPUT;
 }

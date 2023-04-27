@@ -161,7 +161,7 @@ bool SharedAggregateRestorer::tryPop(Block & block)
     auto load_res = tryLoadBucketData();
     switch (load_res)
     {
-    case SharedLoadResult::success:
+    case SharedLoadResult::SUCCESS:
     {
         BlocksList tmp;
         assert(!bucket_data.empty() && restored_blocks.empty());
@@ -170,9 +170,9 @@ bool SharedAggregateRestorer::tryPop(Block & block)
         RUNTIME_CHECK(!restored_blocks.empty());
         block = popFromRestoredBlocks();
     }
-    case SharedLoadResult::finished:
+    case SharedLoadResult::FINISHED:
         return true;
-    case SharedLoadResult::retry:
+    case SharedLoadResult::RETRY:
         return false;
     }
 }
@@ -180,12 +180,12 @@ bool SharedAggregateRestorer::tryPop(Block & block)
 SharedLoadResult SharedAggregateRestorer::tryLoadBucketData()
 {
     if (!bucket_data.empty() || !restored_blocks.empty())
-        return SharedLoadResult::success;
+        return SharedLoadResult::SUCCESS;
     if (!loader->tryPop(bucket_data))
-        return SharedLoadResult::retry;
+        return SharedLoadResult::RETRY;
     return bucket_data.empty()
-        ? SharedLoadResult::finished
-        : SharedLoadResult::success;
+        ? SharedLoadResult::FINISHED
+        : SharedLoadResult::SUCCESS;
 }
 
 } // namespace DB
