@@ -251,6 +251,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             switch (executor.tp())
             {
             case tipb::ExecType::TypeTableScan:
+            case tipb::ExecType::TypePartitionTableScan:
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
