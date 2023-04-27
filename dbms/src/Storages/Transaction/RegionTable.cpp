@@ -410,7 +410,7 @@ RegionID RegionTable::pickRegionToFlush()
     return InvalidRegionID;
 }
 
-bool RegionTable::writeBlockForAllRegionAndFlush()
+bool RegionTable::tryFlushRegions()
 {
     if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {

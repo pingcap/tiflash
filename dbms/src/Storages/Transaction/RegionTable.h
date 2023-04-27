@@ -161,8 +161,7 @@ public:
 
     // Find all regions with data, call writeBlockByRegionAndFlush with try_persist = true.
     // This function is only for debug.
-    // The original name for this function is tryFlushRegions.
-    bool writeBlockForAllRegionAndFlush();
+    bool tryFlushRegions();
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the smae time.
     // Only one thread can do this at the same time.
