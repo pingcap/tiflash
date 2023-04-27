@@ -160,8 +160,8 @@ public:
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     bool tryFlushRegions();
-    RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
 
     void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;

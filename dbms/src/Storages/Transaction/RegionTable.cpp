@@ -302,7 +302,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist)
 {
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
@@ -311,10 +311,10 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
         return {};
     }
 
-    return tryFlushRegion(region, try_persist);
+    return tryWriteBlockByRegionAndFlush(region, try_persist);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
 
@@ -414,7 +414,7 @@ bool RegionTable::tryFlushRegions()
 {
     if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {
-        tryFlushRegion(region_to_flush, true);
+        tryWriteBlockByRegionAndFlush(region_to_flush, true);
         return true;
     }
 
