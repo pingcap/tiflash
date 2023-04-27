@@ -439,7 +439,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle filter conditions for local and remote table scan.
-    if (filter_conditions.hasValue())
+    /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+    if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
     {
         ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, filter_conditions.executor_id);

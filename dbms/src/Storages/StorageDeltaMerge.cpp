@@ -705,32 +705,30 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     return ranges;
 }
 
-DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
+DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const std::unique_ptr<DAGQueryInfo> & dag_query,
                                                      const ColumnDefines & columns_to_read,
                                                      const Context & context,
                                                      const LoggerPtr & tracing_logger)
 {
+    RUNTIME_CHECK(dag_query != nullptr);
     // build rough set operator
     DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
-    if (enable_rs_filter)
+    if (likely(enable_rs_filter))
     {
-        if (likely(query_info.dag_query))
-        {
-            /// Query from TiDB / TiSpark
-            auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
-                const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
-                auto iter = std::find_if(
-                    defines.begin(),
-                    defines.end(),
-                    [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
-                if (iter != defines.end())
-                    return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-                // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-                return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-            };
-            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-        }
+        /// Query from TiDB / TiSpark
+        auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
+            const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
+            auto iter = std::find_if(
+                defines.begin(),
+                defines.end(),
+                [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+            if (iter != defines.end())
+                return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+            // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+            return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+        };
+        rs_operator = FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
@@ -747,102 +745,95 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
                                                              const Context & context,
                                                              const LoggerPtr & tracing_logger)
 {
-    if (!pushed_down_filters.empty())
+    if (pushed_down_filters.empty())
     {
-        // Note: table_scan_column_info is a light copy of column_info from TiDB, so some attributes are missing, like name.
-        std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
-        for (const auto & column : columns_to_read)
-            columns_to_read_map.emplace(column.id, column);
-
-        // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
-        // The columns_to_read is a subset of table_scan_column_info, when there are generated columns.
-        NamesAndTypes source_columns_of_analyzer;
-        source_columns_of_analyzer.reserve(table_scan_column_info.size());
-        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
-        {
-            auto const & ci = table_scan_column_info[i];
-            const auto cid = ci.id;
-            if (ci.hasGeneratedColumnFlag())
-            {
-                const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
-                const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
-                source_columns_of_analyzer.emplace_back(col_name, data_type);
-                continue;
-            }
-            RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
-            source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
-        }
-        // Get the columns of the filter, is a subset of columns_to_read
-        std::unordered_set<ColumnID> filter_col_id_set;
-        for (const auto & expr : pushed_down_filters)
-        {
-            getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_id_set);
-        }
-        ColumnDefines filter_columns;
-        filter_columns.reserve(filter_col_id_set.size());
-        for (const auto & id : filter_col_id_set)
-        {
-            auto iter = std::find_if(
-                columns_to_read.begin(),
-                columns_to_read.end(),
-                [&id](const ColumnDefine & d) -> bool { return d.id == id; });
-            RUNTIME_CHECK(iter != columns_to_read.end());
-            filter_columns.push_back(*iter);
-        }
-
-        // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
-        std::vector<ExtraCastAfterTSMode> need_cast_column;
-        need_cast_column.reserve(table_scan_column_info.size());
-        for (const auto & col : table_scan_column_info)
-        {
-            if (!filter_col_id_set.contains(col.id))
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            else
-            {
-                if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                else
-                    need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-        }
-
-        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
-        ExpressionActionsChain chain;
-        auto & step = analyzer->initAndGetLastStep(chain);
-        auto & actions = step.actions;
-        ExpressionActionsPtr extra_cast = nullptr;
-        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
-        {
-            NamesWithAliases project_cols;
-            for (size_t i = 0; i < columns_to_read.size(); ++i)
-            {
-                if (filter_col_id_set.contains(columns_to_read[i].id))
-                {
-                    project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
-                }
-            }
-            actions->add(ExpressionAction::project(project_cols));
-
-            for (auto & col : filter_columns)
-                step.required_output.push_back(col.name);
-
-            extra_cast = chain.getLastActions();
-            assert(extra_cast);
-            chain.finalize();
-            chain.clear();
-            LOG_DEBUG(tracing_logger, "Extra cast: {}", extra_cast->dumpActions());
-        }
-
-        // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
-        LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
-
-        return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
+        LOG_DEBUG(tracing_logger, "Push down filter is empty");
+        return std::make_shared<PushDownFilter>(rs_operator);
     }
-    LOG_DEBUG(tracing_logger, "Push down filter is empty");
-    return std::make_shared<PushDownFilter>(rs_operator);
+    std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
+    for (const auto & column : columns_to_read)
+        columns_to_read_map.emplace(column.id, column);
+
+    // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
+    // The columns_to_read is a subset of table_scan_column_info, when there are generated columns.
+    NamesAndTypes source_columns_of_analyzer;
+    source_columns_of_analyzer.reserve(table_scan_column_info.size());
+    for (size_t i = 0; i < table_scan_column_info.size(); ++i)
+    {
+        auto const & ci = table_scan_column_info[i];
+        const auto cid = ci.id;
+        if (ci.hasGeneratedColumnFlag())
+        {
+            const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+            source_columns_of_analyzer.emplace_back(col_name, data_type);
+            continue;
+        }
+        RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
+        source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
+    }
+    // Get the columns of the filter, is a subset of columns_to_read
+    std::unordered_set<ColumnID> filter_col_id_set;
+    for (const auto & expr : pushed_down_filters)
+    {
+        getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_id_set);
+    }
+    ColumnDefines filter_columns;
+    filter_columns.reserve(filter_col_id_set.size());
+    for (const auto & cid : filter_col_id_set)
+    {
+        RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "Filter ColumnID({}) not found in columns_to_read_map", cid);
+        filter_columns.emplace_back(columns_to_read_map.at(cid));
+    }
+
+    // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan_column_info.size());
+    for (const auto & col : table_scan_column_info)
+    {
+        if (!filter_col_id_set.contains(col.id))
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        else
+        {
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+            else
+                need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
+    }
+
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
+    ExpressionActionsChain chain;
+    auto & step = analyzer->initAndGetLastStep(chain);
+    auto & actions = step.actions;
+    ExpressionActionsPtr extra_cast = nullptr;
+    if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
+    {
+        NamesWithAliases project_cols;
+        for (size_t i = 0; i < columns_to_read.size(); ++i)
+        {
+            if (filter_col_id_set.contains(columns_to_read[i].id))
+                project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
+        }
+        actions->add(ExpressionAction::project(project_cols));
+
+        for (auto & col : filter_columns)
+            step.required_output.push_back(col.name);
+
+        extra_cast = chain.getLastActions();
+        assert(extra_cast);
+        chain.finalize();
+        chain.clear();
+        LOG_DEBUG(tracing_logger, "Extra cast: {}", extra_cast->dumpActions());
+    }
+
+    // build filter expression actions
+    auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
+    LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
+
+    return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
 }
 
 DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
@@ -850,14 +841,21 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
                                                              const Context & context,
                                                              const LoggerPtr & tracing_logger)
 {
-    // build rough set operator
-    DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
+    const auto & dag_query = query_info.dag_query;
+    if (unlikely(dag_query == nullptr))
+        return EMPTY_FILTER;
 
+    // build rough set operator
+    const DM::RSOperatorPtr rs_operator = buildRSOperator(dag_query, columns_to_read, context, tracing_logger);
     // build push down filter
-    if (query_info.dag_query == nullptr)
-        return std::make_shared<PushDownFilter>(rs_operator);
-    const auto & pushed_down_filters = query_info.dag_query->pushed_down_filters;
-    const auto & columns_to_read_info = query_info.dag_query->source_columns;
+    const auto & columns_to_read_info = dag_query->source_columns;
+    const auto & pushed_down_filters = dag_query->pushed_down_filters;
+    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    {
+        google::protobuf::RepeatedPtrField<tipb::Expr> merged_filters{pushed_down_filters.begin(), pushed_down_filters.end()};
+        merged_filters.MergeFrom(dag_query->filters);
+        return buildPushDownFilter(rs_operator, columns_to_read_info, merged_filters, columns_to_read, context, tracing_logger);
+    }
     return buildPushDownFilter(rs_operator, columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
 }
 
