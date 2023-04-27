@@ -547,7 +547,7 @@ void MockRaftStoreProxy::doApply(
         return;
 
     auto old_applied = kvs.getRegion(region_id)->appliedIndex();
-    auto old_applied_term = kvs.getRegion(region_id)->appliedIndexTerm();
+    auto old_applied_term = 0; //kvs.getRegion(region_id)->appliedIndexTerm();
     if (cmd.has_raw_write_request())
     {
         // TiFlash write

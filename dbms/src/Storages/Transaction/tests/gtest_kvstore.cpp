@@ -35,7 +35,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
         }
     }
     {
-        kvs.tryPersist(1);
+        kvs.tryPersistRegion(1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -308,7 +308,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
         ASSERT_EQ(region->peerState(), raft_serverpb::PeerState::Applying);
         region->setPeerState(raft_serverpb::PeerState::Merging);
 
-        region->meta.region_state.getMutMergeState().set_commit(1234);
+        // region->meta.region_state.getMutMergeState().set_commit(1234);
         try
         {
             kvs.handleAdminRaftCmd(std::move(request),
@@ -796,7 +796,7 @@ TEST_F(RegionKVStoreTest, KVStore)
         }
     }
     {
-        kvs.tryPersist(1);
+        kvs.tryPersistRegion(1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -1329,9 +1329,9 @@ TEST_F(RegionKVStoreTest, KVStoreRestore)
                 lock.index.add(region);
             }
         }
-        kvs.tryPersist(1);
-        kvs.tryPersist(2);
-        kvs.tryPersist(3);
+        kvs.tryPersistRegion(1);
+        kvs.tryPersistRegion(2);
+        kvs.tryPersistRegion(3);
     }
     {
         KVStore & kvs = reloadKVSFromDisk();

@@ -95,10 +95,10 @@ UInt64 Region::appliedIndex() const
     return meta.appliedIndex();
 }
 
-UInt64 Region::appliedIndexTerm() const
-{
-    return meta.appliedIndexTerm();
-}
+// UInt64 Region::appliedIndexTerm() const
+// {
+//     return meta.appliedIndexTerm();
+// }
 
 void Region::setApplied(UInt64 index, UInt64 term)
 {

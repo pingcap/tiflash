@@ -140,7 +140,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
             if (try_persist)
             {
                 KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
-                tmt.getKVStore()->tryPersist(region->id());
+                tmt.getKVStore()->tryPersistRegion(region->id());
             }
         }
 

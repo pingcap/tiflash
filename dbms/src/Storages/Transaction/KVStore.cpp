@@ -172,15 +172,12 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     return true;
 }
 
-void KVStore::tryPersist(RegionID region_id)
+void KVStore::tryPersistRegion(RegionID region_id)
 {
     auto region = getRegion(region_id);
     if (region)
     {
-        LOG_INFO(log, "Try to persist {}", region->toString(false));
-        RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
-        region_persister->persist(*region);
-        LOG_INFO(log, "After persisted {}, cache {} bytes", region->toString(false), region->dataSize());
+        persistRegion(*region, std::nullopt, "");
     }
 }
 
@@ -333,12 +330,27 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
         bytes);
 }
 
-void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
+void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
 {
-    LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
     RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
-    region_persister->persist(region, region_task_lock);
-    LOG_DEBUG(log, "Persist {} done", region.toString(false));
+    if (region_task_lock.has_value())
+    {
+        LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
+        region_persister->persist(region, *region_task_lock.value());
+    }
+    else
+    {
+        LOG_INFO(log, "Try to persist {}", region.toString(false));
+        region_persister->persist(region);
+    }
+    if (region_task_lock.has_value())
+    {
+        LOG_DEBUG(log, "Persist {} done", region.toString(false));
+    }
+    else
+    {
+        LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
+    }
 }
 
 bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
@@ -422,7 +434,7 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
     }
     if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
-        persistRegion(curr_region, region_task_lock, "tryFlushRegionData");
+        persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
@@ -474,7 +486,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
+        persistRegion(curr_region, &region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -549,7 +561,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, region_task_lock, "admin raft cmd");
+            persistRegion(region, &region_task_lock, "admin raft cmd");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {

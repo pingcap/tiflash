@@ -86,7 +86,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             old_region->setStateApplying();
             tmt.getRegionTable().tryFlushRegion(old_region, false);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, region_lock, "save previous region before apply");
+            persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
     }
 
@@ -261,7 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, region_lock, "save current region after apply");
+        persistRegion(*new_region, &region_lock, "save current region after apply");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -533,7 +533,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
     else
     {
-        persistRegion(*region, region_task_lock, __FUNCTION__);
+        persistRegion(*region, &region_task_lock, __FUNCTION__);
         return EngineStoreApplyRes::Persist;
     }
 }
