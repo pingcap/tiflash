@@ -120,7 +120,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
 
@@ -349,7 +349,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = flushRegion(region, try_persist);
+        data_list_to_remove = writeBlockByRegionAndFlush(region, try_persist);
     }
     catch (const Exception & e)
     {
@@ -410,7 +410,7 @@ RegionID RegionTable::pickRegionToFlush()
     return InvalidRegionID;
 }
 
-bool RegionTable::tryFlushRegions()
+bool RegionTable::writeBlockForAllRegionAndFlush()
 {
     if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {
