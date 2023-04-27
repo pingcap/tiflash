@@ -308,7 +308,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
         ASSERT_EQ(region->peerState(), raft_serverpb::PeerState::Applying);
         region->setPeerState(raft_serverpb::PeerState::Merging);
 
-        // region->meta.region_state.getMutMergeState().set_commit(1234);
+        region->meta.region_state.getMutMergeState().set_commit(1234);
         try
         {
             kvs.handleAdminRaftCmd(std::move(request),
