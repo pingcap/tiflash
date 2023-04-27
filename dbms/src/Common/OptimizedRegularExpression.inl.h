@@ -25,7 +25,7 @@
 #include <optional>
 
 #define MIN_LENGTH_FOR_STRSTR 3
-constexpr static int max_captures = 10;
+constexpr static int MAX_CAPTURES = 10;
 
 namespace DB
 {
@@ -329,7 +329,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
         if (!is_no_capture)
         {
             capture_num = re2->NumberOfCapturingGroups();
-            if (capture_num > max_captures)
+            if (capture_num > MAX_CAPTURES)
                 throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many subpatterns in regexp: {}", regexp_));
         }
     }
@@ -457,7 +457,7 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
                 return 0;
         }
 
-        StringPieceType pieces[max_captures];
+        StringPieceType pieces[MAX_CAPTURES];
 
         if (!re2->Match(StringPieceType(subject, subject_size), 0, subject_size, RegexType::UNANCHORED, pieces, limit))
             return 0;
@@ -518,7 +518,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(
 
     StringPieceType expr_sp(subject, subject_size);
     StringPieceType matched_str;
-    StringPieceType matches[max_captures];
+    StringPieceType matches[MAX_CAPTURES];
     bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num);
     if (!success)
     {
@@ -616,7 +616,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
     StringPieceType matched_str;
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[max_captures];
+    StringPieceType matches[MAX_CAPTURES];
 
     // Copy characters that before position
     res_data.resize(res_data.size() + byte_offset);
@@ -653,7 +653,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[max_captures];
+    StringPieceType matches[MAX_CAPTURES];
 
     while (occur > 0)
     {
