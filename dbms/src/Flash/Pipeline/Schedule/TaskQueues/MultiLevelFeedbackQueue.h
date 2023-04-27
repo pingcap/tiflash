@@ -24,6 +24,30 @@
 
 namespace DB
 {
+///    +------------+     +------------+       +------------+           +------------+
+///    | UnitQueue 1|     | UnitQueue 3|       | UnitQueue 3|    ...    | UnitQueue 8|
+///    +------------+     +------------+       +------------+           +------------+
+///          ^                   ^                   ^                        ^
+///          |                   |                   |                        |
+/// +--------+--------+  +-------+--------+  +-------+--------+       +-------+--------+
+/// | Task 1          |  | Task 6         |  | Task 11        |       | Task 16        |
+/// +-----------------+  +----------------+  +----------------+       +----------------+
+///          ^                   ^                   ^                        ^
+///          |                   |                   |                        |
+/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// | Task 2          |  | Task 7         |  | Task 12        |       | Task 17        |
+/// +-----------------+  +----------------+  +----------------+       +----------------+
+///          ^                   ^                   ^                        ^
+///          |                   |                   |                        |
+/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// | Task 3          |  | Task 8         |  | Task 13        |       | Task 18        |
+/// +-----------------+  +----------------+  +----------------+       +----------------+
+///          ^                   ^                   ^                        ^
+///          |                   |                   |                        |
+/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// | Task 4          |  | Task 9         |  | Task 14        |       | Task 19        |
+/// +-----------------+  +----------------+  +----------------+       +----------------+
+
 struct UnitQueueInfo
 {
     UnitQueueInfo(UInt64 time_slice_, double factor_for_normal_)
@@ -104,7 +128,10 @@ private:
 
     LoggerPtr logger = Logger::get("MultiLevelFeedbackQueue");
 
-    // from high level to low level.
+    // From high priority to low priority.
+    // The higher the priority of the queue,
+    // the longer the total execution time of all tasks in the queue,
+    // and the shorter the execution time of each individual task.
     std::array<UnitQueuePtr, QUEUE_SIZE> level_queues;
 };
 
@@ -127,4 +154,5 @@ struct IOTimeGetter
     }
 };
 using IOMultiLevelFeedbackQueue = MultiLevelFeedbackQueue<IOTimeGetter>;
+
 } // namespace DB
