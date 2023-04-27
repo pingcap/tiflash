@@ -96,6 +96,13 @@ private:
 };
 using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketDataLoader>;
 
+enum class SharedLoadResult
+{
+    success,
+    retry,
+    finished,
+};
+
 class SharedAggregateRestorer
 {
 public:
@@ -103,11 +110,12 @@ public:
         Aggregator & aggregator_,
         SharedSpilledBucketDataLoaderPtr loader_);
 
-    // return true if pop success
-    // return false means that `tryLoadBucketData` need to be called.
     bool tryPop(Block & block);
 
-    bool tryLoadBucketData();
+    SharedLoadResult tryLoadBucketData();
+
+private:
+    Block popFromRestoredBlocks();
 
 private:
     Aggregator & aggregator;
@@ -117,8 +125,6 @@ private:
     BlocksList restored_blocks;
 
     SharedSpilledBucketDataLoaderPtr loader;
-
-    bool finished = false;
 };
 using SharedAggregateRestorerPtr = std::unique_ptr<SharedAggregateRestorer>;
 

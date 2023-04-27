@@ -142,37 +142,50 @@ SharedAggregateRestorer::SharedAggregateRestorer(
     RUNTIME_CHECK(loader);
 }
 
-bool SharedAggregateRestorer::tryPop(Block & block)
+Block SharedAggregateRestorer::popFromRestoredBlocks()
 {
-    if unlikely (finished)
-        return true;
-
-    if (restored_blocks.empty())
-    {
-        if (bucket_data.empty())
-            return false;
-
-        BlocksList tmp;
-        std::swap(tmp, bucket_data);
-        restored_blocks = aggregator.vstackBlocks(tmp, true);
-        RUNTIME_CHECK(!restored_blocks.empty());
-    }
-    block = std::move(restored_blocks.front());
+    assert(!restored_blocks.empty());
+    Block block = std::move(restored_blocks.front());
     restored_blocks.pop_front();
-    return true;
+    return block;
 }
 
-bool SharedAggregateRestorer::tryLoadBucketData()
+bool SharedAggregateRestorer::tryPop(Block & block)
 {
-    if unlikely (finished)
+    if (!restored_blocks.empty())
+    {
+        block = popFromRestoredBlocks();
         return true;
-    if (!bucket_data.empty() || !restored_blocks.empty())
+    }
+
+    auto load_res = tryLoadBucketData();
+    switch (load_res)
+    {
+    case SharedLoadResult::success:
+    {
+        BlocksList tmp;
+        assert(!bucket_data.empty() && restored_blocks.empty());
+        restored_blocks = aggregator.vstackBlocks(bucket_data, true);
+        bucket_data = {};
+        RUNTIME_CHECK(!restored_blocks.empty());
+        block = popFromRestoredBlocks();
+    }
+    case SharedLoadResult::finished:
         return true;
-    if (!loader->tryPop(bucket_data))
+    case SharedLoadResult::retry:
         return false;
-    if unlikely (bucket_data.empty())
-        finished = true;
-    return true;
+    }
+}
+
+SharedLoadResult SharedAggregateRestorer::tryLoadBucketData()
+{
+    if (!bucket_data.empty() || !restored_blocks.empty())
+        return SharedLoadResult::success;
+    if (!loader->tryPop(bucket_data))
+        return SharedLoadResult::retry;
+    return bucket_data.empty()
+        ? SharedLoadResult::finished
+        : SharedLoadResult::success;
 }
 
 } // namespace DB

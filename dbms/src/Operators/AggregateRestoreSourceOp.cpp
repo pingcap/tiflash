@@ -39,9 +39,9 @@ OperatorStatus AggregateRestoreSourceOp::readImpl(Block & block)
 
 OperatorStatus AggregateRestoreSourceOp::awaitImpl()
 {
-    return restorer->tryLoadBucketData()
-        ? OperatorStatus::HAS_OUTPUT
-        : OperatorStatus::WAITING;
+    return restorer->tryLoadBucketData() == SharedLoadResult::retry
+        ? OperatorStatus::WAITING
+        : OperatorStatus::HAS_OUTPUT;
 }
 
 } // namespace DB
