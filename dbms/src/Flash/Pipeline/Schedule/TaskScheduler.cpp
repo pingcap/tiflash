@@ -54,8 +54,8 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
         assert(task);
         task->profile_info.startTimer();
         // A quick check to avoid an unnecessary round into `running_tasks` then being scheduled out immediately.
+        // Skip `task->profile_info.elapsedAwaitTime()` here because the `await` will end instantly.
         auto status = task->await();
-        task->profile_info.elapsedAwaitTime();
         switch (status)
         {
         case ExecTaskStatus::RUNNING:
