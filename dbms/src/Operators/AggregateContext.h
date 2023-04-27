@@ -18,7 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
-#include <Operators/Operator.h>
+#include <Operators/SharedAggregateRestorer.h>
 
 namespace DB
 {
@@ -49,6 +49,8 @@ public:
 
     void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
 
+    size_t getBuildConcurrency() const { return max_threads; }
+
     void buildOnBlock(size_t task_index, const Block & block);
 
     bool hasSpilledData() const;
@@ -58,6 +60,8 @@ public:
     void spillData(size_t task_index);
 
     LocalAggregateRestorerPtr buildLocalRestorer();
+
+    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorStatus & exec_status);
 
     void initConvergent();
 

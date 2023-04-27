@@ -20,10 +20,12 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Operators/AggregateContext.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
 class PhysicalAggregationBuild : public PhysicalUnary
 {
 public:
@@ -54,6 +56,8 @@ public:
         size_t /*concurrency*/) override;
 
 private:
+    EventPtr doSinkComplete(PipelineExecutorStatus & exec_status) override;
+
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 
 private:

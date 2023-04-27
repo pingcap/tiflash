@@ -39,15 +39,15 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler)
     try
     {
         data_stream->readPrefix();
-        if (result_handler.isIgnored())
-        {
-            while (data_stream->read())
-                continue;
-        }
-        else
+        if (result_handler)
         {
             while (Block block = data_stream->read())
                 result_handler(block);
+        }
+        else
+        {
+            while (data_stream->read())
+                continue;
         }
         data_stream->readSuffix();
         return ExecutionResult::success();

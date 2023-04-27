@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/BucketInput.h>
+#include <Operators/SpilledBucketInput.h>
 
 namespace DB
 {
-BucketInput::BucketInput(const BlockInputStreamPtr & stream_)
+SpilledBucketInput::SpilledBucketInput(const BlockInputStreamPtr & stream_)
     : stream(stream_)
 {
     stream->readPrefix();
 }
 
-bool BucketInput::needLoad() const
+bool SpilledBucketInput::needLoad() const
 {
     return !is_exhausted && !output.has_value();
 }
 
-void BucketInput::load()
+void SpilledBucketInput::load()
 {
     assert(needLoad());
     Block ret = stream->read();
@@ -44,22 +44,47 @@ void BucketInput::load()
     }
 }
 
-bool BucketInput::hasOutput() const
+bool SpilledBucketInput::hasOutput() const
 {
     return output.has_value();
 }
 
-Int32 BucketInput::bucketNum() const
+Int32 SpilledBucketInput::bucketNum() const
 {
     assert(hasOutput());
     return output->info.bucket_num;
 }
 
-Block BucketInput::moveOutput()
+Block SpilledBucketInput::popOutput()
 {
     assert(hasOutput());
     Block ret = std::move(*output);
     output.reset();
     return ret;
+}
+
+Int32 SpilledBucketInput::getMinBucketNum(const SpilledBucketInputs & inputs)
+{
+    assert(!inputs.empty());
+    Int32 min_bucket_num = NUM_BUCKETS;
+    for (const auto & input : inputs)
+    {
+        if (input.hasOutput())
+            min_bucket_num = std::min(input.bucketNum(), min_bucket_num);
+    }
+    return min_bucket_num;
+}
+
+BlocksList SpilledBucketInput::popOutputs(SpilledBucketInputs & inputs, Int32 target_bucket_num)
+{
+    BlocksList bucket_data;
+    // store bucket data of min bucket num.
+    for (auto & input : inputs)
+    {
+        if (input.hasOutput() && target_bucket_num == input.bucketNum())
+            bucket_data.push_back(input.popOutput());
+    }
+    assert(!bucket_data.empty());
+    return bucket_data;
 }
 } // namespace DB

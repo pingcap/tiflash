@@ -854,8 +854,10 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
 
     // build push down filter
-    const auto & pushed_down_filters = query_info.dag_query != nullptr ? query_info.dag_query->pushed_down_filters : google::protobuf::RepeatedPtrField<tipb::Expr>{};
-    const auto & columns_to_read_info = query_info.dag_query != nullptr ? query_info.dag_query->source_columns : ColumnInfos{};
+    if (query_info.dag_query == nullptr)
+        return std::make_shared<PushDownFilter>(rs_operator);
+    const auto & pushed_down_filters = query_info.dag_query->pushed_down_filters;
+    const auto & columns_to_read_info = query_info.dag_query->source_columns;
     return buildPushDownFilter(rs_operator, columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
 }
 

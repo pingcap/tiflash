@@ -108,6 +108,7 @@ Join::Join(
     const SpillConfig & build_spill_config_,
     const SpillConfig & probe_spill_config_,
     Int64 join_restore_concurrency_,
+    const Names & tidb_output_column_names_,
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
@@ -135,6 +136,7 @@ Join::Join(
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
+    , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
@@ -156,6 +158,7 @@ Join::Join(
 
     if (unlikely(kind == ASTTableJoin::Kind::Cross_RightOuter))
         throw Exception("Cross right outer join should be converted to cross Left outer join during compile");
+    RUNTIME_CHECK(!(isNecessaryKindToUseRowFlaggedHashMap(kind) && strictness == ASTTableJoin::Strictness::Any));
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
@@ -301,6 +304,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         createSpillConfigWithNewSpillId(build_spill_config, fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
         createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
+        tidb_output_column_names,
         collators,
         non_equal_conditions,
         max_block_size,
@@ -580,11 +584,12 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
 
 /**
  * handle other join conditions
- * Join Kind/Strictness               ALL               ANY
- *     INNER                    TiDB inner join    TiDB semi join
- *     LEFT                     TiDB left join     should not happen
- *     RIGHT                    should not happen  should not happen
- *     ANTI                     should not happen  TiDB anti semi join
+ * Join Kind/Strictness               ALL                 ANY
+ *     INNER                    TiDB inner join      TiDB semi join
+ *     LEFT                     TiDB left join       should not happen
+ *     RIGHT                    TiDB right join      should not happen
+ *     RIGHT_SEMI/ANTI          TiDB semi/anti join  should not happen
+ *     ANTI                     should not happen    TiDB anti semi join
  * @param block
  * @param offsets_to_replicate
  * @param left_table_columns
@@ -695,9 +700,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
-    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isRightSemiFamily(kind))
+    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isNecessaryKindToUseRowFlaggedHashMap(kind))
     {
-        /// inner | rightSemi | rightAnti join,  just use other_filter_column to filter result
+        /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
         return;
@@ -820,7 +825,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     /// For RightSemi/RightAnti join with other conditions, using this column to record hash entries that matches keys
     /// Note: this column will record map entry addresses, so should use it carefully and better limit its usage in this function only.
     MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
-    if (isRightSemiFamily(kind) && non_equal_conditions.other_cond_expr != nullptr)
+    if (useRowFlaggedHashMap(kind, has_other_condition))
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
         flag_mapped_entry_helper_column->reserve(rows);
@@ -883,12 +888,12 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     /// handle other conditions
-    if (non_equal_conditions.other_cond_expr != nullptr)
+    if (has_other_condition)
     {
         assert(offsets_to_replicate != nullptr);
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
 
-        if (isRightSemiFamily(kind))
+        if (useRowFlaggedHashMap(kind, has_other_condition))
         {
             // set hash table used flag using SemiMapped column
             auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
@@ -900,8 +905,24 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
-            // Return build table header for right semi/anti join
-            block = sample_block_with_columns_to_add;
+
+            if (isRightSemiFamily(kind))
+            {
+                // Return build table header for right semi/anti join
+                block = sample_block_with_columns_to_add;
+            }
+            else if (kind == ASTTableJoin::Kind::RightOuter)
+            {
+                block.erase(flag_mapped_entry_helper_name);
+                if (!non_equal_conditions.other_cond_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_cond_name);
+                }
+                if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
+                {
+                    block.erase(non_equal_conditions.other_eq_cond_from_in_name);
+                }
+            }
         }
     }
 
@@ -1770,7 +1791,14 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 
-    return block;
+    /// remove useless columns
+    Block projected_block;
+    for (const auto & name : tidb_output_column_names)
+    {
+        auto & column = block.getByName(name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
 }
 
 BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const

@@ -130,8 +130,8 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(con
         num_columns_left = 0;
     else
         result_sample_block = materializeBlock(left_sample_block);
-    size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
 
+    size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
     /// Add columns from the right-side table to the block.
     for (size_t i = 0; i < num_columns_right; ++i)
     {
@@ -163,6 +163,12 @@ ScanHashMapAfterProbeBlockInputStream::ScanHashMapAfterProbeBlockInputStream(con
     columns_left.resize(num_columns_left);
     columns_right.resize(num_columns_right);
     current_partition_index = index;
+
+    for (const auto & name : parent.tidb_output_column_names)
+    {
+        auto & column = result_sample_block.getByName(name);
+        projected_sample_block.insert(column);
+    }
 }
 
 Block ScanHashMapAfterProbeBlockInputStream::readImpl()
@@ -213,6 +219,7 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
                 fillColumnsUsingCurrentPartition<false, true>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
             break;
         case ASTTableJoin::Kind::RightAnti:
+        case ASTTableJoin::Kind::RightOuter:
             if (parent.has_other_condition)
                 fillColumnsUsingCurrentPartition<true, false>(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
             else
@@ -232,7 +239,14 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
     for (size_t i = 0; i < num_columns_right; ++i)
         res.getByPosition(column_indices_right[i]).column = std::move(columns_right[i]);
 
-    return res;
+    /// remove useless columns
+    Block projected_block;
+    for (const auto & name : parent.tidb_output_column_names)
+    {
+        auto & column = res.getByName(name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
 }
 
 template <bool row_flagged, bool output_joined_rows>

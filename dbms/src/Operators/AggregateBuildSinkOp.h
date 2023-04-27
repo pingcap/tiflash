@@ -14,11 +14,13 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
+class AggregateContext;
+using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+
 class AggregateBuildSinkOp : public SinkOp
 {
 public:
@@ -43,9 +45,13 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus executeIOImpl() override;
+
 private:
     size_t index{};
     uint64_t total_rows{};
     AggregateContextPtr agg_context;
+
+    bool is_final_spill = false;
 };
 } // namespace DB
