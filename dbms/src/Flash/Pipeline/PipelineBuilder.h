@@ -53,8 +53,8 @@ private:
             : pipeline(pipeline_)
             , breaker_node(breaker_node_)
         {
-            assert(pipeline);
-            assert(breaker_node);
+            RUNTIME_CHECK(pipeline);
+            RUNTIME_CHECK(breaker_node);
         }
 
         // the broken pipeline.
@@ -87,7 +87,7 @@ public:
 
     PipelinePtr build()
     {
-        assert(pipeline);
+        RUNTIME_CHECK(pipeline);
         if (pipeline_breaker)
         {
             // First add the breaker node as the last node in this pipeline.

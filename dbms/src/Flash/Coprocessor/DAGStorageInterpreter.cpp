@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,10 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Operators/BlockInputStreamSourceOp.h>
+#include <Operators/CoprocessorReaderSourceOp.h>
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
@@ -232,12 +236,12 @@ String genErrMsgForLocalRead(
 {
     return table_id == logical_table_id
         ? fmt::format(
-            "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id: {})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id)
         : fmt::format(
-            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id,
@@ -272,6 +276,93 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     prepare(); // learner read
 
     executeImpl(pipeline);
+}
+
+SourceOps DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status)
+{
+    prepare(); // learner read
+
+    return executeImpl(exec_status);
+}
+
+SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status)
+{
+    auto & dag_context = dagContext();
+
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    mvcc_query_info->scan_context = scan_context;
+
+    SourceOps source_ops;
+    if (!mvcc_query_info->regions_query_info.empty())
+    {
+        source_ops = buildLocalSourceOps(exec_status, context.getSettingsRef().max_block_size);
+    }
+
+    // Should build `remote_requests` and `nullSourceOp` under protect of `table_structure_lock`.
+    if (source_ops.empty())
+    {
+        source_ops.emplace_back(std::make_unique<NullSourceOp>(
+            exec_status,
+            storage_for_logical_table->getSampleBlockForColumns(required_columns),
+            log->identifier()));
+    }
+
+    // Note that `buildRemoteRequests` must be called after `buildLocalSourceOps` because
+    // `buildLocalSourceOps` will setup `region_retry_from_local_region` and we must
+    // retry those regions or there will be data lost.
+    auto remote_requests = buildRemoteRequests(scan_context);
+
+    if (dag_context.is_disaggregated_task && !remote_requests.empty())
+    {
+        // This means RN is sending requests with stale region info, we simply reject the request
+        // and ask RN to send requests again with correct region info. When RN updates region info,
+        // RN may be sending requests to other WN.
+
+        RegionException::UnavailableRegions region_ids;
+        for (const auto & info : context.getDAGContext()->retry_regions)
+            region_ids.insert(info.region_id);
+
+        throw RegionException(
+            std::move(region_ids),
+            RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
+    }
+
+    FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
+
+    // Release alter locks
+    // The DeltaTree engine ensures that once sourceOps are created, the caller can get a consistent result
+    // from those sourceOps even if DDL operations are applied. Release the alter lock so that reading does not
+    // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
+    const TableLockHolders drop_locks = releaseAlterLocks();
+
+    remote_read_sources_start_index = source_ops.size();
+
+    if (!remote_requests.empty())
+        buildRemoteSourceOps(source_ops, exec_status, remote_requests);
+
+    for (const auto & lock : drop_locks)
+        dagContext().addTableLock(lock);
+
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
+
+    return source_ops;
+}
+
+void DAGStorageInterpreter::executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+{
+    /// handle timezone/duration cast for local table scan.
+    executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
+
+    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
+
+    /// handle filter conditions for local and remote table scan.
+    if (filter_conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_sources_start_index, filter_conditions, *analyzer, log);
+        /// TODO: record profile
+    }
 }
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
@@ -393,6 +484,26 @@ void DAGStorageInterpreter::prepare()
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index)
+{
+    // execute timezone cast or duration cast if needed for local table scan
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    if (has_cast)
+    {
+        RUNTIME_CHECK(remote_read_sources_start_index <= group_builder.group.size());
+        size_t i = 0;
+        // local sources
+        while (i < remote_read_sources_start_index)
+        {
+            auto & group = group_builder.group[i++];
+            group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+        }
+    }
+}
+
+void DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
 {
@@ -400,7 +511,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        assert(remote_read_streams_start_index <= pipeline.streams.size());
+        RUNTIME_CHECK(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
         // local streams
         while (i < remote_read_streams_start_index)
@@ -472,7 +583,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     {
         size_t task_end = task_start + task_per_thread;
         if (i < rest_task)
-            task_end++;
+            ++task_end;
         if (task_end == task_start)
             continue;
         std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
@@ -483,6 +594,39 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
         pipeline.streams.push_back(input);
         task_start = task_end;
     }
+}
+
+void DAGStorageInterpreter::buildRemoteSourceOps(
+    SourceOps & source_ops,
+    PipelineExecutorStatus & exec_status,
+    const std::vector<RemoteRequest> & remote_requests)
+{
+    std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
+    const DAGSchema & schema = remote_requests[0].schema;
+    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+    size_t task_per_thread = all_tasks.size() / concurrent_num;
+    size_t rest_task = all_tasks.size() % concurrent_num;
+    pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
+    /// TODO: support reading data from write nodes
+    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+    {
+        size_t task_end = task_start + task_per_thread;
+        if (i < rest_task)
+            ++task_end;
+        if (task_end == task_start)
+            continue;
+        std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
+        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+
+        source_ops.emplace_back(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
+        task_start = task_end;
+    }
+
+    LOG_DEBUG(log, "remote sourceOps built");
 }
 
 DAGContext & DAGStorageInterpreter::dagContext() const
@@ -769,6 +913,68 @@ DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     return table_snap;
 }
 
+SourceOps DAGStorageInterpreter::buildLocalSourceOpsForPhysicalTable(
+    PipelineExecutorStatus & exec_status,
+    const TableID & table_id,
+    const SelectQueryInfo & query_info,
+    size_t max_block_size)
+{
+    size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
+    if (region_num == 0)
+        return {};
+
+    RUNTIME_CHECK(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
+    auto & storage = storages_with_structure_lock[table_id].storage;
+
+    const DAGContext & dag_context = *context.getDAGContext();
+    for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
+    {
+        try
+        {
+            /// TODO: consider disaggregated task
+            auto source_ops = storage->readSourceOps(
+                exec_status,
+                required_columns,
+                query_info,
+                context,
+                max_block_size,
+                max_streams);
+
+            injectFailPointForLocalRead(query_info);
+            // After getting sourceOps from storage, we need to validate whether Regions have changed or not after learner read.
+            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `sourceOps`
+            // may contain different data other than expected.
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            return source_ops;
+        }
+        catch (RegionException & e)
+        {
+            query_info.mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
+            /// Recover from region exception for batchCop/MPP
+            if (dag_context.isBatchCop() || dag_context.isMPPTask())
+            {
+                if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
+                    continue;
+                else
+                    break;
+            }
+            else
+            {
+                // Throw an exception for TiDB / TiSpark to retry
+                e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+                throw;
+            }
+        }
+        catch (DB::Exception & e)
+        {
+            /// Other unknown exceptions
+            e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+            throw;
+        }
+    }
+    return {};
+}
+
 void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)
 {
     const DAGContext & dag_context = *context.getDAGContext();
@@ -824,6 +1030,33 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, req_info));
         }
     }
+}
+
+SourceOps DAGStorageInterpreter::buildLocalSourceOps(
+    PipelineExecutorStatus & exec_status,
+    size_t max_block_size)
+{
+    const DAGContext & dag_context = *context.getDAGContext();
+    size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
+    if (total_local_region_num == 0)
+        return {};
+    const auto table_query_infos = generateSelectQueryInfos();
+
+    /// TODO: support multiple partitions
+    SourceOps source_ops;
+    for (const auto & table_query_info : table_query_infos)
+    {
+        const TableID table_id = table_query_info.first;
+        const SelectQueryInfo & query_info = table_query_info.second;
+        source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
+    }
+
+    LOG_DEBUG(
+        log,
+        "local sourceOps built, is_disaggregated_task={}",
+        dag_context.is_disaggregated_task);
+
+    return source_ops;
 }
 
 std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
@@ -1100,6 +1333,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             filter_conditions,
             log));
     }
+    LOG_DEBUG(log, "remote request size: {}", remote_requests.size());
     return remote_requests;
 }
 

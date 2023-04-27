@@ -28,7 +28,7 @@ EventTask::EventTask(
     : exec_status(exec_status_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
 EventTask::EventTask(
@@ -40,7 +40,7 @@ EventTask::EventTask(
     , exec_status(exec_status_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
 EventTask::~EventTask()

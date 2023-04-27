@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
@@ -99,11 +100,23 @@ void PhysicalPlanNode::buildPipelineExecGroup(
     throw Exception("Unsupport");
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)
 {
-    assert(childrenSize() <= 1);
+    RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder);
+        children(0)->buildPipeline(builder, context, exec_status);
     builder.addPlanNode(shared_from_this());
+}
+
+EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorStatus & exec_status)
+{
+    if (getFineGrainedShuffle().enable())
+        return nullptr;
+    return doSinkComplete(exec_status);
+}
+
+EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorStatus & /*exec_status*/)
+{
+    return nullptr;
 }
 } // namespace DB

@@ -12,126 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
-#include <Functions/FunctionHelpers.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/ColumnGenerator.h>
-#include <TestUtils/ExecutorTestUtils.h>
-
-#include <ext/enumerate.h>
-#include <tuple>
+#include <Flash/tests/gtest_join.h>
 
 namespace DB
 {
 namespace tests
 {
-class JoinExecutorTestRunner : public DB::tests::ExecutorTest
+class JoinExecutorTestRunner : public DB::tests::JoinTestRunner
 {
 public:
     void initializeContext() override
     {
-        ExecutorTest::initializeContext();
-        context.addMockTable({"test_db", "test_table"},
-                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        JoinTestRunner::initializeContext();
 
-        context.addMockTable({"test_db", "r_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "banana"})});
-
-        context.addMockTable({"test_db", "r_table_2"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "apple", "apple"})});
-
-        context.addMockTable({"test_db", "l_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                             {toVec<String>("s", {"banana", "banana"}),
-                              toVec<String>("join_c", {"apple", "banana"})});
-
-        context.addExchangeReceiver("exchange_r_table",
-                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s", {"banana", "banana"}),
-                                     toNullableVec<String>("join_c", {"apple", "banana"})});
-
-        context.addExchangeReceiver("exchange_l_table",
-                                    {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                    {toNullableVec<String>("s", {"banana", "banana"}),
-                                     toNullableVec<String>("join_c", {"apple", "banana"})});
-
-        /// for ScanHashMapData test
-        DB::MockColumnInfoVec left_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
-        DB::MockColumnInfoVec right_column_infos{{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}};
-        DB::MockColumnInfoVec right_partition_column_infos{{"a", TiDB::TP::TypeLong}};
-        ColumnsWithTypeAndName left_column_data;
-        ColumnsWithTypeAndName right_column_data;
-        ColumnsWithTypeAndName common_column_data;
-        size_t table_rows = 61440;
-        size_t common_rows = 12288;
-        for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
-        {
-            ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-            common_column_data.push_back(ColumnGenerator::instance().generate(opts));
-        }
-
-        for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
-        {
-            ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-            left_column_data.push_back(ColumnGenerator::instance().generate(opts));
-        }
-
-        for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(right_column_infos))
-        {
-            ColumnGeneratorOpts opts{table_rows - common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
-            right_column_data.push_back(ColumnGenerator::instance().generate(opts));
-        }
-
-        for (size_t i = 0; i < common_column_data.size(); ++i)
-        {
-            left_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
-            right_column_data[i].column->assumeMutable()->insertRangeFrom(*common_column_data[i].column, 0, common_rows);
-        }
-
-        ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
-        IColumn::Permutation perm;
-        shuffle_column.column->getPermutation(false, 0, -1, perm);
-        for (auto & column : left_column_data)
-        {
-            column.column = column.column->permute(perm, 0);
-        }
-        for (auto & column : right_column_data)
-        {
-            column.column = column.column->permute(perm, 0);
-        }
-
-        context.addMockTable("outer_join_test", "left_table_1_concurrency", left_column_infos, left_column_data, 1);
-        context.addMockTable("outer_join_test", "left_table_3_concurrency", left_column_infos, left_column_data, 3);
-        context.addMockTable("outer_join_test", "left_table_5_concurrency", left_column_infos, left_column_data, 5);
-        context.addMockTable("outer_join_test", "left_table_10_concurrency", left_column_infos, left_column_data, 10);
-        context.addMockTable("outer_join_test", "right_table_1_concurrency", right_column_infos, right_column_data, 1);
-        context.addMockTable("outer_join_test", "right_table_3_concurrency", right_column_infos, right_column_data, 3);
-        context.addMockTable("outer_join_test", "right_table_5_concurrency", right_column_infos, right_column_data, 5);
-        context.addMockTable("outer_join_test", "right_table_10_concurrency", right_column_infos, right_column_data, 10);
-        context.addExchangeReceiver("right_exchange_receiver_1_concurrency", right_column_infos, right_column_data, 1, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_3_concurrency", right_column_infos, right_column_data, 3, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
-        context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
+        /// disable spill
+        context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     }
-
-    static constexpr size_t join_type_num = 7;
-
-    static constexpr tipb::JoinType join_types[join_type_num] = {
-        tipb::JoinType::TypeInnerJoin,
-        tipb::JoinType::TypeLeftOuterJoin,
-        tipb::JoinType::TypeRightOuterJoin,
-        tipb::JoinType::TypeSemiJoin,
-        tipb::JoinType::TypeAntiSemiJoin,
-        tipb::JoinType::TypeLeftOuterSemiJoin,
-        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-    };
 };
+
+#define WRAP_FOR_JOIN_TEST_BEGIN                   \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_JOIN_TEST_END \
+    }
 
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
@@ -196,19 +102,7 @@ try
                                .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                .build(context);
 
-            {
-                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
-
-                // for spill to disk tests
-                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-                ASSERT_THROW(executeStreams(request), Exception);
-                auto concurrences = {2, 5, 10};
-                for (auto concurrency : concurrences)
-                {
-                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
-                }
-            }
+            executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
         }
     }
 }
@@ -472,88 +366,255 @@ TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
 try
 {
     context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
-    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "empty_table_t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable("cross_join", "empty_table_t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
 
-    const auto cond = gt(col("a"), lit(Field("1", 1)));
-
-    const auto table_scan = [&]() -> std::tuple<DAGRequestBuilder, DAGRequestBuilder> {
-        return {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")};
+    const ColumnsWithTypeAndName expected_cols[join_type_num * 4] = {
+        // non-empty inner non-empty
+        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty inner non-empty
+        {},
+        // non-empty inner empty
+        {toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty inner empty
+        {},
+        // non-empty left non-empty
+        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
+        // empty left non-empty
+        {},
+        // non-empty left empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}})},
+        // empty left empty
+        {},
+        // non-empty right non-empty
+        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
+        // empty right non-empty
+        {toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // non-empty right empty
+        {},
+        // empty right empty
+        {},
+        // non-empty semi non-empty
+        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
+        // empty semi non-empty
+        {},
+        // non-empty semi empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty semi empty
+        {},
+        // non-empty anti semi non-empty
+        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
+        // empty anti semi non-empty
+        {},
+        // non-empty anti semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty anti semi empty
+        {},
+        // non-empty left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
+        // empty left outer semi non-empty
+        {},
+        // non-empty left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty left outer semi empty
+        {},
+        // non-empty anti left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+        // empty anti left outer semi non-empty
+        {},
+        // non-empty anti left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty anti left outer semi empty
+        {},
     };
 
-    const ColumnsWithTypeAndName expected_cols[join_type_num] = {
-        // inner
-        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
-        // left
-        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
-        // right
-        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
-        // semi
-        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
-        // anti semi
-        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
-        // left outer semi
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
-        // anti left outer semi
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+    const auto cond = gt(col("a"), lit(Field("1", 1)));
+    const auto cond_right = gt(col("c"), lit(Field("1", 1)));
+    const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
+        return {
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table_t2")},
+            {context.scan("cross_join", "empty_table_t1"), context.scan("cross_join", "empty_table_t2")},
+        };
     };
 
     /// for cross join, there is no join columns
     size_t i = 0;
 
+    for (const auto & join_type : join_types)
     {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        auto join_cond = cond;
+        if (join_type == tipb::TypeRightOuterJoin)
+            join_cond = cond_right;
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, join_type, {}, {}, {}, {join_cond}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
+        /// extra tests for outer join
+        if (join_type == tipb::TypeLeftOuterJoin)
+        {
+            /// left out join with left condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {join_cond}, {}, {}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+            /// left out join with left condition and other condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeLeftOuterJoin, {}, {join_cond}, {}, {join_cond}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+        }
+        else if (join_type == tipb::TypeRightOuterJoin)
+        {
+            /// right out join with right condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {join_cond}, {}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+            /// right out join with right condition and other condition
+            join_inputs = gen_join_inputs();
+            i -= join_inputs.size();
+            for (auto & join_input : join_inputs)
+            {
+                auto request = join_input.first
+                                   .join(join_input.second, tipb::JoinType::TypeRightOuterJoin, {}, {}, {join_cond}, {join_cond}, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, expected_cols[i++]);
+            }
+        }
     }
+}
+CATCH
 
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
+TEST_F(JoinExecutorTestRunner, CrossJoinWithoutCondition)
+try
+{
+    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "empty_table", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
 
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
+    const auto gen_join_inputs = [&]() -> std::vector<std::pair<DAGRequestBuilder, DAGRequestBuilder>> {
+        return {
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "t2")},
+            {context.scan("cross_join", "t1"), context.scan("cross_join", "empty_table")},
+            {context.scan("cross_join", "empty_table"), context.scan("cross_join", "empty_table")},
+        };
+    };
 
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
+    const ColumnsWithTypeAndName expected_cols[join_type_num * 4] = {
+        // non-empty inner non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty inner non-empty
+        {},
+        // non-empty inner empty
+        {toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty inner empty
+        {},
+        // non-empty left non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty left non-empty
+        {},
+        // non-empty left empty
+        {
+            toNullableVec<String>({"1", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}})},
+        // empty left empty
+        {},
+        // non-empty right non-empty
+        {
+            toNullableVec<String>({"1", "1", "1", "1", "2", "2", "2", "2", {}, {}, {}, {}, "1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", "3", "3", "4", "4", "4", "4", "3", "3", "3", "3", {}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2", "1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}, "3", "4", "3", {}})},
+        // empty right non-empty
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}})},
+        // non-empty right empty
+        {},
+        // empty right empty
+        {},
+        // non-empty semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty semi non-empty
+        {},
+        // non-empty semi empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty semi empty
+        {},
+        // non-empty anti semi non-empty
+        {toNullableVec<String>({}), toNullableVec<String>({})},
+        // empty anti semi non-empty
+        {},
+        // non-empty anti semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // empty anti semi empty
+        {},
+        // non-empty left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty left outer semi non-empty
+        {},
+        // non-empty left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty left outer semi empty
+        {},
+        // non-empty anti left outer semi non-empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 0, 0, 0})},
+        // empty anti left outer semi non-empty
+        {},
+        // non-empty anti left outer semi empty
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 1, 1, 1})},
+        // empty anti left outer semi empty
+        {},
+    };
 
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
+    /// for cross join, there is no join columns
+    size_t i = 0;
 
+    for (const auto & join_type : join_types)
     {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
-    }
-
-    {
-        auto [t1, t2] = table_scan();
-        auto request = t1
-                           .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        auto join_inputs = gen_join_inputs();
+        for (auto & join_input : join_inputs)
+        {
+            auto request = join_input.first
+                               .join(join_input.second, join_type, {}, {}, {}, {}, {})
+                               .build(context);
+            executeAndAssertColumnsEqual(request, expected_cols[i++]);
+        }
     }
 }
 CATCH
@@ -800,12 +861,14 @@ try
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        WRAP_FOR_JOIN_TEST_BEGIN
         auto blocks = getExecuteStreamsReturnBlocks(request);
         ASSERT_EQ(expect[i].size(), blocks.size());
         for (size_t j = 0; j < blocks.size(); ++j)
         {
             ASSERT_EQ(expect[i][j], blocks[j].rows());
         }
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -859,39 +922,14 @@ try
         for (size_t i = 0; i < block_sizes.size(); ++i)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+            WRAP_FOR_JOIN_TEST_BEGIN
             auto blocks = getExecuteStreamsReturnBlocks(request);
             ASSERT_EQ(expect[i].size(), blocks.size());
             for (size_t j = 0; j < blocks.size(); ++j)
             {
                 ASSERT_EQ(expect[i][j], blocks[j].rows());
             }
-        }
-    }
-}
-CATCH
-
-TEST_F(JoinExecutorTestRunner, SpillToDisk)
-try
-{
-    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})});
-
-    auto request = context
-                       .scan("split_test", "t1")
-                       .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
-                       .build(context);
-
-    auto join_restore_concurrences = {-1, 0, 1, 5};
-    auto concurrences = {2, 5, 10};
-    const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-    for (const auto & join_restore_concurrency : join_restore_concurrences)
-    {
-        context.context->setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
-        ASSERT_THROW(executeStreams(request), Exception);
-        for (auto concurrency : concurrences)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, concurrency));
+            WRAP_FOR_JOIN_TEST_END
         }
     }
 }
@@ -906,8 +944,6 @@ try
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
-    /// disable spill
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
@@ -983,215 +1019,8 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillTriggered)
-try
+namespace
 {
-    UInt64 max_block_size = 800;
-    size_t original_max_streams = 20;
-    /// used to test the case that max_stream less than fine_grained_stream_count
-    size_t original_max_streams_small = 4;
-    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
-    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
-    std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
-    UInt64 max_bytes_before_external_join = 20000;
-    /// case 1, right join without right condition
-    auto request = context
-                       .scan("outer_join_test", right_table_names[0])
-                       .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
-                       .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
-                       .build(context);
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-    /// use right_table left join left_table as the reference
-    auto ref_columns = executeStreams(request, original_max_streams);
-
-    /// case 1.1 table scan join table scan
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
-    for (auto & left_table_name : left_table_names)
-    {
-        for (auto & right_table_name : right_table_names)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
-                          .build(context);
-            if (right_table_name == "right_table_1_concurrency")
-            {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
-            }
-            else
-            {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-            }
-        }
-    }
-    /// case 1.2 table scan join fine grained exchange receiver
-    for (auto & left_table_name : left_table_names)
-    {
-        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
-                          .build(context);
-            if (exchange_concurrency == 1)
-            {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
-            }
-            else
-            {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-                if (original_max_streams_small < exchange_concurrency)
-                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
-            }
-        }
-    }
-    /// case 2, right join with right condition
-    request = context
-                  .scan("outer_join_test", right_table_names[0])
-                  .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
-                  .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
-                  .build(context);
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    /// use right_table left join left_table as the reference
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-    ref_columns = executeStreams(request, original_max_streams);
-
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
-    /// case 2.1 table scan join table scan
-    for (auto & left_table_name : left_table_names)
-    {
-        for (auto & right_table_name : right_table_names)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
-                          .build(context);
-            if (right_table_name == "right_table_1_concurrency")
-            {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
-            }
-            else
-            {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-            }
-        }
-    }
-    /// case 2.2 table scan join fine grained exchange receiver
-    for (auto & left_table_name : left_table_names)
-    {
-        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
-        {
-            String exchange_name = fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency);
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
-                          .build(context);
-            if (exchange_concurrency == 1)
-            {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
-            }
-            else
-            {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-                if (original_max_streams_small < exchange_concurrency)
-                    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
-            }
-        }
-    }
-}
-CATCH
-
-TEST_F(JoinExecutorTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillNotTriggered)
-try
-{
-    UInt64 max_block_size = 800;
-    size_t original_max_streams = 20;
-    /// used to test the case that max_stream less than fine_grained_stream_count
-    size_t original_max_streams_small = 4;
-    std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
-    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
-    std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
-    UInt64 max_bytes_before_external_join_will_no_spill_happens = 1024ULL * 1024 * 1024 * 1024;
-    /// case 1, right join without right condition
-    auto request = context
-                       .scan("outer_join_test", right_table_names[0])
-                       .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
-                       .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
-                       .build(context);
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-    /// use right_table left join left_table as the reference
-    auto ref_columns = executeStreams(request, original_max_streams);
-
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
-    /// case 1.1 table scan join table scan
-    for (auto & left_table_name : left_table_names)
-    {
-        for (auto & right_table_name : right_table_names)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
-                          .build(context);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-        }
-    }
-    /// case 1.2 table scan join fine grained exchange receiver
-    for (auto & left_table_name : left_table_names)
-    {
-        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
-                          .build(context);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
-        }
-    }
-    /// case 2, right join with right condition
-    request = context
-                  .scan("outer_join_test", right_table_names[0])
-                  .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
-                  .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
-                  .build(context);
-    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    /// use right_table left join left_table as the reference
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-    ref_columns = executeStreams(request, original_max_streams);
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
-    /// case 2.1 table scan join table scan
-    for (auto & left_table_name : left_table_names)
-    {
-        for (auto & right_table_name : right_table_names)
-        {
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
-                          .build(context);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-        }
-    }
-    /// case 2.2 table scan join fine grained exchange receiver
-    for (auto & left_table_name : left_table_names)
-    {
-        for (size_t exchange_concurrency : right_exchange_receiver_concurrency)
-        {
-            String exchange_name = fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency);
-            request = context
-                          .scan("outer_join_test", left_table_name)
-                          .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
-                          .build(context);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-            if (original_max_streams_small < exchange_concurrency)
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
-        }
-    }
-}
-CATCH
-
 ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithTypeAndName & left, const ColumnWithTypeAndName & left_semi_res)
 {
     ColumnsWithTypeAndName res = left;
@@ -1237,6 +1066,7 @@ ColumnsWithTypeAndName genSemiJoinResult(tipb::JoinType type, const ColumnsWithT
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Semi join Type {} is not supported", type);
     return res;
 }
+} // namespace
 
 TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
@@ -1570,7 +1400,6 @@ try
 }
 CATCH
 
-
 TEST_F(JoinExecutorTestRunner, RightSemiFamilyJoin)
 try
 {
@@ -1696,6 +1525,222 @@ try
     }
 }
 CATCH
+
+/// please ensure that left table output columns' size == right table output columns' size
+ColumnsWithTypeAndName swapLeftRightTableColumns(const ColumnsWithTypeAndName & left_outer_result)
+{
+    auto right_outer_result = left_outer_result;
+    auto size = left_outer_result.size();
+    assert(size % 2 == 0);
+    auto half_size = size >> 1;
+    for (size_t i = 0; i < half_size; ++i)
+        right_outer_result[i] = left_outer_result[half_size + i];
+    for (size_t i = half_size; i < size; ++i)
+        right_outer_result[i] = left_outer_result[i - half_size];
+    return right_outer_result;
+}
+
+TEST_F(JoinExecutorTestRunner, RightOuterJoin)
+try
+{
+    using tipb::JoinType;
+    /// One join key(t.a = s.a) + no left/right condition + no other condition.
+    /// type + left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1 = {
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {2, 3, {}, 7})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
+         {toNullableVec<Int32>("a", {3, 2, {}, 7})}}};
+
+    for (const auto & [type, left, right] : t1)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
+    }
+
+    /// One join key(t.a = s.a) + no left/right condition + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2 = {
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+        }};
+
+    for (const auto & [type, left, right] : t2)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {lt(col("t.c"), col("s.c"))},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
+    }
+
+    /// One join key(t.a = s.a) + left/right condition + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t3 = {
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+        }};
+
+    auto literal_integer = lit(Field(static_cast<Int64>(2)));
+    for (const auto & [type, left, right] : t3)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {lt(col("s.a"), literal_integer)},
+                                 {},
+                                 {lt(col("t.c"), col("s.c"))},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {lt(col("s.a"), literal_integer)},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
+    }
+}
+CATCH
+
+#undef WRAP_FOR_JOIN_TEST_BEGIN
+#undef WRAP_FOR_JOIN_TEST_END
 
 } // namespace tests
 } // namespace DB

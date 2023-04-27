@@ -27,6 +27,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
+#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -49,7 +51,7 @@ void recordJoinExecuteInfo(
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
     join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 
@@ -64,8 +66,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
-    assert(left);
-    assert(right);
+    RUNTIME_CHECK(left);
+    RUNTIME_CHECK(right);
 
     left->finalize();
     right->finalize();
@@ -125,6 +127,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
     String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, right_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
+    Names join_output_column_names;
+    for (const auto & col : join_output_schema)
+        join_output_column_names.emplace_back(col.name);
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -137,6 +142,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_spill_config,
         probe_spill_config,
         settings.join_restore_concurrency,
+        join_output_column_names,
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
@@ -225,39 +231,37 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
         probe()->buildBlockInputStream(probe_pipeline, context, max_streams);
         probeSideTransform(probe_pipeline, context);
     }
-
-    doSchemaProject(pipeline);
 }
 
-void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
-{
-    /// add a project to remove all the useless column
-    NamesWithAliases schema_project_cols;
-    for (auto & c : schema)
-    {
-        /// do not need to care about duplicated column names because
-        /// it is guaranteed by its children physical plan nodes
-        schema_project_cols.emplace_back(c.name, c.name);
-    }
-    assert(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
-    assert(schema_project && !schema_project->getActions().empty());
-    executeExpression(pipeline, schema_project, log, "remove useless column after join");
-}
-
-void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
+void PhysicalJoin::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
 {
     // Break the pipeline for join build.
-    // FIXME: Should be newly created PhysicalJoinBuild.
-    auto join_build_builder = builder.breakPipeline(shared_from_this());
+    auto join_build = std::make_shared<PhysicalJoinBuild>(
+        executor_id,
+        build()->getSchema(),
+        fine_grained_shuffle,
+        log->identifier(),
+        build(),
+        join_ptr,
+        build_side_prepare_actions);
+    auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder);
+    build()->buildPipeline(join_build_builder, context, exec_status);
     join_build_builder.build();
+
     // Join probe pipeline.
-    probe()->buildPipeline(builder);
-    // FIXME: Should be newly created PhysicalJoinProbe.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    probe()->buildPipeline(builder, context, exec_status);
+    auto join_probe = std::make_shared<PhysicalJoinProbe>(
+        executor_id,
+        schema,
+        log->identifier(),
+        probe(),
+        join_ptr,
+        probe_side_prepare_actions);
+    builder.addPlanNode(join_probe);
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)

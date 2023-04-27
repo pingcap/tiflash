@@ -38,50 +38,50 @@ extern const char random_pipeline_model_event_finish_failpoint[];
         exec_status.onErrorOccurred(std::current_exception());   \
     }
 
-void Event::addInput(const EventPtr & input)
+void Event::addInput(const EventPtr & input) noexcept
 {
-    assert(status == EventStatus::INIT);
-    assert(input.get() != this);
+    RUNTIME_ASSERT(status == EventStatus::INIT);
+    RUNTIME_ASSERT(input.get() != this);
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
 }
 
-void Event::addOutput(const EventPtr & output)
+void Event::addOutput(const EventPtr & output) noexcept
 {
     /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
-    assert(status == EventStatus::INIT || status == EventStatus::FINISHED);
-    assert(output.get() != this);
+    RUNTIME_ASSERT(status == EventStatus::INIT || status == EventStatus::FINISHED);
+    RUNTIME_ASSERT(output.get() != this);
     outputs.push_back(output);
 }
 
 void Event::insertEvent(const EventPtr & insert_event) noexcept
 {
-    assert(insert_event);
-    assert(status == EventStatus::FINISHED);
+    RUNTIME_ASSERT(status == EventStatus::FINISHED);
+    RUNTIME_ASSERT(insert_event);
     /// eventA───────►eventB ===> eventA─────────────►eventB
     ///                             │                    ▲
     ///                             └────►insert_event───┘
     for (const auto & output : outputs)
     {
-        assert(output);
+        RUNTIME_ASSERT(output);
         output->addInput(insert_event);
     }
     insert_event->addInput(shared_from_this());
-    RUNTIME_ASSERT(!insert_event->prepareForSource());
+    RUNTIME_ASSERT(!insert_event->prepare());
 }
 
 void Event::onInputFinish() noexcept
 {
     auto cur_value = unfinished_inputs.fetch_sub(1);
-    assert(cur_value >= 1);
+    RUNTIME_ASSERT(cur_value >= 1);
     if (1 == cur_value)
         schedule();
 }
 
-bool Event::prepareForSource()
+bool Event::prepare() noexcept
 {
-    assert(status == EventStatus::INIT);
+    RUNTIME_ASSERT(status == EventStatus::INIT);
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
@@ -99,9 +99,16 @@ bool Event::prepareForSource()
     }
 }
 
+void Event::addTask(TaskPtr && task) noexcept
+{
+    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    ++unfinished_tasks;
+    tasks.push_back(std::move(task));
+}
+
 void Event::schedule() noexcept
 {
-    assert(0 == unfinished_inputs);
+    RUNTIME_ASSERT(0 == unfinished_inputs);
     if (is_source)
     {
         RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
@@ -113,22 +120,45 @@ void Event::schedule() noexcept
         exec_status.onEventSchedule();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    std::vector<TaskPtr> tasks;
     try
     {
-        tasks = scheduleImpl();
+        scheduleImpl();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    scheduleTasks();
+}
+
+void Event::scheduleTasks() noexcept
+{
+    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    RUNTIME_ASSERT(tasks.size() == static_cast<size_t>(unfinished_tasks));
     if (!tasks.empty())
     {
-        scheduleTasks(tasks);
+        // If query has already been cancelled, we can skip scheduling tasks.
+        // Then tasks will be destroyed and call `onTaskFinish`.
+        if (likely(!exec_status.isCancelled()))
+        {
+            LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
+            TaskScheduler::instance->submit(tasks);
+        }
+        tasks.clear();
     }
     else
     {
         // if no task is scheduled here, we should call finish directly.
         finish();
     }
+}
+
+void Event::onTaskFinish() noexcept
+{
+    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+    RUNTIME_ASSERT(remaining_tasks >= 0);
+    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+    if (0 == remaining_tasks)
+        finish();
 }
 
 void Event::finish() noexcept
@@ -147,7 +177,7 @@ void Event::finish() noexcept
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {
-            assert(output);
+            RUNTIME_ASSERT(output);
             output->onInputFinish();
             output.reset();
         }
@@ -160,31 +190,6 @@ void Event::finish() noexcept
     // since `exec_status.onEventSchedule()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
     exec_status.onEventFinish();
-}
-
-void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
-{
-    assert(!tasks.empty());
-    assert(0 == unfinished_tasks);
-    unfinished_tasks = tasks.size();
-    assert(status != EventStatus::FINISHED);
-    // If query has already been cancelled, we can skip scheduling tasks.
-    // And then tasks will be destroyed and call `onTaskFinish`.
-    if (likely(!exec_status.isCancelled()))
-    {
-        LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-        TaskScheduler::instance->submit(tasks);
-    }
-}
-
-void Event::onTaskFinish() noexcept
-{
-    assert(status != EventStatus::FINISHED);
-    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    assert(remaining_tasks >= 0);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
-    if (0 == remaining_tasks)
-        finish();
 }
 
 void Event::switchStatus(EventStatus from, EventStatus to) noexcept

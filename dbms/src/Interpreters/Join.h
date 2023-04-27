@@ -143,6 +143,7 @@ public:
          const SpillConfig & build_spill_config_,
          const SpillConfig & probe_spill_config_,
          Int64 join_restore_concurrency_,
+         const Names & tidb_output_column_names_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
@@ -237,6 +238,7 @@ public:
 
     void finishOneProbe();
     void waitUntilAllProbeFinished() const;
+    bool isAllProbeFinished() const;
 
     void finishOneNonJoin(size_t partition_index);
 
@@ -344,6 +346,8 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
+
+    Names tidb_output_column_names;
 
     bool is_test;
 

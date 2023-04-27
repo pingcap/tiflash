@@ -30,11 +30,11 @@ public:
         : Event(exec_status_, std::move(mem_tracker_), req_id)
         , pipeline_exec(std::move(pipeline_exec_))
     {
-        assert(pipeline_exec);
+        RUNTIME_CHECK(pipeline_exec);
     }
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override;
+    void scheduleImpl() override;
 
 private:
     // The pipeline exec for executing the specific fine-grained partition.

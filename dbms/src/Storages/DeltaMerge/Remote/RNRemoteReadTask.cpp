@@ -546,7 +546,20 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     }
     auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
-    LOG_DEBUG(log, "receive page, oid={}", oid);
+    LOG_DEBUG(log, "receive page, oid={} segment_id={}", oid, segment->segmentId());
+}
+
+bool RNRemoteSegmentReadTask::addConsumedMsg()
+{
+    num_msg_consumed += 1;
+    RUNTIME_CHECK(
+        num_msg_consumed <= num_msg_to_consume,
+        num_msg_consumed,
+        num_msg_to_consume,
+        segment->segmentId());
+
+    // return there are more pending msg or not
+    return num_msg_consumed < num_msg_to_consume;
 }
 
 void RNRemoteSegmentReadTask::prepare()

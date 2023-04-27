@@ -34,7 +34,7 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     RUNTIME_ASSERT(window_sort.ispartialsort(), log, "for window sort, ispartialsort must be true");
 
@@ -66,7 +66,7 @@ void PhysicalWindowSort::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
-    assert(fine_grained_shuffle.enable());
+    RUNTIME_CHECK(fine_grained_shuffle.enable());
     executeLocalSort(exec_status, group_builder, order_descr, {}, context, log);
 }
 

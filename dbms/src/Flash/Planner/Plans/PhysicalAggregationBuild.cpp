@@ -15,9 +15,11 @@
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
@@ -29,7 +31,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
 {
     // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
     // So only non fine grained shuffle is considered here.
-    assert(!fine_grained_shuffle.enable());
+    RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
     executeExpression(exec_status, group_builder, before_agg_actions, log);
 
@@ -59,5 +61,31 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
+}
+
+EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_status)
+{
+    if (!aggregate_context->hasSpilledData())
+        return nullptr;
+
+    /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
+    /// so a new event is added here to execute the final spill.
+    /// ...──►AggregateBuildSinkOp[local spill]──┐
+    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         ┌──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┼──►[final spill]AggregateFinalSpillEvent─┼──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┤                                         └──►AggregateFinalSpillTask
+    /// ...──►AggregateBuildSinkOp[local spill]──┘
+    std::vector<size_t> indexes;
+    for (size_t index = 0; index < aggregate_context->getBuildConcurrency(); ++index)
+    {
+        if (aggregate_context->needSpill(index, /*try_mark_need_spill=*/true))
+            indexes.push_back(index);
+    }
+    if (!indexes.empty())
+    {
+        auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes));
+    }
+    return nullptr;
 }
 } // namespace DB
