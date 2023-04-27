@@ -38,7 +38,7 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override;
+    void scheduleImpl() override;
 
     void finishImpl() override;
 

@@ -14,7 +14,7 @@
 
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 
 #include <magic_enum.hpp>
 
@@ -23,7 +23,7 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
-    size_t non_joined_stream_index,
+    size_t scan_hash_map_after_probe_stream_index,
     const String & req_id,
     UInt64 max_block_size_)
     : log(Logger::get(req_id))
@@ -34,7 +34,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
-    probe_exec.set(HashJoinProbeExec::build(original_join, input, non_joined_stream_index, max_block_size_));
+    probe_exec.set(HashJoinProbeExec::build(original_join, input, scan_hash_map_after_probe_stream_index, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 
     ProbeProcessInfo header_probe_process_info(0);
@@ -44,7 +44,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
 {
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
@@ -75,9 +75,9 @@ void HashJoinProbeBlockInputStream::onCurrentProbeDone()
     switchStatus(probe_exec->onProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::WAIT_PROBE_FINISH);
 }
 
-void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
+void HashJoinProbeBlockInputStream::onCurrentScanHashMapDone()
 {
-    switchStatus(probe_exec->onNonJoinedFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN);
+    switchStatus(probe_exec->onScanHashMapAfterProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN);
 }
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
@@ -96,10 +96,10 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
     auto & cur_probe_exec = *probe_exec;
-    if (cur_probe_exec.needOutputNonJoinedData())
+    if (cur_probe_exec.needScanHashMap())
     {
-        cur_probe_exec.onNonJoinedStart();
-        switchStatus(ProbeStatus::READ_NON_JOINED_DATA);
+        cur_probe_exec.onScanHashMapAfterProbeStart();
+        switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
     }
     else
     {
@@ -147,13 +147,13 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 onAllProbeDone();
                 break;
             }
-            case ProbeStatus::READ_NON_JOINED_DATA:
+            case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
             {
-                auto block = probe_exec->fetchNonJoined();
-                non_joined_rows += block.rows();
+                auto block = probe_exec->fetchScanHashMapData();
+                scan_hash_map_rows += block.rows();
                 if (!block)
                 {
-                    onCurrentReadNonJoinedDataDone();
+                    onCurrentScanHashMapDone();
                     break;
                 }
                 return block;

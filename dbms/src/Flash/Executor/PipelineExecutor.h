@@ -55,8 +55,7 @@ public:
     PipelineExecutor(
         const MemoryTrackerPtr & memory_tracker_,
         Context & context_,
-        const String & req_id,
-        const PipelinePtr & root_pipeline_);
+        const String & req_id);
 
     String toString() const override;
 
@@ -78,7 +77,7 @@ private:
 
     void wait();
 
-    void consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler);
+    void consume(ResultHandler & result_handler);
 
 private:
     PipelinePtr root_pipeline;

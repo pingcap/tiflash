@@ -354,6 +354,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         {
             handleConnectionAfterException();
             cancel();
+            waitAllConnectionDone();
             thread_manager->wait();
         }
         catch (...)

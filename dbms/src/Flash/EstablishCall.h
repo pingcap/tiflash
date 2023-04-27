@@ -19,6 +19,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
@@ -85,6 +86,9 @@ public:
 
     void tryConnectTunnel();
 
+    const mpp::EstablishMPPConnectionRequest & getRequest() const { return request; }
+    grpc::ServerContext * getGrpcContext() { return &ctx; }
+
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
     /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
@@ -136,6 +140,8 @@ private:
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
+    String query_id;
+    String connection_id;
     double waiting_task_time_ms = 0;
 };
 } // namespace DB

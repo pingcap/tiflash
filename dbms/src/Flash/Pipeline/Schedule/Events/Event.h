@@ -50,7 +50,7 @@ public:
     {}
     virtual ~Event() = default;
 
-    void addInput(const EventPtr & input);
+    void addInput(const EventPtr & input) noexcept;
 
     // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
     // so these functions must be noexcept.
@@ -59,22 +59,28 @@ public:
     void onTaskFinish() noexcept;
 
     // return true for source event.
-    bool prepareForSource();
+    bool prepare() noexcept;
 
 protected:
-    // Returns the tasks ready to be scheduled.
-    virtual std::vector<TaskPtr> scheduleImpl() { return {}; }
+    // add task ready to be scheduled.
+    void addTask(TaskPtr && task) noexcept;
+
+    // Generate the tasks ready to be scheduled and use `addTask` to add the tasks.
+    virtual void scheduleImpl() {}
 
     // So far the ownership and the life-cycle of the resources are not very well-defined so we still rely on things like "A must be released before B".
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
+    /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
+    void insertEvent(const EventPtr & insert_event) noexcept;
+
 private:
-    void scheduleTasks(std::vector<TaskPtr> & tasks) noexcept;
+    void scheduleTasks() noexcept;
 
     void finish() noexcept;
 
-    void addOutput(const EventPtr & output);
+    void addOutput(const EventPtr & output) noexcept;
 
     void onInputFinish() noexcept;
 
@@ -91,6 +97,9 @@ private:
     Events outputs;
 
     std::atomic_int32_t unfinished_inputs{0};
+
+    // hold the tasks that ready to be scheduled.
+    std::vector<TaskPtr> tasks;
 
     std::atomic_int32_t unfinished_tasks{0};
 

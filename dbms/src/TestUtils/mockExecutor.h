@@ -85,8 +85,17 @@ public:
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(
+        const String & db,
+        const String & table,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
+    DAGRequestBuilder & mockTable(
+        const MockTableName & name,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
 
     DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -127,7 +136,18 @@ public:
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
     /// @param fine_grained_shuffle_stream_count decide the generated tipb executor's find_grained_shuffle_stream_count
     /// @param is_null_aware_semi_join indicates whether to use null-aware semi join and join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
+    /// @param inner_index indicates use which side to build hash table
+    DAGRequestBuilder & join(
+        const DAGRequestBuilder & right,
+        tipb::JoinType tp,
+        MockAstVec join_col_exprs,
+        MockAstVec left_conds,
+        MockAstVec right_conds,
+        MockAstVec other_conds,
+        MockAstVec other_eq_conds_from_in,
+        uint64_t fine_grained_shuffle_stream_count = 0,
+        bool is_null_aware_semi_join = false,
+        int64_t inner_index = 1);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
@@ -200,7 +220,10 @@ public:
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
 
-    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder scan(
+        const String & db_name,
+        const String & table_name,
+        bool keep_order = false);
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }

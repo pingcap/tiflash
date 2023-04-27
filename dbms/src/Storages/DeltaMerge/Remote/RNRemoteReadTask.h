@@ -206,20 +206,14 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & key_ranges,
         UInt64 read_tso,
-        const DM::RSOperatorPtr & rs_filter,
-        size_t expected_block_size);
+        const PushDownFilterPtr & push_down_filter,
+        size_t expected_block_size,
+        ReadMode read_mode);
 
     void addPendingMsg() { num_msg_to_consume += 1; }
 
     /// Returns true if there are more pending messages.
-    bool addConsumedMsg()
-    {
-        num_msg_consumed += 1;
-        RUNTIME_CHECK(num_msg_consumed <= num_msg_to_consume);
-
-        // return there are more pending msg or not
-        return num_msg_consumed < num_msg_to_consume;
-    }
+    bool addConsumedMsg();
 
     void initColumnFileDataProvider(Remote::RNLocalPageCacheGuardPtr pages_guard);
 

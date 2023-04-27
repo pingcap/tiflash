@@ -20,6 +20,7 @@
 #include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool_fwd.h>
+#include <Storages/Transaction/Types.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -159,9 +160,23 @@ public:
 
     void removeDTFile(UInt64 file_id);
 
-    void addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_);
-    String getS3DTFile(UInt64 file_id);
-    void addS3DTFileSize(UInt64 file_id, size_t size);
+    // Used to add reference to remote DTFile at restart or after the local_page_id is applied to PageDirectory.
+    void addRemoteDTFileIfNotExists(UInt64 local_external_id, size_t file_size);
+
+    // The following two methods is for adding new reference to remote DTFile.
+    // Main usage is following:
+    //   addRemoteDTFileWithGCDisabled
+    //   apply local_page_id to PageDirectory
+    //   enableGCForRemoteDTFile
+    void addRemoteDTFileWithGCDisabled(UInt64 local_external_id, size_t file_size);
+    // local_page_id may be an external id or a ref id, and ref id will just be ignored.
+    void enableGCForRemoteDTFile(UInt64 local_page_id);
+
+    void removeRemoteDTFile(UInt64 local_external_id);
+
+    // Return all remote DTFiles that can be GCed.
+    std::set<UInt64> getAllRemoteDTFilesForGC();
+
     DISALLOW_COPY_AND_MOVE(StableDiskDelegator);
 
 private:
@@ -480,6 +495,9 @@ private:
     };
     using LatestPathInfos = std::vector<LatestPathInfo>;
 
+    // A map of DMFileID -> { isGCEnabled, FileSize }
+    using RemoteDMFileSizeMap = std::unordered_map<UInt64, std::pair<bool, UInt64>>;
+
     friend class StableDiskDelegator;
     friend class PSDiskDelegatorMulti;
     friend class PSDiskDelegatorSingle;
@@ -494,10 +512,14 @@ private:
     String database;
     String table;
 
-    // This mutex mainly used to protect the `dt_file_path_map`
+    KeyspaceID keyspace_id = NullspaceID;
+
+    // This mutex mainly used to protect the `dt_file_path_map` and `remote_dt_file_size_map`.
     mutable std::mutex mutex;
     // DMFileID -> path index
     DMFilePathMap dt_file_path_map;
+    // local page id -> std::pair<can_gc, file_size>
+    RemoteDMFileSizeMap remote_dt_file_size_map;
 
     bool path_need_database_name = false;
 
@@ -506,9 +528,6 @@ private:
     PathCapacityMetricsPtr global_capacity;
 
     FileProviderPtr file_provider;
-
-    String s3_stable_path;
-    std::set<UInt64> s3_file_ids;
 
     LoggerPtr log;
 };

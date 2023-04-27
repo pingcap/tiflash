@@ -1120,8 +1120,8 @@ try
         auto split_info = segment->prepareSplit(dmContext(), tableColumns(), segment_snap, wbs);
 
         wbs.writeLogAndData();
-        split_info->my_stable->enableDMFilesGC();
-        split_info->other_stable->enableDMFilesGC();
+        split_info->my_stable->enableDMFilesGC(dmContext());
+        split_info->other_stable->enableDMFilesGC(dmContext());
 
         auto lock = segment->mustGetUpdateLock();
         std::tie(segment, other_segment) = segment->applySplit(lock, dmContext(), segment_snap, wbs, split_info.value());
@@ -1151,7 +1151,7 @@ try
         auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
         wbs.writeLogAndData();
-        merged_stable->enableDMFilesGC();
+        merged_stable->enableDMFilesGC(dmContext());
 
         std::vector<Segment::Lock> locks;
         locks.emplace_back(segment->mustGetUpdateLock());

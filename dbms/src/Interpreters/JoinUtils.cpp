@@ -145,7 +145,7 @@ void ProbeProcessInfo::prepareForProbe(const Names & key_names, const String & f
                 convertColumnToNullable(block.getByPosition(i));
         }
     }
-    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
+    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
@@ -187,10 +187,10 @@ void computeDispatchHash(size_t rows,
 
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
-    /// null aware semi/left semi/anti join never expand the probe side
+    /// null aware semi/left outer semi/anti join never expand the probe side
     if (isNullAwareSemiFamily(kind))
         return false;
-    if (isLeftSemiFamily(kind))
+    if (isLeftOuterSemiFamily(kind))
         return false;
     if (isAntiJoin(kind))
         return false;

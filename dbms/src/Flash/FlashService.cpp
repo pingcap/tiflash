@@ -357,20 +357,19 @@ static grpc::Status CheckMppVersionForEstablishMPPConnection(const mpp::Establis
     return grpc::Status::OK;
 }
 
-grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
-                                                            const mpp::EstablishMPPConnectionRequest * request,
-                                                            EstablishCallData * call_data)
+grpc::Status AsyncFlashService::establishMPPConnectionAsync(EstablishCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_INFO(log, "Handling establish mpp connection request: {}", request->DebugString());
+    const auto & request = call_data->getRequest();
+    LOG_INFO(log, "Handling establish mpp connection request: {}", request.DebugString());
 
-    auto check_result = checkGrpcContext(grpc_context);
+    auto check_result = checkGrpcContext(call_data->getGrpcContext());
     if (!check_result.ok())
         return check_result;
 
-    if (auto res = CheckMppVersionForEstablishMPPConnection(request); !res.ok())
+    if (auto res = CheckMppVersionForEstablishMPPConnection(&request); !res.ok())
     {
         LOG_WARNING(log, res.error_message());
         return res;
@@ -747,7 +746,7 @@ grpc::Status FlashService::FetchDisaggPages(
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={}", keyspace_id, request->table_id(), request->segment_id());
+    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -837,8 +836,9 @@ grpc::Status FlashService::GetTiFlashSystemTable(
 
     try
     {
-        ContextPtr ctx;
-        std::tie(ctx, std::ignore) = createDBContext(grpc_context);
+        auto [ctx, status] = createDBContext(grpc_context);
+        if (!status.ok())
+            return status;
         ctx->setDefaultFormat("JSONCompact");
         ReadBufferFromString in_buf(request->sql());
         MemoryWriteBuffer out_buf;

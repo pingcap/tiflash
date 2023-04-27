@@ -18,6 +18,7 @@
 #include <Common/ProcessCollector.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -350,7 +351,8 @@ namespace DB
         F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
-        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+        F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                                  \
     M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
         F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \
@@ -534,6 +536,11 @@ private:
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
+
+    prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
+    using KeyspaceID = UInt32;
+    std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
+    prometheus::Gauge * store_used_total_metric;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
