@@ -84,7 +84,11 @@ private:
 
     void onInputFinish() noexcept;
 
-    void switchStatus(EventStatus from, EventStatus to) noexcept;
+    void switchStatus(EventStatus from, EventStatus to);
+
+    void assertStatus(EventStatus expect);
+
+    void assertStatus(EventStatus expect1, EventStatus expect2);
 
 protected:
     PipelineExecutorStatus & exec_status;

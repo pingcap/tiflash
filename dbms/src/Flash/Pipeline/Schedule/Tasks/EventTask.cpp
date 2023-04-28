@@ -101,7 +101,6 @@ ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action
     catch (...)
     {
         finalize();
-        assert(event);
         LOG_WARNING(log, "error occurred and cancel the query");
         exec_status.onErrorOccurred(std::current_exception());
         return ExecTaskStatus::ERROR;

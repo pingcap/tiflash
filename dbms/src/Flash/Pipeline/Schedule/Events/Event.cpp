@@ -40,8 +40,8 @@ extern const char random_pipeline_model_event_finish_failpoint[];
 
 void Event::addInput(const EventPtr & input) noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::INIT);
-    RUNTIME_ASSERT(input.get() != this);
+    assertStatus(EventStatus::INIT);
+    RUNTIME_ASSERT(input.get() != this, log, "Cannot create circular dependency");
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
@@ -50,38 +50,38 @@ void Event::addInput(const EventPtr & input) noexcept
 void Event::addOutput(const EventPtr & output) noexcept
 {
     /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
-    RUNTIME_ASSERT(status == EventStatus::INIT || status == EventStatus::FINISHED);
-    RUNTIME_ASSERT(output.get() != this);
+    assertStatus(EventStatus::INIT, EventStatus::FINISHED);
+    RUNTIME_ASSERT(output.get() != this, log, "Cannot create circular dependency");
     outputs.push_back(output);
 }
 
 void Event::insertEvent(const EventPtr & insert_event) noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::FINISHED);
-    RUNTIME_ASSERT(insert_event);
+    assertStatus(EventStatus::FINISHED);
+    RUNTIME_ASSERT(insert_event, log, "The insert event cannot be nullptr");
     /// eventA───────►eventB ===> eventA─────────────►eventB
     ///                             │                    ▲
     ///                             └────►insert_event───┘
     for (const auto & output : outputs)
     {
-        RUNTIME_ASSERT(output);
+        RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
         output->addInput(insert_event);
     }
     insert_event->addInput(shared_from_this());
-    RUNTIME_ASSERT(!insert_event->prepare());
+    RUNTIME_ASSERT(!insert_event->prepare(), log, "The insert event cannot be source event");
 }
 
 void Event::onInputFinish() noexcept
 {
-    auto cur_value = unfinished_inputs.fetch_sub(1);
-    RUNTIME_ASSERT(cur_value >= 1);
-    if (1 == cur_value)
+    auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
+    RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
+    if (0 == cur_value)
         schedule();
 }
 
 bool Event::prepare() noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::INIT);
+    assertStatus(EventStatus::INIT);
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
@@ -101,21 +101,25 @@ bool Event::prepare() noexcept
 
 void Event::addTask(TaskPtr && task) noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    assertStatus(EventStatus::SCHEDULED);
     ++unfinished_tasks;
     tasks.push_back(std::move(task));
 }
 
 void Event::schedule() noexcept
 {
-    RUNTIME_ASSERT(0 == unfinished_inputs);
+    RUNTIME_ASSERT(
+        0 == unfinished_inputs,
+        log,
+        "unfinished_inputs must be 0 in `schedule`, but actual value is {}",
+        unfinished_inputs);
     if (is_source)
     {
-        RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+        assertStatus(EventStatus::SCHEDULED);
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepareForSource`.
+        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
         exec_status.onEventSchedule();
     }
@@ -131,8 +135,13 @@ void Event::schedule() noexcept
 
 void Event::scheduleTasks() noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
-    RUNTIME_ASSERT(tasks.size() == static_cast<size_t>(unfinished_tasks));
+    assertStatus(EventStatus::SCHEDULED);
+    RUNTIME_ASSERT(
+        tasks.size() == static_cast<size_t>(unfinished_tasks),
+        log,
+        "{} does not equal to {}",
+        tasks.size(),
+        unfinished_tasks);
     if (!tasks.empty())
     {
         // If query has already been cancelled, we can skip scheduling tasks.
@@ -153,9 +162,9 @@ void Event::scheduleTasks() noexcept
 
 void Event::onTaskFinish() noexcept
 {
-    RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    assertStatus(EventStatus::SCHEDULED);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    RUNTIME_ASSERT(remaining_tasks >= 0);
+    RUNTIME_ASSERT(remaining_tasks >= 0, log, "remaining_tasks must >= 0, but actual value is {}", remaining_tasks);
     LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
     if (0 == remaining_tasks)
         finish();
@@ -177,7 +186,7 @@ void Event::finish() noexcept
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {
-            RUNTIME_ASSERT(output);
+            RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
             output->onInputFinish();
             output.reset();
         }
@@ -192,10 +201,39 @@ void Event::finish() noexcept
     exec_status.onEventFinish();
 }
 
-void Event::switchStatus(EventStatus from, EventStatus to) noexcept
+void Event::switchStatus(EventStatus from, EventStatus to)
 {
-    RUNTIME_ASSERT(status.compare_exchange_strong(from, to));
+    RUNTIME_ASSERT(
+        status.compare_exchange_strong(from, to),
+        log,
+        "switch from {} to {} fail, because the current status is {}",
+        magic_enum::enum_name(from),
+        magic_enum::enum_name(to),
+        magic_enum::enum_name(status.load()));
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
+}
+
+void Event::assertStatus(EventStatus expect)
+{
+    auto cur_status = status.load();
+    RUNTIME_ASSERT(
+        cur_status == expect,
+        log,
+        "actual status is {}, but expect status is {}",
+        magic_enum::enum_name(cur_status),
+        magic_enum::enum_name(expect));
+}
+
+void Event::assertStatus(EventStatus expect1, EventStatus expect2)
+{
+    auto cur_status = status.load();
+    RUNTIME_ASSERT(
+        cur_status == expect1 || cur_status == expect2,
+        log,
+        "actual status is {}, but expect status are {} and {}",
+        magic_enum::enum_name(cur_status),
+        magic_enum::enum_name(expect1),
+        magic_enum::enum_name(expect2));
 }
 
 #undef CATCH
