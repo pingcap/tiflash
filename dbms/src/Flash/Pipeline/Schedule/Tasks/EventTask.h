@@ -56,7 +56,6 @@ private:
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
-    bool finalized = false;
 };
 
 } // namespace DB
