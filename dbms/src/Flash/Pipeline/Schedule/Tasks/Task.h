@@ -69,7 +69,7 @@ protected:
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:
-    void switchStatus(ExecTaskStatus to) noexcept;
+    void switchStatus(ExecTaskStatus to);
 
     void assertStatus(ExecTaskStatus expect);
 

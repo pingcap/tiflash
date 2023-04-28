@@ -50,20 +50,18 @@ public:
     {}
     virtual ~Event() = default;
 
-    void addInput(const EventPtr & input) noexcept;
+    void addInput(const EventPtr & input);
 
-    // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
-    // so these functions must be noexcept.
-    void schedule() noexcept;
+    void schedule();
 
-    void onTaskFinish() noexcept;
+    void onTaskFinish();
 
     // return true for source event.
-    bool prepare() noexcept;
+    bool prepare();
 
 protected:
     // add task ready to be scheduled.
-    void addTask(TaskPtr && task) noexcept;
+    void addTask(TaskPtr && task);
 
     // Generate the tasks ready to be scheduled and use `addTask` to add the tasks.
     virtual void scheduleImpl() {}
@@ -73,16 +71,16 @@ protected:
     virtual void finishImpl() {}
 
     /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
-    void insertEvent(const EventPtr & insert_event) noexcept;
+    void insertEvent(const EventPtr & insert_event);
 
 private:
-    void scheduleTasks() noexcept;
+    void scheduleTasks();
 
-    void finish() noexcept;
+    void finish();
 
-    void addOutput(const EventPtr & output) noexcept;
+    void addOutput(const EventPtr & output);
 
-    void onInputFinish() noexcept;
+    void onInputFinish();
 
     void switchStatus(EventStatus from, EventStatus to);
 

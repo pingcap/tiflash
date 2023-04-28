@@ -104,7 +104,7 @@ ExecTaskStatus Task::await() noexcept
     return exec_status;
 }
 
-void Task::switchStatus(ExecTaskStatus to) noexcept
+void Task::switchStatus(ExecTaskStatus to)
 {
     if (exec_status != to)
     {

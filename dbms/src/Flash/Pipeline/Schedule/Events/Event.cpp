@@ -38,7 +38,7 @@ extern const char random_pipeline_model_event_finish_failpoint[];
         exec_status.onErrorOccurred(std::current_exception());   \
     }
 
-void Event::addInput(const EventPtr & input) noexcept
+void Event::addInput(const EventPtr & input)
 {
     assertStatus(EventStatus::INIT);
     RUNTIME_ASSERT(input.get() != this, log, "Cannot create circular dependency");
@@ -47,7 +47,7 @@ void Event::addInput(const EventPtr & input) noexcept
     is_source = false;
 }
 
-void Event::addOutput(const EventPtr & output) noexcept
+void Event::addOutput(const EventPtr & output)
 {
     /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
     assertStatus(EventStatus::INIT, EventStatus::FINISHED);
@@ -55,7 +55,7 @@ void Event::addOutput(const EventPtr & output) noexcept
     outputs.push_back(output);
 }
 
-void Event::insertEvent(const EventPtr & insert_event) noexcept
+void Event::insertEvent(const EventPtr & insert_event)
 {
     assertStatus(EventStatus::FINISHED);
     RUNTIME_ASSERT(insert_event, log, "The insert event cannot be nullptr");
@@ -71,7 +71,7 @@ void Event::insertEvent(const EventPtr & insert_event) noexcept
     RUNTIME_ASSERT(!insert_event->prepare(), log, "The insert event cannot be source event");
 }
 
-void Event::onInputFinish() noexcept
+void Event::onInputFinish()
 {
     auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
@@ -83,7 +83,7 @@ void Event::onInputFinish() noexcept
         schedule();
 }
 
-bool Event::prepare() noexcept
+bool Event::prepare()
 {
     assertStatus(EventStatus::INIT);
     if (is_source)
@@ -103,14 +103,14 @@ bool Event::prepare() noexcept
     }
 }
 
-void Event::addTask(TaskPtr && task) noexcept
+void Event::addTask(TaskPtr && task)
 {
     assertStatus(EventStatus::SCHEDULED);
     ++unfinished_tasks;
     tasks.push_back(std::move(task));
 }
 
-void Event::schedule() noexcept
+void Event::schedule()
 {
     RUNTIME_ASSERT(
         0 == unfinished_inputs,
@@ -137,7 +137,7 @@ void Event::schedule() noexcept
     scheduleTasks();
 }
 
-void Event::scheduleTasks() noexcept
+void Event::scheduleTasks()
 {
     assertStatus(EventStatus::SCHEDULED);
     RUNTIME_ASSERT(
@@ -164,7 +164,7 @@ void Event::scheduleTasks() noexcept
     }
 }
 
-void Event::onTaskFinish() noexcept
+void Event::onTaskFinish()
 {
     assertStatus(EventStatus::SCHEDULED);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
@@ -178,7 +178,7 @@ void Event::onTaskFinish() noexcept
         finish();
 }
 
-void Event::finish() noexcept
+void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     MemoryTrackerSetter setter{true, mem_tracker.get()};
