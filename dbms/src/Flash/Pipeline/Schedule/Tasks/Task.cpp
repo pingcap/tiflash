@@ -104,6 +104,21 @@ ExecTaskStatus Task::await() noexcept
     return exec_status;
 }
 
+void Task::finalize() noexcept
+{
+    RUNTIME_ASSERT(
+        exec_status == ExecTaskStatus::FINISHED
+            || exec_status == ExecTaskStatus::ERROR
+            || exec_status == ExecTaskStatus::CANCELLED,
+        log,
+        "finalize must be called in FINISHED/ERROR/CANCELLED status, but actual status is {}",
+        magic_enum::enum_name(exec_status));
+
+    // To make sure that `finalize` only called once.
+    exec_status = ExecTaskStatus::FINALIZE;
+    finalizeImpl();
+}
+
 void Task::switchStatus(ExecTaskStatus to)
 {
     if (exec_status != to)

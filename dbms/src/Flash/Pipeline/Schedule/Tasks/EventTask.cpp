@@ -45,17 +45,16 @@ EventTask::EventTask(
 
 EventTask::~EventTask()
 {
-    finalize();
     assert(event);
     event->onTaskFinish();
     event.reset();
 }
 
-void EventTask::finalize() noexcept
+void EventTask::finalizeImpl() noexcept
 {
     try
     {
-        finalizeImpl();
+        doFinalizeImpl();
     }
     catch (...)
     {
