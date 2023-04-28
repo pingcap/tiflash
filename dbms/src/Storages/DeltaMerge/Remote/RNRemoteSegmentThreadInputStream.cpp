@@ -105,6 +105,12 @@ RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_build_stream).Observe(seconds_build_stream);
 }
 
+void RNRemoteSegmentThreadInputStream::cancel(bool kill)
+{
+    read_tasks->notifyCancel();
+    IProfilingBlockInputStream::cancel(kill);
+}
+
 Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
     if (done)

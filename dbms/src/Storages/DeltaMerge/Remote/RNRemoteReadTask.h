@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadCanceller_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -27,6 +28,7 @@
 #include <Storages/Transaction/Types.h>
 #include <common/types.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -62,7 +64,9 @@ enum class SegmentReadTaskState
 class RNRemoteReadTask
 {
 public:
-    explicit RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_);
+    explicit RNRemoteReadTask(
+        std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_,
+        const RNRemoteReadCancellerPtr & canceller_);
 
     ~RNRemoteReadTask();
 
@@ -92,6 +96,9 @@ public:
 
     void wakeAll() { cv_ready_tasks.notify_all(); }
 
+    // Notify the Write Node that this read task is cancelled.
+    void notifyCancel();
+
     const String & getErrorMessage() const;
 
     friend class tests::RNRemoteReadTaskTest;
@@ -103,6 +110,8 @@ private:
     bool doneOrErrorHappen() const;
 
 private:
+    RNRemoteReadCancellerPtr canceller;
+
     // The original number of segment tasks
     // Only assign when init
     size_t num_segments;
