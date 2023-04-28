@@ -32,7 +32,7 @@ PipelineTask::PipelineTask(
     pipeline_exec->executePrefix();
 }
 
-void PipelineTask::finalizeImpl()
+void PipelineTask::doFinalizeImpl()
 {
     RUNTIME_CHECK(pipeline_exec);
     pipeline_exec->executeSuffix();
