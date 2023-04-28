@@ -30,7 +30,7 @@ SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
 {
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
-    assert(!bucket_inputs.empty());
+    RUNTIME_CHECK(!bucket_inputs.empty());
 
     exec_status.onEventSchedule();
 }
@@ -50,20 +50,20 @@ bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, Shared
 
 std::vector<SpilledBucketInput *> SharedSpilledBucketDataLoader::getNeedLoadInputs()
 {
-    assert(!bucket_inputs.empty());
+    RUNTIME_CHECK(!bucket_inputs.empty());
     std::vector<SpilledBucketInput *> load_inputs;
     for (auto & bucket_input : bucket_inputs)
     {
         if (bucket_input.needLoad())
             load_inputs.push_back(&bucket_input);
     }
-    assert(!load_inputs.empty());
+    RUNTIME_CHECK(!load_inputs.empty());
     return load_inputs;
 }
 
 void SharedSpilledBucketDataLoader::storeBucketData()
 {
-    assert(status == SharedLoaderStatus::loading);
+    RUNTIME_CHECK(status == SharedLoaderStatus::loading);
 
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
     if unlikely (exec_status.isCancelled())
@@ -94,12 +94,12 @@ void SharedSpilledBucketDataLoader::storeBucketData()
 
 void SharedSpilledBucketDataLoader::loadBucket()
 {
-    assert(status == SharedLoaderStatus::loading);
+    RUNTIME_CHECK(status == SharedLoaderStatus::loading);
     // Although the status will always stay at `SharedLoaderStatus::loading`, but because the query has stopped, it doesn't matter.
     if unlikely (exec_status.isCancelled())
         return;
 
-    assert(!bucket_inputs.empty());
+    RUNTIME_CHECK(!bucket_inputs.empty());
     auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     auto event = std::make_shared<LoadBucketEvent>(exec_status, mem_tracker, log->identifier(), shared_from_this());
     RUNTIME_CHECK(event->prepare());
@@ -139,37 +139,53 @@ SharedAggregateRestorer::SharedAggregateRestorer(
     : aggregator(aggregator_)
     , loader(std::move(loader_))
 {
-    assert(loader);
+    RUNTIME_CHECK(loader);
+}
+
+Block SharedAggregateRestorer::popFromRestoredBlocks()
+{
+    assert(!restored_blocks.empty());
+    Block block = std::move(restored_blocks.front());
+    restored_blocks.pop_front();
+    return block;
 }
 
 bool SharedAggregateRestorer::tryPop(Block & block)
 {
-    if unlikely (finished)
-        return true;
-
-    if (restored_blocks.empty())
+    if (!restored_blocks.empty())
     {
-        if (bucket_data.empty())
-            return false;
-
-        BlocksList tmp;
-        std::swap(tmp, bucket_data);
-        restored_blocks = aggregator.vstackBlocks(tmp, true);
-        assert(!restored_blocks.empty());
+        block = popFromRestoredBlocks();
+        return true;
     }
-    block = std::move(restored_blocks.front());
-    restored_blocks.pop_front();
-    return true;
+
+    auto load_res = tryLoadBucketData();
+    switch (load_res)
+    {
+    case SharedLoadResult::SUCCESS:
+    {
+        BlocksList tmp;
+        assert(!bucket_data.empty() && restored_blocks.empty());
+        restored_blocks = aggregator.vstackBlocks(bucket_data, true);
+        bucket_data = {};
+        RUNTIME_CHECK(!restored_blocks.empty());
+        block = popFromRestoredBlocks();
+    }
+    case SharedLoadResult::FINISHED:
+        return true;
+    case SharedLoadResult::RETRY:
+        return false;
+    }
 }
 
-bool SharedAggregateRestorer::tryLoadBucketData()
+SharedLoadResult SharedAggregateRestorer::tryLoadBucketData()
 {
-    assert(!finished && bucket_data.empty());
+    if (!bucket_data.empty() || !restored_blocks.empty())
+        return SharedLoadResult::SUCCESS;
     if (!loader->tryPop(bucket_data))
-        return false;
-    if unlikely (bucket_data.empty())
-        finished = true;
-    return true;
+        return SharedLoadResult::RETRY;
+    return bucket_data.empty()
+        ? SharedLoadResult::FINISHED
+        : SharedLoadResult::SUCCESS;
 }
 
 } // namespace DB
