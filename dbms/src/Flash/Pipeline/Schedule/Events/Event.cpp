@@ -74,7 +74,11 @@ void Event::insertEvent(const EventPtr & insert_event) noexcept
 void Event::onInputFinish() noexcept
 {
     auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
-    RUNTIME_ASSERT(cur_value >= 0, log, "unfinished_inputs cannot < 0, but actual value is {}", cur_value);
+    RUNTIME_ASSERT(
+        cur_value >= 0,
+        log,
+        "unfinished_inputs cannot < 0, but actual value is {}",
+        cur_value);
     if (0 == cur_value)
         schedule();
 }
@@ -164,7 +168,11 @@ void Event::onTaskFinish() noexcept
 {
     assertStatus(EventStatus::SCHEDULED);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    RUNTIME_ASSERT(remaining_tasks >= 0, log, "remaining_tasks must >= 0, but actual value is {}", remaining_tasks);
+    RUNTIME_ASSERT(
+        remaining_tasks >= 0,
+        log,
+        "remaining_tasks must >= 0, but actual value is {}",
+        remaining_tasks);
     LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
     if (0 == remaining_tasks)
         finish();

@@ -71,6 +71,8 @@ protected:
 private:
     void switchStatus(ExecTaskStatus to) noexcept;
 
+    void assertStatus(ExecTaskStatus expect);
+
 protected:
     MemoryTrackerPtr mem_tracker;
     LoggerPtr log;
