@@ -337,18 +337,12 @@ void KVStore::persistRegion(const Region & region, std::optional<const RegionTas
     {
         LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
         region_persister->persist(region, *region_task_lock.value());
+        LOG_DEBUG(log, "Persist {} done", region.toString(false));
     }
     else
     {
         LOG_INFO(log, "Try to persist {}", region.toString(false));
         region_persister->persist(region);
-    }
-    if (region_task_lock.has_value())
-    {
-        LOG_DEBUG(log, "Persist {} done", region.toString(false));
-    }
-    else
-    {
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
     }
 }
