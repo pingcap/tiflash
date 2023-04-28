@@ -46,9 +46,8 @@ protected:
     ExecTaskStatus awaitImpl() noexcept override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
-    // Used to release held resources, just like `Event::finishImpl`.
-    void finalize() noexcept;
-    virtual void finalizeImpl(){};
+    void finalizeImpl() noexcept override;
+    virtual void doFinalizeImpl(){};
 
 private:
     ExecTaskStatus doTaskAction(std::function<ExecTaskStatus()> && action);
@@ -56,7 +55,6 @@ private:
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
-    bool finalized = false;
 };
 
 } // namespace DB
