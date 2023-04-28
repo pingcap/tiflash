@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_restore_from_disk_failpoint[];
+} // namespace FailPoints
+
 SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
     : spilled_file_infos(std::move(spilled_file_infos_))
     , header(header_)
@@ -31,6 +37,7 @@ Block SpilledFilesInputStream::readImpl()
 {
     if (unlikely(current_file_stream == nullptr))
         return {};
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_restore_from_disk_failpoint);
     Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;
