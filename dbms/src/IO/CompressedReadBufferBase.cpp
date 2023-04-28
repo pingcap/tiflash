@@ -28,7 +28,9 @@
 
 #include <vector>
 
+#ifdef ENABLE_QPL_COMPRESSION
 #include "CodecDeflateQpl.h"
+#endif
 
 namespace DB
 {
@@ -65,6 +67,10 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
 
     size_t & size_compressed = size_compressed_without_checksum;
 
+#ifndef ENABLE_QPL_COMPRESSION
+    if (method == static_cast<UInt8>(CompressionMethodByte::QPL))
+        throw Exception("This binary is not built with qpl support", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#endif
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4) || method == static_cast<UInt8>(CompressionMethodByte::QPL) || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
         || method == static_cast<UInt8>(CompressionMethodByte::NONE))
     {

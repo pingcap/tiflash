@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_LIB_COMPRESS_QPL_H_
-#define SRC_LIB_COMPRESS_QPL_H_
+#pragma once
+#ifdef ENABLE_QPL_COMPRESSION
 
 #include <array>
 #include <atomic>
@@ -79,4 +79,4 @@ Int32 QPL_decompress(const char * source, int inputSize, char * dest, int maxOut
 } //namespace QPL
 } //namespace DB
 
-#endif /* SRC_LIB_COMPRESS_QPL_H_ */
+#endif /* ENABLE_QPL_COMPRESSION */

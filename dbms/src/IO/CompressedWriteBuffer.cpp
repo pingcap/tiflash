@@ -23,8 +23,9 @@
 
 #include <memory>
 
+#ifdef ENABLE_QPL_COMPRESSION
 #include "CodecDeflateQpl.h"
-
+#endif
 
 namespace DB
 {
