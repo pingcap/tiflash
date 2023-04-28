@@ -28,7 +28,7 @@ class TestGRPCSendQueue : public testing::Test
 protected:
     TestGRPCSendQueue()
         : tag(nullptr)
-        , queue(10, [this](KickTag * t) -> grpc_call_error {
+        , queue(10, [this](KickSendTag * t) -> grpc_call_error {
             bool no_use;
             t->FinalizeResult(&tag, &no_use);
             return grpc_call_error::GRPC_CALL_OK;

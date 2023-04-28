@@ -226,7 +226,7 @@ public:
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(queue_size, func)
     {}
