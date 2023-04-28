@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,89 +17,20 @@
 #include <Common/ConcurrentIOQueue.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceiverChannelBase.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
-#include <functional>
+#include <memory>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_receiver_local_msg_push_failure_failpoint[];
-extern const char random_receiver_sync_msg_push_failure_failpoint[];
-extern const char random_receiver_async_msg_push_failure_failpoint[];
-} // namespace FailPoints
-
-namespace ExchangeReceiverMetric
-{
-inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
-{
-    data_size_in_queue.fetch_add(size);
-    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Increment(size);
-}
-
-inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
-{
-    data_size_in_queue.fetch_sub(size);
-    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(size);
-}
-
-inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
-{
-    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(data_size_in_queue.load());
-}
-} // namespace ExchangeReceiverMetric
-
-struct ReceivedMessage
-{
-    size_t source_index;
-    String req_info;
-    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
-    const mpp::Error * error_ptr;
-    const String * resp_ptr;
-    std::vector<const String *> chunks;
-
-    // Constructor that move chunks.
-    ReceivedMessage(size_t source_index_,
-                    const String & req_info_,
-                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
-                    const mpp::Error * error_ptr_,
-                    const String * resp_ptr_,
-                    std::vector<const String *> && chunks_)
-        : source_index(source_index_)
-        , req_info(req_info_)
-        , packet(packet_)
-        , error_ptr(error_ptr_)
-        , resp_ptr(resp_ptr_)
-        , chunks(chunks_)
-    {}
-
-    void switchMemTracker()
-    {
-        packet->switchMemTracker(current_memory_tracker);
-    }
-};
-using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
-
-enum class ReceiverMode
-{
-    Local = 0,
-    Sync,
-    Async
-};
-
-using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>;
-
-class ReceiverChannelWriter
+class ReceiverChannelWriter : public ReceiverChannelBase
 {
 public:
     ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
-        : data_size_in_queue(data_size_in_queue_)
+        : ReceiverChannelBase(msg_channels_->size(), req_info_, log_, data_size_in_queue_, mode_)
         , msg_channels(msg_channels_)
-        , req_info(req_info_)
-        , log(log_)
-        , mode(mode_)
     {}
 
     // "write" means writing the packet to the channel which is a ConcurrentIOQueue.
@@ -163,10 +94,6 @@ private:
         const mpp::Error * error_ptr,
         const String * resp_ptr);
 
-    std::atomic<Int64> * data_size_in_queue;
     std::vector<MsgChannelPtr> * msg_channels;
-    String req_info;
-    const LoggerPtr log;
-    ReceiverMode mode;
 };
 } // namespace DB

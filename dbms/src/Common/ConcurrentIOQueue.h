@@ -53,6 +53,13 @@ public:
         return mpmc_queue.push(std::move(data));
     }
 
+    /// Just like MPMCQueue::tryPush.
+    template <typename U>
+    MPMCQueueResult tryPush(U && data)
+    {
+        return mpmc_queue.tryPush(std::forward<U>(data));
+    }
+
     /// Non-blocking function.
     /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
     /// The obj that exceeds its capacity will be stored in remaining_objs and wait for the next pop/tryPop to trigger pushRemains.
