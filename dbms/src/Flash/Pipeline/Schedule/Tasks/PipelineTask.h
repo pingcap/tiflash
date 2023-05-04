@@ -36,7 +36,7 @@ protected:
 
     ExecTaskStatus doAwaitImpl() override;
 
-    void finalizeImpl() override;
+    void doFinalizeImpl() override;
 
 private:
     PipelineExecPtr pipeline_exec;
