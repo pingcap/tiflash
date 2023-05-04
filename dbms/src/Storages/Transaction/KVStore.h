@@ -93,7 +93,7 @@ public:
 
     void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
 
-    void tryPersist(RegionID region_id);
+    void tryPersistRegion(RegionID region_id);
 
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
@@ -246,7 +246,7 @@ private:
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
     bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
-    void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
+    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 

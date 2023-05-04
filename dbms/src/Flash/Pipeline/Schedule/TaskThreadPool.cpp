@@ -113,6 +113,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
+        task->finalize();
         task.reset();
         break;
     default:

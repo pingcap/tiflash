@@ -41,6 +41,7 @@ enum class ExecTaskStatus
     FINISHED,
     ERROR,
     CANCELLED,
+    FINALIZE,
 };
 
 class Task
@@ -63,14 +64,21 @@ public:
 
     ExecTaskStatus await() noexcept;
 
+    void finalize() noexcept;
+
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
     virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
+    // Used to release held resources, just like `Event::finishImpl`.
+    virtual void finalizeImpl() noexcept {}
+
 private:
-    void switchStatus(ExecTaskStatus to) noexcept;
+    void switchStatus(ExecTaskStatus to);
+
+    void assertStatus(ExecTaskStatus expect);
 
 public:
     LocalTaskProfileInfo profile_info;

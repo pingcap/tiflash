@@ -55,6 +55,12 @@ void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
+#define CHECK_FINISHED                                        \
+    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
+                 || exec_status == ExecTaskStatus::ERROR      \
+                 || exec_status == ExecTaskStatus::CANCELLED) \
+        return exec_status;
+
 Task::Task()
     : mem_tracker(nullptr)
     , log(Logger::get())
@@ -78,29 +84,47 @@ Task::~Task()
 
 ExecTaskStatus Task::execute() noexcept
 {
+    CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::RUNNING);
+    assertStatus(ExecTaskStatus::RUNNING);
     switchStatus(executeImpl());
     return exec_status;
 }
 
 ExecTaskStatus Task::executeIO() noexcept
 {
+    CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::IO);
+    assertStatus(ExecTaskStatus::IO);
     switchStatus(executeIOImpl());
     return exec_status;
 }
 
 ExecTaskStatus Task::await() noexcept
 {
+    CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::WAITING);
+    assertStatus(ExecTaskStatus::WAITING);
     switchStatus(awaitImpl());
     return exec_status;
 }
 
-void Task::switchStatus(ExecTaskStatus to) noexcept
+void Task::finalize() noexcept
+{
+    RUNTIME_ASSERT(
+        exec_status == ExecTaskStatus::FINISHED
+            || exec_status == ExecTaskStatus::ERROR
+            || exec_status == ExecTaskStatus::CANCELLED,
+        log,
+        "finalize must be called in FINISHED/ERROR/CANCELLED status, but actual status is {}",
+        magic_enum::enum_name(exec_status));
+
+    // To make sure that `finalize` only called once.
+    exec_status = ExecTaskStatus::FINALIZE;
+    finalizeImpl();
+}
+
+void Task::switchStatus(ExecTaskStatus to)
 {
     if (exec_status != to)
     {
@@ -108,5 +132,16 @@ void Task::switchStatus(ExecTaskStatus to) noexcept
         addToStatusMetrics(to);
         exec_status = to;
     }
+}
+
+void Task::assertStatus(ExecTaskStatus expect)
+{
+    RUNTIME_ASSERT(
+        exec_status == expect || exec_status == ExecTaskStatus::INIT,
+        log,
+        "actual status is {}, but expect status are {} and {}",
+        magic_enum::enum_name(exec_status),
+        magic_enum::enum_name(expect),
+        magic_enum::enum_name(ExecTaskStatus::INIT));
 }
 } // namespace DB

@@ -55,6 +55,7 @@ public:
             return false;
         case FINISH_STATUS:
             task->profile_info.elapsedAwaitTime();
+            task->finalize();
             task.reset();
             return true;
         default:
