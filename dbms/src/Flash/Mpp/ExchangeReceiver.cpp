@@ -675,20 +675,23 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     });
 
     CPUAffinityManager::getInstance().bindSelfQueryThread();
+    Stopwatch watch;
     bool meet_error = false;
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+    ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
+    UInt64 waiting_task_time = 0;
 
     LoggerPtr log = exc_log->getChild(req_info);
 
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
         ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
+            waiting_task_time = watch.elapsedMilliseconds();
             bool has_data = false;
             for (;;)
             {
@@ -753,6 +756,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         local_err_msg = getCurrentExceptionMessage(false);
     }
     connectionDone(meet_error, local_err_msg, log);
+    if (recv_mode == ReceiverMode::Local)
+        LOG_INFO(log, "connection for {} cost {} ms, including {} ms to waiting task.", req_info, watch.elapsedMilliseconds(), waiting_task_time);
 }
 
 template <typename RPCContext>
