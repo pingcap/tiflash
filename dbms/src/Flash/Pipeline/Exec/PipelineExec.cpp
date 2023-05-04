@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Operators/HashJoinProbeTransformOp.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
@@ -146,6 +147,7 @@ OperatorStatus PipelineExec::await()
 #endif
     return op_status;
 }
+
 OperatorStatus PipelineExec::awaitImpl()
 {
     auto op_status = sink_op->await();
@@ -154,8 +156,11 @@ OperatorStatus PipelineExec::awaitImpl()
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
-        op_status = (*it)->await();
-        HANDLE_OP_STATUS((*it), op_status, OperatorStatus::NEED_INPUT);
+        if (dynamic_cast<HashJoinProbeTransformOp *>(it->get()))
+        {
+            op_status = (*it)->await();
+            HANDLE_OP_STATUS((*it), op_status, OperatorStatus::NEED_INPUT);
+        }
     }
     op_status = source_op->await();
     HANDLE_LAST_OP_STATUS(source_op, op_status);
