@@ -52,6 +52,7 @@ public:
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
+            task->finalize();
             task.reset();
             return true;
         default:

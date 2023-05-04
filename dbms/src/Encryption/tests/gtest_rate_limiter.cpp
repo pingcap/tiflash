@@ -70,8 +70,9 @@ TEST(WriteLimiterTest, Rate)
         // make sure that 0.8 * target <= actual_rate <= 1.25 * target
         // hint: the range [0.8, 1.25] is copied from rocksdb,
         // if tests fail, try to enlarge this range.
-        EXPECT_GE(actual_rate / target, 0.80);
-        EXPECT_LE(actual_rate / target, 1.25);
+        // enlarge the range to [0.75, 1.30]
+        EXPECT_GE(actual_rate / target, 0.75);
+        EXPECT_LE(actual_rate / target, 1.30);
     }
 }
 

@@ -35,7 +35,7 @@ public:
 protected:
     ExecTaskStatus doExecuteIOImpl() override;
 
-    void finalizeImpl() override;
+    void doFinalizeImpl() override;
 
 private:
     AggregateContextPtr agg_context;

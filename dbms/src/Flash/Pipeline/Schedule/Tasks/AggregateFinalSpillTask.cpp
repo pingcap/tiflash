@@ -31,7 +31,7 @@ AggregateFinalSpillTask::AggregateFinalSpillTask(
     assert(agg_context);
 }
 
-void AggregateFinalSpillTask::finalizeImpl()
+void AggregateFinalSpillTask::doFinalizeImpl()
 {
     agg_context.reset();
 }

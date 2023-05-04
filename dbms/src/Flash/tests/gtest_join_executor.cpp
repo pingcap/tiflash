@@ -1400,7 +1400,6 @@ try
 }
 CATCH
 
-
 TEST_F(JoinExecutorTestRunner, RightSemiFamilyJoin)
 try
 {
@@ -1523,6 +1522,219 @@ try
                                  0)
                            .build(context);
         executeAndAssertColumnsEqual(request, res);
+    }
+}
+CATCH
+
+/// please ensure that left table output columns' size == right table output columns' size
+ColumnsWithTypeAndName swapLeftRightTableColumns(const ColumnsWithTypeAndName & left_outer_result)
+{
+    auto right_outer_result = left_outer_result;
+    auto size = left_outer_result.size();
+    assert(size % 2 == 0);
+    auto half_size = size >> 1;
+    for (size_t i = 0; i < half_size; ++i)
+        right_outer_result[i] = left_outer_result[half_size + i];
+    for (size_t i = half_size; i < size; ++i)
+        right_outer_result[i] = left_outer_result[i - half_size];
+    return right_outer_result;
+}
+
+TEST_F(JoinExecutorTestRunner, RightOuterJoin)
+try
+{
+    using tipb::JoinType;
+    /// One join key(t.a = s.a) + no left/right condition + no other condition.
+    /// type + left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t1 = {
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {2, 3, {}, 7})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 1, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 3, {}, 4})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
+         {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})}},
+        {JoinType::TypeRightOuterJoin,
+         {toNullableVec<Int32>("a", {1, 2, 2, {}, {}, 5, 5})},
+         {toNullableVec<Int32>("a", {3, 2, {}, 7})}}};
+
+    for (const auto & [type, left, right] : t1)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
+    }
+
+    /// One join key(t.a = s.a) + no left/right condition + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t2 = {
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+        }};
+
+    for (const auto & [type, left, right] : t2)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {},
+                                 {},
+                                 {lt(col("t.c"), col("s.c"))},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
+    }
+
+    /// One join key(t.a = s.a) + left/right condition + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
+    const std::vector<std::tuple<JoinType, ColumnsWithTypeAndName, ColumnsWithTypeAndName>> t3 = {
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {3, 2, {}, 4, 6}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, {}, 4, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7})},
+            {toNullableVec<Int32>("a", {1, 4, 4, 4}), toNullableVec<Int32>("c", {2, 9, 3, 10})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 1, 2, 7, 1})},
+            {toNullableVec<Int32>("a", {1, 5, 8}), toNullableVec<Int32>("c", {0, 2, 8})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {0, 1, 5, 6, 7})},
+        },
+        {
+            JoinType::TypeRightOuterJoin,
+            {toNullableVec<Int32>("a", {1, 1, 2, 2, {}, {}, 4, 5}), toNullableVec<Int32>("c", {1, 2, 3, 4, 5, 6, 7, 8})},
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("c", {2, 1, 5, 6, 7})},
+        }};
+
+    auto literal_integer = lit(Field(static_cast<Int64>(2)));
+    for (const auto & [type, left, right] : t3)
+    {
+        context.addMockTable("right_outer", "t", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("right_outer", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+
+        auto request = context.scan("right_outer", "s")
+                           .join(context.scan("right_outer", "t"),
+                                 JoinType::TypeLeftOuterJoin,
+                                 {col("a")},
+                                 {lt(col("s.a"), literal_integer)},
+                                 {},
+                                 {lt(col("t.c"), col("s.c"))},
+                                 {},
+                                 0,
+                                 false,
+                                 1)
+                           .build(context);
+        auto expect = executeStreams(request, 1);
+        auto swap_expect = swapLeftRightTableColumns(expect);
+        auto request2 = context.scan("right_outer", "t")
+                            .join(context.scan("right_outer", "s"),
+                                  type,
+                                  {col("a")},
+                                  {},
+                                  {lt(col("s.a"), literal_integer)},
+                                  {lt(col("t.c"), col("s.c"))},
+                                  {},
+                                  0,
+                                  false,
+                                  1)
+                            .build(context);
+        executeAndAssertColumnsEqual(request2, swap_expect);
     }
 }
 CATCH

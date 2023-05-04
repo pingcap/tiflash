@@ -32,10 +32,10 @@ class TestGRPCSendQueue;
 
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
-class KickTag : public grpc::internal::CompletionQueueTag
+class KickSendTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    explicit KickTag(std::function<void *()> a)
+    explicit KickSendTag(std::function<void *()> a)
         : action(std::move(a))
     {}
 
@@ -51,7 +51,7 @@ private:
     std::function<void *()> action;
 };
 
-using GRPCKickFunc = std::function<grpc_call_error(KickTag *)>;
+using GRPCSendKickFunc = std::function<grpc_call_error(KickSendTag *)>;
 
 enum class GRPCSendQueueRes
 {
@@ -80,7 +80,7 @@ public:
     GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & l)
         : send_queue(queue_size)
         , log(l)
-        , kick_tag([this]() { return kickTagAction(); })
+        , kick_send_tag([this]() { return kickTagAction(); })
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
@@ -92,16 +92,16 @@ public:
     }
 
     // For gtest usage.
-    GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
+    GRPCSendQueue(size_t queue_size, GRPCSendKickFunc func)
         : send_queue(queue_size)
         , log(Logger::get())
         , kick_func(func)
-        , kick_tag([this]() { return kickTagAction(); })
+        , kick_send_tag([this]() { return kickTagAction(); })
     {}
 
     ~GRPCSendQueue()
     {
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
 
         RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
     }
@@ -213,7 +213,7 @@ private:
 
     void * kickTagAction()
     {
-        std::unique_lock lock(mu);
+        std::lock_guard lock(mu);
 
         RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", magic_enum::enum_name(status));
         status = Status::NONE;
@@ -225,16 +225,14 @@ private:
     void kickCompletionQueue()
     {
         {
-            std::unique_lock lock(mu);
+            std::lock_guard lock(mu);
             if (status != Status::WAITING)
-            {
                 return;
-            }
             RUNTIME_ASSERT(tag != nullptr, log, "status is waiting but tag is nullptr");
             status = Status::QUEUING;
         }
 
-        grpc_call_error error = kick_func(&kick_tag);
+        grpc_call_error error = kick_func(&kick_send_tag);
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
@@ -271,9 +269,9 @@ private:
     Status status = Status::NONE;
     void * tag = nullptr;
 
-    GRPCKickFunc kick_func;
+    GRPCSendKickFunc kick_func;
 
-    KickTag kick_tag;
+    KickSendTag kick_send_tag;
 };
 
 } // namespace DB

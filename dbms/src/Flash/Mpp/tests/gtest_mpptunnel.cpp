@@ -80,9 +80,9 @@ public:
         return nullptr;
     }
 
-    std::optional<GRPCKickFunc> getKickFuncForTest() override
+    std::optional<GRPCSendKickFunc> getGRPCSendKickFuncForTest() override
     {
-        return [&](KickTag * tag) {
+        return [&](KickSendTag * tag) {
             {
                 void * t;
                 bool s;
@@ -653,13 +653,15 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
+    std::vector<MsgChannelPtr> msg_channels;
+    msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(1));
 
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
+        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
@@ -673,12 +675,14 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
+    std::vector<MsgChannelPtr> msg_channels;
+    msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(1));
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
+        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
     tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
