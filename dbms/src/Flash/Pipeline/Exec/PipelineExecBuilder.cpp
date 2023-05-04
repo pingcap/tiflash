@@ -21,12 +21,14 @@ void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
     RUNTIME_CHECK(!source_op && source_op_);
     source_op = std::move(source_op_);
 }
-void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
+void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op, bool wait)
 {
     RUNTIME_CHECK(source_op && transform_op);
     Block header = getCurrentHeader();
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
+    if (wait)
+        wait_transform_idx.push_back(transform_ops.size());
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
@@ -42,7 +44,8 @@ PipelineExecPtr PipelineExecBuilder::build()
     return std::make_unique<PipelineExec>(
         std::move(source_op),
         std::move(transform_ops),
-        std::move(sink_op));
+        std::move(sink_op),
+        std::move(wait_transform_idx));
 }
 
 Block PipelineExecBuilder::getCurrentHeader() const

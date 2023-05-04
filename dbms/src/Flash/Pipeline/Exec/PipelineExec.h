@@ -17,6 +17,7 @@
 #include <Operators/Operator.h>
 
 #include <memory>
+#include <vector>
 
 namespace DB
 {
@@ -29,10 +30,12 @@ public:
     PipelineExec(
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
-        SinkOpPtr && sink_op_)
+        SinkOpPtr && sink_op_,
+        std::vector<Int64> wait_transform_idx_)
         : source_op(std::move(source_op_))
         , transform_ops(std::move(transform_ops_))
         , sink_op(std::move(sink_op_))
+        , wait_transform_idx(std::move(wait_transform_idx_))
     {}
 
     void executePrefix();
@@ -59,6 +62,7 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    std::vector<Int64> wait_transform_idx;
 
     // hold the operator which is ready for executing io.
     std::optional<Operator *> io_op;

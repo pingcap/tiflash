@@ -152,15 +152,12 @@ OperatorStatus PipelineExec::awaitImpl()
 {
     auto op_status = sink_op->await();
     HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
+    for (auto it = wait_transform_idx.rbegin(); it != wait_transform_idx.rend(); ++it) // NOLINT(modernize-loop-convert)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
-        if (dynamic_cast<HashJoinProbeTransformOp *>(it->get()))
-        {
-            op_status = (*it)->await();
-            HANDLE_OP_STATUS((*it), op_status, OperatorStatus::NEED_INPUT);
-        }
+        op_status = (transform_ops[*it])->await();
+        HANDLE_OP_STATUS((transform_ops[*it]), op_status, OperatorStatus::NEED_INPUT);
     }
     op_status = source_op->await();
     HANDLE_LAST_OP_STATUS(source_op, op_status);

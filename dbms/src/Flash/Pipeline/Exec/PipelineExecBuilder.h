@@ -23,9 +23,10 @@ struct PipelineExecBuilder
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    std::vector<Int64> wait_transform_idx;
 
     void setSourceOp(SourceOpPtr && source_op_);
-    void appendTransformOp(TransformOpPtr && transform_op);
+    void appendTransformOp(TransformOpPtr && transform_op, bool await = false);
     void setSinkOp(SinkOpPtr && sink_op_);
 
     Block getCurrentHeader() const;
