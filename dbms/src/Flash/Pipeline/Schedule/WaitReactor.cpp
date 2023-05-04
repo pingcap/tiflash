@@ -44,10 +44,10 @@ public:
         switch (status)
         {
         case ExecTaskStatus::RUNNING:
-            running_tasks.push_back(std::move(task));
+            running_tasks.emplace_back(std::move(task));
             return true;
         case ExecTaskStatus::IO:
-            io_tasks.push_back(std::move(task));
+            io_tasks.emplace_back(std::move(task));
             return true;
         case ExecTaskStatus::WAITING:
             return false;
