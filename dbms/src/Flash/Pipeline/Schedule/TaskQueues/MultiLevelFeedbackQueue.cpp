@@ -54,6 +54,7 @@ MultiLevelFeedbackQueue<TimeGetter>::MultiLevelFeedbackQueue()
         time_slices[i] = time_slice;
     }
 
+    static constexpr double RATIO_OF_ADJACENT_QUEUE = 1.2;
     double factors[QUEUE_SIZE];
     double factor = 1;
     for (int i = QUEUE_SIZE - 1; i >= 0; --i)

@@ -24,9 +24,9 @@
 
 namespace DB
 {
-///    +------------+     +------------+       +------------+           +------------+
-///    | UnitQueue 1|     | UnitQueue 2|       | UnitQueue 3|    ...    | UnitQueue 8|
-///    +------------+     +------------+       +------------+           +------------+
+///    +-----------+       +-----------+       +-----------+            +-----------+
+///    |UnitQueue 1|       |UnitQueue 2|       |UnitQueue 3|    ...     |UnitQueue 8|
+///    +-----------+       +-----------+       +-----------+            +-----------+
 ///          ^                   ^                   ^                        ^
 ///          |                   |                   |                        |
 /// +--------+--------+  +-------+--------+  +-------+--------+       +-------+--------+
@@ -34,17 +34,17 @@ namespace DB
 /// +-----------------+  +----------------+  +----------------+       +----------------+
 ///          ^                   ^                   ^                        ^
 ///          |                   |                   |                        |
-/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// +--------+--------+  +-------+--------+  +-------+--------+       +-------+--------+
 /// | Task 2          |  | Task 7         |  | Task 12        |       | Task 17        |
 /// +-----------------+  +----------------+  +----------------+       +----------------+
 ///          ^                   ^                   ^                        ^
 ///          |                   |                   |                        |
-/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// +--------+--------+  +-------+--------+  +-------+--------+       +-------+--------+
 /// | Task 3          |  | Task 8         |  | Task 13        |       | Task 18        |
 /// +-----------------+  +----------------+  +----------------+       +----------------+
 ///          ^                   ^                   ^                        ^
 ///          |                   |                   |                        |
-/// +--------v--------+  +-------v--------+  +-------v--------+       +-------v--------+
+/// +--------+--------+  +-------+--------+  +-------+--------+       +-------+--------+
 /// | Task 4          |  | Task 9         |  | Task 14        |       | Task 19        |
 /// +-----------------+  +----------------+  +----------------+       +----------------+
 
@@ -58,9 +58,13 @@ struct UnitQueueInfo
         assert(factor_for_normal > 0);
     }
 
+    // The total duration of tasks executed in the queue must be less than `time_slice`.
     UInt64 time_slice;
 
-    // factor for normalization
+    // factor for normalization.
+    // The priority value is equal to `accu_consume_time / factor_for_normal`.
+    // The smaller the value, the higher the priority.
+    // Therefore, the higher the priority of the queue, the larger the value of factor_for_normal.
     double factor_for_normal;
 };
 
@@ -115,8 +119,6 @@ public:
     // so when a task's execution time exceeds 0.2s, 0.6s, 1.2s, 2s, 3s, 4.2s, 5.6s, and 7.2s,
     // it will move to next level.
     static constexpr int64_t LEVEL_TIME_SLICE_BASE_NS = 200'000'000L;
-
-    static constexpr double RATIO_OF_ADJACENT_QUEUE = 1.2;
 
 private:
     void computeQueueLevel(const TaskPtr & task);
