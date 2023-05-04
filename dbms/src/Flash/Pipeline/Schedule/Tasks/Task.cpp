@@ -104,6 +104,8 @@ ExecTaskStatus Task::await() noexcept
     return exec_status;
 }
 
+#undef CHECK_FINISHED
+
 void Task::finalize() noexcept
 {
     RUNTIME_ASSERT(

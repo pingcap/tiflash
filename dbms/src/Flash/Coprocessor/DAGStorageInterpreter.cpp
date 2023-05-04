@@ -1050,7 +1050,7 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
     {
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-    
+
         if (has_multiple_partitions)
             source_pool.add(buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size));
         else

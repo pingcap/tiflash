@@ -121,7 +121,7 @@ protected:
             return OperatorStatus::HAS_OUTPUT;
 
         if unlikely (pool.empty())
-            return OperatorStatus::HAS_OUTPUT; 
+            return OperatorStatus::HAS_OUTPUT;
 
         for (const auto & source : pool)
         {
