@@ -33,13 +33,15 @@ void PhysicalJoinProbe::buildPipelineExecGroup(
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
-            exec_status,
-            log->identifier(),
-            join_ptr,
-            probe_index++,
-            max_block_size,
-            input_header));
+        builder.appendTransformOp(
+            std::make_unique<HashJoinProbeTransformOp>(
+                exec_status,
+                log->identifier(),
+                join_ptr,
+                probe_index++,
+                max_block_size,
+                input_header),
+            true);
     });
 }
 } // namespace DB
