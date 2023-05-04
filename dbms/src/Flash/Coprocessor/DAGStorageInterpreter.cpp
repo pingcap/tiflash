@@ -35,6 +35,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/BlockInputStreamSourceOp.h>
+#include <Operators/ConcatSourceOp.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
@@ -1041,20 +1042,37 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
     if (total_local_region_num == 0)
         return {};
     const auto table_query_infos = generateSelectQueryInfos();
+    bool has_multiple_partitions = table_query_infos.size() > 1;
+    MultiPartitionSourcePool source_pool{max_streams};
 
-    /// TODO: support multiple partitions
     SourceOps source_ops;
     for (const auto & table_query_info : table_query_infos)
     {
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
+    
+        if (has_multiple_partitions)
+            source_pool.add(buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size));
+        else
+            source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
     }
 
     LOG_DEBUG(
         log,
         "local sourceOps built, is_disaggregated_task={}",
         dag_context.is_disaggregated_task);
+
+    if (has_multiple_partitions)
+    {
+        assert(source_ops.empty());
+        while (true)
+        {
+            auto pool = source_pool.gen();
+            if (pool.empty())
+                break;
+            source_ops.push_back(std::make_unique<ConcatSourceOp>(exec_status, log->identifier(), std::move(pool)));
+        }
+    }
 
     return source_ops;
 }

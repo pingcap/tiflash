@@ -16,8 +16,47 @@
 
 #include <Operators/Operator.h>
 
+#include <unordered_set>
+
 namespace DB
 {
+class MultiPartitionSourcePool
+{
+public:
+    explicit MultiPartitionSourcePool(size_t expect_size)
+    {
+        RUNTIME_CHECK(expect_size > 0);
+        pool.resize(expect_size);
+    }
+
+    void add(SourceOps && sources)
+    {
+        for (auto & source : sources)
+        {
+            pool[pre_index++].push_back(std::move(source));
+            if (pre_index == pool.size())
+                pre_index = 0;
+        }
+        sources.clear();
+    }
+
+    SourceOps gen()
+    {
+        while (!pool.empty())
+        {
+            auto ret = std::move(pool.back());
+            pool.pop_back();
+            if (!ret.empty())
+                return ret;
+        }
+        return {};
+    }
+
+private:
+    std::vector<SourceOps> pool;
+    size_t pre_index = 0;
+};
+
 class ConcatSourceOp : public SourceOp
 {
 public:
@@ -29,7 +68,7 @@ public:
         , holder(std::move(pool_))
     {
         assert(!holder.empty());
-        setHeader(holder->back()->getHeader());
+        setHeader(holder.back()->getHeader());
 
         for (auto & source : holder)
             pool.insert(source.get());
@@ -79,10 +118,10 @@ protected:
     OperatorStatus awaitImpl() override
     {
         if (cur != nullptr)
-            OperatorStatus::HAS_OUTPUT;
+            return OperatorStatus::HAS_OUTPUT;
 
         if unlikely (pool.empty())
-            OperatorStatus::HAS_OUTPUT; 
+            return OperatorStatus::HAS_OUTPUT; 
 
         for (const auto & source : pool)
         {
@@ -90,7 +129,7 @@ protected:
             switch (res)
             {
             case OperatorStatus::HAS_OUTPUT:
-                cur = source.get();
+                cur = source;
                 return OperatorStatus::HAS_OUTPUT;
             case OperatorStatus::WAITING:
                 break;
@@ -105,7 +144,7 @@ protected:
     OperatorStatus executeIOImpl() override
     {
         if (cur == nullptr)
-            OperatorStatus::WAITING;
+            return OperatorStatus::WAITING;
 
         auto res = cur->executeIO();
         switch (res)
