@@ -86,9 +86,6 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     size_t gcount = istr.gcount();
     if (gcount == 0 && !istr.eof())
     {
-<<<<<<< HEAD
-        LOG_ERROR(log, "Cannot read from istream, errmsg={}", strerror(errno));
-=======
         LOG_ERROR(
             log,
             "Cannot read from istream, gcount={}, eof={}, cur_offset={}, content_length={}, errmsg={}, cost={}ns",
@@ -98,7 +95,6 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
             content_length,
             strerror(errno),
             sw.elapsed());
->>>>>>> d2e85fcd3c (Retry when 'Resource temporarily unavailable' (#7363))
         return -1;
     }
     auto elapsed_ns = sw.elapsed();
