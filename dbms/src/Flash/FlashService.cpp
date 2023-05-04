@@ -422,6 +422,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    auto waiting_task_time = watch.elapsedMilliseconds();
     if (tunnel == nullptr)
     {
         if (!sync_writer->Write(getPacketWithError(err_msg)))
@@ -436,7 +437,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
         SyncPacketWriter writer(sync_writer);
         tunnel->connectSync(&writer);
         tunnel->waitForFinish();
-        LOG_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+        LOG_INFO(tunnel->getLogger(), "connection for {} cost {} ms, including {} ms to wait task.", tunnel->id(), stopwatch.elapsedMilliseconds(), waiting_task_time);
     }
     return grpc::Status::OK;
 }
