@@ -79,6 +79,18 @@ public:
         return "ConcatSourceOp";
     }
 
+    void operatePrefix() override
+    {
+        for (const auto & source : pool)
+            source->operatePrefix();
+    }
+
+    void operateSuffix() override
+    {
+        for (const auto & source : pool)
+            source->operateSuffix();
+    }
+
 protected:
     OperatorStatus readImpl(Block & block) override
     {
