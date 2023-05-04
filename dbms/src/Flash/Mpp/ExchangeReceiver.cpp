@@ -410,6 +410,12 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
 
+    // `live_local_connections` needs to be protected, so the `waitLocalConnectionDone` should be protected by the lock.
+    //
+    // `wait` function in AsyncRequestHandler waits for the `is_close_conn_called` to be set. However,
+    // `is_close_conn_called` is set in `closeConnection` which also call the `connectionDone` function with
+    // the lock in ExchangeReceiver. So we shouldn't hold the lock in ExchangeReceiver when waiting for the
+    // `is_close_conn_called` to be set.
     lock.unlock();
     waitAsyncConnectionDone();
 }
