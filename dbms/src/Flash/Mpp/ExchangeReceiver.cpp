@@ -409,6 +409,8 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
+
+    lock.unlock();
     waitAsyncConnectionDone();
 }
 

@@ -137,6 +137,7 @@ public:
     {
         std::unique_lock<std::mutex> ul(is_close_conn_called_mu);
         condition_cv.wait(ul, [this]() { return is_close_conn_called; });
+        ul.unlock();
     }
 
 private:
