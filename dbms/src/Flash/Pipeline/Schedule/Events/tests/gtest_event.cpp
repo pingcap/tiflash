@@ -274,7 +274,7 @@ class DoInsertEvent : public Event
 public:
     DoInsertEvent(
         PipelineExecutorStatus & exec_status_,
-        std::atomic_int16_t & counter_)
+        int16_t & counter_)
         : Event(exec_status_, nullptr)
         , counter(counter_)
     {
@@ -295,7 +295,7 @@ protected:
     }
 
 private:
-    std::atomic_int16_t & counter;
+    int16_t & counter;
 };
 
 class CreateTaskFailEvent : public Event
@@ -546,14 +546,13 @@ TEST_F(EventTestRunner, insert_events)
 try
 {
     PipelineExecutorStatus exec_status;
-    std::atomic_int16_t counter1{5};
-    std::atomic_int16_t counter2{5};
-    std::atomic_int16_t counter3{5};
+    std::vector<int16_t> counters;
+    for (size_t i = 0; i < 10; ++i)
+        counters.push_back(99);
     {
         std::vector<EventPtr> events;
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter1));
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter2));
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter3));
+        for (auto & counter : counters)
+            events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter));
         auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);
         for (const auto & event : events)
             err_event->addInput(event);
@@ -563,9 +562,8 @@ try
     wait(exec_status);
     auto exception_ptr = exec_status.getExceptionPtr();
     ASSERT_TRUE(exception_ptr);
-    ASSERT_EQ(0, counter1);
-    ASSERT_EQ(0, counter2);
-    ASSERT_EQ(0, counter3);
+    for (auto & counter : counters)
+        ASSERT_EQ(0, counter);
 }
 CATCH
 
