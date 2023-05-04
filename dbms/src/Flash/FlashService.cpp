@@ -409,6 +409,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
         GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value()));
     }
+    Stopwatch watch;
     SCOPE_EXIT({
         GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
@@ -417,7 +418,6 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    Stopwatch watch;
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
