@@ -66,6 +66,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
             waiting_tasks.push_back(std::move(task));
             break;
         case FINISH_STATUS:
+            task->finalize();
             task.reset();
             break;
         default:

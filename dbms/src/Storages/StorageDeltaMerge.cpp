@@ -20,6 +20,7 @@
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
@@ -748,11 +749,30 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
 {
     if (!pushed_down_filters.empty())
     {
-        NamesAndTypes columns_to_read_name_and_type;
-        for (const auto & col : columns_to_read)
+        // Note: table_scan_column_info is a light copy of column_info from TiDB, so some attributes are missing, like name.
+        std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
+        for (const auto & column : columns_to_read)
+            columns_to_read_map.emplace(column.id, column);
+
+        // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
+        // The columns_to_read is a subset of table_scan_column_info, when there are generated columns.
+        NamesAndTypes source_columns_of_analyzer;
+        source_columns_of_analyzer.reserve(table_scan_column_info.size());
+        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
-            columns_to_read_name_and_type.emplace_back(col.name, col.type);
+            auto const & ci = table_scan_column_info[i];
+            const auto cid = ci.id;
+            if (ci.hasGeneratedColumnFlag())
+            {
+                const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+                const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+                source_columns_of_analyzer.emplace_back(col_name, data_type);
+                continue;
+            }
+            RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
+            source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
         }
+        // Get the columns of the filter, is a subset of columns_to_read
         std::unordered_set<ColumnID> filter_col_id_set;
         for (const auto & expr : pushed_down_filters)
         {
@@ -770,14 +790,13 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             filter_columns.push_back(*iter);
         }
 
+        // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
         std::vector<ExtraCastAfterTSMode> need_cast_column;
-        need_cast_column.reserve(columns_to_read.size());
+        need_cast_column.reserve(table_scan_column_info.size());
         for (const auto & col : table_scan_column_info)
         {
             if (!filter_col_id_set.contains(col.id))
-            {
                 need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
             else
             {
                 if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
@@ -789,7 +808,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             }
         }
 
-        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, context);
+        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
         ExpressionActionsChain chain;
         auto & step = analyzer->initAndGetLastStep(chain);
         auto & actions = step.actions;

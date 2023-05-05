@@ -30,6 +30,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
+#include <memory>
 #include <utility>
 
 
@@ -175,6 +176,11 @@ struct MockReceiverContext
         bool is_local = false;
     };
 
+    struct MockClientContext
+    {
+        static grpc_call * c_call() { return nullptr; }
+    };
+
     struct Reader
     {
         explicit Reader(const PacketQueuePtr & queue_)
@@ -214,6 +220,10 @@ struct MockReceiverContext
         static void init(UnaryCallback<bool> *) { assert(0); }
         static void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
         static void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        static std::shared_ptr<MockClientContext> getClientContext()
+        {
+            return std::make_shared<MockClientContext>();
+        }
     };
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
@@ -474,7 +484,9 @@ public:
             "mock_req_id",
             "mock_exchange_receiver_id",
             0,
-            2);
+            2,
+            1,
+            0);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",
