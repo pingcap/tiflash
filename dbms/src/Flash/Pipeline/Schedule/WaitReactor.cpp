@@ -83,7 +83,11 @@ public:
 
         if (spin_count != 0 && spin_count % 64 == 0)
         {
+#if defined(__x86_64__)
+            _mm_pause();
+#else
             sched_yield();
+#endif
             if (spin_count == 640)
             {
                 spin_count = 0;
