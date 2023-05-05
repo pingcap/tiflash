@@ -86,8 +86,6 @@ private:
 
     void assertStatus(EventStatus expect);
 
-    void assertStatus(EventStatus expect1, EventStatus expect2);
-
 protected:
     PipelineExecutorStatus & exec_status;
 
