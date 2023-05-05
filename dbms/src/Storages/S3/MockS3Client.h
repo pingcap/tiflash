@@ -44,6 +44,9 @@ public:
     Model::CopyObjectOutcome CopyObject(const Model::CopyObjectRequest & request) const override;
     Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
+    Model::GetBucketLifecycleConfigurationOutcome GetBucketLifecycleConfiguration(const Model::GetBucketLifecycleConfigurationRequest & request) const override;
+    Model::PutBucketLifecycleConfigurationOutcome PutBucketLifecycleConfiguration(const Model::PutBucketLifecycleConfigurationRequest & request) const override;
+
 private:
     static String normalizedKey(String ori_key);
 
