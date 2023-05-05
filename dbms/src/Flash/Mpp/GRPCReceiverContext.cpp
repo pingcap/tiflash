@@ -299,6 +299,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
+    local_request_handler.recordWaitingTaskTime();
     tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained, has_remote_conn);
 }
 

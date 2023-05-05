@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Stopwatch.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 
 namespace DB
@@ -59,10 +60,27 @@ struct LocalRequestHandler
         add_local_conn_num();
     }
 
+    void recordWaitingTaskTime()
+    {
+        waiting_task_time = watch.elapsedMilliseconds();
+    }
+
+    UInt64 getTotalElapsedTime() const
+    {
+        return watch.elapsedMilliseconds();
+    }
+
+    UInt64 getWaitingTaskTime() const
+    {
+        return waiting_task_time;
+    }
+
     MemoryTracker * recv_mem_tracker;
     std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_close;
     std::function<void()> add_local_conn_num;
     ReceiverChannelWriter channel_writer;
+    UInt64 waiting_task_time = 0;
+    Stopwatch watch;
 };
 } // namespace DB
