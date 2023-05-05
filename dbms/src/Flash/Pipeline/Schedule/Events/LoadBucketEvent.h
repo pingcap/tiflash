@@ -14,35 +14,33 @@
 
 #pragma once
 
-#include <Operators/Operator.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
-class AggregateContext;
-using AggregateContextPtr = std::shared_ptr<AggregateContext>;
+class SharedSpilledBucketDataLoader;
+using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketDataLoader>;
 
-class AggregateConvergentSourceOp : public SourceOp
+class LoadBucketEvent : public Event
 {
 public:
-    AggregateConvergentSourceOp(
+    LoadBucketEvent(
         PipelineExecutorStatus & exec_status_,
-        const AggregateContextPtr & agg_context_,
-        size_t index_,
-        const String & req_id);
-
-    String getName() const override
+        MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
+        SharedSpilledBucketDataLoaderPtr loader_)
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        , loader(std::move(loader_))
     {
-        return "AggregateConvergentSourceOp";
+        assert(loader);
     }
 
-    void operateSuffix() override;
-
 protected:
-    OperatorStatus readImpl(Block & block) override;
+    void scheduleImpl() override;
+
+    void finishImpl() override;
 
 private:
-    AggregateContextPtr agg_context;
-    uint64_t total_rows{};
-    const size_t index;
+    SharedSpilledBucketDataLoaderPtr loader;
 };
 } // namespace DB

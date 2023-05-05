@@ -38,18 +38,10 @@ public:
     std::shared_ptr<TiFlashS3Client> client;
 };
 
-
-TEST_F(S3ClientTest, UploadDelete)
+TEST_F(S3ClientTest, LifecycleRule)
 try
 {
-    deleteObject(*client, "s999/manifest/mf_1");
-    ASSERT_FALSE(objectExists(*client, "s999/manifest/mf_1"));
-
-    uploadEmptyFile(*client, "s999/manifest/mf_1");
-    ASSERT_TRUE(objectExists(*client, "s999/manifest/mf_1"));
-
-    deleteObject(*client, "s999/manifest/mf_1");
-    ASSERT_FALSE(objectExists(*client, "s999/manifest/mf_1"));
+    ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
 }
 CATCH
 

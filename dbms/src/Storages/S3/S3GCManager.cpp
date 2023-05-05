@@ -143,17 +143,25 @@ bool S3GCManager::runOnAllStores()
         {
             s = iter->second.state();
         }
-        if (!s || *s == metapb::StoreState::Tombstone)
+        try
         {
-            if (!s)
+            if (!s || *s == metapb::StoreState::Tombstone)
             {
-                LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
+                if (!s)
+                {
+                    LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
+                }
+                runForTombstoneStore(gc_store_id);
             }
-            runForTombstoneStore(gc_store_id);
+            else
+            {
+                runForStore(gc_store_id);
+            }
         }
-        else
+        catch (...)
         {
-            runForStore(gc_store_id);
+            // log error and continue on next store_id
+            tryLogCurrentException(log, fmt::format("gc_store_id={}", gc_store_id));
         }
     }
     // always return false, run in fixed rate
@@ -226,7 +234,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
-    LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+    LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={} tombstone=true", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
     Stopwatch watch;
     // If the store id is tombstone, then run gc on the store as if no locks.
@@ -264,7 +272,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
         break;
     }
     }
-    LOG_INFO(log, "gc on tombstone store done, gc_store_id={}", gc_store_id);
+    LOG_INFO(log, "gc on store done, gc_store_id={} tombstone=true", gc_store_id);
 }
 
 void S3GCManager::cleanUnusedLocks(

@@ -129,7 +129,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
-    background_task.begin();
     grpc::ServerBuilder builder;
 
     if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
@@ -237,7 +236,6 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-        background_task.end();
     }
     catch (...)
     {
