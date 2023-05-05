@@ -12508,7 +12508,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "bytes",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
