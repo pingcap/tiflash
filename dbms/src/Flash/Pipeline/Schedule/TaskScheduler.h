@@ -76,8 +76,5 @@ private:
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
-
-    friend class TaskThreadPool<CPUImpl>;
-    friend class WaitReactor;
 };
 } // namespace DB
