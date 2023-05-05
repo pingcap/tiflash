@@ -34,6 +34,13 @@ public:
     std::shared_ptr<TiFlashS3Client> client;
 };
 
+TEST_F(S3ClientTest, LifecycleRule)
+try
+{
+    ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+}
+CATCH
+
 TEST_F(S3ClientTest, UploadRead)
 try
 {
