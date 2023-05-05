@@ -49,8 +49,7 @@ void Event::addInput(const EventPtr & input)
 
 void Event::addOutput(const EventPtr & output)
 {
-    /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
-    assertStatus(EventStatus::INIT, EventStatus::FINISHED);
+    assertStatus(EventStatus::INIT);
     RUNTIME_ASSERT(output.get() != this, log, "Cannot create circular dependency");
     outputs.push_back(output);
 }
@@ -59,15 +58,13 @@ void Event::insertEvent(const EventPtr & insert_event)
 {
     assertStatus(EventStatus::FINISHED);
     RUNTIME_ASSERT(insert_event, log, "The insert event cannot be nullptr");
-    /// eventA───────►eventB ===> eventA─────────────►eventB
-    ///                             │                    ▲
-    ///                             └────►insert_event───┘
-    for (const auto & output : outputs)
-    {
-        RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
-        output->addInput(insert_event);
-    }
-    insert_event->addInput(shared_from_this());
+    /// eventA───────►eventB ===> eventA───►insert_event───►eventB
+    assert(insert_event->outputs.empty());
+    insert_event->outputs = std::move(outputs);
+    outputs = {insert_event};
+    assert(insert_event->unfinished_inputs == 0);
+    insert_event->unfinished_inputs = 1;
+    insert_event->is_source = false;
     RUNTIME_ASSERT(!insert_event->prepare(), log, "The insert event cannot be source event");
 }
 
@@ -230,18 +227,6 @@ void Event::assertStatus(EventStatus expect)
         "actual status is {}, but expect status is {}",
         magic_enum::enum_name(cur_status),
         magic_enum::enum_name(expect));
-}
-
-void Event::assertStatus(EventStatus expect1, EventStatus expect2)
-{
-    auto cur_status = status.load();
-    RUNTIME_ASSERT(
-        cur_status == expect1 || cur_status == expect2,
-        log,
-        "actual status is {}, but expect status are {} and {}",
-        magic_enum::enum_name(cur_status),
-        magic_enum::enum_name(expect1),
-        magic_enum::enum_name(expect2));
 }
 
 #undef CATCH
