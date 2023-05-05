@@ -77,11 +77,6 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
-Task::~Task()
-{
-    LOG_TRACE(log, "task finish with profile info: {}", profile_info.toJson());
-}
-
 ExecTaskStatus Task::execute() noexcept
 {
     CHECK_FINISHED
@@ -122,6 +117,7 @@ void Task::finalize() noexcept
     // To make sure that `finalize` only called once.
     exec_status = ExecTaskStatus::FINALIZE;
     finalizeImpl();
+    LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 }
 
 void Task::switchStatus(ExecTaskStatus to)
