@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Operators/HashJoinProbeTransformOp.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB

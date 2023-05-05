@@ -40,8 +40,8 @@ void PhysicalJoinProbe::buildPipelineExecGroup(
                 join_ptr,
                 probe_index++,
                 max_block_size,
-                input_header),
-            true);
+                input_header));
+        builder.appendWaitTransformIdx();
     });
 }
 } // namespace DB

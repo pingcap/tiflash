@@ -21,14 +21,16 @@ void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
     RUNTIME_CHECK(!source_op && source_op_);
     source_op = std::move(source_op_);
 }
-void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op, bool wait)
+void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
     RUNTIME_CHECK(source_op && transform_op);
     Block header = getCurrentHeader();
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
-    if (wait)
-        wait_transform_idx.push_back(transform_ops.size());
+}
+void PipelineExecBuilder::appendWaitTransformIdx()
+{
+    wait_transform_idx.push_back(transform_ops.size() - 1);
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
