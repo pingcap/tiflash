@@ -26,132 +26,136 @@ namespace DB
   * while (queue.isFull()) {}
   * queue.nonBlockingPush(std::move(obj));
   * ```
-  * There are additional overheads compared to using mpmcqueue directly
-  * - two locks
-  * - condition double check
-  * Since io queues are not performance sensitive, they are acceptable.
   */
 template <typename T>
 class ConcurrentIOQueue
 {
 public:
-    explicit ConcurrentIOQueue(size_t capacity)
-        : mpmc_queue(std::max(1, capacity))
-    {}
-
-    ConcurrentIOQueue(
-        size_t capacity,
-        Int64 max_auxiliary_memory_usage_,
-        typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
-        : mpmc_queue(std::max(1, capacity), max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
+    explicit ConcurrentIOQueue(size_t capacity_)
+        : capacity(std::max(1, capacity_))
     {}
 
     /// blocking function.
     /// Just like MPMCQueue::push.
     MPMCQueueResult push(T && data)
     {
-        return mpmc_queue.push(std::move(data));
+        std::unique_lock lock(mu);
+
+        push_cv.wait(lock, [&] { return queue.size() < capacity || unlikely (status != MPMCQueueStatus::NORMAL); });
+
+        if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
+        {
+            queue.emplace_front(std::move(data));
+            pop_cv.notify_one();
+            return MPMCQueueResult::OK;
+        }
+
+        switch (status)
+        {
+        case MPMCQueueStatus::NORMAL:
+            return MPMCQueueResult::FULL;
+        case MPMCQueueStatus::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        case MPMCQueueStatus::FINISHED:
+            return MPMCQueueResult::FINISHED;
+        }
     }
 
     /// Just like MPMCQueue::tryPush.
     template <typename U>
     MPMCQueueResult tryPush(U && data)
     {
-        return mpmc_queue.tryPush(std::forward<U>(data));
+        std::lock_guard lock(mu);
+
+        if unlikely (status == MPMCQueueStatus::CANCELLED)
+           return MPMCQueueResult::CANCELLED;
+        if unlikely (status == MPMCQueueStatus::FINISHED)
+           return MPMCQueueResult::FINISHED;
+
+        if (queue.size() >= capacity)
+            return MPMCQueueResult::FULL;
+
+        queue.emplace_front(std::forward<U>(data));
+        pop_cv.notify_one();
+        return MPMCQueueResult::OK;
     }
 
     /// Non-blocking function.
     /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
-    /// The obj that exceeds its capacity will be stored in remaining_objs and wait for the next pop/tryPop to trigger pushRemains.
+    /// The obj that exceeds its capacity will still be stored in queue.
     MPMCQueueResult nonBlockingPush(T && data)
     {
-        auto res = mpmc_queue.tryPush(std::move(data));
-        if (res == MPMCQueueResult::FULL)
-        {
-            // Double check if this queue is full.
-            std::lock_guard lock(mu);
-            res = mpmc_queue.tryPush(std::move(data));
-            if (res == MPMCQueueResult::FULL)
-            {
-                // obj that exceeds its capacity will be stored in remaining_objs.
-                // And then waiting for the next pop/tryPop to trigger pushRemains.
-                remaining_objs.push_front(std::move(data));
-                return MPMCQueueResult::OK;
-            }
-        }
-        return res;
+        std::lock_guard lock(mu);
+
+        if unlikely (status == MPMCQueueStatus::CANCELLED)
+           return MPMCQueueResult::CANCELLED;
+        if unlikely (status == MPMCQueueStatus::FINISHED)
+           return MPMCQueueResult::FINISHED;
+
+        queue.push_front(std::move(data));
+        pop_cv.notify_one();
+        return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult pop(T & data)
     {
-        auto res = mpmc_queue.pop(data);
-        switch (res)
+        std::unique_lock lock(mu);
+
+        pop_cv.wait(lock, [&] { return !queue.empty() || unlikely (status != MPMCQueueStatus::NORMAL); });
+
+        if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
-        case MPMCQueueResult::FINISHED:
-            // when finished, we still should pop the remaining_objs.
-            return popRemains(data) ? MPMCQueueResult::OK : MPMCQueueResult::FINISHED;
-        case MPMCQueueResult::OK:
-            pushRemains();
-        default:
-            return res;
+            data = std::move(queue.back());
+            queue.pop_back();
+            push_cv.notify_one();
+            return MPMCQueueResult::OK;
+        }
+
+        switch (status)
+        {
+        case MPMCQueueStatus::NORMAL:
+            return MPMCQueueResult::EMPTY;
+        case MPMCQueueStatus::CANCELLED:
+            return MPMCQueueResult::CANCELLED;
+        case MPMCQueueStatus::FINISHED:
+            return MPMCQueueResult::FINISHED;
         }
     }
 
     MPMCQueueResult tryPop(T & data)
     {
-        auto res = mpmc_queue.tryPop(data);
-        switch (res)
-        {
-        case MPMCQueueResult::FINISHED:
-            // when finished, we still should pop the remaings.
-            return popRemains(data) ? MPMCQueueResult::OK : MPMCQueueResult::FINISHED;
-        case MPMCQueueResult::EMPTY:
-        {
-            // Double check if this queue is empty.
-            std::lock_guard lock(mu);
-            res = mpmc_queue.tryPop(data);
-            switch (res)
-            {
-            case MPMCQueueResult::FINISHED:
-            case MPMCQueueResult::EMPTY:
-                // when finished, we still should pop the remaining_objs.
-                // when mpmc_queue empty, we can try pop from remaining_objs.
-                return popRemainsWithoutLock(data) ? MPMCQueueResult::OK : res;
-            case MPMCQueueResult::OK:
-                pushRemainsWithoutLock();
-            default:
-                return res;
-            }
-        }
-        case MPMCQueueResult::OK:
-            pushRemains();
-        default:
-            return res;
-        }
+        std::lock_guard lock(mu);
+
+        if unlikely (status == MPMCQueueStatus::CANCELLED)
+            return MPMCQueueResult::CANCELLED;
+
+        if (queue.empty())
+            return status == MPMCQueueStatus::NORMAL
+                ? MPMCQueueResult::EMPTY
+                : MPMCQueueResult::FINISHED;
+
+        data = std::move(queue.back());
+        queue.pop_back();
+        push_cv.notify_one();
+        return MPMCQueueResult::OK;
     }
 
     size_t size() const
     {
-        size_t mpmc_queue_size = mpmc_queue.size();
         std::lock_guard lock(mu);
-        return mpmc_queue_size + remaining_objs.size();
+        return queue.size();
     }
 
-    // When the queue is finished, it may appear that the mpmc_queue is empty but the remaining_objs are not, causing isFull to return true.
-    // But this is expected, and the return value of isFull is meaningless after finished/cancelled.
     bool isFull() const
     {
-        {
-            std::lock_guard lock(mu);
-            if (!remaining_objs.empty())
-                return true;
-        }
-        return mpmc_queue.isFull();
+        std::lock_guard lock(mu);
+        return queue.size() >= capacity;
     }
 
     MPMCQueueStatus getStatus() const
     {
-        return mpmc_queue.getStatus();
+        std::lock_guard lock(mu);
+        return status;
     }
 
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
@@ -163,10 +167,13 @@ public:
     }
     bool cancelWith(String reason)
     {
-        if (mpmc_queue.cancelWith(std::move(reason)))
+        std::lock_guard lock(mu);
+        if likely (status == MPMCQueueStatus::NORMAL)
         {
-            std::lock_guard lock(mu);
-            remaining_objs.clear();
+            status = MPMCQueueStatus::CANCELLED;
+            cancel_reason = std::move(reason);
+            pop_cv.notify_all();
+            push_cv.notify_all();
             return true;
         }
         return false;
@@ -174,7 +181,9 @@ public:
 
     const String & getCancelReason() const
     {
-        return mpmc_queue.getCancelReason();
+        std::unique_lock lock(mu);
+        RUNTIME_ASSERT(status == MPMCQueueStatus::CANCELLED);
+        return cancel_reason;
     }
 
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
@@ -183,46 +192,25 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
-        return mpmc_queue.finish();
-    }
-
-private:
-    void pushRemainsWithoutLock()
-    {
-        while (!remaining_objs.empty() && mpmc_queue.tryPush(std::move(remaining_objs.back())) == MPMCQueueResult::OK)
-            remaining_objs.pop_back();
-    }
-
-    void pushRemains()
-    {
         std::lock_guard lock(mu);
-        pushRemainsWithoutLock();
-    }
-
-    bool popRemainsWithoutLock(T & data)
-    {
-        if (!remaining_objs.empty())
+        if likely (status == MPMCQueueStatus::NORMAL)
         {
-            data = std::move(remaining_objs.back());
-            remaining_objs.pop_back();
+            status = MPMCQueueStatus::FINISHED;
+            pop_cv.notify_all();
+            push_cv.notify_all();
             return true;
         }
         return false;
     }
 
-    bool popRemains(T & data)
-    {
-        std::lock_guard lock(mu);
-        return popRemainsWithoutLock(data);
-    }
-
 private:
     mutable std::mutex mu;
-    // Used to hold objs pushed by `NonBlockingPush` that exceed the capacity.
-    // pop/tryPop will try to push remaining_objs into the mpmc_queue when pop/tryPop.
-    // The size of the deque is less than or equal to the number of writing threads,
-    // because remaining_objs is only pushed when isFull return false.
-    std::deque<T> remaining_objs;
-    MPMCQueue<T> mpmc_queue;
+    std::deque<T> queue;
+    size_t capacity;
+    std::condition_variable pop_cv;
+    std::condition_variable push_cv;
+
+    MPMCQueueStatus status = MPMCQueueStatus::NORMAL;
+    String cancel_reason;
 };
 } // namespace DB
