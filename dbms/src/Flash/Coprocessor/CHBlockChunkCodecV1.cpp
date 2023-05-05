@@ -104,7 +104,8 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
         auto && column = mutable_columns[i];
         /// For non-fixed size type, reserve function might cause too much memory usage, i.e. string type column reserves 64 bytes
         /// size for each element.
-        if (removeNullable(name_and_type_list[i].type)->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion())
+        const auto & type_removed_nullable = removeNullable(name_and_type_list[i].type);
+        if (type_removed_nullable->isValueRepresentedByNumber() || type_removed_nullable->isFixedString())
         {
             if (reserve_size > 0)
                 column->reserve(std::max(rows_to_read, reserve_size));
