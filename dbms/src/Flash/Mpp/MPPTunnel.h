@@ -384,6 +384,7 @@ private:
         {
             consumer_state.setMsg(local_err_msg);
             local_request_handler.writeDone(meet_error, local_err_msg);
+            LOG_INFO(log, "connection for {} cost {} ms, including {} ms to wait task.", tunnel_id, local_request_handler.getTotalElapsedTime(), local_request_handler.getWaitingTaskTime());
         }
     }
 
