@@ -41,7 +41,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        push_cv.wait(lock, [&] { return queue.size() < capacity || unlikely (status != MPMCQueueStatus::NORMAL); });
+        push_cv.wait(lock, [&] { return queue.size() < capacity || (unlikely (status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
@@ -101,7 +101,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        pop_cv.wait(lock, [&] { return !queue.empty() || unlikely (status != MPMCQueueStatus::NORMAL); });
+        pop_cv.wait(lock, [&] { return !queue.empty() || (unlikely (status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
@@ -167,16 +167,10 @@ public:
     }
     bool cancelWith(String reason)
     {
-        std::lock_guard lock(mu);
-        if likely (status == MPMCQueueStatus::NORMAL)
-        {
+        return changeStatus([&] {
             status = MPMCQueueStatus::CANCELLED;
             cancel_reason = std::move(reason);
-            pop_cv.notify_all();
-            push_cv.notify_all();
-            return true;
-        }
-        return false;
+        });
     }
 
     const String & getCancelReason() const
@@ -192,10 +186,19 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
+        return changeStatus([&] {
+            status = MPMCQueueStatus::FINISHED;
+        });
+    }
+
+private:
+    template<typename FF>
+    bool changeStatus(FF && ff)
+    {
         std::lock_guard lock(mu);
         if likely (status == MPMCQueueStatus::NORMAL)
         {
-            status = MPMCQueueStatus::FINISHED;
+            ff();
             pop_cv.notify_all();
             push_cv.notify_all();
             return true;
