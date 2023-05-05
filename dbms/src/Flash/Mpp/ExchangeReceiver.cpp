@@ -397,18 +397,20 @@ void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
-    std::unique_lock lock(mu);
-    auto pred = [&] {
-        return live_connections == 0;
-    };
-    cv.wait(lock, pred);
+    {
+        std::unique_lock lock(mu);
+        auto pred = [&] {
+            return live_connections == 0;
+        };
+        cv.wait(lock, pred);
 
-    // The meaning of calling of connectionDone by local tunnel is to tell the receiver
-    // to close channels and the local tunnel may still alive after it calls connectionDone.
-    //
-    // In order to ensure the destructions of local tunnels are
-    // after the ExchangeReceiver, we need to wait at here.
-    waitLocalConnectionDone(lock);
+        // The meaning of calling of connectionDone by local tunnel is to tell the receiver
+        // to close channels and the local tunnel may still alive after it calls connectionDone.
+        //
+        // In order to ensure the destructions of local tunnels are
+        // after the ExchangeReceiver, we need to wait at here.
+        waitLocalConnectionDone(lock);
+    }
 
     // `live_local_connections` needs to be protected, so the `waitLocalConnectionDone` should be protected by the lock.
     //
@@ -416,7 +418,6 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // `is_close_conn_called` is set in `closeConnection` which also call the `connectionDone` function with
     // the lock in ExchangeReceiver. So we shouldn't hold the lock in ExchangeReceiver when waiting for the
     // `is_close_conn_called` to be set.
-    lock.unlock();
     waitAsyncConnectionDone();
 }
 
