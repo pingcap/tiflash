@@ -20,6 +20,7 @@
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
@@ -704,10 +705,10 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
     return ranges;
 }
 
-DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
-                                                             const ColumnDefines & columns_to_read,
-                                                             const Context & context,
-                                                             const LoggerPtr & tracing_logger)
+DM::RSOperatorPtr StorageDeltaMerge::buildRSOperator(const SelectQueryInfo & query_info,
+                                                     const ColumnDefines & columns_to_read,
+                                                     const Context & context,
+                                                     const LoggerPtr & tracing_logger)
 {
     // build rough set operator
     DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
@@ -736,53 +737,66 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    // build push down filter
-    if (likely(query_info.dag_query) && !query_info.dag_query->pushed_down_filters.empty())
-    {
-        NamesAndTypes columns_to_read_name_and_type;
-        for (const auto & col : columns_to_read)
-        {
-            columns_to_read_name_and_type.emplace_back(col.name, col.type);
-        }
+    return rs_operator;
+}
 
-        std::unordered_set<String> filter_column_names;
-        for (const auto & filter : query_info.dag_query->pushed_down_filters)
+DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr & rs_operator,
+                                                             const ColumnInfos & table_scan_column_info,
+                                                             const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
+    if (!pushed_down_filters.empty())
+    {
+        // Note: table_scan_column_info is a light copy of column_info from TiDB, so some attributes are missing, like name.
+        std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
+        for (const auto & column : columns_to_read)
+            columns_to_read_map.emplace(column.id, column);
+
+        // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
+        // The columns_to_read is a subset of table_scan_column_info, when there are generated columns.
+        NamesAndTypes source_columns_of_analyzer;
+        source_columns_of_analyzer.reserve(table_scan_column_info.size());
+        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
-            DB::getColumnNamesFromExpr(filter, columns_to_read_name_and_type, filter_column_names);
+            auto const & ci = table_scan_column_info[i];
+            const auto cid = ci.id;
+            if (ci.hasGeneratedColumnFlag())
+            {
+                const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+                const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+                source_columns_of_analyzer.emplace_back(col_name, data_type);
+                continue;
+            }
+            RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
+            source_columns_of_analyzer.emplace_back(columns_to_read_map.at(cid).name, columns_to_read_map.at(cid).type);
+        }
+        // Get the columns of the filter, is a subset of columns_to_read
+        std::unordered_set<ColumnID> filter_col_id_set;
+        for (const auto & expr : pushed_down_filters)
+        {
+            getColumnIDsFromExpr(expr, table_scan_column_info, filter_col_id_set);
         }
         ColumnDefines filter_columns;
-        filter_columns.reserve(filter_column_names.size());
-        for (const auto & name : filter_column_names)
+        filter_columns.reserve(filter_col_id_set.size());
+        for (const auto & id : filter_col_id_set)
         {
             auto iter = std::find_if(
                 columns_to_read.begin(),
                 columns_to_read.end(),
-                [&name](const ColumnDefine & d) -> bool { return d.name == name; });
+                [&id](const ColumnDefine & d) -> bool { return d.id == id; });
             RUNTIME_CHECK(iter != columns_to_read.end());
             filter_columns.push_back(*iter);
         }
 
-        ColumnInfos table_scan_column_info;
-        table_scan_column_info.reserve(columns_to_read.size());
-        const auto & table_infos = tidb_table_info.columns;
-        for (const auto & col : columns_to_read)
-        {
-            auto iter = std::find_if(
-                table_infos.begin(),
-                table_infos.end(),
-                [col](const ColumnInfo & c) -> bool { return c.id == col.id; });
-            RUNTIME_CHECK(iter != table_infos.end());
-            table_scan_column_info.push_back(*iter);
-        }
-
+        // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
         std::vector<ExtraCastAfterTSMode> need_cast_column;
-        need_cast_column.reserve(columns_to_read.size());
+        need_cast_column.reserve(table_scan_column_info.size());
         for (const auto & col : table_scan_column_info)
         {
-            if (!filter_column_names.contains(col.name))
-            {
+            if (!filter_col_id_set.contains(col.id))
                 need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
             else
             {
                 if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
@@ -794,7 +808,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
             }
         }
 
-        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, context);
+        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
         ExpressionActionsChain chain;
         auto & step = analyzer->initAndGetLastStep(chain);
         auto & actions = step.actions;
@@ -804,7 +818,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
             NamesWithAliases project_cols;
             for (size_t i = 0; i < columns_to_read.size(); ++i)
             {
-                if (filter_column_names.contains(columns_to_read[i].name))
+                if (filter_col_id_set.contains(columns_to_read[i].id))
                 {
                     project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
                 }
@@ -822,12 +836,29 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         }
 
         // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(query_info.dag_query->pushed_down_filters, *analyzer);
+        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
         LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
         return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
     }
+    LOG_DEBUG(tracing_logger, "Push down filter is empty");
     return std::make_shared<PushDownFilter>(rs_operator);
+}
+
+DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
+{
+    // build rough set operator
+    DM::RSOperatorPtr rs_operator = buildRSOperator(query_info, columns_to_read, context, tracing_logger);
+
+    // build push down filter
+    if (query_info.dag_query == nullptr)
+        return std::make_shared<PushDownFilter>(rs_operator);
+    const auto & pushed_down_filters = query_info.dag_query->pushed_down_filters;
+    const auto & columns_to_read_info = query_info.dag_query->source_columns;
+    return buildPushDownFilter(rs_operator, columns_to_read_info, pushed_down_filters, columns_to_read, context, tracing_logger);
 }
 
 BlockInputStreams StorageDeltaMerge::read(

@@ -135,6 +135,6 @@ public:
     }
     /// Return grpc::Status::OK when the connection is established.
     /// Return non-OK grpc::Status when the connection can not be established.
-    grpc::Status establishMPPConnectionAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data);
+    grpc::Status establishMPPConnectionAsync(EstablishCallData * call_data);
 };
 } // namespace DB

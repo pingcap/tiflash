@@ -26,6 +26,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -48,7 +49,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-
 namespace DB::DM
 {
 
@@ -546,7 +546,20 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     }
     auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
-    LOG_DEBUG(log, "receive page, oid={}", oid);
+    LOG_DEBUG(log, "receive page, oid={} segment_id={}", oid, segment->segmentId());
+}
+
+bool RNRemoteSegmentReadTask::addConsumedMsg()
+{
+    num_msg_consumed += 1;
+    RUNTIME_CHECK(
+        num_msg_consumed <= num_msg_to_consume,
+        num_msg_consumed,
+        num_msg_to_consume,
+        segment->segmentId());
+
+    // return there are more pending msg or not
+    return num_msg_consumed < num_msg_to_consume;
 }
 
 void RNRemoteSegmentReadTask::prepare()
@@ -559,15 +572,17 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & key_ranges,
     UInt64 read_tso,
-    const DM::RSOperatorPtr & rs_filter,
-    size_t expected_block_size)
+    const PushDownFilterPtr & push_down_filter,
+    size_t expected_block_size,
+    ReadMode read_mode)
 {
-    return segment->getInputStreamModeNormal(
+    return segment->getInputStream(
+        read_mode,
         *dm_context,
         columns_to_read,
         segment_snap,
         key_ranges,
-        rs_filter,
+        push_down_filter,
         read_tso,
         expected_block_size);
 }

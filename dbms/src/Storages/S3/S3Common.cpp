@@ -27,6 +27,7 @@
 #include <Storages/S3/PocoHTTPClient.h>
 #include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
@@ -74,8 +75,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
-
 namespace ProfileEvents
 {
 extern const Event S3HeadObject;
@@ -87,6 +88,9 @@ extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
 extern const Event S3CopyObject;
 extern const Event S3PutObjectRetry;
+extern const Event S3PutDMFile;
+extern const Event S3PutDMFileRetry;
+extern const Event S3WriteDMFileBytes;
 } // namespace ProfileEvents
 
 namespace
@@ -379,16 +383,18 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
+namespace
+{
+bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
     {
-        return;
+        return true;
     }
 
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
-    Poco::URI uri(cfg.endpointOverride);
+    const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
@@ -399,7 +405,41 @@ void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
         cfg.region = Aws::Region::AWS_GLOBAL;
     }
+
+    if (uri.getScheme() == "https")
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTPS;
+    }
+    else
+    {
+        cfg.scheme = Aws::Http::Scheme::HTTP;
+    }
+    cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
+
+    bool use_virtual_address = true;
+    {
+        std::string_view view(cfg.endpointOverride);
+        if (auto pos = view.find("://"); pos != std::string_view::npos)
+        {
+            view.remove_prefix(pos + 3); // remove the "<Scheme>://" prefix
+        }
+        // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
+        // the service need virtual addressing to do load balancing.
+        // For deployed with local minio, the address contains fix port, we should disable virtual addressing
+        use_virtual_address = (view.find(':') == std::string_view::npos);
+    }
+
+    LOG_INFO(
+        log,
+        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} useVirtualAddressing={}}}",
+        cfg.endpointOverride,
+        cfg.region,
+        magic_enum::enum_name(cfg.scheme),
+        cfg.verifySSL,
+        use_virtual_address);
+    return use_virtual_address;
 }
+} // namespace
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
@@ -412,11 +452,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;
-        auto scheme = parseScheme(config_.endpoint);
-        cfg.scheme = scheme;
-        cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
-    updateRegionByEndpoint(cfg);
+    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
         Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
@@ -447,7 +484,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             provider,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ true);
+            /*userVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
@@ -459,16 +496,12 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ true);
+            /*useVirtualAddressing*/ use_virtual_addressing);
         LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
 }
 
-Aws::Http::Scheme ClientFactory::parseScheme(std::string_view endpoint)
-{
-    return boost::algorithm::starts_with(endpoint, "https://") ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
-}
 
 bool isNotFoundError(Aws::S3::S3Errors error)
 {
@@ -550,6 +583,7 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
 static bool doUploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, Int32 max_retry_times, Int32 current_retry)
 {
     Stopwatch sw;
+    auto is_dmfile = S3FilenameView::fromKey(remote_fname).isDMFile();
     Aws::S3::Model::PutObjectRequest req;
     client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
@@ -557,10 +591,10 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
     auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
-    ProfileEvents::increment(ProfileEvents::S3PutObject);
+    ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFile : ProfileEvents::S3PutObject);
     if (current_retry > 0)
     {
-        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+        ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFileRetry : ProfileEvents::S3PutObjectRetry);
     }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
@@ -584,9 +618,16 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
             return false;
         }
     }
-    ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
+    ProfileEvents::increment(is_dmfile ? ProfileEvents::S3WriteDMFileBytes : ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
+    if (is_dmfile)
+    {
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_put_dmfile).Observe(elapsed_seconds);
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
+    }
     LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.3f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
     return true;
 }
@@ -724,17 +765,17 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(client.log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
-    std::vector<Aws::S3::Model::Tag> filter_tags{Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")};
-    Aws::S3::Model::LifecycleRuleFilter filter;
-    filter.WithAnd(Aws::S3::Model::LifecycleRuleAndOperator()
-                       .WithPrefix("")
-                       .WithTags(filter_tags));
+    std::vector<Aws::S3::Model::Tag> filter_tags{
+        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
+    };
 
     Aws::S3::Model::LifecycleRule rule;
     rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
-        .WithFilter(filter)
+        .WithFilter(Aws::S3::Model::LifecycleRuleFilter()
+                        .WithAnd(Aws::S3::Model::LifecycleRuleAndOperator()
+                                     .WithPrefix("")
+                                     .WithTags(filter_tags)))
         .WithExpiration(Aws::S3::Model::LifecycleExpiration()
-                            .WithExpiredObjectDeleteMarker(false)
                             .WithDays(expire_days))
         .WithID("tiflashgc");
 
@@ -753,7 +794,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         const auto & error = outcome.GetError();
         LOG_WARNING(
             client.log,
-            "Create lifecycle rule with filter \"{}\" failed, please check the bucket lifecycle configuration or create the lifecycle rule manually"
+            "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or create the lifecycle rule manually"
             ", bucket={} {}",
             TaggingObjectIsDeleted,
             client.bucket(),

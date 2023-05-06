@@ -407,8 +407,8 @@ public:
         const std::vector<size_t> & main_capacity_quota,
         const Strings & latest_data_paths,
         const std::vector<size_t> & latest_capacity_quota,
-        const String & remote_cache_data_path = "",
-        size_t remote_cache_capacity = 0);
+        const Strings & remote_cache_paths = {},
+        const std::vector<size_t> & remote_cache_capacity_quota = {});
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializeTiFlashMetrics() const;

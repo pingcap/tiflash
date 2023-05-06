@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/TiFlashMetrics.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
@@ -92,6 +93,7 @@ try
         has_err = true;
     }
     ASSERT_TRUE(has_err);
+    ASSERT_TRUE(DB::GET_METRIC(tiflash_memory_exceed_quota_count).Value() > 0);
     ASSERT_EQ(500, child1->get());
     ASSERT_EQ(0, child2->get());
     ASSERT_EQ(500, root->get());

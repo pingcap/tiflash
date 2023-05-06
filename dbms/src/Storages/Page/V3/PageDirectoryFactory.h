@@ -78,6 +78,7 @@ private:
     BlobStats * blob_stats = nullptr;
 
     // For debug tool
+    template <typename T>
     friend class PageStorageControlV3;
     bool dump_entries = false;
 };

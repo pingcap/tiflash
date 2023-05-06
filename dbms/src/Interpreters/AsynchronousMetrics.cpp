@@ -113,7 +113,7 @@ void AsynchronousMetrics::run()
 template <typename Max, typename T>
 static void calculateMax(Max & max, T x)
 {
-    if (Max(x) > max)
+    if (static_cast<Max>(x) > max)
         max = x;
 }
 
@@ -121,7 +121,7 @@ template <typename Max, typename Sum, typename T>
 static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 {
     sum += x;
-    if (Max(x) > max)
+    if (static_cast<Max>(x) > max)
         max = x;
 }
 
@@ -172,7 +172,7 @@ FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
     case DisaggregatedMode::Compute:
     {
         // disagg compute node without auto-scaler, the proxy data are stored in the `uni_ps`
-        if (auto uni_ps = context.getWriteNodePageStorage(); uni_ps != nullptr)
+        if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
         {
             usage.merge(uni_ps->getFileUsageStatistics());
         }

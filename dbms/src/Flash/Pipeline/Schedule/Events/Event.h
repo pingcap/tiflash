@@ -52,33 +52,39 @@ public:
 
     void addInput(const EventPtr & input);
 
-    // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
-    // so these functions must be noexcept.
-    void schedule() noexcept;
+    void schedule();
 
-    void onTaskFinish() noexcept;
+    void onTaskFinish();
 
     // return true for source event.
-    bool prepareForSource();
+    bool prepare();
 
 protected:
-    // Returns the tasks ready to be scheduled.
-    virtual std::vector<TaskPtr> scheduleImpl() { return {}; }
+    // add task ready to be scheduled.
+    void addTask(TaskPtr && task);
+
+    // Generate the tasks ready to be scheduled and use `addTask` to add the tasks.
+    virtual void scheduleImpl() {}
 
     // So far the ownership and the life-cycle of the resources are not very well-defined so we still rely on things like "A must be released before B".
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
-private:
-    void scheduleTasks(std::vector<TaskPtr> & tasks) noexcept;
+    /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
+    void insertEvent(const EventPtr & insert_event);
 
-    void finish() noexcept;
+private:
+    void scheduleTasks();
+
+    void finish();
 
     void addOutput(const EventPtr & output);
 
-    void onInputFinish() noexcept;
+    void onInputFinish();
 
-    void switchStatus(EventStatus from, EventStatus to) noexcept;
+    void switchStatus(EventStatus from, EventStatus to);
+
+    void assertStatus(EventStatus expect);
 
 protected:
     PipelineExecutorStatus & exec_status;
@@ -91,6 +97,9 @@ private:
     Events outputs;
 
     std::atomic_int32_t unfinished_inputs{0};
+
+    // hold the tasks that ready to be scheduled.
+    std::vector<TaskPtr> tasks;
 
     std::atomic_int32_t unfinished_tasks{0};
 

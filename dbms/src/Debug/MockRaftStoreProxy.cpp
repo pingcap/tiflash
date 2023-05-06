@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <google/protobuf/text_format.h>
 
 namespace DB
 {
@@ -369,7 +370,8 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 void MockRaftStoreProxy::bootstrap(
     KVStore & kvs,
     TMTContext & tmt,
-    UInt64 region_id)
+    UInt64 region_id,
+    std::optional<std::pair<std::string, std::string>> maybe_range)
 {
     UNUSED(tmt);
     auto _ = genLockGuard();
@@ -378,7 +380,10 @@ void MockRaftStoreProxy::bootstrap(
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
     {
-        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10));
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id + 1, 0);
+        auto range = maybe_range.value_or(std::make_pair(start.toString(), end.toString()));
+        auto region = tests::makeRegion(region_id, range.first, range.second);
         lock.regions.emplace(region_id, region);
         lock.index.add(region);
     }
@@ -590,11 +595,12 @@ void MockRaftStoreProxy::replay(
     }
 }
 
-void MockRaftStoreProxy::Cf::finish_file()
+void MockRaftStoreProxy::Cf::finish_file(SSTFormatKind kind)
 {
     if (freezed)
         return;
     auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
+    region_id_str = MockRaftStoreProxy::encodeSSTView(kind, region_id_str);
     c++;
     sst_files.push_back(region_id_str);
     MockSSTReader::Data kv_list;
@@ -640,6 +646,11 @@ void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)
     kvs.emplace_back(k, v);
 }
 
+void MockRaftStoreProxy::Cf::insert_raw(std::string key, std::string val)
+{
+    kvs.emplace_back(std::move(key), std::move(val));
+}
+
 void MockRaftStoreProxy::snapshot(
     KVStore & kvs,
     TMTContext & tmt,
@@ -649,10 +660,15 @@ void MockRaftStoreProxy::snapshot(
     uint64_t term)
 {
     auto region = getRegion(region_id);
-    auto kv_region = kvs.getRegion(region_id);
+    auto old_kv_region = kvs.getRegion(region_id);
     // We have catch up to index by snapshot.
-    index = region->getLatestCommitIndex() + 1;
-    term = region->getLatestCommitTerm();
+    if (index == 0)
+    {
+        index = region->getLatestCommitIndex() + 1;
+        term = region->getLatestCommitTerm();
+    }
+
+    auto new_kv_region = kvs.genRegionPtr(old_kv_region->getMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 
@@ -667,16 +683,16 @@ void MockRaftStoreProxy::snapshot(
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
     auto ingest_ids = kvs.preHandleSnapshotToFiles(
-        kv_region,
+        new_kv_region,
         snaps,
         index,
         term,
         tmt);
 
-    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{kv_region, std::move(ingest_ids)}, tmt);
+    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
-    kv_region->setApplied(index, term);
+    new_kv_region->setApplied(index, term);
 }
 
 TableID MockRaftStoreProxy::bootstrap_table(
@@ -690,6 +706,8 @@ TableID MockRaftStoreProxy::bootstrap_table(
     columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
     auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
+    // Make sure there is a table with smaller id.
+    MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
     UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
     auto schema_syncer = tmt.getSchemaSyncer();

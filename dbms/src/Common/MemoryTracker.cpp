@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/MemoryTracker.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
@@ -66,7 +67,8 @@ static Poco::Logger * getLogger()
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
-    LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
+    const char * tmp_decr = description.load();
+    LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (tmp_decr ? " " + std::string(tmp_decr) : ""), formatReadableSizeWithBinarySuffix(peak));
 }
 
 void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
@@ -88,8 +90,9 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         {
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
-            if (description)
-                fmt_buf.fmtAppend(" {}", description);
+            const char * tmp_decr = description.load();
+            if (tmp_decr)
+                fmt_buf.fmtAppend(" {}", tmp_decr);
 
             fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, memory usage tracked by ProcessList: peak {}, current {}, memory usage not tracked by ProcessList: peak {}, current {} . Virtual memory size: {}",
                               formatReadableSizeWithBinarySuffix(real_rss),
@@ -111,8 +114,9 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
-            if (description)
-                fmt_buf.fmtAppend(" {}", description);
+            const char * tmp_decr = description.load();
+            if (tmp_decr)
+                fmt_buf.fmtAppend(" {}", tmp_decr);
             fmt_buf.fmtAppend(": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
                               formatReadableSizeWithBinarySuffix(will_be),
                               size,
@@ -127,12 +131,14 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {
+            DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
             amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
-            if (description)
-                fmt_buf.fmtAppend(" {}", description);
+            const char * tmp_decr = description.load();
+            if (tmp_decr)
+                fmt_buf.fmtAppend(" {}", tmp_decr);
 
             if (!is_rss_too_large)
             { // out of memory quota

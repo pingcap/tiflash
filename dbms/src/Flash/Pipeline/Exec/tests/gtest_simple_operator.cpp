@@ -17,6 +17,7 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -35,7 +36,7 @@ public:
         : SinkOp(exec_status_, req_id)
         , result_handler(std::move(result_handler_))
     {
-        assert(!result_handler.isIgnored());
+        assert(result_handler);
     }
 
     String getName() const override

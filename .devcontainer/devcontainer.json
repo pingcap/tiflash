@@ -1,12 +1,35 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
   "name": "TiFlash",
-  "dockerComposeFile": [
-    "docker-compose.yml",
-    "docker-compose.vscode.yml"
+  "build": {
+    "dockerfile": "Dockerfile",
+  },
+  // "init": true,
+  "capAdd": [
+    "SYS_PTRACE",
   ],
-  "service": "shell",
-  "workspaceFolder": "/workspace",
+  "securityOpt": [
+    "seccomp=unconfined",
+  ],
+  "mounts": [
+    // Cache Cargo downloaded deps
+    "source=${localEnv:HOME}/.cargo/registry,target=/home/dev/.cargo/registry,type=bind",
+    "source=${localEnv:HOME}/.cargo/git,target=/home/dev/.cargo/git,type=bind",
+    // Cache Rust toolchain
+    // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
+    "source=${localEnv:HOME}/.rustup,target=/home/dev/.rustup,type=bind",
+    // Cache ccache results
+    "source=${localEnv:HOME}/.cache/ccache,target=/home/dev/.cache/ccache,type=bind",
+    // Persist GitHub CLI Config locally
+    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind",
+    // VSCode Extensions
+    "source=${localEnv:HOME}/.vscode-server/extensions,target=/home/dev/.vscode-server/extensions,type=bind",
+  ],
+  // Ensure mount source directories exist.
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.cargo/registry ${localEnv:HOME}/.cargo/git ${localEnv:HOME}/.rustup ${localEnv:HOME}/.cache/ccache ${localEnv:HOME}/.config/gh ${localEnv:HOME}/.vscode-server/extensions",
+  "remoteUser": "dev",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/dev/workspace,type=bind",
+  "workspaceFolder": "/home/dev/workspace",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -37,7 +60,7 @@
         "cmake.generator": "Ninja",
         "cmake.configureOnOpen": true,
         "testMate.cpp.test.executables": "cmake-build-*/**/gtests_*",
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh",
       }
     }
   }

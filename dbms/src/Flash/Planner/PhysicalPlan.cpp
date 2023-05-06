@@ -64,7 +64,7 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
 
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
-    assert(dag_request);
+    RUNTIME_CHECK(dag_request);
     traverseExecutorsReverse(
         dag_request,
         [&](const tipb::Executor & executor) {
@@ -85,8 +85,8 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
 
 void PhysicalPlan::build(const tipb::Executor * executor)
 {
-    assert(executor);
-    assert(executor->has_executor_id());
+    RUNTIME_CHECK(executor);
+    RUNTIME_CHECK(executor->has_executor_id());
     const auto & executor_id = executor->executor_id();
     switch (executor->tp())
     {
@@ -214,7 +214,7 @@ DAGContext & PhysicalPlan::dagContext() const
 
 void PhysicalPlan::pushBack(const PhysicalPlanNodePtr & plan_node)
 {
-    assert(plan_node);
+    RUNTIME_CHECK(plan_node);
     cur_plan_nodes.push_back(plan_node);
 }
 
@@ -222,7 +222,7 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 {
     RUNTIME_CHECK(!cur_plan_nodes.empty());
     PhysicalPlanNodePtr back = cur_plan_nodes.back();
-    assert(back);
+    RUNTIME_CHECK(back);
     cur_plan_nodes.pop_back();
     return back;
 }
@@ -231,7 +231,7 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 /// For batchcop/cop that without PhysicalExchangeSender or PhysicalMockExchangeSender, We need to add root final projection.
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
     {
         pushBack(root_node);
@@ -265,21 +265,21 @@ PhysicalPlanNodePtr PhysicalPlan::outputAndOptimize()
 
 String PhysicalPlan::toString() const
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
 void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline()
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorStatus & exec_status, Context & context)
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};
-    root_node->buildPipeline(builder);
+    root_node->buildPipeline(builder, context, exec_status);
     root_node.reset();
     auto pipeline = builder.build();
     auto to_string = [&]() -> String {

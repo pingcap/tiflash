@@ -625,7 +625,7 @@ public:
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
-                /// TCP with SSL
+                /// TCP with SSL (Not supported yet)
                 if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
                 {
 #if Poco_NetSSL_FOUND
@@ -655,9 +655,8 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
-                /// TCP servers must be created.
                 if (servers.empty())
-                    throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+                    LOG_WARNING(log, "No TCP and HTTP servers are created");
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -677,10 +676,6 @@ public:
                     throw;
             }
         }
-
-        if (servers.empty())
-            throw Exception("No servers started (add valid listen_host and 'tcp_port' or 'http_port' to configuration file.)",
-                            ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
         for (auto & server : servers)
             server->start();
@@ -1099,14 +1094,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
+    const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto [remote_cache_paths, remote_cache_capacity_quota] = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
         storage_config.latest_capacity_quota,
-        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
-        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
+        remote_cache_paths,
+        remote_cache_capacity_quota);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1114,7 +1111,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_compute_mode)
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);

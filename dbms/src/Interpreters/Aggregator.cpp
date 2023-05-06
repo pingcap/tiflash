@@ -65,6 +65,22 @@ AggregatedDataVariants::~AggregatedDataVariants()
     destroyAggregationMethodImpl();
 }
 
+bool AggregatedDataVariants::tryMarkNeedSpill()
+{
+    assert(!need_spill);
+    if (empty())
+        return false;
+    if (!isTwoLevel())
+    {
+        /// Data can only be flushed to disk if a two-level aggregation is supported.
+        if (!isConvertibleToTwoLevel())
+            return false;
+        convertToTwoLevel();
+    }
+    need_spill = true;
+    return true;
+}
+
 void AggregatedDataVariants::destroyAggregationMethodImpl()
 {
     if (!aggregation_method_impl)
@@ -719,6 +735,8 @@ bool Aggregator::executeOnBlock(
     ColumnRawPtrs & key_columns,
     AggregateColumns & aggregate_columns)
 {
+    assert(!result.need_spill);
+
     if (is_cancelled())
         return true;
 
@@ -811,15 +829,11 @@ bool Aggregator::executeOnBlock(
         result.convertToTwoLevel();
 
     /** Flush data to disk if too much RAM is consumed.
-      * Data can only be flushed to disk if a two-level aggregation is supported.
       */
     if (max_bytes_before_external_group_by && result_size > 0
-        && (result.isTwoLevel() || result.isConvertibleToTwoLevel())
         && result_size_bytes > max_bytes_before_external_group_by)
     {
-        if (!result.isTwoLevel())
-            result.convertToTwoLevel();
-        spill(result);
+        result.tryMarkNeedSpill();
     }
 
     return true;
@@ -847,6 +861,12 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 
 void Aggregator::spill(AggregatedDataVariants & data_variants)
 {
+    assert(data_variants.need_spill);
+    bool init_value = false;
+    if (spill_triggered.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
+    {
+        LOG_INFO(log, "Begin spill in aggregator");
+    }
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \
@@ -867,6 +887,7 @@ void Aggregator::spill(AggregatedDataVariants & data_variants)
 
     /// NOTE Instead of freeing up memory and creating new hash tables and arenas, you can re-use the old ones.
     data_variants.init(data_variants.type);
+    data_variants.need_spill = false;
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
     data_variants.without_key = nullptr;
@@ -973,12 +994,18 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
         if (!executeOnBlock(block, result, key_columns, aggregate_columns))
             break;
+        if (result.need_spill)
+            spill(result);
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
+    {
         executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns);
+        if (result.need_spill)
+            spill(result);
+    }
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.size();

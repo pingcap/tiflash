@@ -25,13 +25,17 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 #include <mutex>
 #include <random>
 #include <set>
 #include <unordered_map>
+#include <utility>
+
 
 namespace DB
 {
@@ -143,6 +147,7 @@ StoragePathPool::StoragePathPool( //
     FileProviderPtr file_provider_)
     : database(std::move(database_))
     , table(std::move(table_))
+    , keyspace_id(SchemaNameMapper::getMappedNameKeyspaceID(table_))
     , path_need_database_name(path_need_database_name_)
     , shutdown_called(false)
     , global_capacity(std::move(global_capacity_))
@@ -170,13 +175,12 @@ StoragePathPool::StoragePathPool(StoragePathPool && rhs) noexcept
     , latest_path_infos(std::move(rhs.latest_path_infos))
     , database(std::move(rhs.database))
     , table(std::move(rhs.table))
+    , keyspace_id(rhs.keyspace_id)
     , dt_file_path_map(std::move(rhs.dt_file_path_map))
     , path_need_database_name(rhs.path_need_database_name)
     , shutdown_called(rhs.shutdown_called.load())
     , global_capacity(std::move(rhs.global_capacity))
     , file_provider(std::move(rhs.file_provider))
-    , s3_stable_path(std::move(rhs.s3_stable_path))
-    , s3_file_ids(std::move(rhs.s3_file_ids))
     , log(std::move(rhs.log))
 {}
 
@@ -189,12 +193,11 @@ StoragePathPool & StoragePathPool::operator=(StoragePathPool && rhs)
         dt_file_path_map.swap(rhs.dt_file_path_map);
         database.swap(rhs.database);
         table.swap(rhs.table);
+        keyspace_id = rhs.keyspace_id;
         path_need_database_name = rhs.path_need_database_name;
         shutdown_called = rhs.shutdown_called.load();
         global_capacity.swap(rhs.global_capacity);
         file_provider.swap(rhs.file_provider);
-        s3_stable_path.swap(rhs.s3_stable_path);
-        s3_file_ids.swap(rhs.s3_file_ids);
         log.swap(rhs.log);
     }
     return *this;
@@ -316,6 +319,12 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             }
         }
     }
+    for (const auto & [local_file_id, size_entry] : remote_dt_file_size_map)
+    {
+        UNUSED(local_file_id);
+        global_capacity->freeRemoteUsedSize(keyspace_id, size_entry.second);
+    }
+    remote_dt_file_size_map.clear();
 }
 
 //==========================================================================================
@@ -554,25 +563,63 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     pool.global_capacity->freeUsedSize(pool.main_path_infos[index].path, file_size);
 }
 
-void StableDiskDelegator::addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_)
+void StableDiskDelegator::addRemoteDTFileIfNotExists(UInt64 local_external_id, size_t file_size)
 {
-    RUNTIME_CHECK(!s3_stable_path_.empty(), s3_stable_path_);
-    RUNTIME_CHECK(pool.s3_stable_path.empty() && pool.s3_file_ids.empty(), pool.s3_stable_path); // Can only `addS3DTFiles` one time.
-    pool.s3_stable_path = s3_stable_path_;
-    pool.s3_file_ids = std::move(file_ids_);
+    std::lock_guard lock{pool.mutex};
+    auto [iter, inserted] = pool.remote_dt_file_size_map.emplace(local_external_id, std::make_pair(true, file_size));
+    if (!inserted)
+    {
+        RUNTIME_CHECK(iter->second.second == file_size, iter->second.second, file_size);
+        return;
+    }
+    // update global used size
+    pool.global_capacity->addRemoteUsedSize(pool.keyspace_id, file_size);
 }
 
-String StableDiskDelegator::getS3DTFile(UInt64 file_id)
+void StableDiskDelegator::addRemoteDTFileWithGCDisabled(UInt64 local_external_id, size_t file_size)
 {
-    auto iter = pool.s3_file_ids.find(file_id);
-    RUNTIME_CHECK_MSG(iter != pool.s3_file_ids.end(), "file_id={} is not a DMFile in S3", file_id);
-    return pool.s3_stable_path;
+    std::lock_guard lock{pool.mutex};
+    auto [_, inserted] = pool.remote_dt_file_size_map.emplace(local_external_id, std::make_pair(false, file_size));
+    RUNTIME_CHECK(inserted);
+    // update global used size
+    pool.global_capacity->addRemoteUsedSize(pool.keyspace_id, file_size);
 }
 
-void StableDiskDelegator::addS3DTFileSize(UInt64 /*file_id*/, size_t /*size*/)
+void StableDiskDelegator::enableGCForRemoteDTFile(UInt64 local_page_id)
 {
-    // TODO: support S3.
+    std::lock_guard lock{pool.mutex};
+    auto iter = pool.remote_dt_file_size_map.find(local_page_id);
+    // local_page_id may be a ref id, so it may not in remote_dt_file_size_map
+    if (iter != pool.remote_dt_file_size_map.end())
+    {
+        iter->second.first = true;
+    }
 }
+
+void StableDiskDelegator::removeRemoteDTFile(UInt64 local_external_id)
+{
+    std::lock_guard lock{pool.mutex};
+    auto iter = pool.remote_dt_file_size_map.find(local_external_id);
+    RUNTIME_CHECK(iter != pool.remote_dt_file_size_map.end());
+    // update global used size
+    pool.global_capacity->freeRemoteUsedSize(pool.keyspace_id, iter->second.second);
+    pool.remote_dt_file_size_map.erase(iter);
+}
+
+std::set<UInt64> StableDiskDelegator::getAllRemoteDTFilesForGC()
+{
+    std::lock_guard lock{pool.mutex};
+    std::set<UInt64> all_local_external_ids;
+    for (auto & [local_external_id, pair] : pool.remote_dt_file_size_map)
+    {
+        if (pair.first)
+        {
+            all_local_external_ids.insert(local_external_id);
+        }
+    }
+    return all_local_external_ids;
+}
+
 //==========================================================================================
 // Delta data
 //==========================================================================================

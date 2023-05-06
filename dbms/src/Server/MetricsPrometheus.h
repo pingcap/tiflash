@@ -24,6 +24,8 @@ namespace DB
 {
 class AsynchronousMetrics;
 class Context;
+class PathCapacityMetrics;
+using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 
 /**    Automatically sends
   * - difference of ProfileEvents;
@@ -45,6 +47,7 @@ private:
     void run();
 
     Timer timer;
+    PathCapacityMetricsPtr path_capacity_metrics;
     const AsynchronousMetrics & async_metrics;
     LoggerPtr log;
 

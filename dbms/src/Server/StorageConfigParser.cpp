@@ -639,7 +639,17 @@ void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & l
     RUNTIME_CHECK(dtfile_level <= 100);
     readConfig(table, "delta_rate", delta_rate);
     RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
-    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}", dir, capacity, dtfile_level, delta_rate);
+    readConfig(table, "reserved_rate", reserved_rate);
+    RUNTIME_CHECK(std::isgreaterequal(reserved_rate, 0.0) && std::islessequal(reserved_rate, 0.5), reserved_rate);
+    RUNTIME_CHECK(std::islessequal(delta_rate + reserved_rate, 1.0), delta_rate, reserved_rate);
+    LOG_INFO(
+        log,
+        "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}, reserved_rate={}",
+        dir,
+        capacity,
+        dtfile_level,
+        delta_rate,
+        reserved_rate);
 }
 
 bool StorageRemoteCacheConfig::isCacheEnabled() const
@@ -677,12 +687,29 @@ String StorageRemoteCacheConfig::getPageCacheDir() const
 
 UInt64 StorageRemoteCacheConfig::getDTFileCapacity() const
 {
-    return capacity - getPageCapacity();
+    return capacity - getPageCapacity() - getReservedCapacity();
 }
 
 UInt64 StorageRemoteCacheConfig::getPageCapacity() const
 {
     return capacity * delta_rate;
+}
+
+UInt64 StorageRemoteCacheConfig::getReservedCapacity() const
+{
+    return capacity * reserved_rate;
+}
+
+std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInfos(bool is_compute_mode) const
+{
+    if (is_compute_mode && isCacheEnabled())
+    {
+        return {Strings{getDTFileCacheDir(), getPageCacheDir()}, std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
+    }
+    else
+    {
+        return {};
+    }
 }
 
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 #include <Core/Types.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 
@@ -42,14 +43,20 @@ public:
                         const std::vector<size_t> & main_capacity_quota_, //
                         const Strings & latest_paths_,
                         const std::vector<size_t> & latest_capacity_quota_,
-                        String remote_cache_path = "",
-                        size_t remote_cache_capacity = 0);
+                        const Strings & remote_cache_paths = {},
+                        const std::vector<size_t> & remote_cache_capacity_quota_ = {});
 
     virtual ~PathCapacityMetrics() = default;
 
     void addUsedSize(std::string_view file_path, size_t used_bytes);
 
     void freeUsedSize(std::string_view file_path, size_t used_bytes);
+
+    void addRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes);
+
+    void freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used_bytes);
+
+    std::unordered_map<KeyspaceID, UInt64> getKeyspaceUsedSizes();
 
     FsStats getFsStats(bool finalize_capacity = true);
 
@@ -95,6 +102,10 @@ private:
     // 0 means no quota, use the whole disk.
     size_t capacity_quota;
     std::vector<CapacityInfo> path_infos;
+
+    // Used to protect `keyspace_id_to_used_bytes`
+    std::mutex mutex;
+    std::unordered_map<KeyspaceID, UInt64> keyspace_id_to_used_bytes;
     LoggerPtr log;
 };
 

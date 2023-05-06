@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <IO/ReadBufferFromString.h>
 
@@ -96,12 +97,21 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
         return;
 
     auto && mutable_columns = res.mutateColumns();
-    for (auto && column : mutable_columns)
+    const auto & name_and_type_list = res.getColumnsWithTypeAndName();
+    size_t column_size = mutable_columns.size();
+    for (size_t i = 0; i < column_size; ++i)
     {
-        if (reserve_size > 0)
-            column->reserve(std::max(rows_to_read, reserve_size));
-        else
-            column->reserve(rows_to_read + column->size());
+        auto && column = mutable_columns[i];
+        /// For non-fixed size type, reserve function might cause too much memory usage, i.e. string type column reserves 64 bytes
+        /// size for each element.
+        const auto & type_removed_nullable = removeNullable(name_and_type_list[i].type);
+        if (type_removed_nullable->isValueRepresentedByNumber() || type_removed_nullable->isFixedString())
+        {
+            if (reserve_size > 0)
+                column->reserve(std::max(rows_to_read, reserve_size));
+            else
+                column->reserve(rows_to_read + column->size());
+        }
     }
 
     // Contain columns of multi blocks
