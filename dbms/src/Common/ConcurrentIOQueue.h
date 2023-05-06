@@ -45,7 +45,7 @@ public:
         thread_local MPMCQueueDetail::WaitingNode node;
 #endif
         std::unique_lock lock(mu);
-        wait(lock, writer_head, node, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        writer_head.wait(lock, node, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
@@ -106,7 +106,7 @@ public:
         thread_local MPMCQueueDetail::WaitingNode node;
 #endif
         std::unique_lock lock(mu);
-        wait(lock, reader_head, node, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        reader_head.wait(lock, node, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
@@ -193,39 +193,6 @@ public:
     }
 
 private:
-    template <typename Pred>
-    ALWAYS_INLINE void wait(
-        std::unique_lock<std::mutex> & lock,
-        MPMCQueueDetail::WaitingNode & head,
-        MPMCQueueDetail::WaitingNode & node,
-        Pred pred)
-    {
-        while (!pred())
-        {
-            node.prependTo(&head);
-            node.cv.wait(lock);
-            node.detach();
-        }
-    }
-
-    ALWAYS_INLINE void notifyNext(MPMCQueueDetail::WaitingNode & head)
-    {
-        auto * next = head.next;
-        if (next != &head)
-        {
-            next->cv.notify_one();
-            next->detach(); // avoid being notified more than once
-        }
-    }
-
-    ALWAYS_INLINE void notifyAll()
-    {
-        for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
-            p->next->cv.notify_one();
-        for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
-            p->next->cv.notify_one();
-    }
-
     template <typename FF>
     ALWAYS_INLINE bool changeStatus(FF && ff)
     {
@@ -233,7 +200,8 @@ private:
         if likely (status == MPMCQueueStatus::NORMAL)
         {
             ff();
-            notifyAll();
+            reader_head.notifyAll();
+            writer_head.notifyAll();
             return true;
         }
         return false;
@@ -243,7 +211,7 @@ private:
     {
         auto data = std::move(queue.back());
         queue.pop_back();
-        notifyNext(writer_head);
+        writer_head.notifyNext();
         return data;
     }
 
@@ -251,7 +219,7 @@ private:
     ALWAYS_INLINE void pushFront(U && data)
     {
         queue.emplace_front(std::forward<U>(data));
-        notifyNext(reader_head);
+        reader_head.notifyNext();
     }
 
 private:

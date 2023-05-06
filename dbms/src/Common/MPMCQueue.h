@@ -35,8 +35,57 @@ namespace MPMCQueueDetail
 /// every time a push/pop succeeds, it can notify next reader/writer in fifo.
 ///
 /// Double link is to support remove self from the mid of the list when timeout.
-struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
+class WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 {
+public:
+    ALWAYS_INLINE void notifyNext()
+    {
+        if (next != this)
+        {
+            next->cv.notify_one();
+            next->detach(); // avoid being notified more than once
+        }
+    }
+
+    ALWAYS_INLINE void notifyAll()
+    {
+        for (auto * p = this; p->next != this; p = p->next)
+            p->next->cv.notify_one();
+    }
+
+    template <typename Pred>
+    ALWAYS_INLINE void wait(
+        std::unique_lock<std::mutex> & lock,
+        MPMCQueueDetail::WaitingNode & node,
+        Pred pred)
+    {
+        while (!pred())
+        {
+            node.prependTo(this);
+            node.cv.wait(lock);
+            node.detach();
+        }
+    }
+
+    template <typename Pred>
+    ALWAYS_INLINE bool waitFor(
+        std::unique_lock<std::mutex> & lock,
+        WaitingNode & node,
+        Pred pred,
+        const std::chrono::steady_clock::time_point & deadline)
+    {
+        while (!pred())
+        {
+            node.prependTo(this);
+            auto res = node.cv.wait_until(lock, deadline);
+            node.detach();
+            if (res == std::cv_status::timeout)
+                return false;
+        }
+        return true;
+    }
+
+private:
     std::condition_variable cv;
 };
 } // namespace MPMCQueueDetail
@@ -246,10 +295,8 @@ private:
 
     void notifyAll()
     {
-        for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
-            p->next->cv.notify_one();
-        for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
-            p->next->cv.notify_one();
+        reader_head.notifyAll();
+        writer_head.notifyAll();
     }
 
     template <typename Pred>
@@ -262,34 +309,12 @@ private:
     {
         if (deadline)
         {
-            while (!pred())
-            {
-                node.prependTo(&head);
-                auto res = node.cv.wait_until(lock, *deadline);
-                node.detach();
-                if (res == std::cv_status::timeout)
-                    return false;
-            }
+            return head.waitFor(lock, node, pred, *deadline);
         }
         else
         {
-            while (!pred())
-            {
-                node.prependTo(&head);
-                node.cv.wait(lock);
-                node.detach();
-            }
-        }
-        return true;
-    }
-
-    ALWAYS_INLINE void notifyNext(WaitingNode & head)
-    {
-        auto * next = head.next;
-        if (next != &head)
-        {
-            next->cv.notify_one();
-            next->detach(); // avoid being notified more than once
+            head.wait(lock, node, pred);
+            return true;
         }
     }
 
@@ -335,7 +360,7 @@ private:
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
             if (current_auxiliary_memory_usage < max_auxiliary_memory_usage)
-                notifyNext(writer_head);
+                writer_head.notifyNext();
             return Result::OK;
         }
         if constexpr (need_wait)
@@ -386,7 +411,7 @@ private:
             ++write_pos;
 
             /// See comments in `popObj`.
-            notifyNext(reader_head);
+            reader_head.notifyNext();
             return Result::OK;
         }
         if constexpr (need_wait)
