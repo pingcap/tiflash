@@ -56,7 +56,7 @@ public:
     template <typename Pred>
     ALWAYS_INLINE void wait(
         std::unique_lock<std::mutex> & lock,
-        MPMCQueueDetail::WaitingNode & node,
+        WaitingNode & node,
         Pred pred)
     {
         while (!pred())
