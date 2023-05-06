@@ -39,13 +39,8 @@ public:
     /// Just like MPMCQueue::push.
     MPMCQueueResult push(T && data)
     {
-#ifdef __APPLE__
-        MPMCQueueDetail::WaitingNode node;
-#else
-        thread_local MPMCQueueDetail::WaitingNode node;
-#endif
         std::unique_lock lock(mu);
-        writer_head.wait(lock, node, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        writer_head.wait(lock, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
@@ -100,13 +95,8 @@ public:
 
     MPMCQueueResult pop(T & data)
     {
-#ifdef __APPLE__
-        MPMCQueueDetail::WaitingNode node;
-#else
-        thread_local MPMCQueueDetail::WaitingNode node;
-#endif
         std::unique_lock lock(mu);
-        reader_head.wait(lock, node, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        reader_head.wait(lock, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {

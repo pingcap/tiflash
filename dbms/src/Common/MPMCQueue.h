@@ -56,9 +56,13 @@ public:
     template <typename Pred>
     ALWAYS_INLINE void wait(
         std::unique_lock<std::mutex> & lock,
-        WaitingNode & node,
         Pred pred)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
+        thread_local WaitingNode node;
+#endif
         while (!pred())
         {
             node.prependTo(this);
@@ -70,10 +74,14 @@ public:
     template <typename Pred>
     ALWAYS_INLINE bool waitFor(
         std::unique_lock<std::mutex> & lock,
-        WaitingNode & node,
         Pred pred,
         const std::chrono::steady_clock::time_point & deadline)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
+        thread_local WaitingNode node;
+#endif
         while (!pred())
         {
             node.prependTo(this);
@@ -303,17 +311,16 @@ private:
     ALWAYS_INLINE bool wait(
         std::unique_lock<std::mutex> & lock,
         WaitingNode & head,
-        WaitingNode & node,
         Pred pred,
         const TimePoint * deadline)
     {
         if (deadline)
         {
-            return head.waitFor(lock, node, pred, *deadline);
+            return head.waitFor(lock, pred, *deadline);
         }
         else
         {
-            head.wait(lock, node, pred);
+            head.wait(lock, pred);
             return true;
         }
     }
@@ -321,11 +328,6 @@ private:
     template <bool need_wait>
     Result popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
     {
-#ifdef __APPLE__
-        WaitingNode node;
-#else
-        thread_local WaitingNode node;
-#endif
         std::unique_lock lock(mu);
         bool is_timeout = false;
 
@@ -335,7 +337,7 @@ private:
             auto pred = [&] {
                 return read_pos < write_pos || !isNormal();
             };
-            if (!wait(lock, reader_head, node, pred, deadline))
+            if (!wait(lock, reader_head, pred, deadline))
                 is_timeout = true;
         }
         /// double check status after potential wait
@@ -382,11 +384,6 @@ private:
     template <bool need_wait, typename F>
     Result assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
     {
-#ifdef __APPLE__
-        WaitingNode node;
-#else
-        thread_local WaitingNode node;
-#endif
         std::unique_lock lock(mu);
         bool is_timeout = false;
 
@@ -395,7 +392,7 @@ private:
             auto pred = [&] {
                 return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage) || !isNormal();
             };
-            if (!wait(lock, writer_head, node, pred, deadline))
+            if (!wait(lock, writer_head, pred, deadline))
                 is_timeout = true;
         }
 
