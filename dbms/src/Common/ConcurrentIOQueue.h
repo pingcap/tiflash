@@ -39,14 +39,17 @@ public:
     /// Just like MPMCQueue::push.
     MPMCQueueResult push(T && data)
     {
+#ifdef __APPLE__
+        MPMCQueueDetail::WaitingNode node;
+#else
+        thread_local MPMCQueueDetail::WaitingNode node;
+#endif
         std::unique_lock lock(mu);
-
-        push_cv.wait(lock, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        wait(lock, writer_head, node, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
-            queue.emplace_front(std::move(data));
-            pop_cv.notify_one();
+            pushFront(std::move(data));
             return MPMCQueueResult::OK;
         }
 
@@ -75,8 +78,7 @@ public:
         if (queue.size() >= capacity)
             return MPMCQueueResult::FULL;
 
-        queue.emplace_front(std::forward<U>(data));
-        pop_cv.notify_one();
+        pushFront(std::forward<U>(data));
         return MPMCQueueResult::OK;
     }
 
@@ -92,22 +94,23 @@ public:
         if unlikely (status == MPMCQueueStatus::FINISHED)
             return MPMCQueueResult::FINISHED;
 
-        queue.push_front(std::move(data));
-        pop_cv.notify_one();
+        pushFront(std::move(data));
         return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult pop(T & data)
     {
+#ifdef __APPLE__
+        MPMCQueueDetail::WaitingNode node;
+#else
+        thread_local MPMCQueueDetail::WaitingNode node;
+#endif
         std::unique_lock lock(mu);
-
-        pop_cv.wait(lock, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
+        wait(lock, reader_head, node, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
-            data = std::move(queue.back());
-            queue.pop_back();
-            push_cv.notify_one();
+            data = popBack();
             return MPMCQueueResult::OK;
         }
 
@@ -134,9 +137,7 @@ public:
                 ? MPMCQueueResult::EMPTY
                 : MPMCQueueResult::FINISHED;
 
-        data = std::move(queue.back());
-        queue.pop_back();
-        push_cv.notify_one();
+        data = popBack();
         return MPMCQueueResult::OK;
     }
 
@@ -192,26 +193,75 @@ public:
     }
 
 private:
+    template <typename Pred>
+    ALWAYS_INLINE void wait(
+        std::unique_lock<std::mutex> & lock,
+        MPMCQueueDetail::WaitingNode & head,
+        MPMCQueueDetail::WaitingNode & node,
+        Pred pred)
+    {
+        while (!pred())
+        {
+            node.prependTo(&head);
+            node.cv.wait(lock);
+            node.detach();
+        }
+    }
+
+    ALWAYS_INLINE void notifyNext(MPMCQueueDetail::WaitingNode & head)
+    {
+        auto * next = head.next;
+        if (next != &head)
+        {
+            next->cv.notify_one();
+            next->detach(); // avoid being notified more than once
+        }
+    }
+
+    ALWAYS_INLINE void notifyAll()
+    {
+        for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
+            p->next->cv.notify_one();
+        for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
+            p->next->cv.notify_one();
+    }
+
     template <typename FF>
-    bool changeStatus(FF && ff)
+    ALWAYS_INLINE bool changeStatus(FF && ff)
     {
         std::lock_guard lock(mu);
         if likely (status == MPMCQueueStatus::NORMAL)
         {
             ff();
-            pop_cv.notify_all();
-            push_cv.notify_all();
+            notifyAll();
             return true;
         }
         return false;
     }
 
+    ALWAYS_INLINE T popBack()
+    {
+        auto data = std::move(queue.back());
+        queue.pop_back();
+        notifyNext(writer_head);
+        return data;
+    }
+
+    template <typename U>
+    ALWAYS_INLINE void pushFront(U && data)
+    {
+        queue.emplace_front(std::forward<U>(data));
+        notifyNext(reader_head);
+    }
+
 private:
     mutable std::mutex mu;
+
     std::deque<T> queue;
     size_t capacity;
-    std::condition_variable pop_cv;
-    std::condition_variable push_cv;
+
+    MPMCQueueDetail::WaitingNode reader_head;
+    MPMCQueueDetail::WaitingNode writer_head;
 
     MPMCQueueStatus status = MPMCQueueStatus::NORMAL;
     String cancel_reason;
