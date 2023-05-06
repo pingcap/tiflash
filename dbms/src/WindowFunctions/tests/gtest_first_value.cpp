@@ -21,6 +21,7 @@ namespace DB::tests
 class FirstValue : public DB::tests::ExecutorTest
 {
     static const size_t max_concurrency_level = 10;
+
 public:
     static constexpr auto value_col_name = "first_value";
     const ASTPtr value_col = col(value_col_name);
@@ -125,7 +126,7 @@ try
         {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
          toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
          toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})});
-    
+
     // TODO support unsigned int.
     testInt<Int8>();
     testInt<Int16>();
