@@ -79,11 +79,7 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
         {
             assert(window_expr->children_size() == 1);
             const auto arg_type = window_expr->children(0).field_type();
-            ft->set_tp(arg_type.tp());
-            ft->set_flag(arg_type.flag());
-            ft->set_collate(arg_type.collate());
-            ft->set_flen(arg_type.flen());
-            ft->set_decimal(arg_type.decimal());
+            (*ft) = arg_type;
             break;
         }
         default:

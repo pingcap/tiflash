@@ -141,7 +141,7 @@ public:
     explicit WindowFunctionFirstValue(const DataTypes & argument_types_)
         : IWindowFunction(argument_types_)
     {
-        assert(argument_types_.size() == 1);
+        RUNTIME_CHECK(argument_types_.size() == 1);
         return_type = argument_types_[0];
     }
 
