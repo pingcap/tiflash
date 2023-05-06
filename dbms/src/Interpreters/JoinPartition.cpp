@@ -235,7 +235,7 @@ void JoinPartition::initMap()
 void JoinPartition::insertBlockForBuild(Block && block)
 {
     size_t rows = block.rows();
-    size_t bytes = block.bytes();
+    size_t bytes = block.estimateBytesForSpill();
     build_partition.rows += rows;
     build_partition.bytes += bytes;
     build_partition.blocks.push_back(block);
@@ -246,7 +246,7 @@ void JoinPartition::insertBlockForBuild(Block && block)
 void JoinPartition::insertBlockForProbe(Block && block)
 {
     size_t rows = block.rows();
-    size_t bytes = block.bytes();
+    size_t bytes = block.estimateBytesForSpill();
     probe_partition.rows += rows;
     probe_partition.bytes += bytes;
     probe_partition.blocks.push_back(std::move(block));
