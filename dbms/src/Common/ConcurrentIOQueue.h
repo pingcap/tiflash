@@ -41,7 +41,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        push_cv.wait(lock, [&] { return queue.size() < capacity || (unlikely (status != MPMCQueueStatus::NORMAL)); });
+        push_cv.wait(lock, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
@@ -68,9 +68,9 @@ public:
         std::lock_guard lock(mu);
 
         if unlikely (status == MPMCQueueStatus::CANCELLED)
-           return MPMCQueueResult::CANCELLED;
+            return MPMCQueueResult::CANCELLED;
         if unlikely (status == MPMCQueueStatus::FINISHED)
-           return MPMCQueueResult::FINISHED;
+            return MPMCQueueResult::FINISHED;
 
         if (queue.size() >= capacity)
             return MPMCQueueResult::FULL;
@@ -88,9 +88,9 @@ public:
         std::lock_guard lock(mu);
 
         if unlikely (status == MPMCQueueStatus::CANCELLED)
-           return MPMCQueueResult::CANCELLED;
+            return MPMCQueueResult::CANCELLED;
         if unlikely (status == MPMCQueueStatus::FINISHED)
-           return MPMCQueueResult::FINISHED;
+            return MPMCQueueResult::FINISHED;
 
         queue.push_front(std::move(data));
         pop_cv.notify_one();
@@ -101,7 +101,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        pop_cv.wait(lock, [&] { return !queue.empty() || (unlikely (status != MPMCQueueStatus::NORMAL)); });
+        pop_cv.wait(lock, [&] { return !queue.empty() || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status != MPMCQueueStatus::CANCELLED)) && !queue.empty())
         {
@@ -192,7 +192,7 @@ public:
     }
 
 private:
-    template<typename FF>
+    template <typename FF>
     bool changeStatus(FF && ff)
     {
         std::lock_guard lock(mu);
