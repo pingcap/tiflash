@@ -56,14 +56,14 @@ public:
         actual_input[1].name = "order";
         actual_input[2].name = value_col_name;
         context.addMockTable(
-            {"test_db", "test_table_for_lead_lag"},
+            {"test_db", "test_table_for_first_value"},
             {{"partition", TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
              {"order", TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
              {value_col_name, value_tp, actual_input[2].type->isNullable()}},
             actual_input);
 
         auto request = context
-                           .scan("test_db", "test_table_for_lead_lag")
+                           .scan("test_db", "test_table_for_first_value")
                            .sort({{"partition", false}, {"order", false}}, true)
                            .window(function, {"order", false}, {"partition", false}, MockWindowFrame{})
                            .build(context);
