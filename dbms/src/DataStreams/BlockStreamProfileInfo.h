@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <vector>
 #include <Common/Stopwatch.h>
-
 #include <Core/Types.h>
+
+#include <vector>
 
 #if __APPLE__
 #include <common/apple_rt.h>
@@ -25,7 +25,6 @@
 
 namespace DB
 {
-
 class Block;
 class ReadBuffer;
 class WriteBuffer;
@@ -38,11 +37,12 @@ struct BlockStreamProfileInfo
     IProfilingBlockInputStream * parent = nullptr;
 
     bool started = false;
-    Stopwatch total_stopwatch {CLOCK_MONOTONIC_COARSE};    /// Time with waiting time
+    Stopwatch total_stopwatch{CLOCK_MONOTONIC_COARSE}; /// Time with waiting time
 
     size_t rows = 0;
     size_t blocks = 0;
     size_t bytes = 0;
+    size_t allocated_bytes = 0;
     // execution time is the total time spent on current stream and all its children streams
     // note that it is different from total_stopwatch.elapsed(), which includes not only the
     // time spent on current stream and all its children streams, but also the time of its
@@ -79,9 +79,9 @@ private:
     void calculateRowsBeforeLimit() const;
 
     /// For these fields we make accessors, because they must be calculated beforehand.
-    mutable bool applied_limit = false;                    /// Whether LIMIT was applied
+    mutable bool applied_limit = false; /// Whether LIMIT was applied
     mutable size_t rows_before_limit = 0;
-    mutable bool calculated_rows_before_limit = false;    /// Whether the field rows_before_limit was calculated
+    mutable bool calculated_rows_before_limit = false; /// Whether the field rows_before_limit was calculated
 };
 
-}
+} // namespace DB

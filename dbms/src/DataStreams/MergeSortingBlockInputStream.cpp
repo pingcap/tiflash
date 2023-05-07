@@ -71,7 +71,7 @@ Block MergeSortingBlockInputStream::readImpl()
             SortHelper::removeConstantsFromBlock(block);
 
             blocks.push_back(block);
-            sum_bytes_in_blocks += block.bytes();
+            sum_bytes_in_blocks += block.estimateBytesForSpill();
 
             /** If too many of them and if external sorting is enabled,
               *  will merge blocks that we have in memory at this moment and write merged stream to temporary (compressed) file.

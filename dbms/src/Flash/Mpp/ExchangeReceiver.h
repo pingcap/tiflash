@@ -17,15 +17,18 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/AsyncRequestHandler.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <future>
+#include <memory>
 #include <mutex>
 #include <thread>
 
 namespace DB
 {
-constexpr Int32 batch_packet_count = 16;
+constexpr Int32 batch_packet_count_v1 = 16;
 
 struct ExchangeReceiverResult
 {
@@ -91,7 +94,7 @@ enum class ReceiveStatus
 struct ReceiveResult
 {
     ReceiveStatus recv_status;
-    std::shared_ptr<ReceivedMessage> recv_msg;
+    RecvMsgPtr recv_msg;
 };
 
 template <typename RPCContext>
@@ -110,6 +113,8 @@ public:
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
         Int32 local_tunnel_version_,
+        Int32 async_recv_version_,
+        Int32 recv_queue_size,
         const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
@@ -147,10 +152,11 @@ private:
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
     template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);
+
     template <bool enable_fine_grained_shuffle>
     void reactor(const std::vector<Request> & async_requests);
-    void setUpConnection();
 
+    void setUpConnection();
     bool setEndState(ExchangeReceiverState new_state);
     String getStatusString();
 
@@ -159,7 +165,7 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     DecodeDetail decodeChunks(
-        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        const RecvMsgPtr & recv_msg,
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
@@ -170,6 +176,7 @@ private:
 
     void waitAllConnectionDone();
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
+    void waitAsyncConnectionDone();
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
@@ -177,16 +184,23 @@ private:
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,
         const Block & header,
-        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        const RecvMsgPtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     ReceiveResult receive(
         size_t stream_id,
-        std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func);
+        std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func);
 
 private:
     void prepareMsgChannels();
+    void prepareGRPCReceiveQueue();
     void addLocalConnectionNum();
+    void createAsyncRequestHandler(Request && request);
+
+    void setUpLocalConnection(Request && req);
+    void setUpSyncConnection(Request && req);
+    void setUpAsyncConnection(std::vector<Request> && async_requests);
+
     void connectionLocalDone();
     void handleConnectionAfterException();
 
@@ -213,6 +227,10 @@ private:
     DAGSchema schema;
 
     std::vector<MsgChannelPtr> msg_channels;
+    std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
+    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
+
+    std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;
@@ -227,6 +245,7 @@ private:
     bool collected = false;
     int thread_count = 0;
     Int32 local_tunnel_version;
+    Int32 async_recv_version;
 
     std::atomic<Int64> data_size_in_queue;
 
