@@ -133,6 +133,116 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     }
 };
 
+
+struct WindowFunctionLastValue final : public IWindowFunction
+{
+public:
+    static constexpr auto name = "last_value";
+
+    explicit WindowFunctionLastValue(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
+        , first_unassigned_val_row()
+        , unassigned_row_num(0)
+    {
+        RUNTIME_CHECK(argument_types_.size() == 1);
+        return_type = argument_types_[0];
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    DataTypePtr getReturnType() const override
+    {
+        return return_type;
+    }
+
+    void windowInsertResultInto(
+        WindowTransformAction & action,
+        size_t function_index,
+        const ColumnNumbers & arguments) override
+    {
+        // switch for another frame type
+        switch (action.window_description.frame.end_type)
+        {
+        case WindowFrame::BoundaryType::Current:
+            processFrameTypeCurrent(action, function_index, arguments);
+            break;
+        case WindowFrame::BoundaryType::Unbounded:
+            processFrameTypeUnbounded(action, function_index, arguments);
+            break;
+        case WindowFrame::BoundaryType::Offset:
+            processFrameTypeOffset(action, function_index, arguments);
+            break;
+        default:
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not supported frame BoundaryType");
+        }
+    }
+
+private:
+    static void processFrameTypeCurrent(
+        WindowTransformAction & action,
+        size_t function_index,
+        const ColumnNumbers & arguments)
+    {
+        IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
+        const auto & value_column = *action.inputAt(action.current_row)[arguments[0]];
+        const auto & value_field = value_column[action.current_row.row];
+        to.insert(value_field);
+    }
+
+    void processFrameTypeUnbounded(
+        WindowTransformAction & action,
+        size_t function_index,
+        const ColumnNumbers & arguments)
+    {
+        if (!action.frame_ended)
+        {
+            ++unassigned_row_num;
+            return;
+        }
+
+        RowNumber assigned_row = first_unassigned_val_row;
+
+        // Because [frame_start, frame_end), so we need to get the previous row of the frame_end.
+        RowNumber last_row = action.getPreviousRowNumber(action.frame_end);
+
+        // Now, we have found the frame's end and need to assign values for corresponding rows.
+        // Current row should alse be assigned value, so we need to `+1` in the for-loop
+        for (size_t i = 0; i < unassigned_row_num + 1; ++i)
+        {
+            IColumn & to = *action.blockAt(assigned_row).output_columns[function_index];
+            const auto & value_column = *action.inputAt(last_row)[arguments[0]];
+            const auto & value_field = value_column[last_row.row];
+            to.insert(value_field);
+            action.advanceRowNumber(assigned_row);
+        }
+
+        first_unassigned_val_row = action.current_row;
+        action.advanceRowNumber(first_unassigned_val_row);
+        unassigned_row_num = 0;
+    }
+
+    static void processFrameTypeOffset(
+        WindowTransformAction & /*action*/,
+        size_t /*function_index*/,
+        const ColumnNumbers & /*arguments*/)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "processFrameTypeUnbounded is not implemented");
+    }
+
+    DataTypePtr return_type;
+
+    // Refer to the position of the first value that is waiting for finding the frame's end
+    RowNumber first_unassigned_val_row;
+
+    // Before finding the end of frame, we need to record how many rows that need the
+    // result value are skipped. And we should assign result value to these rows when finding
+    // the frame's end.
+    size_t unassigned_row_num;
+};
+
 /**
 LEAD/LAG(<expression>[,offset[, default_value]]) OVER (
     PARTITION BY (expr)
@@ -319,5 +429,6 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
     factory.registerFunction<WindowFunctionRowNumber>();
     factory.registerFunction<WindowFunctionLeadLagBase<LeadImpl>>();
     factory.registerFunction<WindowFunctionLeadLagBase<LagImpl>>();
+    factory.registerFunction<WindowFunctionLastValue>();
 }
 } // namespace DB

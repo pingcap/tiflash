@@ -73,6 +73,13 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             ft->set_decimal(first_arg_type.decimal());
             break;
         }
+        case tipb::ExprType::LastValue:
+        {
+            assert(window_expr->children_size() == 1);
+            const auto arg_type = window_expr->children(0).field_type();
+            (*ft) = arg_type;
+            break;
+        }
         default:
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagBinary);
@@ -200,6 +207,11 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
                     assert(children_ci[0].tp == children_ci[2].tp);
                     ci = children_ci[0].hasNotNullFlag() ? children_ci[2] : children_ci[0];
                 }
+                break;
+            }
+            case tipb::ExprType::LastValue:
+            {
+                ci = children_ci[0];
                 break;
             }
             default:
