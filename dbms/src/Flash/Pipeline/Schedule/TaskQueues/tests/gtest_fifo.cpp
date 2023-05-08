@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -48,12 +49,6 @@ try
     auto thread_manager = newThreadManager();
     size_t valid_task_num = 1000;
 
-    // submit valid task
-    thread_manager->schedule(false, "submit", [&]() {
-        for (size_t i = 0; i < valid_task_num; ++i)
-            queue.submit(std::make_unique<IndexTask>(i));
-        queue.finish();
-    });
     // take valid task
     thread_manager->schedule(false, "take", [&]() {
         TaskPtr task;
@@ -63,14 +58,20 @@ try
             ASSERT_TRUE(task);
             auto * index_task = static_cast<IndexTask *>(task.get());
             ASSERT_EQ(index_task->index, expect_index++);
-            task->finalize();
-            task.reset();
+            FINALIZE_TASK(task);
         }
         ASSERT_EQ(expect_index, valid_task_num);
     });
+    // submit valid task
+    thread_manager->schedule(false, "submit", [&]() {
+        for (size_t i = 0; i < valid_task_num; ++i)
+            queue.submit(std::make_unique<IndexTask>(i));
+        queue.finish();
+    });
+    // wait
     thread_manager->wait();
 
-    // No tasks are taken after the queue is closed.
+    // No tasks can be submitted after the queue is finished.
     queue.submit(std::make_unique<IndexTask>(valid_task_num));
     TaskPtr task;
     ASSERT_FALSE(queue.take(task));

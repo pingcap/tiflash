@@ -42,7 +42,7 @@ bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks)
 {
     std::lock_guard lock(mu);
     if (waiting_tasks.empty())
-        return is_finished ? false : true;
+        return !is_finished;
     local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
     return true;
 }
