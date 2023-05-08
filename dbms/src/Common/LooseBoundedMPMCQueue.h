@@ -37,14 +37,15 @@ public:
 
     /// blocking function.
     /// Just like MPMCQueue::push.
-    MPMCQueueResult push(T && data)
+    template <typename U>
+    MPMCQueueResult push(U && data)
     {
         std::unique_lock lock(mu);
         writer_head.wait(lock, [&] { return queue.size() < capacity || (unlikely(status != MPMCQueueStatus::NORMAL)); });
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && queue.size() < capacity)
         {
-            pushFront(std::move(data));
+            pushFront(std::forward<U>(data));
             return MPMCQueueResult::OK;
         }
 
@@ -80,7 +81,8 @@ public:
     /// Non-blocking function.
     /// Besides all conditions mentioned at `push`, `forcePush` will still return OK if queue is `NORMAL` and full.
     /// The obj that exceeds its capacity will still be stored in queue.
-    MPMCQueueResult forcePush(T && data)
+    template <typename U>
+    MPMCQueueResult forcePush(U && data)
     {
         std::lock_guard lock(mu);
 
@@ -89,7 +91,7 @@ public:
         if unlikely (status == MPMCQueueStatus::FINISHED)
             return MPMCQueueResult::FINISHED;
 
-        pushFront(std::move(data));
+        pushFront(std::forward<U>(data));
         return MPMCQueueResult::OK;
     }
 
