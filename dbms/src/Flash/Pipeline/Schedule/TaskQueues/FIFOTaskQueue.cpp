@@ -19,6 +19,11 @@
 
 namespace DB
 {
+FIFOTaskQueue::~FIFOTaskQueue()
+{
+    RUNTIME_ASSERT(task_queue.empty(), "all task should be taken before it is destructed");
+}
+
 bool FIFOTaskQueue::take(TaskPtr & task)
 {
     assert(!task);

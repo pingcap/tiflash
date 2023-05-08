@@ -24,6 +24,8 @@ namespace DB
 class FIFOTaskQueue : public TaskQueue
 {
 public:
+    ~FIFOTaskQueue() override;
+
     void submit(TaskPtr && task) override;
 
     void submit(std::vector<TaskPtr> & tasks) override;
