@@ -330,7 +330,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
         {
             capture_num = re2->NumberOfCapturingGroups();
             if (capture_num > MAX_CAPTURES)
-                throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many subpatterns in regexp: {}", regexp_));
+                throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many capture_groups in regexp: {}", regexp_));
         }
     }
 }
@@ -517,7 +517,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(
     }
 
     StringPieceType expr_sp(subject, subject_size);
-    StringPieceType matched_str;
     StringPieceType matches[MAX_CAPTURES];
     bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num);
     if (!success)
@@ -613,7 +612,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
 {
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
-    StringPieceType matched_str;
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
     StringPieceType matches[MAX_CAPTURES];
