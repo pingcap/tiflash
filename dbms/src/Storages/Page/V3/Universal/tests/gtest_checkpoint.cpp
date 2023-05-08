@@ -775,6 +775,7 @@ try
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "The flower carriage rocked");
         batch.putPage("3", tag, "Said she just dreamed a dream");
+        batch.putPage("11", tag, "Said she just dreamed a dream");
         page_storage->write(std::move(batch));
     }
     {
@@ -783,7 +784,8 @@ try
         batch.delPage("1");
         batch.putRefPage("2", "5");
         batch.putPage("10", tag, "Nahida opened her eyes");
-        batch.delPage("3");
+        batch.delPage("5");
+        batch.delPage("11");
         PS::V3::CheckpointLocation data_location{
             .data_file_id = std::make_shared<String>("dt file path"),
             .offset_in_file = 0,
@@ -794,13 +796,14 @@ try
     }
     dumpCheckpoint(true, {}, 1); // One record per file.
 
-    ASSERT_TRUE(Poco::File(dir + "7.manifest").exists());
-    ASSERT_TRUE(Poco::File(dir + "7_0.data").exists());
-    ASSERT_TRUE(Poco::File(dir + "7_1.data").exists());
-    ASSERT_TRUE(Poco::File(dir + "7_2.data").exists());
-    ASSERT_FALSE(Poco::File(dir + "7_3.data").exists());
+    // valid record in data file: put 10, put 3, put 5
+    ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
+    ASSERT_TRUE(Poco::File(dir + "9_0.data").exists());
+    ASSERT_TRUE(Poco::File(dir + "9_1.data").exists());
+    ASSERT_TRUE(Poco::File(dir + "9_2.data").exists());
+    ASSERT_FALSE(Poco::File(dir + "9_3.data").exists());
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "7.manifest");
+    auto manifest_file = PosixRandomAccessFile::create(dir + "9.manifest");
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -814,7 +817,7 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("10", iter->page_id);
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("9_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
@@ -825,18 +828,18 @@ try
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
     ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-    ASSERT_EQ("7_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("9_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
-
-    iter++;
-    ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
-    ASSERT_EQ("3", iter->page_id);
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("7_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("9_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
     ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
+
+    iter++;
+    ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+    ASSERT_EQ("5", iter->page_id);
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
@@ -852,6 +855,7 @@ try
         UniversalWriteBatch batch;
         batch.putPage("5", tag, "The flower carriage rocked");
         batch.putPage("3", tag, "Said she just dreamed a dream");
+        batch.putPage("11", tag, "Said she just dreamed a dream");
         page_storage->write(std::move(batch));
     }
     {
@@ -860,7 +864,8 @@ try
         batch.delPage("1");
         batch.putRefPage("2", "5");
         batch.putPage("10", tag, "Nahida opened her eyes");
-        batch.delPage("3");
+        batch.delPage("11");
+        batch.delPage("5");
         PS::V3::CheckpointLocation data_location{
             .data_file_id = std::make_shared<String>("dt file path"),
             .offset_in_file = 0,
@@ -871,9 +876,8 @@ try
     }
     dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {}, /*max_data_file_size*/ 1, /*max_edit_records_per_part*/ 1);
 
-
-    ASSERT_TRUE(Poco::File(dir + "7.manifest").exists());
-    auto manifest_file = PosixRandomAccessFile::create(dir + "7.manifest");
+    ASSERT_TRUE(Poco::File(dir + "9.manifest").exists());
+    auto manifest_file = PosixRandomAccessFile::create(dir + "9.manifest");
     auto reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -897,7 +901,7 @@ try
         case 1:
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("10", iter->page_id);
-            ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("9_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
             break;
         case 2:
@@ -908,18 +912,18 @@ try
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("3", iter->page_id);
             ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-            ASSERT_EQ("7_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("9_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
             break;
         case 4:
-            ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
-            ASSERT_EQ("3", iter->page_id);
-            break;
-        case 5:
             ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
             ASSERT_EQ("5", iter->page_id);
-            ASSERT_EQ("7_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("9_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
             ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
+            break;
+        case 5:
+            ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+            ASSERT_EQ("5", iter->page_id);
             break;
         case 6:
             ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
