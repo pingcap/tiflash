@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 
@@ -25,10 +26,10 @@ bool FIFOTaskQueue::take(TaskPtr & task) noexcept
         std::unique_lock lock(mu);
         while (true)
         {
-            if (unlikely(is_closed))
-                return false;
             if (!task_queue.empty())
                 break;
+            if (unlikely(is_finished))
+                return false;
             cv.wait(lock);
         }
 
@@ -45,20 +46,26 @@ bool FIFOTaskQueue::empty() noexcept
     return task_queue.empty();
 }
 
-void FIFOTaskQueue::close()
+void FIFOTaskQueue::finish()
 {
     {
         std::lock_guard lock(mu);
-        is_closed = true;
+        is_finished = true;
     }
     cv.notify_all();
 }
 
 void FIFOTaskQueue::submit(TaskPtr && task) noexcept
 {
-    assert(task);
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASK(task);
+        return;
+    }
+
     {
         std::lock_guard lock(mu);
+        assert(task);
         task_queue.push_back(std::move(task));
     }
     cv.notify_one();
@@ -66,9 +73,14 @@ void FIFOTaskQueue::submit(TaskPtr && task) noexcept
 
 void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks) noexcept
 {
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASKS(tasks);
+        return;
+    }
+
     if (tasks.empty())
         return;
-
     std::lock_guard lock(mu);
     for (auto & task : tasks)
     {

@@ -30,7 +30,7 @@ class WaitReactor
 public:
     explicit WaitReactor(TaskScheduler & scheduler_);
 
-    void close();
+    void finish();
 
     void waitForStop();
 

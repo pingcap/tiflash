@@ -371,7 +371,8 @@ namespace DB
         F(type_to_io, {"type", "to_io"}),                                                                                                           \
         F(type_to_finished, {"type", "to_finished"}),                                                                                               \
         F(type_to_error, {"type", "to_error"}),                                                                                                     \
-        F(type_to_cancelled, {"type", "to_cancelled"}))                                                                                             \
+        F(type_to_cancelled, {"type", "to_cancelled"}),                                                                                             \
+        F(type_to_finalize, {"type", "to_finalize"}))                                                                                               \
     M(tiflash_storage_s3_gc_status, "S3 GC status", Gauge,                                                                                          \
         F(type_lifecycle_added, {{"type", "lifecycle_added"}}),                                                                                     \
         F(type_lifecycle_failed, {{"type", "lifecycle_failed"}}),                                                                                   \

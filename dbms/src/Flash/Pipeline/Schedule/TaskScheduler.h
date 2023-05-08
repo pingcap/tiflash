@@ -58,7 +58,7 @@ public:
 
     ~TaskScheduler();
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
+    void submit(std::vector<TaskPtr> & tasks);
 
     void submitToWaitReactor(TaskPtr && task);
     void submitToCPUTaskThreadPool(TaskPtr && task);

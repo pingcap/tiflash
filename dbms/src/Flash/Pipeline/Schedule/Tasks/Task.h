@@ -50,7 +50,7 @@ public:
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
-    virtual ~Task() = default;
+    virtual ~Task();
 
     MemoryTrackerPtr getMemTracker() const
     {
@@ -66,18 +66,18 @@ public:
     void finalize() noexcept;
 
 protected:
-    virtual ExecTaskStatus executeImpl() noexcept = 0;
-    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus executeImpl() = 0;
+    virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
-    virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
     // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalizeImpl() noexcept {}
+    virtual void finalizeImpl() {}
 
 private:
     void switchStatus(ExecTaskStatus to);
 
-    void assertStatus(ExecTaskStatus expect);
+    void assertNormalStatus(ExecTaskStatus expect);
 
 protected:
     MemoryTrackerPtr mem_tracker;

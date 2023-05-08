@@ -34,12 +34,14 @@ public:
 
     virtual void submit(std::vector<TaskPtr> & tasks) noexcept = 0;
 
-    // return false if the queue had been closed.
+    // return false if the queue is empty and finished.
     virtual bool take(TaskPtr & task) noexcept = 0;
 
     virtual bool empty() noexcept = 0;
 
-    virtual void close() = 0;
+    // After finish is called, the submitted task will be finalized directly and will not be taken.
+    // And the tasks in the queue can still be taken normally.
+    virtual void finish() = 0;
 
 protected:
     LoggerPtr logger = Logger::get();

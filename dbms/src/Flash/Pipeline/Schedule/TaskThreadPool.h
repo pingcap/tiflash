@@ -32,7 +32,7 @@ class TaskThreadPool
 public:
     TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
 
-    void close();
+    void finish();
 
     void waitForStop();
 

@@ -40,6 +40,19 @@ namespace DB
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
 
+#define FINALIZE_TASK(task) \
+    assert(task);           \
+    task->finalize();       \
+    task.reset();
+
+#define FINALIZE_TASKS(tasks) \
+    for (auto & task : tasks) \
+    {                         \
+        assert(task);         \
+        task->finalize();     \
+        task.reset();         \
+    }
+
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 
 } // namespace DB

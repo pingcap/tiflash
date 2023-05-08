@@ -52,10 +52,7 @@ try
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < valid_task_num; ++i)
             queue.submit(std::make_unique<IndexTask>(i));
-        // Close the queue after all valid tasks have been consumed.
-        while (!queue.empty())
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        queue.close();
+        queue.finish();
     });
     // take valid task
     thread_manager->schedule(false, "take", [&]() {
@@ -66,6 +63,7 @@ try
             ASSERT_TRUE(task);
             auto * index_task = static_cast<IndexTask *>(task.get());
             ASSERT_EQ(index_task->index, expect_index++);
+            task->finalize();
             task.reset();
         }
         ASSERT_EQ(expect_index, valid_task_num);

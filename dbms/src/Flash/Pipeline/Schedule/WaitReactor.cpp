@@ -52,19 +52,20 @@ public:
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
-            task->finalize();
-            task.reset();
+            FINALIZE_TASK(task);
             return true;
         default:
             UNEXPECTED_STATUS(logger, status);
         }
     }
 
-    // return false if there are no ready task to submit.
-    bool submitReadyTasks()
+    void submitReadyTasks()
     {
         if (running_tasks.empty() && io_tasks.empty())
-            return false;
+        {
+            tryYield();
+            return;
+        }
 
         task_scheduler.submitToCPUTaskThreadPool(running_tasks);
         running_tasks.clear();
@@ -73,12 +74,11 @@ public:
         io_tasks.clear();
 
         spin_count = 0;
-        return true;
     }
 
     void tryYield()
     {
-        assert(running_tasks.empty());
+        assert(running_tasks.empty() && io_tasks.empty());
         ++spin_count;
 
         if (spin_count != 0 && spin_count % 64 == 0)
@@ -111,9 +111,9 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     thread = std::thread(&WaitReactor::loop, this);
 }
 
-void WaitReactor::close()
+void WaitReactor::finish()
 {
-    waiting_task_list.close();
+    waiting_task_list.finish();
 }
 
 void WaitReactor::waitForStop()
@@ -140,17 +140,7 @@ void WaitReactor::loop() noexcept
 
     Spinner spinner{scheduler, logger};
     std::list<TaskPtr> local_waiting_tasks;
-    // Get the incremental tasks from waiting_task_list.
-    // return false if waiting_task_list has been closed.
-    auto take_from_waiting_task_list = [&]() {
-        return local_waiting_tasks.empty()
-            ? waiting_task_list.take(local_waiting_tasks)
-            // If the local waiting tasks are not empty, there is no need to be blocked here
-            // and we can continue to process the leftover tasks in the local waiting tasks
-            : waiting_task_list.tryTake(local_waiting_tasks);
-    };
-    while (take_from_waiting_task_list())
-    {
+    auto react = [&]() {
         assert(!local_waiting_tasks.empty());
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
@@ -164,9 +154,24 @@ void WaitReactor::loop() noexcept
 
         GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
-        if (!spinner.submitReadyTasks())
-            spinner.tryYield();
-    }
+        spinner.submitReadyTasks();
+    };
+
+    // Get the incremental tasks from waiting_task_list.
+    // return false if waiting_task_list has been closed.
+    auto take_from_waiting_task_list = [&]() {
+        return local_waiting_tasks.empty()
+            ? waiting_task_list.take(local_waiting_tasks)
+            // If the local waiting tasks are not empty, there is no need to be blocked here
+            // and we can continue to process the leftover tasks in the local waiting tasks
+            : waiting_task_list.tryTake(local_waiting_tasks);
+    };
+    while (take_from_waiting_task_list())
+        react();
+
+    // Handle remaining tasks.
+    while (!local_waiting_tasks.empty())
+        react();
 
     LOG_INFO(logger, "wait reactor loop finished");
 }

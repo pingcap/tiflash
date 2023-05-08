@@ -38,9 +38,9 @@ TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_n
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::close()
+void TaskThreadPool<Impl>::finish()
 {
-    task_queue->close();
+    task_queue->finish();
 }
 
 template <typename Impl>
@@ -110,8 +110,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
-        task->finalize();
-        task.reset();
+        FINALIZE_TASK(task);
         break;
     default:
         UNEXPECTED_STATUS(log, status);

@@ -32,12 +32,12 @@ public:
 
     bool empty() noexcept override;
 
-    void close() override;
+    void finish() override;
 
 private:
     std::mutex mu;
     std::condition_variable cv;
-    bool is_closed = false;
+    std::atomic_bool is_finished = false;
     std::deque<TaskPtr> task_queue;
 };
 } // namespace DB

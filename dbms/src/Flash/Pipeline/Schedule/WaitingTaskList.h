@@ -31,15 +31,16 @@ public:
     bool tryTake(std::list<TaskPtr> & local_waiting_tasks) noexcept;
 
     void submit(TaskPtr && task) noexcept;
-
     void submit(std::list<TaskPtr> & tasks) noexcept;
 
-    void close();
+    // After finish is called, the submitted task will be finalized directly and will not be taken.
+    // And the tasks in the queue can still be taken normally.
+    void finish();
 
 private:
     std::mutex mu;
     std::condition_variable cv;
     std::list<TaskPtr> waiting_tasks;
-    bool is_closed = false;
+    std::atomic_bool is_finished = false;
 };
 } // namespace DB

@@ -31,16 +31,16 @@ TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
 
 TaskScheduler::~TaskScheduler()
 {
-    cpu_task_thread_pool.close();
-    io_task_thread_pool.close();
-    wait_reactor.close();
+    cpu_task_thread_pool.finish();
+    io_task_thread_pool.finish();
+    wait_reactor.finish();
 
     cpu_task_thread_pool.waitForStop();
     io_task_thread_pool.waitForStop();
     wait_reactor.waitForStop();
 }
 
-void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
+void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 {
     if (unlikely(tasks.empty()))
         return;
@@ -66,8 +66,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
             waiting_tasks.push_back(std::move(task));
             break;
         case FINISH_STATUS:
-            task->finalize();
-            task.reset();
+            FINALIZE_TASK(task);
             break;
         default:
             UNEXPECTED_STATUS(logger, status);
