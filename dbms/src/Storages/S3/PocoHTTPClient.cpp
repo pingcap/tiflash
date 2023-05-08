@@ -329,7 +329,6 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     Poco::Net::HTTPSendMetrics metrics;
     auto & request_body_stream = session->sendRequest(poco_request, &metrics);
     GET_METRIC(tiflash_storage_s3_http_request_seconds, type_connect).Observe(metrics.connect_ms / 1000.0);
-    LOG_DEBUG(tracing_logger, "connect cost {}ms", metrics.connect_ms);
 
     if (request.GetContentBody())
     {

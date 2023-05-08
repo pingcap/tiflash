@@ -281,16 +281,23 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
     LOG_DEBUG(log, "Aws::InitAPI start");
-    // Override the HTTP client, use PocoHTTPClient instead
-    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
-        // TODO: do we need the remote host filter?
-        PocoHTTPClientConfiguration poco_cfg(
-            std::make_shared<RemoteHostFilter>(),
-            config_.max_redirections,
-            /*enable_s3_requests_logging_*/ config_.verbose,
-            config_.enable_http_pool);
-        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
-    };
+    if (!config_.enable_poco_client)
+    {
+        LOG_DEBUG(log, "Using default curl client");
+    }
+    else
+    {
+        // Override the HTTP client, use PocoHTTPClient instead
+        aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+            // TODO: do we need the remote host filter?
+            PocoHTTPClientConfiguration poco_cfg(
+                std::make_shared<RemoteHostFilter>(),
+                config_.max_redirections,
+                /*enable_s3_requests_logging_*/ config_.verbose,
+                config_.enable_http_pool);
+            return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+        };
+    }
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
 

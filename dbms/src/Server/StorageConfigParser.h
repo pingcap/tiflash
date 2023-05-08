@@ -100,6 +100,9 @@ struct StorageS3Config
     // verbose logging for http requests. Use for debugging
     bool verbose = false;
 
+    bool enable_http_pool = true; // will be removed after testing
+    bool enable_poco_client = true; // will be removed after testing
+
     String endpoint;
     String bucket;
     String access_key_id;
@@ -109,7 +112,6 @@ struct StorageS3Config
     UInt64 request_timeout_ms = 30000;
     UInt64 max_redirections = 10;
     String root;
-    bool enable_http_pool = true; // will be removed after testing
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
