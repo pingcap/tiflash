@@ -187,7 +187,7 @@ static void writeRegionDataToStorage(
     /// If first try failed, sync schema and force read then write.
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
 
         if (!atomic_read_write(true))
         {
@@ -429,7 +429,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",

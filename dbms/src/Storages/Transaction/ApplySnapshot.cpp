@@ -390,7 +390,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+                tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;
 

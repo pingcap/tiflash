@@ -1,0 +1,108 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <TiDB/Schema/TiDBSchemaSyncer.h>
+
+namespace DB {
+
+class TiDBSchemaSyncerManager {
+public:
+    explicit TiDBSchemaSyncerManager(KVClusterPtr cluster_, bool mock_getter_, bool mock_mapper_) : 
+            cluster(cluster_)
+            ,mock_getter(mock_getter_)
+            ,mock_mapper(mock_mapper_) {}
+
+    SchemaSyncerPtr getSchemaSyncer(KeyspaceID keyspace_id){
+        schema_syncers_mutex.lock_shared();
+        auto syncer = schema_syncers.find(keyspace_id);
+        schema_syncers_mutex.unlock_shared();
+        return syncer == schema_syncers.end() ? nullptr : syncer->second;
+    }
+
+    SchemaSyncerPtr createSchemaSyncer(KeyspaceID keyspace_id) {
+        if (!mock_getter and !mock_mapper) {
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
+            schema_syncers_mutex.lock();
+            schema_syncers[keyspace_id] = schema_syncer ;
+            schema_syncers_mutex.unlock();
+            return schema_syncer;
+        } 
+        
+        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+        schema_syncers_mutex.lock();
+        schema_syncers[keyspace_id] = schema_syncer ;
+        schema_syncers_mutex.unlock();
+        return schema_syncer;
+    }
+
+    bool syncSchemas(Context & context, KeyspaceID keyspace_id){
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            schema_syncer = createSchemaSyncer(keyspace_id);
+        }
+        return schema_syncer->syncSchemas(context);
+    }
+
+    bool syncTableSchema(Context & context, KeyspaceID keyspace_id, TableID table_id){
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            schema_syncer = createSchemaSyncer(keyspace_id);
+        }
+        return schema_syncer->syncTableSchema(context, table_id);
+    }
+
+    TiDB::DBInfoPtr getDBInfoByName(KeyspaceID keyspace_id, const String & database_name){
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            schema_syncer = createSchemaSyncer(keyspace_id);
+        }
+        return schema_syncer->getDBInfoByName(database_name);
+    }
+
+    TiDB::DBInfoPtr getDBInfoByMappedName(KeyspaceID keyspace_id, const String & mapped_database_name)
+    {
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            schema_syncer = createSchemaSyncer(keyspace_id);
+        }
+        return schema_syncer->getDBInfoByMappedName(mapped_database_name);
+    }
+
+    bool removeSchemaSyncer(Context & context, KeyspaceID keyspace_id) {
+        schema_syncers_mutex.lock();
+
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            schema_syncers_mutex.unlock();
+            return false;
+        }
+        schema_syncer->dropAllSchema(context);
+        schema_syncers.erase(keyspace_id);
+        schema_syncers_mutex.unlock();
+        return true;
+    }
+
+private:
+    std::shared_mutex schema_syncers_mutex;
+
+    KVClusterPtr cluster;
+
+    const bool mock_getter;
+    const bool mock_mapper;
+
+    std::unordered_map<KeyspaceID, SchemaSyncerPtr> schema_syncers;
+};
+}

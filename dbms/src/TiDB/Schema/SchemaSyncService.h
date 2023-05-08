@@ -34,6 +34,7 @@ using ASTPtr = std::shared_ptr<IAST>;
 using ASTs = std::vector<ASTPtr>;
 using DBGInvokerPrinter = std::function<void(const std::string &)>;
 extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+class TiDBSchemaSyncer;
 
 class SchemaSyncService
     : public std::enable_shared_from_this<SchemaSyncService>
@@ -45,7 +46,6 @@ public:
 
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
-    void removeCurrentVersion(KeyspaceID keyspace_id);
 
     struct GCContext
     {

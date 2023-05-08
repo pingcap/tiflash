@@ -829,7 +829,7 @@ void syncSchemaWithTiDB(
         {
             try
             {
-                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context, NullspaceID);
+                global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
                 break;
             }
             catch (Poco::Exception & e)

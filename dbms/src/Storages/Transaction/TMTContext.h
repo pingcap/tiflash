@@ -20,6 +20,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 namespace DB
 {
@@ -30,8 +31,9 @@ class PathPool;
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
-class SchemaSyncer;
-using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
+// class SchemaSyncer;
+// using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
+class TiDBSchemaSyncerManager;
 
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
@@ -101,7 +103,7 @@ public:
                         const pingcap::ClusterConfig & cluster_config_);
     ~TMTContext();
 
-    SchemaSyncerPtr getSchemaSyncer() const;
+    std::shared_ptr<TiDBSchemaSyncerManager> getSchemaSyncerManager() const;
 
     void updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config);
 
@@ -160,7 +162,7 @@ private:
     std::atomic<StoreStatus> store_status{StoreStatus::Idle};
 
     const std::unordered_set<std::string> ignore_databases;
-    SchemaSyncerPtr schema_syncer;
+    std::shared_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
     MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;

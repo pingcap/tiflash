@@ -1615,43 +1615,89 @@ BlockPtr DeltaMergeStore::getHeader() const
 }
 
 void DeltaMergeStore::applyAlters(
-    const AlterCommands & commands,
-    const OptionTableInfoConstRef table_info,
-    ColumnID & max_column_id_used,
-    const Context & /* context */)
+    TableInfo & table_info)
 {
+    // TODO:要改这么多，性能能保证么？？？？？
     std::unique_lock lock(read_write_mutex);
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
-    for (const auto & command : commands)
-    {
-        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
+    std::unordered_map<ColumnID, ColumnDefine> original_columns_map;
+    for (const auto& column : new_original_table_columns) {
+        original_columns_map[column.id] = column;
+    }   
+
+    std::set<ColumnID> new_column_ids;
+    for (const auto& column : table_info.columns){
+        auto column_id = column.id;
+        new_column_ids.insert(column_id);
+        auto iter = original_columns_map.find(column_id);
+        if (iter == original_columns_map.end()) {
+            // 创建新的列
+            ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
+            define.default_value = column.defaultValueToField();
+            
+            new_original_table_columns.emplace_back(std::move(define));
+        } else {
+            // 更新列, 包括 rename column(同时要改 index 里的，虽然觉得没什么必要的样子）, type change,
+            auto original_column = iter->second;
+            auto new_data_type = getDataTypeByColumnInfo(column);
+            original_column.default_value = column.defaultValueToField();
+            if (original_column.name == column.name and original_column.type == new_data_type) {
+                // 啥也不需要改
+                continue;
+            } 
+
+            // 改 name 和 type，可以进一步确认一下哪些要改，也可以直接暴力都改
+
+            if (original_column.name != column.name && table_info.is_common_handle)
+            {
+                /// TiDB only saves column name(not column id) in index info, so have to update primary
+                /// index info when rename column
+                auto & index_info = table_info.getPrimaryIndexInfo();
+                for (auto & col : index_info.idx_cols)
+                {
+                    if (col.name == original_column.name)
+                    {
+                        col.name = column.name;
+                        break;
+                    }
+                }
+            }
+            original_column.name = column.name;
+            original_column.type = getDataTypeByColumnInfo(column);
+            
+        }
     }
 
-    if (table_info)
+    // 删除列
+    auto iter = new_original_table_columns.begin();
+    while (iter != new_original_table_columns.end()) {
+        if (new_column_ids.count(iter->id) == 0) {
+            new_original_table_columns.erase(iter);
+        }
+    }
+
+    // Update primary keys from TiDB::TableInfo when pk_is_handle = true
+    // todo update the column name in rowkey_columns
+    std::vector<String> pk_names;
+    for (const auto & col : table_info.columns)
     {
-        // Update primary keys from TiDB::TableInfo when pk_is_handle = true
-        // todo update the column name in rowkey_columns
-        std::vector<String> pk_names;
-        for (const auto & col : table_info->get().columns)
+        if (col.hasPriKeyFlag())
         {
-            if (col.hasPriKeyFlag())
-            {
-                pk_names.emplace_back(col.name);
-            }
+            pk_names.emplace_back(col.name);
         }
-        if (table_info->get().pk_is_handle && pk_names.size() == 1)
-        {
-            // Only update primary key name if pk is handle and there is only one column with
-            // primary key flag
-            original_table_handle_define.name = pk_names[0];
-        }
-        if (table_info.value().get().replica_info.count == 0)
-        {
-            replica_exist.store(false);
-        }
+    }
+    if (table_info.pk_is_handle && pk_names.size() == 1)
+    {
+        // Only update primary key name if pk is handle and there is only one column with
+        // primary key flag
+        original_table_handle_define.name = pk_names[0];
+    }
+    if (table_info.replica_info.count == 0)
+    {
+        replica_exist.store(false);
     }
 
     auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);

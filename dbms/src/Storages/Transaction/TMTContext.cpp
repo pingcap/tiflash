@@ -47,7 +47,7 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
+static std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
     // Doesn't need SchemaSyncer for tiflash_compute mode.
     if (disaggregated_compute_mode)
@@ -56,20 +56,23 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
     {
         // product env
         // Get DBInfo/TableInfo from TiKV, and create table with names `t_${table_id}`
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ false, /*mock_mapper*/ false>>(cluster));
+        // return std::static_pointer_cast<SchemaSyncer>(
+        //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ false, /*mock_mapper*/ false>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, false, false);
     }
     else if (!for_unit_test)
     {
         // mock test
         // Get DBInfo/TableInfo from MockTiDB, and create table with its display names
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ true>>(cluster));
+        // return std::static_pointer_cast<SchemaSyncer>(
+        //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ true>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, true);
     }
     // unit test.
     // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
-    return std::static_pointer_cast<SchemaSyncer>(
-        std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
+    // return std::static_pointer_cast<SchemaSyncer>(
+    //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
+    return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, false);
 }
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
@@ -81,7 +84,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
                                            : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
+    , schema_sync_manager(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
@@ -255,10 +258,16 @@ TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_orde
     return store_status.load(memory_order);
 }
 
-SchemaSyncerPtr TMTContext::getSchemaSyncer() const
+// SchemaSyncerPtr TMTContext::getSchemaSyncer() const
+// {
+//     std::lock_guard lock(mutex);
+//     return schema_syncer;
+// }
+
+std::shared_ptr<TiDBSchemaSyncerManager> TMTContext::getSchemaSyncerManager() const
 {
     std::lock_guard lock(mutex);
-    return schema_syncer;
+    return schema_sync_manager;
 }
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const

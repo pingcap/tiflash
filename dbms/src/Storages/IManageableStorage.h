@@ -112,6 +112,15 @@ public:
         const Context & context)
         = 0;
 
+    virtual void alterSchemaChange(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const String & database_name,
+        const String & table_name,
+        const Context & context)
+        = 0;
+
+    virtual DM::ColumnDefines getStoreColumnDefines() const;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.

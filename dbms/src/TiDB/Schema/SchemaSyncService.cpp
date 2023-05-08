@@ -126,8 +126,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         LOG_INFO(ks_log, "remove sync schema task");
         background_pool.removeTask(ks_handle_iter->second);
         ks_handle_iter = ks_handle_map.erase(ks_handle_iter);
-        // remove schema version for this keyspace
-        removeCurrentVersion(ks);
+        // TODO:救命这名字好难听，ks 改掉
+        context.getTMTContext().getSchemaSyncerManager()->removeSchemaSyncer(context, ks);
     }
 }
 
@@ -144,13 +144,7 @@ SchemaSyncService::~SchemaSyncService()
 
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
 {
-    return context.getTMTContext().getSchemaSyncer()->syncSchemas(context, keyspace_id);
-}
-
-
-void SchemaSyncService::removeCurrentVersion(KeyspaceID keyspace_id)
-{
-    context.getTMTContext().getSchemaSyncer()->removeCurrentVersion(keyspace_id);
+    return context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, keyspace_id);
 }
 
 template <typename DatabaseOrTablePtr>
@@ -209,7 +203,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         const auto & table_info = storage->getTableInfo();
         auto canonical_name = [&]() {
             // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
-            auto db_info = tmt_context.getSchemaSyncer()->getDBInfoByMappedName(database_name);
+            auto db_info = tmt_context.getSchemaSyncerManager()->getDBInfoByMappedName(keyspace_id, database_name);
             return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
                            : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
         }();

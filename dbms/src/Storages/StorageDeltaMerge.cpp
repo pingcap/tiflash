@@ -1441,6 +1441,97 @@ catch (Exception & e)
     throw;
 }
 
+std::tuple<NamesAndTypes, Strings>
+parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
+{
+    NamesAndTypes columns;
+    std::vector<String> primary_keys;
+    for (const auto & column : table_info.columns)
+    {
+        DataTypePtr type = getDataTypeByColumnInfo(column);
+        columns.emplace_back(column.name, type);
+        if (column.hasPriKeyFlag())
+        {
+            primary_keys.emplace_back(column.name);
+        }
+    }
+
+    if (!table_info.pk_is_handle)
+    {
+        // Make primary key as a column, and make the handle column as the primary key.
+        if (table_info.is_common_handle)
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>());
+        else
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>());
+        primary_keys.clear();
+        primary_keys.emplace_back(MutableSupport::tidb_pk_column_name);
+    }
+
+    return std::make_tuple(std::move(columns), std::move(primary_keys));
+}
+
+ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info){
+    auto [columns, pks] = parseColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
+    // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
+    ColumnsDescription new_columns;
+    for (auto column : columns) {
+        new_columns.ordinary.emplace_back(std::move(column));
+    }
+    return new_columns;
+}
+
+void StorageDeltaMerge::alterSchemaChange(
+    const TableLockHolder &,
+    TiDB::TableInfo & table_info,
+    const String & database_name,
+    const String & table_name,
+    const Context & context)
+{
+    // 1. 更新 table_info ; 2. 更新 columns ; 3. 更新 create table statement ; 4. 更新 store 的 columns
+    // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
+
+    ColumnsDescription new_columns = getNewColumnsDescription(table_info);
+    setColumns(std::move(new_columns));
+
+    {
+        std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
+        if (storeInited())
+        {
+            _store->applyAlters(table_info);
+        }
+        else
+        {
+            // TODO: 这边逻辑 check 一下
+            updateTableColumnInfo();
+        }
+    }
+    decoding_schema_changed = true; // TODO:现在这个模式还需要这个么；也可以，因为读的时候还用不到
+
+    SortDescription pk_desc = getPrimarySortDescription();
+    ColumnDefines store_columns = getStoreColumnDefines();
+    // TiDB::TableInfo table_info_from_store;
+    // table_info_from_store.name = table_name_;
+    // after update `new_columns` and store's table columns, we need to update create table statement,
+    // so that we can restore table next time.
+    updateDeltaMergeTableCreateStatement(
+        database_name,
+        table_name,
+        pk_desc,
+        getColumns(),
+        hidden_columns,
+        table_info,
+        1, // 后面删掉
+        context);
+
+    // TODO:这边应该有些字段要改，比如 engine type 
+    tidb_table_info = table_info;
+    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
+    {
+        auto & tmt_context = context.getTMTContext();
+        tidb_table_info.engine_type = tmt_context.getEngineType();
+    }
+}
+
 ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const
 {
     if (storeInited())

@@ -46,12 +46,9 @@ public:
      * Synchronize all schemas between TiDB and CH.
      * @param context
      */
-    virtual bool syncSchemas(Context & context, KeyspaceID keyspace_id) = 0;
+    virtual bool syncSchemas(Context & context) = 0;
 
-    /**
-     *  Remove current version of CH schema.
-    */
-    virtual void removeCurrentVersion(KeyspaceID keyspace_id) = 0;
+    virtual bool syncTableSchema(Context & context, TableID table_id_) = 0;
 
     virtual void reset() = 0;
 
@@ -60,6 +57,8 @@ public:
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
     virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs(KeyspaceID keyspace_id) = 0;
+
+    virtual void dropAllSchema(Context & context) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
