@@ -865,6 +865,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
+
     UseSSL ssl_holder;
 
     const auto log = Logger::get();
@@ -1223,9 +1226,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
-
-    /// Initialize the labels of tiflash compute node.
-    ComputeLabelHolder::instance().init(config());
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();

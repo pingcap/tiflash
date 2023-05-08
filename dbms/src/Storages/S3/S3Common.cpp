@@ -457,24 +457,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-        sts_cfg.verifySSL = false;
-        Aws::STS::STSClient sts_client(sts_cfg);
-        Aws::STS::Model::GetCallerIdentityRequest req;
-        LOG_DEBUG(log, "GetCallerIdentity start");
-        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
-        if (!get_identity_outcome.IsSuccess())
-        {
-            const auto & error = get_identity_outcome.GetError();
-            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
-        }
-        else
-        {
-            const auto & result = get_identity_outcome.GetResult();
-            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
-        }
-        LOG_DEBUG(log, "GetCallerIdentity end");
-
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
