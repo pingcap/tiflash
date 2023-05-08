@@ -956,27 +956,6 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow();
-    if (probe_process_info.end_row == probe_process_info.block.rows())
-    {
-        probe_process_info.all_rows_joined_finish = true;
-        /// generate an empty block
-        Block ret = probe_process_info.block;
-        size_t num_existing_columns = probe_process_info.block.columns();
-        size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-        for (size_t i = 0; i < num_existing_columns; ++i)
-        {
-            /// create an column with size 0
-            ret.getByPosition(i).column = ret.getByPosition(i).type->createColumn();
-        }
-        for (size_t i = 0; i < num_columns_to_add; ++i)
-        {
-            ColumnWithTypeAndName src_column = sample_block_with_columns_to_add.getByPosition(i);
-            RUNTIME_CHECK_MSG(!ret.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
-            src_column.column = src_column.type->createColumn();
-            ret.insert(src_column);
-        }
-        return ret;
-    }
     if (use_optimized_cross_probe)
     {
         auto block = probe_process_info.block;
@@ -984,7 +963,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     }
     else
     {
-        auto block = crossProbeBlock(kind, strictness, probe_process_info, sample_block_with_columns_to_add, blocks);
+        auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
         if (non_equal_conditions.other_cond_expr != nullptr)
         {
             assert(probe_process_info.offsets_to_replicate != nullptr);
@@ -1010,7 +989,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
 
 Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
-    probe_process_info.prepareForCrossProbe(non_equal_conditions.left_filter_column, kind, strictness);
+    probe_process_info.prepareForCrossProbe(non_equal_conditions.left_filter_column, kind, strictness, sample_block_with_columns_to_add);
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
 

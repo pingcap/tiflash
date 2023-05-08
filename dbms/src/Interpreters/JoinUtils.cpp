@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Columns/ColumnsCommon.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
@@ -37,6 +38,7 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     materialized_columns.clear();
     filter.reset();
     offsets_to_replicate.reset();
+    filtered_rows = 0;
 }
 
 void ProbeProcessInfo::updateStartRow()
@@ -153,7 +155,11 @@ void ProbeProcessInfo::prepareForHashProbe(const Names & key_names, const String
     prepare_for_probe_done = true;
 }
 
-void ProbeProcessInfo::prepareForCrossProbe(const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+void ProbeProcessInfo::prepareForCrossProbe(
+    const String & filter_column,
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    const Block & sample_block_with_columns_to_add)
 {
     if (prepare_for_probe_done)
         return;
@@ -163,6 +169,16 @@ void ProbeProcessInfo::prepareForCrossProbe(const String & filter_column, ASTTab
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
+
+    result_block_schema = block.cloneEmpty();
+    for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
+    {
+        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
+        RUNTIME_CHECK_MSG(!result_block_schema.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
+        result_block_schema.insert(src_column);
+    }
+    if (null_map != nullptr)
+        filtered_rows = countBytesInFilter(*null_map);
     prepare_for_probe_done = true;
 }
 

@@ -120,6 +120,10 @@ struct ProbeProcessInfo
     Columns materialized_columns;
     ColumnRawPtrs key_columns;
 
+    /// for cross probe
+    Block result_block_schema;
+    size_t filtered_rows = 0;
+
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
         , min_result_block_size((max_block_size + 1) / 2)
@@ -128,7 +132,7 @@ struct ProbeProcessInfo
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     void updateStartRow();
     void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
-    void prepareForCrossProbe(const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+    void prepareForCrossProbe(const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness, const Block & sample_block_with_columns_to_add);
 };
 struct JoinBuildInfo
 {

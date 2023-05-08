@@ -24,6 +24,5 @@ Block crossProbeBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const Block & sample_block_with_columns_to_add,
     const BlocksList & right_blocks);
 } // namespace DB
