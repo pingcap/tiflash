@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
+#include <aws/core/NoResult.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/core/utils/stream/ResponseStream.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
@@ -53,10 +53,6 @@
 #include <mutex>
 #include <string_view>
 
-namespace DB::FailPoints
-{
-extern const char force_set_mocked_s3_object_mtime[];
-} // namespace DB::FailPoints
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
@@ -91,7 +87,10 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
         boost::algorithm::split(v, request.GetRange().substr(prefix.size()), boost::algorithm::is_any_of("-"));
         RUNTIME_CHECK(v.size() == 2, request.GetRange());
         left = std::stoul(v[0]);
-        right = std::stoul(v[1]);
+        if (!v[1].empty())
+        {
+            right = std::stoul(v[1]);
+        }
     }
     auto size = right - left + 1;
     Model::GetObjectResult result;
@@ -253,24 +252,6 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
     if (itr_obj != bucket_storage.end())
     {
         auto r = Model::HeadObjectResult{};
-        auto try_set_mtime = [&] {
-            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
-            {
-                auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
-                const auto req_key = normalizedKey(request.GetKey());
-                if (auto iter_m = m.find(req_key); iter_m != m.end())
-                {
-                    r.SetLastModified(iter_m->second);
-                    LOG_WARNING(Logger::get(), "failpoint set mtime, key={} mtime={}", req_key, iter_m->second.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
-                }
-                else
-                {
-                    LOG_WARNING(Logger::get(), "failpoint set mtime failed, key={}", req_key);
-                }
-            }
-        };
-        UNUSED(try_set_mtime);
-        fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
         r.SetContentLength(itr_obj->second.size());
         return r;
     }
@@ -329,5 +310,18 @@ Model::DeleteBucketOutcome MockS3Client::DeleteBucket(const Model::DeleteBucketR
     return Model::DeleteBucketOutcome{};
 }
 
+Model::GetBucketLifecycleConfigurationOutcome MockS3Client::GetBucketLifecycleConfiguration(const Model::GetBucketLifecycleConfigurationRequest & request) const
+{
+    // just mock a stub
+    UNUSED(request);
+    return Model::GetBucketLifecycleConfigurationResult();
+}
+
+Model::PutBucketLifecycleConfigurationOutcome MockS3Client::PutBucketLifecycleConfiguration(const Model::PutBucketLifecycleConfigurationRequest & request) const
+{
+    // just mock a stub
+    UNUSED(request);
+    return Aws::NoResult();
+}
 
 } // namespace DB::S3::tests

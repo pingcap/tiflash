@@ -74,6 +74,8 @@ struct S3GCConfig
 
     S3GCMethod method = S3GCMethod::Lifecycle;
 
+    bool verify_locks = false;
+
     // Only has meaning when method == ScanThenDelete
     Int64 delmark_expired_hour = 1;
 
@@ -117,10 +119,13 @@ public:
         const String & datafile_key,
         const String & delmark_key,
         const Aws::Utils::DateTime & timepoint,
-        const Aws::Utils::DateTime & delmark_mtime);
+        const Aws::Utils::DateTime & delmark_mtime,
+        const LoggerPtr & sub_logger) const;
 
-    void lifecycleMarkDataFileDeleted(const String & datafile_key);
-    void physicalRemoveDataFile(const String & datafile_key);
+    void lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger);
+    void physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const;
+
+    void verifyLocks(const std::unordered_set<String> & valid_lock_files);
 
     static std::vector<UInt64> getAllStoreIds();
 

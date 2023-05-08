@@ -116,7 +116,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryFlushRegion(region_id);
+    tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region_id);
 
     output(fmt::format("region_table try flush region {}", region_id));
 }

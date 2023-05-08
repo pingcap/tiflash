@@ -57,20 +57,20 @@ DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) con
     return data.getLockInfo(query);
 }
 
-void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    return insert(NameToCF(cf), std::move(key), std::move(value));
+    return insert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(type, std::move(key), std::move(value));
+    return doInsert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    data.insert(type, std::move(key), std::move(value));
+    data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -630,7 +630,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     {
         return EngineStoreApplyRes::None;
     }
-
     auto & context = tmt.getContext();
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });

@@ -28,7 +28,7 @@ EventTask::EventTask(
     : exec_status(exec_status_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
 EventTask::EventTask(
@@ -40,7 +40,7 @@ EventTask::EventTask(
     , exec_status(exec_status_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
 EventTask::~EventTask()
@@ -50,13 +50,11 @@ EventTask::~EventTask()
     event.reset();
 }
 
-void EventTask::finalize() noexcept
+void EventTask::finalizeImpl() noexcept
 {
     try
     {
-        RUNTIME_CHECK(!finalized);
-        finalized = true;
-        finalizeImpl();
+        doFinalizeImpl();
     }
     catch (...)
     {
@@ -82,26 +80,16 @@ ExecTaskStatus EventTask::awaitImpl() noexcept
 ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action)
 {
     if (unlikely(exec_status.isCancelled()))
-    {
-        finalize();
         return ExecTaskStatus::CANCELLED;
-    }
+
     try
     {
         auto status = action();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint);
-        switch (status)
-        {
-        case FINISH_STATUS:
-            finalize();
-        default:
-            return status;
-        }
+        return status;
     }
     catch (...)
     {
-        finalize();
-        assert(event);
         LOG_WARNING(log, "error occurred and cancel the query");
         exec_status.onErrorOccurred(std::current_exception());
         return ExecTaskStatus::ERROR;

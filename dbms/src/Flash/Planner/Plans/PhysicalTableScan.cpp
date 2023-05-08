@@ -18,11 +18,13 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -54,7 +56,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
 
 void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(pipeline.streams.empty());
+    RUNTIME_CHECK(pipeline.streams.empty());
 
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
@@ -70,28 +72,56 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     }
 }
 
+void PhysicalTableScan::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
+{
+    storage_interpreter = std::make_unique<DAGStorageInterpreter>(
+        context,
+        tidb_table_scan,
+        filter_conditions,
+        context.getMaxStreams());
+    source_ops = storage_interpreter->execute(exec_status);
+    PhysicalPlanNode::buildPipeline(builder, context, exec_status);
+}
+
+void PhysicalTableScan::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context &,
+    size_t)
+{
+    group_builder.init(source_ops.size());
+    size_t i = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::move(source_ops[i++]));
+    });
+    storage_interpreter->executeSuffix(exec_status, group_builder);
+    buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
+}
+
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
-    RUNTIME_CHECK(
-        storage_schema.size() == schema.size(),
-        storage_schema.size(),
-        schema.size());
-    NamesWithAliases schema_project_cols;
-    for (size_t i = 0; i < schema.size(); ++i)
-    {
-        RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type),
-            schema[i].name,
-            schema[i].type->getName(),
-            storage_schema[i].name,
-            storage_schema[i].type->getName());
-        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
-        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
-    }
+    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
+}
+
+void PhysicalTableScan::buildProjection(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const NamesAndTypes & storage_schema)
+{
+    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+
+    /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
+    /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
+    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(group_builder.getCurrentHeader());
+    schema_actions->add(ExpressionAction::project(schema_project_cols));
+    executeExpression(exec_status, group_builder, schema_actions, log);
 }
 
 void PhysicalTableScan::finalize(const Names & parent_require)
@@ -124,7 +154,7 @@ bool PhysicalTableScan::hasFilterConditions() const
 
 const String & PhysicalTableScan::getFilterConditionsId() const
 {
-    assert(hasFilterConditions());
+    RUNTIME_CHECK(hasFilterConditions());
     return filter_conditions.executor_id;
 }
 } // namespace DB

@@ -119,7 +119,9 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
             }
         }
         remote_gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
-        remote_gc_config.method = S3::ClientFactory::instance().gc_method;
+        remote_gc_config.verify_locks = context.getSettingsRef().remote_gc_verify_consistency > 0;
+        // set the gc_method so that S3LockService can set tagging when create delmark
+        S3::ClientFactory::instance().gc_method = remote_gc_config.method;
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, remote_gc_config);
     }
 }
@@ -132,8 +134,11 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
     {
         // update the client config including pd_client
         cluster->update(raft_config.pd_addrs, cluster_config);
-        // update the etcd_client after pd_client get updated
-        etcd_client->update(cluster_config);
+        if (etcd_client)
+        {
+            // update the etcd_client after pd_client get updated
+            etcd_client->update(cluster_config);
+        }
     }
 }
 

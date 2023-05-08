@@ -66,6 +66,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         while (true)
         {
+            if unlikely (isCancelled())
+                return false;
             auto result = remote_reader->nextResult(block_queue, sample_block, stream_id, decoder_ptr);
             if (result.meet_error)
             {
@@ -170,7 +172,7 @@ public:
 protected:
     void readSuffixImpl() override
     {
-        LOG_INFO(log, "finish read {} rows from remote", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
     }
 
     void appendInfo(FmtBuffer & buffer) const override

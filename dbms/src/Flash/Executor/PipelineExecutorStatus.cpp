@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
-#include <assert.h>
 
 namespace DB
 {
@@ -58,12 +57,17 @@ void PipelineExecutorStatus::onErrorOccurred(const String & err_msg) noexcept
 
 bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept
 {
-    assert(exception_ptr_ != nullptr);
+    RUNTIME_ASSERT(exception_ptr_ != nullptr);
     std::lock_guard lock(mu);
     if (exception_ptr != nullptr)
         return false;
     exception_ptr = exception_ptr_;
     return true;
+}
+
+bool PipelineExecutorStatus::isWaitMode() noexcept
+{
+    return !result_queue.has_value();
 }
 
 void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept
@@ -79,9 +83,35 @@ void PipelineExecutorStatus::wait() noexcept
 {
     {
         std::unique_lock lock(mu);
+        RUNTIME_ASSERT(isWaitMode());
         cv.wait(lock, [&] { return 0 == active_event_count; });
     }
     LOG_DEBUG(log, "query finished and wait done");
+}
+
+ResultQueuePtr PipelineExecutorStatus::getConsumedResultQueue() noexcept
+{
+    std::lock_guard lock(mu);
+    RUNTIME_ASSERT(!isWaitMode());
+    auto consumed_result_queue = *result_queue;
+    assert(consumed_result_queue);
+    return consumed_result_queue;
+}
+
+void PipelineExecutorStatus::consume(ResultHandler & result_handler) noexcept
+{
+    RUNTIME_ASSERT(result_handler);
+    auto consumed_result_queue = getConsumedResultQueue();
+    Block ret;
+    while (consumed_result_queue->pop(ret) == MPMCQueueResult::OK)
+        result_handler(ret);
+    // In order to ensure that `onEventFinish` has finished calling at this point
+    // and avoid referencing the already destructed `mu` in `onEventFinish`.
+    {
+        std::lock_guard lock(mu);
+        RUNTIME_ASSERT(0 == active_event_count);
+    }
+    LOG_DEBUG(log, "query finished and consume done");
 }
 
 void PipelineExecutorStatus::onEventSchedule() noexcept
@@ -92,19 +122,25 @@ void PipelineExecutorStatus::onEventSchedule() noexcept
 
 void PipelineExecutorStatus::onEventFinish() noexcept
 {
-    bool query_finished = false;
+    std::lock_guard lock(mu);
+    RUNTIME_ASSERT(active_event_count > 0);
+    --active_event_count;
+    if (0 == active_event_count)
     {
-        std::lock_guard lock(mu);
-        assert(active_event_count > 0);
-        --active_event_count;
-        if (0 == active_event_count)
+        // It is not expected for a query to be finished more than one time.
+        RUNTIME_ASSERT(!is_finished);
+        is_finished = true;
+
+        if (isWaitMode())
         {
             cv.notify_all();
-            query_finished = true;
+        }
+        else
+        {
+            assert(*result_queue);
+            (*result_queue)->finish();
         }
     }
-    if (query_finished && result_queue.has_value())
-        (*result_queue)->finish();
 }
 
 void PipelineExecutorStatus::cancel() noexcept
@@ -112,9 +148,10 @@ void PipelineExecutorStatus::cancel() noexcept
     is_cancelled.store(true, std::memory_order_release);
 }
 
-ResultQueuePtr PipelineExecutorStatus::registerResultQueue(size_t queue_size) noexcept
+ResultQueuePtr PipelineExecutorStatus::toConsumeMode(size_t queue_size) noexcept
 {
-    assert(!result_queue.has_value());
+    std::lock_guard lock(mu);
+    RUNTIME_ASSERT(!result_queue.has_value());
     result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
     return *result_queue;
 }

@@ -22,6 +22,8 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 template <typename Impl>
@@ -52,6 +54,9 @@ void TaskThreadPool<Impl>::waitForStop()
 template <typename Impl>
 void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 {
+    metrics.incThreadCnt();
+    SCOPE_EXIT({ metrics.decThreadCnt(); });
+
     auto thread_no_str = fmt::format("thread_no={}", thread_no);
     auto thread_logger = logger->getChild(thread_no_str);
     setThreadName(thread_no_str.c_str());
@@ -61,6 +66,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
     TaskPtr task;
     while (likely(task_queue->take(task)))
     {
+        metrics.decPendingTask();
         handleTask(task, thread_logger);
         assert(!task);
         ASSERT_MEMORY_TRACKER
@@ -75,16 +81,23 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
     assert(task);
     TRACE_MEMORY(task);
 
+    metrics.incExecutingTask();
+
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
     while (true)
     {
         status = Impl::exec(task);
+        auto execute_time_ns = stopwatch.elapsed();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != Impl::TargetStatus || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        {
+            metrics.updateTaskMaxtimeOnRound(execute_time_ns);
             break;
+        }
     }
 
+    metrics.decExecutingTask();
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
@@ -97,6 +110,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
+        task->finalize();
         task.reset();
         break;
     default:
@@ -107,12 +121,14 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
 template <typename Impl>
 void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
 {
+    metrics.incPendingTask(1);
     task_queue->submit(std::move(task));
 }
 
 template <typename Impl>
 void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
 {
+    metrics.incPendingTask(tasks.size());
     task_queue->submit(tasks);
 }
 

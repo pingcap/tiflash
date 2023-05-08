@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Common/ComputeLabelHolder.h>
+#include <Common/ProcessCollector.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -63,6 +65,7 @@ namespace DB
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
         F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
         F(type_expand, {"type", "expand"}))                                                                                                         \
+    M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                               \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
@@ -218,8 +221,8 @@ namespace DB
         F(type_lock_conflict, {"type", "lock_conflict"}), F(type_delete_conflict, {"type", "delete_conflict"}),                                     \
         F(type_delete_risk, {"type", "delete_risk"}))                                                                                               \
     M(tiflash_disaggregated_object_lock_request_duration_seconds, "Bucketed histogram of S3 object lock/delete request duration", Histogram,        \
-        F(type_lock, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                  \
-        F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
+        F(type_lock, {{"type", "lock"}}, ExpBuckets{0.001, 2, 20}),                                                                                 \
+        F(type_delete, {{"type", "delete"}}, ExpBuckets{0.001, 2, 20}))                                                                             \
     M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                                   \
     M(tiflash_disaggregated_breakdown_duration_seconds, "", Histogram,                                                                              \
         F(type_rpc_establish, {{"type", "rpc_establish"}}, ExpBuckets{0.01, 2, 20}),                                                                \
@@ -319,10 +322,29 @@ namespace DB
     M(tiflash_storage_remote_stats, "The file stats on remote store", Gauge,                                                                        \
         F(type_total_size, {"type", "total_size"}), F(type_valid_size, {"type", "valid_size"}),                                                     \
         F(type_num_files, {"type", "num_files"}))                                                                                                   \
+    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time",                                                                    \
+        Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
+        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                                          \
+        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                                  \
+        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                                        \
+        F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))                                                  \
     M(tiflash_storage_checkpoint_flow, "The bytes flow cause by remote checkpoint", Counter,                                                        \
         F(type_incremental, {"type", "incremental"}), F(type_compaction, {"type", "compaction"}))                                                   \
+    M(tiflash_storage_checkpoint_keys_by_types, "The keys flow cause by remote checkpoint", Counter,                                                \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
+    M(tiflash_storage_checkpoint_flow_by_types, "The bytes flow cause by remote checkpoint", Counter,                                               \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
+    M(tiflash_storage_page_data_by_types, "The existing bytes stored in UniPageStorage", Gauge,                                                     \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_put_dmfile, {{"type", "put_dmfile"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
@@ -330,7 +352,31 @@ namespace DB
         F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
-        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+        F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                                  \
+    M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
+        F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
+        F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \
+        F(type_cpu_executing_tasks_count, {"type", "cpu_executing_tasks_count"}),                                                                   \
+        F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                                         \
+        F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
+        F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
+        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
+        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
+        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
+    M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
+        F(type_to_init, {"type", "to_init"}),                                                                                                       \
+        F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
+        F(type_to_running, {"type", "to_running"}),                                                                                                 \
+        F(type_to_io, {"type", "to_io"}),                                                                                                           \
+        F(type_to_finished, {"type", "to_finished"}),                                                                                               \
+        F(type_to_error, {"type", "to_error"}),                                                                                                     \
+        F(type_to_cancelled, {"type", "to_cancelled"}))                                                                                             \
+    M(tiflash_storage_s3_gc_status, "S3 GC status", Gauge,                                                                                          \
+        F(type_lifecycle_added, {{"type", "lifecycle_added"}}),                                                                                     \
+        F(type_lifecycle_failed, {{"type", "lifecycle_failed"}}),                                                                                   \
+        F(type_owner, {{"type", "owner"}}),                                                                                                         \
+        F(type_running, {{"type", "running"}}))                                                                                                     \
     M(tiflash_storage_s3_gc_seconds, "S3 GC subprocess duration in seconds",                                                                        \
         Histogram,  /* these command usually cost several seconds, increase the start bucket to 500ms */                                            \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 20}),                                                                                 \
@@ -340,10 +386,25 @@ namespace DB
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
         F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
-    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
-        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
-        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.001, 2, 20}))
+    M(tiflash_storage_remote_cache, "Operations of remote cache", Counter,                                                                          \
+        F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                                 \
+        F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                               \
+        F(type_dtfile_evict, {"type", "dtfile_evict"}),                                                                                             \
+        F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                               \
+        F(type_dtfile_download, {"type", "dtfile_download"}),                                                                                       \
+        F(type_dtfile_download_failed, {"type", "dtfile_download_failed"}),                                                                         \
+        F(type_page_hit, {"type", "page_hit"}),                                                                                                     \
+        F(type_page_miss, {"type", "page_miss"}),                                                                                                   \
+        F(type_page_evict, {"type", "page_evict"}),                                                                                                 \
+        F(type_page_full, {"type", "page_full"}),                                                                                                   \
+        F(type_page_download, {"type", "page_download"}))                                                                                           \
+    M(tiflash_storage_remote_cache_bytes, "Flow of remote cache", Counter,                                                                          \
+        F(type_dtfile_evict_bytes, {"type", "dtfile_evict_bytes"}),                                                                                 \
+        F(type_dtfile_download_bytes, {"type", "dtfile_download_bytes"}),                                                                           \
+        F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
+        F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
+        F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))
 
 // clang-format on
 
@@ -468,10 +529,19 @@ private:
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
+    // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
+    // Normally, these metrics will be collected by tiflash-proxy,
+    // but in disaggregated compute mode with AutoScaler, tiflash-proxy will not start, so tiflash will collect these metrics itself.
+    std::shared_ptr<ProcessCollector> cn_process_collector = std::make_shared<ProcessCollector>();
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
+
+    prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
+    using KeyspaceID = UInt32;
+    std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
+    prometheus::Gauge * store_used_total_metric;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

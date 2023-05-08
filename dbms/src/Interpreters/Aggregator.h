@@ -672,6 +672,10 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     Type type{Type::EMPTY};
 
+    bool need_spill = false;
+
+    bool tryMarkNeedSpill();
+
     void destroyAggregationMethodImpl();
 
     AggregatedDataVariants()
@@ -1055,7 +1059,7 @@ public:
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
-    bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
+    bool hasSpilledData() const { return spill_triggered; }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
 
@@ -1121,6 +1125,7 @@ protected:
 
     /// For external aggregation.
     std::unique_ptr<Spiller> spiller;
+    std::atomic<bool> spill_triggered{false};
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();

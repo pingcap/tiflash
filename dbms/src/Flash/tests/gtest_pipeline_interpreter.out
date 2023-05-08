@@ -160,22 +160,8 @@ pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Projection|NonTiDBOpe
 ~test_suite_name: ParallelQuery
 ~result_index: 22
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = limit_2>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     SharedQuery: <restore concurrency>
-      Limit, limit = 1
-       Union: <for partial limit>
-        Limit x 10, limit = 1
-         MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_3, has_non_joined_data = false>
-     Expression: <final projection>
-      MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_3 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_1 -> Limit|limit_2 -> Projection|NonTiDBOperator -> JoinBuild|Join_3
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 0
@@ -281,34 +267,14 @@ pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> TopN|topn_1 -> Projectio
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 8: <join build, build_side_root_executor_id = exchange_receiver_1 enable fine grained shuffle>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|Join_2
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 1
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|Join_2
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
@@ -324,142 +290,47 @@ pipeline#0: AggregationConvergent|aggregation_1 -> Projection|NonTiDBOperator
 ~test_suite_name: Join
 ~result_index: 0
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
- Union x 2: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
-       Expression: <final projection>
-        MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
-     Expression: <final projection>
-      MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|Join_6
+  |- pipeline#2: MockTableScan|table_scan_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|Join_5
+   |- pipeline#3: MockTableScan|table_scan_3 -> Projection|NonTiDBOperator -> JoinBuild|Join_4
 @
 ~test_suite_name: Join
 ~result_index: 1
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
-       Expression: <final projection>
-        MockExchangeReceiver
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
-     Expression: <final projection>
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|Join_6
+  |- pipeline#2: MockExchangeReceiver|exchange_receiver_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|Join_5
+   |- pipeline#3: MockExchangeReceiver|exchange_receiver_3 -> Projection|NonTiDBOperator -> JoinBuild|Join_4
 @
 ~test_suite_name: Join
 ~result_index: 2
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4, has_non_joined_data = false>
-       Expression: <final projection>
-        MockExchangeReceiver
- Union: <for test>
-  MockExchangeSender x 10
-   Expression: <final projection>
-    Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6, has_non_joined_data = false>
-      Expression: <final projection>
-       MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_6 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_7
+ |- pipeline#1: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|NonTiDBOperator -> JoinBuild|Join_6
+  |- pipeline#2: MockExchangeReceiver|exchange_receiver_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_4 -> Projection|NonTiDBOperator -> JoinBuild|Join_5
+   |- pipeline#3: MockExchangeReceiver|exchange_receiver_3 -> Projection|NonTiDBOperator -> JoinBuild|Join_4
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 0
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <expr after aggregation>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <before aggregation>
-       Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = false>
-         Expression: <final projection>
-          MockTableScan
+pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|aggregation_3
+  |- pipeline#2: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinBuild|Join_2
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 1
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <expr after aggregation>
-    SharedQuery: <restore concurrency>
-     ParallelAggregating, max_threads: 10, final: true
-      Expression x 10: <before aggregation>
-       Expression: <remove useless column after join>
-        HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
-         Expression: <append join key and join filters for probe side>
-          Expression: <final projection>
-           MockTableScan
+pipeline#0: AggregationConvergent|aggregation_3 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|aggregation_3
+  |- pipeline#2: MockTableScan|table_scan_1 -> Projection|NonTiDBOperator -> JoinBuild|Join_2
 @
 ~test_suite_name: JoinThenAgg
 ~result_index: 2
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union: <for test>
-  MockExchangeSender x 20
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
-     Limit, limit = 10
-      Union: <for partial limit>
-       Limit x 20, limit = 10
-        Expression: <expr after aggregation>
-         SharedQuery: <restore concurrency>
-          ParallelAggregating, max_threads: 20, final: true
-           Expression x 20: <before aggregation>
-            Expression: <remove useless column after join>
-             HashJoinProbe: <join probe, join_executor_id = Join_2, has_non_joined_data = true>
-              Expression: <append join key and join filters for probe side>
-               Expression: <final projection>
-                MockExchangeReceiver
+pipeline#0: AggregationConvergent|aggregation_3 -> Limit|limit_4 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_5
+ |- pipeline#1: MockExchangeReceiver|exchange_receiver_0 -> Projection|NonTiDBOperator -> JoinProbe|Join_2 -> AggregationBuild|aggregation_3
+  |- pipeline#2: MockExchangeReceiver|exchange_receiver_1 -> Projection|NonTiDBOperator -> JoinBuild|Join_2
 @
 ~test_suite_name: ListBase
 ~result_index: 0
@@ -476,27 +347,6 @@ pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> TopN|to
 ~test_suite_name: ExpandPlan
 ~result_index: 0
 ~result:
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <projection>
-      MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   SharedQuery: <restore concurrency>
-    MergeSorting, limit = 2
-     Union: <for partial order>
-      PartialSorting x 10: limit = 2
-       Expression: <projection>
-        Expression: <remove useless column after join>
-         HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
-          Expression: <final projection>
-           Expression: <expand, expand_executor_id = expand_2: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
-            Expression: <expr after aggregation>
-             SharedQuery: <restore concurrency>
-              ParallelAggregating, max_threads: 10, final: true
-               Expression x 10: <before aggregation>
-                MockExchangeReceiver
+pipeline#0: AggregationConvergent|aggregation_1 -> Expand|expand_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|project_6 -> TopN|topn_7 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_3 -> Projection|project_4 -> Projection|NonTiDBOperator -> JoinBuild|Join_5 |- pipeline#2: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|aggregation_1
 @

@@ -28,6 +28,8 @@ class DAGRequest;
 
 namespace DB
 {
+struct Settings;
+
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
 using Pipelines = std::vector<PipelinePtr>;
@@ -72,11 +74,21 @@ public:
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
-    static bool isSupported(const tipb::DAGRequest & dag_request);
+    static bool isSupported(const tipb::DAGRequest & dag_request, const Settings & settings);
 
     Block getSampleBlock() const;
 
     bool isFineGrainedMode() const;
+
+    /// This method will not be called for fine grained pipeline.
+    /// This method is used to execute two-stage logic and is not suitable for fine grained execution mode,
+    /// such as local/global join build and local/final agg spill.
+    ///  ┌─stage1─┐      ┌─stage2─┐
+    ///     task1──┐    ┌──►task1
+    ///     task2──┼──►─┼──►task2
+    ///     ...    │    │   ...
+    ///     taskn──┘    └──►taskm
+    EventPtr complete(PipelineExecutorStatus & exec_status);
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
@@ -87,6 +99,8 @@ private:
 private:
     const UInt32 id;
     LoggerPtr log;
+
+    bool is_fine_grained_mode = true;
 
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;

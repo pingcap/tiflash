@@ -23,7 +23,7 @@ class ExchangeReceiverBinder;
 class JoinBinder : public ExecutorBinder
 {
 public:
-    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_, bool is_null_aware_semi_join)
+    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_, bool is_null_aware_semi_join, int64_t inner_index_ = 1)
         : ExecutorBinder(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
         , join_cols(join_cols_)
@@ -33,9 +33,8 @@ public:
         , other_eq_conds_from_in(o_eq_conds)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
         , is_null_aware_semi_join(is_null_aware_semi_join)
+        , inner_index(inner_index_)
     {
-        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
-            throw Exception("No join condition found.");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
@@ -61,9 +60,22 @@ protected:
     const ASTs other_eq_conds_from_in{};
     uint64_t fine_grained_shuffle_stream_count;
     bool is_null_aware_semi_join;
+    int64_t inner_index;
 };
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
-ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {}, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
+ExecutorBinderPtr compileJoin(
+    size_t & executor_index,
+    ExecutorBinderPtr left,
+    ExecutorBinderPtr right,
+    tipb::JoinType tp,
+    const ASTs & join_cols,
+    const ASTs & left_conds = {},
+    const ASTs & right_conds = {},
+    const ASTs & other_conds = {},
+    const ASTs & other_eq_conds_from_in = {},
+    uint64_t fine_grained_shuffle_stream_count = 0,
+    bool is_null_aware_semi_join = false,
+    int64_t inner_index = 1);
 
 
 /// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,

@@ -620,7 +620,6 @@ ConfigurationPtr Context::getUsersConfig()
 
 void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
-    LOG_INFO(log, "Setting secuirty config.");
     auto lock = getLock();
     shared->security_config = std::make_shared<TiFlashSecurityConfig>(log);
     shared->security_config->init(config);
@@ -1466,8 +1465,8 @@ void Context::initializePathCapacityMetric( //
     const std::vector<size_t> & main_capacity_quota, //
     const Strings & latest_data_paths,
     const std::vector<size_t> & latest_capacity_quota,
-    const String & remote_cache_data_path,
-    size_t remote_cache_capacity)
+    const Strings & remote_cache_paths,
+    const std::vector<size_t> & remote_cache_capacity_quota)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
@@ -1478,8 +1477,8 @@ void Context::initializePathCapacityMetric( //
         main_capacity_quota,
         latest_data_paths,
         latest_capacity_quota,
-        remote_cache_data_path,
-        remote_cache_capacity);
+        remote_cache_paths,
+        remote_cache_capacity_quota);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const

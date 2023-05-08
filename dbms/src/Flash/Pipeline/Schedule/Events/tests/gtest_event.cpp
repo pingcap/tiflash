@@ -59,12 +59,10 @@ public:
     static constexpr auto task_num = 10;
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
-        return tasks;
+            addTask(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
     }
 
     void finishImpl() override
@@ -108,15 +106,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
-            return {};
+            return;
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -151,19 +147,17 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
         {
             while (!exec_status.isCancelled())
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            return {};
+            return;
         }
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -180,10 +174,9 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         exec_status.onErrorOccurred(err_msg);
-        return {};
     }
 };
 
@@ -195,10 +188,9 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         assert(mem_tracker.get() == current_memory_tracker);
-        return {};
     }
 
     void finishImpl() override
@@ -234,15 +226,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_task)
             throw Exception("throw exception in scheduleImpl");
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
     }
 
     void finishImpl() override
@@ -266,19 +256,63 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (0 == task_num)
-            return {};
+            return;
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
     size_t task_num;
+};
+
+class DoInsertEvent : public Event
+{
+public:
+    DoInsertEvent(
+        PipelineExecutorStatus & exec_status_,
+        int16_t & counter_)
+        : Event(exec_status_, nullptr)
+        , counter(counter_)
+    {
+        assert(counter > 0);
+    }
+
+protected:
+    void scheduleImpl() override
+    {
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+    }
+
+    void finishImpl() override
+    {
+        --counter;
+        if (counter > 0)
+            insertEvent(std::make_shared<DoInsertEvent>(exec_status, counter));
+    }
+
+private:
+    int16_t & counter;
+};
+
+class CreateTaskFailEvent : public Event
+{
+public:
+    explicit CreateTaskFailEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_, nullptr)
+    {
+    }
+
+protected:
+    void scheduleImpl() override
+    {
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        throw Exception("create task fail");
+    }
 };
 } // namespace
 
@@ -287,13 +321,13 @@ class EventTestRunner : public ::testing::Test
 public:
     void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
-        Events without_input_events;
+        Events sources;
         for (const auto & event : events)
         {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
+            if (event->prepare())
+                sources.push_back(event);
         }
-        for (const auto & event : without_input_events)
+        for (const auto & event : sources)
         {
             if (thread_manager)
                 thread_manager->schedule(false, "event", [event]() { event->schedule(); });
@@ -436,8 +470,8 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            assert(on_err_event->withoutInput());
-            on_err_event->schedule();
+            if (on_err_event->prepare())
+                on_err_event->schedule();
         }
         wait(exec_status);
         auto err_msg = exec_status.getExceptionMsg();
@@ -452,19 +486,20 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, memory_trace)
+TEST_F(EventTestRunner, memoryTrace)
 try
 {
     PipelineExecutorStatus exec_status;
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
-    event->schedule();
+    if (event->prepare())
+        event->schedule();
     wait(exec_status);
     assertNoErr(exec_status);
 }
 CATCH
 
-TEST_F(EventTestRunner, throw_exception)
+TEST_F(EventTestRunner, throwException)
 try
 {
     std::vector<bool> with_tasks{false, true};
@@ -492,17 +527,56 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, many_tasks)
+TEST_F(EventTestRunner, manyTasks)
 try
 {
     for (size_t i = 0; i < 200; i += 7)
     {
         PipelineExecutorStatus exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
-        event->schedule();
+        if (event->prepare())
+            event->schedule();
         wait(exec_status);
         assertNoErr(exec_status);
     }
+}
+CATCH
+
+TEST_F(EventTestRunner, insert_events)
+try
+{
+    PipelineExecutorStatus exec_status;
+    std::vector<int16_t> counters;
+    for (size_t i = 0; i < 10; ++i)
+        counters.push_back(99);
+    {
+        std::vector<EventPtr> events;
+        for (auto & counter : counters)
+            events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter));
+        auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);
+        for (const auto & event : events)
+            err_event->addInput(event);
+        events.push_back(err_event);
+        schedule(events);
+    }
+    wait(exec_status);
+    auto exception_ptr = exec_status.getExceptionPtr();
+    ASSERT_TRUE(exception_ptr);
+    for (auto & counter : counters)
+        ASSERT_EQ(0, counter);
+}
+CATCH
+
+TEST_F(EventTestRunner, createTaskFail)
+try
+{
+    PipelineExecutorStatus exec_status;
+    auto event = std::make_shared<CreateTaskFailEvent>(exec_status);
+    if (event->prepare())
+        event->schedule();
+    wait(exec_status);
+    auto exception_ptr = exec_status.getExceptionPtr();
+    ASSERT_TRUE(exception_ptr);
 }
 CATCH
 

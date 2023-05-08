@@ -137,9 +137,14 @@
     M(S3ListObjects)                           \
     M(S3DeleteObject)                          \
     M(S3CopyObject)                            \
+    M(S3GetObjectRetry)                        \
+    M(S3PutObjectRetry)                        \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
-    M(FileCacheEvict)
+    M(FileCacheEvict)                          \
+    M(S3PutDMFile)                             \
+    M(S3PutDMFileRetry)                        \
+    M(S3WriteDMFileBytes)
 
 namespace ProfileEvents
 {

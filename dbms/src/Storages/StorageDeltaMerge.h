@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/UniThreadPool.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -181,12 +182,19 @@ public:
 
     void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
 
-    bool initStoreIfDataDirExist() override;
+    bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
     DM::DMConfigurationOpt createChecksumConfig() const
     {
         return DM::DMChecksumConfig::fromDBContext(global_context);
     }
+
+    static DM::PushDownFilterPtr buildPushDownFilter(const DM::RSOperatorPtr & rs_operator,
+                                                     const ColumnInfos & table_scan_column_info,
+                                                     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+                                                     const DM::ColumnDefines & columns_to_read,
+                                                     const Context & context,
+                                                     const LoggerPtr & tracing_logger);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -217,7 +225,7 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr & getAndMaybeInitStore();
+    DM::DeltaMergeStorePtr & getAndMaybeInitStore(ThreadPool * thread_pool = nullptr);
     bool storeInited() const
     {
         return store_inited.load(std::memory_order_acquire);
@@ -227,6 +235,10 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
+    DM::RSOperatorPtr buildRSOperator(const SelectQueryInfo & query_info,
+                                      const DM::ColumnDefines & columns_to_read,
+                                      const Context & context,
+                                      const LoggerPtr & tracing_logger);
     /// Get filters from query to construct rough set operation and push down filters.
     DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
                                               const DM::ColumnDefines & columns_to_read,

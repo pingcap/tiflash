@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
@@ -51,6 +52,7 @@ public:
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
+            task->finalize();
             task.reset();
             return true;
         default:
@@ -105,6 +107,7 @@ private:
 WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 
@@ -158,6 +161,8 @@ void WaitReactor::loop() noexcept
                 ++task_it;
             ASSERT_MEMORY_TRACKER
         }
+
+        GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
         if (!spinner.submitReadyTasks())
             spinner.tryYield();

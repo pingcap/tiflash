@@ -100,7 +100,8 @@ namespace DB
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
-    M(skip_seek_before_read_dmfile)
+    M(skip_seek_before_read_dmfile)                          \
+    M(exception_after_large_write_exceed)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -145,7 +146,9 @@ namespace DB
     M(random_pipeline_model_operator_run_failpoint)     \
     M(random_pipeline_model_cancel_failpoint)           \
     M(random_spill_to_disk_failpoint)                   \
-    M(random_restore_from_disk_failpoint)
+    M(random_restore_from_disk_failpoint)               \
+    M(random_exception_when_connect_local_tunnel)       \
+    M(random_exception_when_construct_async_request_handler)
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";

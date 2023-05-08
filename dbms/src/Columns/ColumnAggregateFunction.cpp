@@ -210,9 +210,9 @@ size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
     }
     else
     {
-        /// For non-trivial agg like uniqXXX/group_concat, can't estimate the memory usage, so just return byteSize(),
+        /// For non-trivial agg like uniqXXX/group_concat, can't estimate the memory usage, so just return allocateBytes(),
         /// it will highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
-        return byteSize();
+        return allocatedBytes();
     }
 }
 

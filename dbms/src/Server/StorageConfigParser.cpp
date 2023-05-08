@@ -270,13 +270,13 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     if (!config.has("path"))
         return false;
 
-    LOG_WARNING(log, "The configuration \"path\" is deprecated. Check [storage] section for new style.");
+    LOG_WARNING(log, "The configuration `path` is deprecated. Check [storage] section for new style.");
 
     String paths = config.getString("path");
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception(
-            fmt::format("The configuration \"path\" is empty! [path={}]", config.getString("path")),
+            fmt::format("The configuration `path` is empty! [path={}]", config.getString("path")),
             ErrorCodes::INVALID_CONFIG_PARAMETER);
     Strings all_normal_path;
     Poco::StringTokenizer string_tokens(paths, ",");
@@ -309,7 +309,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
         String str_kvstore_path;
         if (config.has("raft.kvstore_path"))
         {
-            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check [storage.raft] section for new style.");
+            LOG_WARNING(log, "The configuration `raft.kvstore_path` is deprecated. Check [storage.raft] section for new style.");
             str_kvstore_path = config.getString("raft.kvstore_path");
         }
         if (str_kvstore_path.empty())
@@ -348,9 +348,9 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     if (config.has("storage.main"))
     {
         if (config.has("path"))
-            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
+            LOG_WARNING(log, "The configuration `path` is ignored when `storage` is defined.");
         if (config.has("capacity"))
-            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
+            LOG_WARNING(log, "The configuration `capacity` is ignored when `storage` is defined.");
 
         storage_config.parseStoragePath(config.getString("storage"), log);
 
@@ -360,7 +360,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             String deprecated_kvstore_path = config.getString("raft.kvstore_path");
             if (!deprecated_kvstore_path.empty())
             {
-                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
+                LOG_WARNING(log, "The configuration `raft.kvstore_path` is deprecated. Check `storage.raft.dir` for new style.");
                 kvstore_paths.clear();
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
                 for (auto & kvstore_path : kvstore_paths)
@@ -379,7 +379,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         // capacity
         if (config.has("capacity"))
         {
-            LOG_WARNING(log, "The configuration \"capacity\" is deprecated. Check [storage] section for new style.");
+            LOG_WARNING(log, "The configuration `capacity` is deprecated. Check [storage] section for new style.");
             // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
             // eg. 100GiB, 10MiB
             String capacities = config.getString("capacity");
@@ -402,7 +402,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         if (!storage_config.parseFromDeprecatedConfiguration(config, log))
         {
             // Can not parse from the deprecated configuration "path".
-            String msg = "The configuration \"storage.main\" section is not defined. Please check your configuration file.";
+            String msg = "The configuration `storage.main` section is not defined. Please check your configuration file.";
             LOG_ERROR(log, "{}", msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
@@ -639,7 +639,17 @@ void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & l
     RUNTIME_CHECK(dtfile_level <= 100);
     readConfig(table, "delta_rate", delta_rate);
     RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
-    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}", dir, capacity, dtfile_level, delta_rate);
+    readConfig(table, "reserved_rate", reserved_rate);
+    RUNTIME_CHECK(std::isgreaterequal(reserved_rate, 0.0) && std::islessequal(reserved_rate, 0.5), reserved_rate);
+    RUNTIME_CHECK(std::islessequal(delta_rate + reserved_rate, 1.0), delta_rate, reserved_rate);
+    LOG_INFO(
+        log,
+        "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}, reserved_rate={}",
+        dir,
+        capacity,
+        dtfile_level,
+        delta_rate,
+        reserved_rate);
 }
 
 bool StorageRemoteCacheConfig::isCacheEnabled() const
@@ -677,12 +687,29 @@ String StorageRemoteCacheConfig::getPageCacheDir() const
 
 UInt64 StorageRemoteCacheConfig::getDTFileCapacity() const
 {
-    return capacity - getPageCapacity();
+    return capacity - getPageCapacity() - getReservedCapacity();
 }
 
 UInt64 StorageRemoteCacheConfig::getPageCapacity() const
 {
     return capacity * delta_rate;
+}
+
+UInt64 StorageRemoteCacheConfig::getReservedCapacity() const
+{
+    return capacity * reserved_rate;
+}
+
+std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInfos(bool is_compute_mode) const
+{
+    if (is_compute_mode && isCacheEnabled())
+    {
+        return {Strings{getDTFileCacheDir(), getPageCacheDir()}, std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
+    }
+    else
+    {
+        return {};
+    }
 }
 
 } // namespace DB

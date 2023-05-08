@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
@@ -112,10 +113,13 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         readIntBinary(page_id, buf);
 
         DMFilePtr dmfile;
+        auto path_delegate = context.path_pool->getStableDiskDelegator();
         if (remote_data_store)
         {
             auto wn_ps = context.db_context.getWriteNodePageStorage();
             auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), page_id);
+            auto full_external_id = wn_ps->getNormalPageId(full_page_id);
+            auto local_external_id = UniversalPageIdFormat::getU64ID(full_external_id);
             auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
             const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
             auto file_oid = lock_key_view.asDataFile().getDMFileOID();
@@ -123,11 +127,12 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
             RUNTIME_CHECK(file_oid.table_id == context.physical_table_id);
             auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
             dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            // gc only begin to run after restore so we can safely call addRemoteDTFileIfNotExists here
+            path_delegate.addRemoteDTFileIfNotExists(local_external_id, dmfile->getBytesOnDisk());
         }
         else
         {
             auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
-            auto path_delegate = context.path_pool->getStableDiskDelegator();
             auto file_parent_path = path_delegate.getDTFilePath(file_id);
             dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
             auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
@@ -187,6 +192,8 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
         auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
         auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
+        // new_local_page_id is already applied to PageDirectory so we can safely call addRemoteDTFileIfNotExists here
+        delegator.addRemoteDTFileIfNotExists(new_local_page_id, dmfile->getBytesOnDisk());
         stable->files.push_back(dmfile);
     }
 
@@ -248,10 +255,19 @@ String StableValueSpace::getDMFilesString()
     return s;
 }
 
-void StableValueSpace::enableDMFilesGC()
+void StableValueSpace::enableDMFilesGC(DMContext & context)
 {
-    for (auto & file : files)
-        file->enableGC();
+    if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+    {
+        for (auto & file : files)
+            file->enableGC();
+    }
+    else
+    {
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        for (auto & file : files)
+            delegator.enableGCForRemoteDTFile(file->fileId());
+    }
 }
 
 void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const

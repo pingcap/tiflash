@@ -165,16 +165,16 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns [[maybe_unused]])
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns [[maybe_unused]], bool keep_order)
 {
     assert(!columns.empty());
-    root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false);
+    root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false, keep_order);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns, bool keep_order)
 {
-    return mockTable(name.first, name.second, table_info, columns);
+    return mockTable(name.first, name.second, table_info, columns, keep_order);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count)
@@ -289,11 +289,12 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec other_conds,
     MockAstVec other_eq_conds_from_in,
     uint64_t fine_grained_shuffle_stream_count,
-    bool is_null_aware_semi_join)
+    bool is_null_aware_semi_join,
+    int64_t inner_index)
 {
     assert(root);
     assert(right.root);
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join, inner_index);
     return *this;
 }
 
@@ -557,23 +558,40 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
     }
 }
 
-DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
+DAGRequestBuilder MockDAGRequestContext::scan(
+    const String & db_name,
+    const String & table_name,
+    bool keep_order)
 {
     if (!mock_storage->useDeltaMerge())
     {
         auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
-        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+        return DAGRequestBuilder(index, collation)
+            .mockTable(
+                {db_name, table_name},
+                table_info,
+                mock_storage->getTableSchema(db_name + "." + table_name),
+                keep_order);
     }
     else
     {
         auto table_info = mock_storage->getTableInfoForDeltaMerge(db_name + "." + table_name);
-        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name));
+        return DAGRequestBuilder(index, collation)
+            .mockTable(
+                {db_name, table_name},
+                table_info,
+                mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name),
+                keep_order);
     }
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_name, mock_storage->getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation)
+                       .exchangeReceiver(
+                           exchange_name,
+                           mock_storage->getExchangeSchema(exchange_name),
+                           fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     mock_storage->addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;

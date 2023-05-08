@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 #include <signal.h>
 
@@ -85,10 +86,12 @@ int main(int argc, char ** argv)
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
     const auto s3_root = Poco::Environment::get("S3_ROOT", "tiflash_ut/");
+    const auto s3_verbose = Poco::Environment::get("S3_VERBOSE", "false");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
     const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
     const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
     auto s3config = DB::StorageS3Config{
+        .verbose = s3_verbose == "true",
         .endpoint = s3_endpoint,
         .bucket = s3_bucket,
         .access_key_id = access_key_id,
@@ -97,6 +100,7 @@ int main(int argc, char ** argv)
     };
     s3config.enable(/*check_requirements*/ false, DB::Logger::get());
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    DB::tests::TiFlashTestEnv::setIsMockedS3Client(mock_s3 == "true");
     DB::S3::ClientFactory::instance().init(s3config, mock_s3 == "true");
 
 #ifdef FIU_ENABLE
