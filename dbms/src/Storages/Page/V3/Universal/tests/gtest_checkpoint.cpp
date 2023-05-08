@@ -1132,6 +1132,9 @@ try
     EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9);
     auto upload_info = new_service->uni_page_storage->allocateNewUploadLocksInfo();
     EXPECT_EQ(upload_info.upload_sequence, 3);
+
+    // TODO: Add check for PageDiectory
+
 }
 CATCH
 

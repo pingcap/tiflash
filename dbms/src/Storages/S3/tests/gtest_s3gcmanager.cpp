@@ -73,7 +73,7 @@ public:
         auto data_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
         gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, data_store, config);
 
-        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        // ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
 
         tmp_dir = getTemporaryPath();
         data_file_path_pattern1 = tmp_dir + "/data1_{index}";
@@ -90,7 +90,7 @@ public:
 
     void TearDown() override
     {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
+        // ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
     }
 
 protected:
@@ -122,6 +122,36 @@ public:
         };
     }
 };
+
+TEST_F(S3GCManagerTest, Test)
+try
+{
+    Strings mfs{
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_247",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_248",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_249",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_250",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_251",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_252",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_253",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_254",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_255",
+        "/DATA/disk1/jaysonhuang/qa/0505/manifest/mf_256",
+    };
+
+#if 0
+    for (const auto & mf : mfs)
+    {
+        Strings t{mf};
+        auto valid_locks = gc_mgr->getValidLocksFromManifest(t);
+        // LOG_INFO(log, "file={} size={} keys={}", mf, valid_locks.size(), valid_locks);
+        LOG_INFO(log, "file={} contains={}", mf, valid_locks.contains("lock/s109/dat_41_1.lock_s109_41"));
+    }
+#endif
+    auto valid_locks = gc_mgr->getValidLocksFromManifest(mfs);
+    gc_mgr->verifyLocks(valid_locks);
+}
+CATCH
 
 TEST_F(S3GCManagerTest, RemoveManifest)
 try

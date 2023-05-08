@@ -41,7 +41,7 @@ public:
     S3LockLocalManager();
 
     std::optional<CheckpointProto::ManifestFilePrefix>
-    initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_);
+    initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_, const universal::PageDirectoryPtr & directory);
 
     struct ExtraLockInfo
     {
