@@ -19,7 +19,7 @@
 
 namespace DB
 {
-bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks) noexcept
+bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks)
 {
     {
         std::unique_lock lock(mu);
@@ -38,7 +38,7 @@ bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks) noexcept
     return true;
 }
 
-bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks) noexcept
+bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks)
 {
     std::lock_guard lock(mu);
     if (waiting_tasks.empty())
@@ -56,7 +56,7 @@ void WaitingTaskList::finish()
     cv.notify_all();
 }
 
-void WaitingTaskList::submit(TaskPtr && task) noexcept
+void WaitingTaskList::submit(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
@@ -72,7 +72,7 @@ void WaitingTaskList::submit(TaskPtr && task) noexcept
     cv.notify_one();
 }
 
-void WaitingTaskList::submit(std::list<TaskPtr> & tasks) noexcept
+void WaitingTaskList::submit(std::list<TaskPtr> & tasks)
 {
     if unlikely (is_finished)
     {

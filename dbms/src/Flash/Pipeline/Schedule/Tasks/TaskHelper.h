@@ -53,6 +53,16 @@ namespace DB
         task.reset();         \
     }
 
+#define CATCH_AND_TERMINATE(log)                      \
+    catch (...)                                       \
+    {                                                 \
+        RUNTIME_ASSERT(                               \
+            false,                                    \
+            (log),                                    \
+            "Unexpected error reported, detail:\n{}", \
+            getCurrentExceptionMessage(true, true));  \
+    }
+
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 
 } // namespace DB

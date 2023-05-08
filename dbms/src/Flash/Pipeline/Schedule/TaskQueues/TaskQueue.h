@@ -30,14 +30,14 @@ class TaskQueue
 public:
     virtual ~TaskQueue() = default;
 
-    virtual void submit(TaskPtr && task) noexcept = 0;
+    virtual void submit(TaskPtr && task) = 0;
 
-    virtual void submit(std::vector<TaskPtr> & tasks) noexcept = 0;
+    virtual void submit(std::vector<TaskPtr> & tasks) = 0;
 
     // return false if the queue is empty and finished.
-    virtual bool take(TaskPtr & task) noexcept = 0;
+    virtual bool take(TaskPtr & task) = 0;
 
-    virtual bool empty() noexcept = 0;
+    virtual bool empty() const = 0;
 
     // After finish is called, the submitted task will be finalized directly and will not be taken.
     // And the tasks in the queue can still be taken normally.

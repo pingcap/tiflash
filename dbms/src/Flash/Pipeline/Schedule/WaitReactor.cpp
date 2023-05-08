@@ -122,17 +122,26 @@ void WaitReactor::waitForStop()
     LOG_INFO(logger, "wait reactor is stopped");
 }
 
-void WaitReactor::submit(TaskPtr && task) noexcept
+void WaitReactor::submit(TaskPtr && task)
 {
     waiting_task_list.submit(std::move(task));
 }
 
-void WaitReactor::submit(std::list<TaskPtr> & tasks) noexcept
+void WaitReactor::submit(std::list<TaskPtr> & tasks)
 {
     waiting_task_list.submit(tasks);
 }
 
-void WaitReactor::loop() noexcept
+void WaitReactor::loop()
+{
+    try
+    {
+        doLoop();
+    }
+    CATCH_AND_TERMINATE(logger)
+}
+
+void WaitReactor::doLoop()
 {
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");

@@ -52,7 +52,17 @@ void TaskThreadPool<Impl>::waitForStop()
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
+void TaskThreadPool<Impl>::loop(size_t thread_no)
+{
+    try
+    {
+        doLoop(thread_no);
+    }
+    CATCH_AND_TERMINATE(logger)
+}
+
+template <typename Impl>
+void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 {
     metrics.incThreadCnt();
     SCOPE_EXIT({ metrics.decThreadCnt(); });
@@ -76,7 +86,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log)
 {
     assert(task);
     TRACE_MEMORY(task);
@@ -118,14 +128,14 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
+void TaskThreadPool<Impl>::submit(TaskPtr && task)
 {
     metrics.incPendingTask(1);
     task_queue->submit(std::move(task));
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
+void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks)
 {
     metrics.incPendingTask(tasks.size());
     task_queue->submit(tasks);

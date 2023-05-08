@@ -24,18 +24,18 @@ namespace DB
 class FIFOTaskQueue : public TaskQueue
 {
 public:
-    void submit(TaskPtr && task) noexcept override;
+    void submit(TaskPtr && task) override;
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept override;
+    void submit(std::vector<TaskPtr> & tasks) override;
 
-    bool take(TaskPtr & task) noexcept override;
+    bool take(TaskPtr & task) override;
 
-    bool empty() noexcept override;
+    bool empty() const override;
 
     void finish() override;
 
 private:
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable cv;
     std::atomic_bool is_finished = false;
     std::deque<TaskPtr> task_queue;

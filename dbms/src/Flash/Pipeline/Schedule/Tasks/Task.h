@@ -57,13 +57,13 @@ public:
         return mem_tracker;
     }
 
-    ExecTaskStatus execute() noexcept;
+    ExecTaskStatus execute();
 
-    ExecTaskStatus executeIO() noexcept;
+    ExecTaskStatus executeIO();
 
-    ExecTaskStatus await() noexcept;
+    ExecTaskStatus await();
 
-    void finalize() noexcept;
+    void finalize();
 
 protected:
     virtual ExecTaskStatus executeImpl() = 0;

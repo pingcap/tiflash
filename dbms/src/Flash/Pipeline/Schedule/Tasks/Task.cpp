@@ -88,7 +88,7 @@ Task::~Task()
         magic_enum::enum_name(exec_status));
 }
 
-ExecTaskStatus Task::execute() noexcept
+ExecTaskStatus Task::execute()
 {
     CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
@@ -97,7 +97,7 @@ ExecTaskStatus Task::execute() noexcept
     return exec_status;
 }
 
-ExecTaskStatus Task::executeIO() noexcept
+ExecTaskStatus Task::executeIO()
 {
     CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
@@ -106,7 +106,7 @@ ExecTaskStatus Task::executeIO() noexcept
     return exec_status;
 }
 
-ExecTaskStatus Task::await() noexcept
+ExecTaskStatus Task::await()
 {
     CHECK_FINISHED
     assert(getMemTracker().get() == current_memory_tracker);
@@ -115,7 +115,7 @@ ExecTaskStatus Task::await() noexcept
     return exec_status;
 }
 
-void Task::finalize() noexcept
+void Task::finalize()
 {
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(
@@ -126,6 +126,8 @@ void Task::finalize() noexcept
 
     finalizeImpl();
 }
+
+#undef CHECK_FINISHED
 
 void Task::switchStatus(ExecTaskStatus to)
 {

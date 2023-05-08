@@ -32,18 +32,21 @@ class TaskThreadPool
 public:
     TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
 
+    // After finish is called, the submitted task will be finalized directly.
+    // And the remaing tasks will be executed normally.
     void finish();
 
     void waitForStop();
 
-    void submit(TaskPtr && task) noexcept;
+    void submit(TaskPtr && task);
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
+    void submit(std::vector<TaskPtr> & tasks);
 
 private:
-    void loop(size_t thread_no) noexcept;
+    void loop(size_t thread_no);
+    void doLoop(size_t thread_no);
 
-    void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
+    void handleTask(TaskPtr & task, const LoggerPtr & log);
 
 private:
     typename Impl::QueueType task_queue;

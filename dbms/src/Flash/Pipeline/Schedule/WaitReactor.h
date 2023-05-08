@@ -30,16 +30,19 @@ class WaitReactor
 public:
     explicit WaitReactor(TaskScheduler & scheduler_);
 
+    // After finish is called, the submitted task will be finalized directly.
+    // And the remaing tasks will be executed normally.
     void finish();
 
     void waitForStop();
 
-    void submit(TaskPtr && task) noexcept;
+    void submit(TaskPtr && task);
 
-    void submit(std::list<TaskPtr> & tasks) noexcept;
+    void submit(std::list<TaskPtr> & tasks);
 
 private:
-    void loop() noexcept;
+    void loop();
+    void doLoop();
 
 private:
     WaitingTaskList waiting_task_list;
