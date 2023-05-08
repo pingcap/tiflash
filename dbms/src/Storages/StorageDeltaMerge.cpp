@@ -830,10 +830,10 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
-    return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast);
+    return std::make_shared<PushDownFilter>(rs_operator, before_where, project_after_where, filter_columns, filter_column_name, extra_cast);
 }
 
 DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,

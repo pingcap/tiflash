@@ -2769,10 +2769,12 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
-    if (filter_columns.size() == columns_to_read.size())
+    if (unlikely(filter_columns.size() == columns_to_read.size()))
     {
         LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
         // no need to read columns again
+        // build ExpressionBlockInputStream to remove tmp filter columns
+        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->project_after_where, dm_context.tracing_id);
         return filter_column_stream;
     }
 
