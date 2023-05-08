@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -48,10 +48,7 @@ try
     std::atomic_size_t taken_task_num = 0;
     auto take_func = [&](bool is_try) {
         std::list<TaskPtr> local_list;
-        auto taken_from_list = [&]() {
-            return is_try ? list.tryTake(local_list) : list.take(local_list);
-        };
-        while (taken_from_list())
+        while (is_try ? list.tryTake(local_list) : list.take(local_list))
         {
             for (auto & task : local_list)
             {
@@ -61,7 +58,7 @@ try
             }
             local_list.clear();
         }
-    }
+    };
     thread_manager->schedule(false, "take", [&]() { take_func(false); });
     thread_manager->schedule(false, "try_take", [&]() { take_func(true); });
     // submit valid task
