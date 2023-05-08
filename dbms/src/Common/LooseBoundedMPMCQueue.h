@@ -20,7 +20,7 @@
 
 namespace DB
 {
-/** A simple thread-safe concurrent queue and basically Compatible with MPMCQueue.
+/** A simple thread-safe loose-bounded concurrent queue and basically compatible with MPMCQueue.
   * Provide functions `forcePush` and `isFull` to support asynchronous writes.
   * ```
   * while (queue.isFull()) {}
