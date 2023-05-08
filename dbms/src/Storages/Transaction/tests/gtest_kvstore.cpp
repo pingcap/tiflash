@@ -35,7 +35,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
         }
     }
     {
-        kvs.tryPersist(1);
+        kvs.tryPersistRegion(1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -796,7 +796,7 @@ TEST_F(RegionKVStoreTest, KVStore)
         }
     }
     {
-        kvs.tryPersist(1);
+        kvs.tryPersistRegion(1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
@@ -1329,9 +1329,9 @@ TEST_F(RegionKVStoreTest, KVStoreRestore)
                 lock.index.add(region);
             }
         }
-        kvs.tryPersist(1);
-        kvs.tryPersist(2);
-        kvs.tryPersist(3);
+        kvs.tryPersistRegion(1);
+        kvs.tryPersistRegion(2);
+        kvs.tryPersistRegion(3);
     }
     {
         KVStore & kvs = reloadKVSFromDisk();
