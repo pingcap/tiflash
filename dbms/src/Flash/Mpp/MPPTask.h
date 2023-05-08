@@ -108,6 +108,14 @@ private:
 
     void initExchangeReceivers();
 
+<<<<<<< HEAD
+=======
+    String getErrString() const;
+    void setErrString(const String & message);
+
+private:
+    // To make sure dag_req is not destroyed before the mpp task ends.
+>>>>>>> 12bda10fd1 (Tsan: fix data race on `ComputeServerRunner.cancelJoinTasks` (#7434))
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
@@ -128,9 +136,11 @@ private:
     QueryExecutorHolder query_executor_holder;
 
     std::atomic<TaskStatus> status{INITIALIZING};
-    String err_string;
 
-    std::mutex tunnel_and_receiver_mu;
+    /// Used to protect concurrent access to `err_string`, `tunnel_set`, and `receiver_set`.
+    mutable std::mutex mtx;
+
+    String err_string;
 
     MPPTunnelSetPtr tunnel_set;
 
