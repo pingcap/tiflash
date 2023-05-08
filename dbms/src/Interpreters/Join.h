@@ -337,6 +337,8 @@ private:
 
     bool has_build_data_in_memory = false;
 
+    bool use_optimized_cross_probe = false;
+
 private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
@@ -400,8 +402,7 @@ private:
       */
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockCrossImpl(Block & block, ConstNullMapPtr null_map) const;
+    Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockNullAwareImpl(

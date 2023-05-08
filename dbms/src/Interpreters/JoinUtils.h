@@ -85,6 +85,16 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
     return has_other_condition && isNecessaryKindToUseRowFlaggedHashMap(kind);
 }
 
+/// incremental probe means a probe row can be probed by each right block independently
+inline bool supportIncrementalProbeForCrossJoin(ASTTableJoin::Kind kind)
+{
+    if (isCrossJoin(kind))
+    {
+        return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_LeftOuter || kind == ASTTableJoin::Kind::Cross_RightOuter;
+    }
+    return false;
+}
+
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 
 struct ProbeProcessInfo
@@ -97,16 +107,18 @@ struct ProbeProcessInfo
     size_t end_row;
     bool all_rows_joined_finish;
 
-    /// these are used for probe
+    /// these are used for probe preparation
     bool prepare_for_probe_done = false;
-    Columns materialized_columns;
-    ColumnRawPtrs key_columns;
     ColumnPtr null_map_holder = nullptr;
     ConstNullMapPtr null_map = nullptr;
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter = nullptr;
     /// Used with ALL ... JOIN
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate = nullptr;
+
+    /// for hash probe
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
@@ -115,7 +127,8 @@ struct ProbeProcessInfo
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
     void updateStartRow();
-    void prepareForProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+    void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
+    void prepareForCrossProbe(const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 };
 struct JoinBuildInfo
 {

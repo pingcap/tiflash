@@ -113,7 +113,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
 }
 
-void ProbeProcessInfo::prepareForProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+void ProbeProcessInfo::prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
     if (prepare_for_probe_done)
         return;
@@ -147,6 +147,19 @@ void ProbeProcessInfo::prepareForProbe(const Names & key_names, const String & f
     }
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::RightOuter) && strictness == ASTTableJoin::Strictness::Any)
         || kind == ASTTableJoin::Kind::Anti)
+        filter = std::make_unique<IColumn::Filter>(block.rows());
+    if (strictness == ASTTableJoin::Strictness::All)
+        offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
+    prepare_for_probe_done = true;
+}
+
+void ProbeProcessInfo::prepareForCrossProbe(const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+{
+    if (prepare_for_probe_done)
+        return;
+
+    recordFilteredRows(block, filter_column, null_map_holder, null_map);
+    if (kind == ASTTableJoin::Kind::Cross_Anti)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
