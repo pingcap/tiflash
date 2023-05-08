@@ -20,18 +20,18 @@
 
 namespace DB
 {
-/** A simple thread-safe concurrent queue for io.
-  * Provide functions `nonBlockingPush` and `isFull` to support asynchronous writes.
+/** A simple thread-safe concurrent queue and basically Compatible with MPMCQueue.
+  * Provide functions `forcePush` and `isFull` to support asynchronous writes.
   * ```
   * while (queue.isFull()) {}
-  * queue.nonBlockingPush(std::move(obj));
+  * queue.forcePush(std::move(obj));
   * ```
   */
 template <typename T>
-class ConcurrentIOQueue
+class LooseBoundedMPMCQueue
 {
 public:
-    explicit ConcurrentIOQueue(size_t capacity_)
+    explicit LooseBoundedMPMCQueue(size_t capacity_)
         : capacity(std::max(1, capacity_))
     {}
 
@@ -78,9 +78,9 @@ public:
     }
 
     /// Non-blocking function.
-    /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
+    /// Besides all conditions mentioned at `push`, `forcePush` will still return OK if queue is `NORMAL` and full.
     /// The obj that exceeds its capacity will still be stored in queue.
-    MPMCQueueResult nonBlockingPush(T && data)
+    MPMCQueueResult forcePush(T && data)
     {
         std::lock_guard lock(mu);
 

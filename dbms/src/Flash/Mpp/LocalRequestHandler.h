@@ -34,10 +34,10 @@ struct LocalRequestHandler
         , channel_writer(std::move(channel_writer_))
     {}
 
-    template <bool enable_fine_grained_shuffle, bool non_blocking>
+    template <bool enable_fine_grained_shuffle, bool is_force>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
     {
-        return channel_writer.write<enable_fine_grained_shuffle, non_blocking>(source_index, tracked_packet);
+        return channel_writer.write<enable_fine_grained_shuffle, is_force>(source_index, tracked_packet);
     }
 
     bool isReadyForWrite() const
