@@ -71,8 +71,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
-    auto & records = edits.getMutRecords();
-    if (records.empty())
+    if (edits.empty())
         return {.has_new_data = false};
 
     CPDataDumpStats write_down_stats;
@@ -87,6 +86,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
     // 1. Iterate all edits, find these entry edits without the checkpoint info
     //    and collect the lock files from applied entries.
+    auto & records = edits.getMutRecords();
     write_down_stats.num_records = records.size();
     for (auto & rec_edit : records)
     {
@@ -108,7 +108,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
                     && !rec_edit.entry.checkpoint_info.data_location.data_file_id->empty(),
                 "the checkpoint info of external id is not set, record={}",
                 rec_edit);
-            // for example, the s3 fullpath of external id
+            // add lock for the s3 fullpath of external id
             locked_files.emplace(*rec_edit.entry.checkpoint_info.data_location.data_file_id);
             write_down_stats.num_ext_pages += 1;
             continue;
@@ -131,13 +131,14 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             continue;
         }
 
+        assert(rec_edit.type == EditRecordType::VAR_ENTRY);
         bool is_compaction = false;
         if (rec_edit.entry.checkpoint_info.has_value())
         {
             const auto file_id = *rec_edit.entry.checkpoint_info.data_location.data_file_id;
             if (!file_ids_to_compact.contains(file_id))
             {
-                // for example, the s3 fullpath that was written in the previous uploaded CheckpointDataFile
+                // add lock for the s3 fullpath that was written in the previous uploaded CheckpointDataFile
                 locked_files.emplace(file_id);
                 write_down_stats.num_pages_unchanged += 1;
                 continue;
@@ -158,8 +159,8 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
         last_page_is_raft_data = current_page_is_raft_data;
 
-        // 2. For entry edits without the checkpoint info, write them to the data file,
-        // and assign a new checkpoint info.
+        // 2. For entry edits without the checkpoint info, or it is stored on an existing data file that needs compact,
+        // write the entry data to the data file, and assign a new checkpoint info.
         auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
         RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
         auto data_location = data_writer->write(

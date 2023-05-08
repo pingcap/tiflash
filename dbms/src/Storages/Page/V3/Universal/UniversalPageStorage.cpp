@@ -397,7 +397,7 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
 void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client)
 {
     assert(remote_locks_local_mgr != nullptr);
-    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client, page_directory);
     if (last_mf_prefix_opt)
     {
         // First init, we need to restore the `last_checkpoint_sequence` from last checkpoint
@@ -454,6 +454,8 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     auto manifest_file_path = fmt::format(
         fmt::runtime(options.manifest_file_path_pattern),
         fmt::arg("seq", sequence));
+
+    // TODO: After FAP is enabled, we need the `data_source` can read data from a remote store.
 
     auto writer = PS::V3::CPFilesWriter::create({
         .data_file_path_pattern = options.data_file_path_pattern,

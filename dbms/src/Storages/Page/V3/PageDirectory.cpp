@@ -1860,7 +1860,7 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
+void PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & edit)
 {
     const auto & records = edit.getRecords();
     if (records.empty())
@@ -1876,7 +1876,7 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
 
     for (const auto & rec : records)
     {
-        // Only VAR_ENTRY will contain checkpoint info.
+        // Only VAR_ENTRY need update checkpoint info.
         if (rec.type != EditRecordType::VAR_ENTRY)
             continue;
 

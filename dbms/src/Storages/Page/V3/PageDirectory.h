@@ -368,7 +368,7 @@ public:
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
-    void copyCheckpointInfoFromEdit(PageEntriesEdit & edit);
+    void copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.

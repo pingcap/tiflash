@@ -42,7 +42,7 @@ S3LockLocalManager::S3LockLocalManager()
 // `store_id` is inited later because they may not
 // accessable when S3LockLocalManager is created.
 std::optional<CheckpointProto::ManifestFilePrefix>
-S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_)
+S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_, const universal::PageDirectoryPtr & directory)
 {
     if (inited_from_s3)
         return std::nullopt;
@@ -65,6 +65,15 @@ S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientP
             auto manifest_file = S3::S3RandomAccessFile::create(manifests.latestManifestKey());
             auto reader = CPManifestFileReader::create(CPManifestFileReader::Options{.plain_file = manifest_file});
             prefix_opt = reader->readPrefix();
+
+            CheckpointProto::StringsInternMap strings_map;
+            while (true)
+            {
+                auto edit = reader->readEdits(strings_map);
+                if (!edit)
+                    break;
+                directory->copyCheckpointInfoFromEdit(*edit);
+            }
         }
         else
         {
