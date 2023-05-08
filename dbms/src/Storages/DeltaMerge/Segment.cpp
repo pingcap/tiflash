@@ -57,6 +57,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 
 namespace ProfileEvents
 {
@@ -2736,7 +2737,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     const auto & filter_columns = filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
-        filter_columns,
+        *filter_columns,
         data_ranges,
         filter->rs_operator,
         max_version,
@@ -2744,51 +2745,67 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
-
-    auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
     SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
-        filter_columns_to_read_ptr,
+        filter_columns,
         this->rowkey_range);
 
+    if (unlikely(filter_columns->size() == columns_to_read.size()))
+    {
+        LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
+        BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
+            *filter_columns,
+            filter_column_stable_stream,
+            filter_column_delta_stream,
+            segment_snap->stable->getDMFilesRows(),
+            bitmap_filter,
+            dm_context.tracing_id);
+        if (filter->extra_cast_for_filter_columns)
+        {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast_for_filter_columns, dm_context.tracing_id);
+            stream->setExtraInfo("cast after tableScan");
+        }
+        stream = std::make_shared<FilterBlockInputStream>(stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
+        stream->setExtraInfo("push down filter");
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
+        stream->setExtraInfo("project after where");
+        return stream;
+    }
+
     BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        filter_columns,
+        *filter_columns,
         filter_column_stable_stream,
         filter_column_delta_stream,
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
     // construct extra cast stream if needed
-    if (filter->extra_cast)
+    if (filter->extra_cast_for_filter_columns)
     {
-        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->extra_cast, dm_context.tracing_id);
-        filter_column_stream->setExtraInfo("cast after tableScan");
+        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->extra_cast_for_filter_columns, dm_context.tracing_id);
+        filter_column_stream->setExtraInfo("extra cast for filter columns");
     }
 
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
-    if (unlikely(filter_columns.size() == columns_to_read.size()))
-    {
-        LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
-        // no need to read columns again
-        // build ExpressionBlockInputStream to remove tmp filter columns
-        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->project_after_where, dm_context.tracing_id);
-        return filter_column_stream;
-    }
 
-    ColumnDefines rest_columns_to_read{columns_to_read};
+    auto rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
     // remove columns of pushed down filter
-    for (const auto & col : filter_columns)
+    for (const auto & col : *filter_columns)
     {
-        rest_columns_to_read.erase(std::remove_if(rest_columns_to_read.begin(), rest_columns_to_read.end(), [&](const ColumnDefine & c) { return c.id == col.id; }), rest_columns_to_read.end());
+        rest_columns_to_read->erase(std::remove_if(
+                                        rest_columns_to_read->begin(),
+                                        rest_columns_to_read->end(),
+                                        [&](const ColumnDefine & c) { return c.id == col.id; }),
+                                    rest_columns_to_read->end());
     }
 
     // construct rest column stream
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
-        rest_columns_to_read,
+        *rest_columns_to_read,
         data_ranges,
         filter->rs_operator,
         max_version,
@@ -2796,23 +2813,35 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
-
-    auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
-        rest_columns_to_read_ptr,
+        rest_columns_to_read,
         this->rowkey_range);
 
     SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        rest_columns_to_read,
+        *rest_columns_to_read,
         rest_column_stable_stream,
         rest_column_delta_stream,
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
     // construct late materialization stream
-    return std::make_shared<LateMaterializationBlockInputStream>(columns_to_read, filter->filter_column_name, filter_column_stream, rest_column_stream, bitmap_filter, dm_context.tracing_id);
+    BlockInputStreamPtr stream = std::make_shared<LateMaterializationBlockInputStream>(
+        columns_to_read,
+        filter->filter_column_name,
+        filter_column_stream,
+        rest_column_stream,
+        bitmap_filter,
+        dm_context.tracing_id);
+
+    // construct extra cast stream if needed
+    if (filter->extra_cast_for_rest_columns)
+    {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast_for_rest_columns, dm_context.tracing_id);
+        rest_column_stream->setExtraInfo("extra cast for rest columns");
+    }
+    return stream;
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)

@@ -1087,7 +1087,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                columns_to_read,
+                filter && (filter->extra_cast_for_filter_columns || filter->extra_cast_for_rest_columns) ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
@@ -1672,7 +1672,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1691,7 +1691,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal()
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 

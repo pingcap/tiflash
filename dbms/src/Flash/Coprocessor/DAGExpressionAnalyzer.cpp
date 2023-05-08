@@ -948,12 +948,12 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const TiDBTableScan & table_scan)
+    const ColumnInfos & table_scan_columns)
 {
     auto & step = initAndGetLastStep(chain);
     auto & actions = step.actions;
 
-    auto [has_cast, casted_columns] = buildExtraCastsAfterTS(actions, need_cast_column, table_scan.getColumns());
+    auto [has_cast, casted_columns] = buildExtraCastsAfterTS(actions, need_cast_column, table_scan_columns);
 
     if (!has_cast)
         return false;
