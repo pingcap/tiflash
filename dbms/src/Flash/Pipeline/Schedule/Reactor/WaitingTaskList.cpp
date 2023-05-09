@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <assert.h>
 #include <common/likely.h>
 

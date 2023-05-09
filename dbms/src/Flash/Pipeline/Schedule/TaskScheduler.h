@@ -15,10 +15,9 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/WaitReactor.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 
 namespace DB
 {
@@ -69,9 +68,9 @@ public:
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
-    TaskThreadPool<CPUImpl> cpu_task_thread_pool;
+    CPUTaskThreadPool cpu_task_thread_pool;
 
-    TaskThreadPool<IOImpl> io_task_thread_pool;
+    IOTaskThreadPool io_task_thread_pool;
 
     WaitReactor wait_reactor;
 

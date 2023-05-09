@@ -15,20 +15,23 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolMetrics.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 
-#include <list>
 #include <thread>
+#include <vector>
 
 namespace DB
 {
 class TaskScheduler;
 
-class WaitReactor
+template <typename Impl>
+class TaskThreadPool
 {
 public:
-    explicit WaitReactor(TaskScheduler & scheduler_);
+    TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
 
     // After finish is called, the submitted task will be finalized directly.
     // And the remaing tasks will be executed normally.
@@ -38,23 +41,27 @@ public:
 
     void submit(TaskPtr && task);
 
-    void submit(std::list<TaskPtr> & tasks);
+    void submit(std::vector<TaskPtr> & tasks);
 
 private:
-    void loop();
-    void doLoop();
+    void loop(size_t thread_no);
+    void doLoop(size_t thread_no);
 
-    // Get the incremental tasks from waiting_task_list.
-    // return false if waiting_task_list is empty and has finished.
-    bool takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks);
+    void handleTask(TaskPtr & task);
 
 private:
-    WaitingTaskList waiting_task_list;
+    typename Impl::QueueType task_queue;
 
-    LoggerPtr logger = Logger::get();
+    LoggerPtr logger = Logger::get(Impl::NAME);
 
     TaskScheduler & scheduler;
 
-    std::thread thread;
+    std::vector<std::thread> threads;
+
+    TaskThreadPoolMetrics<Impl::is_cpu> metrics;
 };
+
+using CPUTaskThreadPool = TaskThreadPool<CPUImpl>;
+using IOTaskThreadPool = TaskThreadPool<IOImpl>;
+
 } // namespace DB

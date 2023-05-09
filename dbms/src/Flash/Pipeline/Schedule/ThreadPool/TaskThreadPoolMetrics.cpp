@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolMetrics.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolMetrics.h>
 
 #include <atomic>
 
