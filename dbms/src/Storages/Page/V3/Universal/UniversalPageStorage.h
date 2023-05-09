@@ -136,6 +136,8 @@ public:
 
     std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
+    void waitUntilInitedFromRemoteStore() const;
+
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client);
 
     bool canSkipCheckpoint() const;

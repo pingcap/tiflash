@@ -394,6 +394,12 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     }
 }
 
+void UniversalPageStorage::waitUntilInitedFromRemoteStore() const
+{
+    assert(remote_locks_local_mgr != nullptr);
+    remote_locks_local_mgr->waitUntilInited();
+}
+
 void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client)
 {
     assert(remote_locks_local_mgr != nullptr);
