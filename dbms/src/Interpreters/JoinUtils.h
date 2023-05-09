@@ -112,6 +112,7 @@ struct ProbeProcessInfo
 
     /// for cross probe
     Block result_block_schema;
+    std::vector<size_t> right_column_index;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
