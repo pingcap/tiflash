@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 

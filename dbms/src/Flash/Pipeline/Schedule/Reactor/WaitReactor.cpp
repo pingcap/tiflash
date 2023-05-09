@@ -15,9 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <common/logger_useful.h>
 #include <errno.h>
 

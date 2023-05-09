@@ -12,64 +12,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/Reactor/Spinner.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
-    bool Spinner::awaitAndPushReadyTask(TaskPtr && task)
+bool Spinner::awaitAndPushReadyTask(TaskPtr && task)
+{
+    assert(task);
+    TRACE_MEMORY(task);
+    auto status = task->await();
+    switch (status)
     {
-        assert(task);
-        TRACE_MEMORY(task);
-        auto status = task->await();
-        switch (status)
-        {
-        case ExecTaskStatus::RUNNING:
-            cpu_tasks.push_back(std::move(task));
-            return true;
-        case ExecTaskStatus::IO:
-            io_tasks.push_back(std::move(task));
-            return true;
-        case ExecTaskStatus::WAITING:
-            return false;
-        case FINISH_STATUS:
-            FINALIZE_TASK(task);
-            return true;
-        default:
-            UNEXPECTED_STATUS(logger, status);
-        }
+    case ExecTaskStatus::RUNNING:
+        cpu_tasks.push_back(std::move(task));
+        return true;
+    case ExecTaskStatus::IO:
+        io_tasks.push_back(std::move(task));
+        return true;
+    case ExecTaskStatus::WAITING:
+        return false;
+    case FINISH_STATUS:
+        FINALIZE_TASK(task);
+        return true;
+    default:
+        UNEXPECTED_STATUS(logger, status);
+    }
+}
+
+void Spinner::submitReadyTasks()
+{
+    if (cpu_tasks.empty() && io_tasks.empty())
+    {
+        tryYield();
+        return;
     }
 
-    void Spinner::submitReadyTasks()
+    task_scheduler.submitToCPUTaskThreadPool(cpu_tasks);
+    cpu_tasks.clear();
+
+    task_scheduler.submitToIOTaskThreadPool(io_tasks);
+    io_tasks.clear();
+
+    spin_count = 0;
+}
+
+void Spinner::tryYield()
+{
+    ++spin_count;
+
+    if (spin_count != 0 && spin_count % 64 == 0)
     {
-        if (cpu_tasks.empty() && io_tasks.empty())
+        sched_yield();
+        if (spin_count == 640)
         {
-            tryYield();
-            return;
-        }
-
-        task_scheduler.submitToCPUTaskThreadPool(cpu_tasks);
-        cpu_tasks.clear();
-
-        task_scheduler.submitToIOTaskThreadPool(io_tasks);
-        io_tasks.clear();
-
-        spin_count = 0;
-    }
-
-    void Spinner::tryYield()
-    {
-        ++spin_count;
-
-        if (spin_count != 0 && spin_count % 64 == 0)
-        {
+            spin_count = 0;
             sched_yield();
-            if (spin_count == 640)
-            {
-                spin_count = 0;
-                sched_yield();
-            }
         }
     }
+}
 } // namespace DB

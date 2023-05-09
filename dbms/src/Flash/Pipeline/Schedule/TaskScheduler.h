@@ -18,6 +18,7 @@
 #include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 namespace DB
 {
@@ -68,9 +69,9 @@ public:
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
-    CPUTaskThreadPool cpu_task_thread_pool;
+    TaskThreadPool<CPUImpl> cpu_task_thread_pool;
 
-    IOTaskThreadPool io_task_thread_pool;
+    TaskThreadPool<IOImpl> io_task_thread_pool;
 
     WaitReactor wait_reactor;
 

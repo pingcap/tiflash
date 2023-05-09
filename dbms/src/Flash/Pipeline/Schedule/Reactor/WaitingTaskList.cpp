@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 

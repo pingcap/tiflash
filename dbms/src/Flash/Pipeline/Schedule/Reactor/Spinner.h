@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 

@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Reactor/Spinner.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <list>
 #include <thread>
