@@ -40,6 +40,11 @@ class S3LockLocalManager
 public:
     S3LockLocalManager();
 
+    // Try to restore from S3 latest manifest.
+    // When this function is called by the first time, it will setup the
+    // `last_upload_sequence`, copy the checkpoint info from the latest
+    // manifest to `directory` and return a `ManifestFilePrefix`.
+    // Otherwise it returns std::nullopt.
     std::optional<CheckpointProto::ManifestFilePrefix>
     initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_, const universal::PageDirectoryPtr & directory);
 
