@@ -77,7 +77,7 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
     while (likely(task_queue->take(task)))
     {
         metrics.decPendingTask();
-        handleTask(task, thread_logger);
+        handleTask(task);
         assert(!task);
         ASSERT_MEMORY_TRACKER
     }
@@ -86,7 +86,7 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log)
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     TRACE_MEMORY(task);
@@ -123,7 +123,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log)
         FINALIZE_TASK(task);
         break;
     default:
-        UNEXPECTED_STATUS(log, status);
+        UNEXPECTED_STATUS(task->log, status);
     }
 }
 

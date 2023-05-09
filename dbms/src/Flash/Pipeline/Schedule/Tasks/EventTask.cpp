@@ -47,7 +47,6 @@ void EventTask::finalizeImpl()
     {
         exec_status.onErrorOccurred(std::current_exception());
     }
-    assert(event);
     event->onTaskFinish();
     event.reset();
 }

@@ -65,6 +65,9 @@ public:
 
     void finalize();
 
+public:
+    LoggerPtr log;
+
 protected:
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
@@ -81,7 +84,6 @@ private:
 
 protected:
     MemoryTrackerPtr mem_tracker;
-    LoggerPtr log;
 
 private:
     ExecTaskStatus exec_status{ExecTaskStatus::INIT};

@@ -44,6 +44,10 @@ private:
     void loop();
     void doLoop();
 
+    // Get the incremental tasks from waiting_task_list.
+    // return false if waiting_task_list is empty and has finished.
+    bool takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks);
+
 private:
     WaitingTaskList waiting_task_list;
 

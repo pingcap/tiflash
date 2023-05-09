@@ -46,7 +46,7 @@ private:
     void loop(size_t thread_no);
     void doLoop(size_t thread_no);
 
-    void handleTask(TaskPtr & task, const LoggerPtr & log);
+    void handleTask(TaskPtr & task);
 
 private:
     typename Impl::QueueType task_queue;

@@ -14,7 +14,6 @@
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <assert.h>
 #include <common/likely.h>
 
 namespace DB
@@ -26,22 +25,18 @@ FIFOTaskQueue::~FIFOTaskQueue()
 
 bool FIFOTaskQueue::take(TaskPtr & task)
 {
-    assert(!task);
+    std::unique_lock lock(mu);
+    while (true)
     {
-        std::unique_lock lock(mu);
-        while (true)
-        {
-            if (!task_queue.empty())
-                break;
-            if (unlikely(is_finished))
-                return false;
-            cv.wait(lock);
-        }
-
-        task = std::move(task_queue.front());
-        task_queue.pop_front();
+        if (!task_queue.empty())
+            break;
+        if (unlikely(is_finished))
+            return false;
+        cv.wait(lock);
     }
-    assert(task);
+
+    task = std::move(task_queue.front());
+    task_queue.pop_front();
     return true;
 }
 
@@ -70,7 +65,6 @@ void FIFOTaskQueue::submit(TaskPtr && task)
 
     {
         std::lock_guard lock(mu);
-        assert(task);
         task_queue.push_back(std::move(task));
     }
     cv.notify_one();
@@ -89,7 +83,6 @@ void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks)
     std::lock_guard lock(mu);
     for (auto & task : tasks)
     {
-        assert(task);
         task_queue.push_back(std::move(task));
         cv.notify_one();
     }

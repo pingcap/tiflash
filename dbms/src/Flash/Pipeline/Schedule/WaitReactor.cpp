@@ -132,6 +132,15 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     waiting_task_list.submit(tasks);
 }
 
+bool WaitReactor::takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks)
+{
+    return local_waiting_tasks.empty()
+        ? waiting_task_list.take(local_waiting_tasks)
+        // If the local waiting tasks are not empty, there is no need to be blocked here
+        // and we can continue to process the leftover tasks in the local waiting tasks
+        : waiting_task_list.tryTake(local_waiting_tasks);
+}
+
 void WaitReactor::loop()
 {
     try
@@ -148,11 +157,8 @@ void WaitReactor::doLoop()
     ASSERT_MEMORY_TRACKER
 
     Spinner spinner{scheduler, logger};
-    std::list<TaskPtr> local_waiting_tasks;
-    auto react = [&]() {
-        assert(!local_waiting_tasks.empty());
-        auto task_it = local_waiting_tasks.begin();
-        while (task_it != local_waiting_tasks.end())
+    auto react = [&](std::list<TaskPtr> & local_waiting_tasks) {
+        for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
         {
             if (spinner.awaitAndPushReadyTask(std::move(*task_it)))
                 task_it = local_waiting_tasks.erase(task_it);
@@ -160,27 +166,17 @@ void WaitReactor::doLoop()
                 ++task_it;
             ASSERT_MEMORY_TRACKER
         }
-
         GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
         spinner.submitReadyTasks();
     };
 
-    // Get the incremental tasks from waiting_task_list.
-    // return false if waiting_task_list has been closed.
-    auto take_from_waiting_task_list = [&]() {
-        return local_waiting_tasks.empty()
-            ? waiting_task_list.take(local_waiting_tasks)
-            // If the local waiting tasks are not empty, there is no need to be blocked here
-            // and we can continue to process the leftover tasks in the local waiting tasks
-            : waiting_task_list.tryTake(local_waiting_tasks);
-    };
-    while (take_from_waiting_task_list())
-        react();
-
+    std::list<TaskPtr> local_waiting_tasks;
+    while (takeFromWaitingTaskList(local_waiting_tasks))
+        react(local_waiting_tasks);
     // Handle remaining tasks.
     while (!local_waiting_tasks.empty())
-        react();
+        react(local_waiting_tasks);
 
     LOG_INFO(logger, "wait reactor loop finished");
 }

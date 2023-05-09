@@ -63,16 +63,16 @@ void addToStatusMetrics(ExecTaskStatus to)
         return exec_status;
 
 Task::Task()
-    : mem_tracker(nullptr)
-    , log(Logger::get())
+    : log(Logger::get())
+    , mem_tracker(nullptr)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
 Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
-    : mem_tracker(std::move(mem_tracker_))
-    , log(Logger::get(req_id))
+    : log(Logger::get(req_id))
+    , mem_tracker(std::move(mem_tracker_))
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();

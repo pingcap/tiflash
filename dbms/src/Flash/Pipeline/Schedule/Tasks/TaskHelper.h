@@ -41,16 +41,14 @@ namespace DB
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
 
 #define FINALIZE_TASK(task) \
-    assert(task);           \
-    task->finalize();       \
-    task.reset();
+    (task)->finalize();     \
+    (task).reset();
 
-#define FINALIZE_TASKS(tasks) \
-    for (auto & task : tasks) \
-    {                         \
-        assert(task);         \
-        task->finalize();     \
-        task.reset();         \
+#define FINALIZE_TASKS(tasks)   \
+    for (auto & task : (tasks)) \
+    {                           \
+        task->finalize();       \
+        task.reset();           \
     }
 
 #define CATCH_AND_TERMINATE(log)                      \
