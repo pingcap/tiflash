@@ -975,7 +975,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
 
 Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
-    probe_process_info.prepareForCrossProbe(non_equal_conditions.left_filter_column, kind, strictness, sample_block_with_columns_to_add);
+    probe_process_info.prepareForCrossProbe(non_equal_conditions.left_filter_column, kind, strictness, sample_block_with_columns_to_add, blocks);
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
 
