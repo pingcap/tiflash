@@ -1871,7 +1871,7 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & ed
     for (const auto & rec : records)
     {
         if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK(rec.entry.checkpoint_info.has_value());
+            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
     }
 
     for (const auto & rec : records)
