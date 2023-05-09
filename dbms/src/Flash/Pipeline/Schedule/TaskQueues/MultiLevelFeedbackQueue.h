@@ -81,7 +81,7 @@ public:
 
     bool empty();
 
-    double accuTimeAfterDivisor();
+    double normalizedTime();
 
 public:
     const UnitQueueInfo info;

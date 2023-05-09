@@ -38,7 +38,7 @@ void UnitQueue::submit(TaskPtr && task)
     task_queue.push_back(std::move(task));
 }
 
-double UnitQueue::accuTimeAfterDivisor()
+double UnitQueue::normalizedTime()
 {
     return accu_consume_time / info.factor_for_normal;
 }
@@ -137,7 +137,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task) noexcept
                 const auto & cur_queue = level_queues[i];
                 if (!cur_queue->empty())
                 {
-                    double local_target_time = cur_queue->accuTimeAfterDivisor();
+                    double local_target_time = cur_queue->normalizedTime();
                     if (queue_idx < 0 || local_target_time < target_accu_time)
                     {
                         target_accu_time = local_target_time;
