@@ -1860,11 +1860,12 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & edit)
+size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & edit)
 {
+    size_t num_copied = 0;
     const auto & records = edit.getRecords();
     if (records.empty())
-        return;
+        return num_copied;
 
     // Pre-check: All ENTRY edit record must contain checkpoint info.
     // We do the pre-check before copying any remote info to avoid partial completion.
@@ -1895,7 +1896,9 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & ed
         }
 
         entries->copyCheckpointInfoFromEdit(rec);
+        num_copied += 1;
     }
+    return num_copied;
 }
 
 template <typename Trait>
