@@ -441,7 +441,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
 
     {
         // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
-        // These page ids may be gcced when dump snapshot, so we cannot read data of these page ids.
+        // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
         // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
         PS::V3::universal::PageDirectoryFactory factory;
         auto temp_page_directory = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
