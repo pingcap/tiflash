@@ -38,7 +38,6 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     materialized_columns.clear();
     filter.reset();
     offsets_to_replicate.reset();
-    filtered_rows = 0;
 }
 
 void ProbeProcessInfo::updateStartRow()
@@ -177,8 +176,6 @@ void ProbeProcessInfo::prepareForCrossProbe(
         RUNTIME_CHECK_MSG(!result_block_schema.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
         result_block_schema.insert(src_column);
     }
-    if (null_map != nullptr)
-        filtered_rows = countBytesInFilter(*null_map);
     prepare_for_probe_done = true;
 }
 

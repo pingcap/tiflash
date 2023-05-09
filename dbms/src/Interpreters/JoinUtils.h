@@ -85,16 +85,6 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
     return has_other_condition && isNecessaryKindToUseRowFlaggedHashMap(kind);
 }
 
-/// incremental probe means a probe row can be probed by each right block independently
-inline bool supportIncrementalProbeForCrossJoin(ASTTableJoin::Kind kind)
-{
-    if (isCrossJoin(kind))
-    {
-        return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_LeftOuter || kind == ASTTableJoin::Kind::Cross_RightOuter;
-    }
-    return false;
-}
-
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 
 struct ProbeProcessInfo
@@ -107,7 +97,7 @@ struct ProbeProcessInfo
     size_t end_row;
     bool all_rows_joined_finish;
 
-    /// these are used for probe preparation
+    /// these should be inited before probe each block
     bool prepare_for_probe_done = false;
     ColumnPtr null_map_holder = nullptr;
     ConstNullMapPtr null_map = nullptr;
@@ -122,7 +112,6 @@ struct ProbeProcessInfo
 
     /// for cross probe
     Block result_block_schema;
-    size_t filtered_rows = 0;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)

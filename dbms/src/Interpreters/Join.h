@@ -337,8 +337,6 @@ private:
 
     bool has_build_data_in_memory = false;
 
-    bool use_optimized_cross_probe = false;
-
 private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 

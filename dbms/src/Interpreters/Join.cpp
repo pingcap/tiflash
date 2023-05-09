@@ -956,35 +956,27 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow();
-    if (use_optimized_cross_probe)
+    auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
+    if (non_equal_conditions.other_cond_expr != nullptr)
     {
-        auto block = probe_process_info.block;
-        throw Exception("Not supported yet");
-    }
-    else
-    {
-        auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
-        if (non_equal_conditions.other_cond_expr != nullptr)
+        assert(probe_process_info.offsets_to_replicate != nullptr);
+        size_t num_existing_columns = probe_process_info.block.columns();
+        size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+        std::vector<size_t> right_column_index;
+        for (size_t i = 0; i < num_columns_to_add; ++i)
+            right_column_index.push_back(num_existing_columns + i);
+        if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
         {
-            assert(probe_process_info.offsets_to_replicate != nullptr);
-            size_t num_existing_columns = probe_process_info.block.columns();
-            size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-            std::vector<size_t> right_column_index;
-            for (size_t i = 0; i < num_columns_to_add; ++i)
-                right_column_index.push_back(num_existing_columns + i);
-            if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
-            {
-                if (probe_process_info.offsets_to_replicate != nullptr)
-                    probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin() + probe_process_info.start_row,
-                                                                    probe_process_info.offsets_to_replicate->begin() + probe_process_info.end_row);
-                if (probe_process_info.filter != nullptr)
-                    probe_process_info.filter->assign(probe_process_info.filter->begin() + probe_process_info.start_row,
-                                                      probe_process_info.filter->begin() + probe_process_info.end_row);
-            }
-            handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, right_column_index);
+            if (probe_process_info.offsets_to_replicate != nullptr)
+                probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin() + probe_process_info.start_row,
+                                                                probe_process_info.offsets_to_replicate->begin() + probe_process_info.end_row);
+            if (probe_process_info.filter != nullptr)
+                probe_process_info.filter->assign(probe_process_info.filter->begin() + probe_process_info.start_row,
+                                                  probe_process_info.filter->begin() + probe_process_info.end_row);
         }
-        return block;
+        handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, right_column_index);
     }
+    return block;
 }
 
 Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
@@ -1281,7 +1273,6 @@ void Join::workAfterBuildFinish()
                 original_blocks.push_back(merged_block);
             }
         }
-        //use_optimized_cross_probe = right_rows > std::max(1, max_block_size / 10);
     }
 
     if (isEnableSpill())
