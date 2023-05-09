@@ -536,12 +536,8 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 
     auto page_lock = acquireLock();
 
-    if (type != EditRecordType::VAR_ENTRY)
-    {
-        // For example, Put X -> Delete X -> dumpSnapshotToEdit -> Full GC -> Delete X -> copyCheckpointInfoFromEdit.
-        // In this case, we have X=VAR_ENTRY in the `edit`, but will get X=VAR_DELETE in the page directory.
-        return;
-    }
+    // This entry must be valid because it must be visible for the snap which is used to dump checkpoint, so it cannot be gced
+    RUNTIME_CHECK(type == EditRecordType::VAR_ENTRY);
 
     // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
     // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
@@ -923,22 +919,14 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             }
             auto last_version = last_iter->first;
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
-            while (true)
+            if (prev_iter->second.isEntry())
             {
-                // if there is any entry prev to this delete entry,
-                //   1) the entry may be ref by another id.
-                //   2) the entry may be upsert into a newer wal file by the gc process.
-                // So we need to keep the entry item and its delete entry in the snapshot.
-                if (prev_iter->second.isEntry())
-                {
-                    const auto & entry = prev_iter->second;
-                    edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
-                    edit.varDel(page_id, last_version);
-                    break;
-                }
-                if (prev_iter == entries.begin())
-                    break;
-                prev_iter--;
+                if (prev_iter->second.being_ref_count == 1)
+                    return;
+                // It is being ref by another id, should persist the item and delete
+                const auto & entry = prev_iter->second;
+                edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
+                edit.varDel(page_id, last_version);
             }
         }
         return;
