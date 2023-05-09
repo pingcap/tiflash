@@ -274,6 +274,7 @@ private:
         {
             stage = AsyncRequestStage::FINISHED;
             close_conn(!msg.empty(), msg, log);
+            closeGrpcConnection();
             is_close_conn_called = true;
         }
         condition_cv.notify_all();
@@ -366,6 +367,12 @@ private:
         // We must ensure that status is set before pushing async handler into queue
         stage = AsyncRequestStage::WAIT_REWRITE;
         async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+    }
+
+    void closeGrpcConnection()
+    {
+        RUNTIME_ASSERT(reader.use_count() <= 1, "reader should be uniquely held");
+        reader.reset();
     }
 
     // won't be null and do not delete this pointer
