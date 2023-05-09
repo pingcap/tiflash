@@ -99,10 +99,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
             (*expanded_row_size_after_join)[i] = current_offset;
         return false;
     }
-    static bool allRightRowsMaybeAdded()
-    {
-        return STRICTNESS == ASTTableJoin::Strictness::All;
-    }
 };
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
@@ -157,10 +153,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
             dst_columns[num_existing_columns + col_num]->insertDefault();
         return false;
     }
-    static bool allRightRowsMaybeAdded()
-    {
-        return STRICTNESS == ASTTableJoin::Strictness::All;
-    }
 };
 template <>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>
@@ -170,15 +162,14 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         size_t /* num_existing_columns */,
         ColumnRawPtrs & /* src_left_columns */,
         size_t /* num_columns_to_add */,
-        size_t i,
+        size_t /* i */,
         const BlocksList & /* blocks */,
-        IColumn::Filter * is_row_matched,
+        IColumn::Filter * /* is_row_matched */,
         IColumn::Offset & /* current_offset */,
         IColumn::Offsets * /* expanded_row_size_after_join */,
         size_t /* total_right_rows */,
         size_t /*max_block_size*/)
     {
-        (*is_row_matched)[i] = 0;
         return false;
     }
     static bool addNotFound(
@@ -192,7 +183,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         IColumn::Offsets * expanded_row_size_after_join,
         size_t max_block_size)
     {
-        auto ret = CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::Any>::addNotFound(
+        return CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, ASTTableJoin::Strictness::Any>::addNotFound(
             dst_columns,
             num_existing_columns,
             src_left_columns,
@@ -202,13 +193,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
             current_offset,
             expanded_row_size_after_join,
             max_block_size);
-        if (!ret)
-            (*is_row_matched)[i] = 1;
-        return ret;
-    }
-    static bool allRightRowsMaybeAdded()
-    {
-        return false;
     }
 };
 template <>
@@ -268,10 +252,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
             (*is_row_matched)[i] = 1;
         return ret;
     }
-    static bool allRightRowsMaybeAdded()
-    {
-        return true;
-    }
 };
 template <ASTTableJoin::Strictness STRICTNESS>
 struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
@@ -329,10 +309,6 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
         if (!ret)
             dst_columns[num_existing_columns + num_columns_to_add - 1]->insert(FIELD_INT8_0);
         return ret;
-    }
-    static bool allRightRowsMaybeAdded()
-    {
-        return STRICTNESS == ASTTableJoin::Strictness::All;
     }
 };
 

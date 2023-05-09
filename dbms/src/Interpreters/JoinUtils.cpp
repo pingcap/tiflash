@@ -166,7 +166,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
         return;
 
     recordFilteredRows(block, filter_column, null_map_holder, null_map);
-    if (kind == ASTTableJoin::Kind::Cross_Anti)
+    if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());

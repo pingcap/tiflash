@@ -989,8 +989,6 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
             break;
     }
 
-    /// todo control the returned block size for cross join
-    //probe_process_info.all_rows_joined_finish = true;
     assert(!result_blocks.empty());
     return vstackBlocks(std::move(result_blocks));
 }
