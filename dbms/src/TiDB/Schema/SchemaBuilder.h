@@ -30,7 +30,7 @@ struct SchemaBuilder
 
     Context & context;
 
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases; // 不确定有什么用，说不定就删了
+    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
 
     std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id;
 
@@ -38,22 +38,20 @@ struct SchemaBuilder
 
     std::unordered_map<DB::TableID, DB::TableID> partition_id_to_logical_id; // 这个我们只存分区表的对应关系
 
-    Int64 target_version;
-
     const KeyspaceID keyspace_id;
 
     LoggerPtr log;
 
     SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, 
-                  std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id_, std::shared_mutex & shared_mutex_for_table_id_map_, 
-                  std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id_, Int64 version)
+                  std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id_, 
+                  std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id_, 
+                  std::shared_mutex & shared_mutex_for_table_id_map_)
         : getter(getter_)
         , context(context_)
         , databases(dbs_)
         , table_id_to_database_id(table_id_to_database_id_)
         , shared_mutex_for_table_id_map(shared_mutex_for_table_id_map_)
         , partition_id_to_logical_id(partition_id_to_logical_id_)
-        , target_version(version)
         , keyspace_id(getter_.getKeyspaceID())
         , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
     {}
@@ -78,6 +76,10 @@ private:
 
     void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
+    void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
+
+    void applyRecoverPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
+
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
@@ -85,7 +87,7 @@ private:
 
     void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage, std::shared_mutex & shared_mutex_for_table_id_map);
 
-    void applyRenameTable(const TiDB::DBInfoPtr & new_db_info, TiDB::TableID table_id);
+    void applyRenameTable(DatabaseID database_id, TiDB::TableID table_id);
 
     void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
 

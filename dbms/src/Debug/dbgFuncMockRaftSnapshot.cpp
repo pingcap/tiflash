@@ -595,7 +595,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     if (!atomic_decode(false))
     {
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        tmt.getSchemaSyncerManager()->syncSchemas(context, keyspace_id);
 
         if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",

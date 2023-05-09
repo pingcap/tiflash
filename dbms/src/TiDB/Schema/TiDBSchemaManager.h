@@ -64,35 +64,58 @@ public:
         return schema_syncer->syncTableSchema(context, table_id);
     }
 
+    void reset(KeyspaceID keyspace_id){
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            return;
+        }
+        schema_syncer->reset();
+    }
+
+    // TODO:那返回地方要处理 nullptr
     TiDB::DBInfoPtr getDBInfoByName(KeyspaceID keyspace_id, const String & database_name){
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
-            schema_syncer = createSchemaSyncer(keyspace_id);
+            LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            return nullptr;
+            //schema_syncer = createSchemaSyncer(keyspace_id);
         }
         return schema_syncer->getDBInfoByName(database_name);
     }
 
+    // TODO:那返回地方要处理 nullptr
     TiDB::DBInfoPtr getDBInfoByMappedName(KeyspaceID keyspace_id, const String & mapped_database_name)
     {
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
-            schema_syncer = createSchemaSyncer(keyspace_id);
+            //schema_syncer = createSchemaSyncer(keyspace_id);
+            LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            return nullptr;
         }
         return schema_syncer->getDBInfoByMappedName(mapped_database_name);
     }
 
-    bool removeSchemaSyncer(Context & context, KeyspaceID keyspace_id) {
+    bool removeSchemaSyncer(KeyspaceID keyspace_id) {
         schema_syncers_mutex.lock();
 
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
+            LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             schema_syncers_mutex.unlock();
             return false;
         }
-        schema_syncer->dropAllSchema(context);
         schema_syncers.erase(keyspace_id);
         schema_syncers_mutex.unlock();
         return true;
+    }
+
+    void removeTableID(KeyspaceID keyspace_id, TableID table_id) {
+        auto schema_syncer = getSchemaSyncer(keyspace_id);
+        if (schema_syncer == nullptr) {
+            LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+        }
+        schema_syncer->removeTableID(table_id);
     }
 
 private:

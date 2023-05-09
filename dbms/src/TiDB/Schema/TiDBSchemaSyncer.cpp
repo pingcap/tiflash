@@ -11,18 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#pragma once
-
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
-#include "common/types.h"
+#include <common/types.h>
 
 namespace DB
 {
 
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
-     auto getter = createSchemaGetter(keyspace_id);
+    auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
 
     Stopwatch watch;
@@ -54,10 +51,9 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
             // first load all db and tables
             Int64 version_after_load_all = syncAllSchemas(context, getter, version); 
 
-            if (version_after_load_all != -1){
-                cur_version = version_after_load_all; //这个是合理的嘛？算一算
-                GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            }
+            cur_version = version_after_load_all;
+            GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
+
         } else {
             // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
             // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
@@ -69,6 +65,8 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
             Int64 version_after_load_diff = syncSchemaDiffs(context); // 如何处理失败的问题
             if (version_after_load_diff != -1) {
                 cur_version = version_after_load_diff;
+            } else {
+                // TODO:-1 就是遇到了 RegenerateSchemaMap = true, 需要从头全部重新载入，该删的删，该改的改
             }
         }
     }
@@ -82,7 +80,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
     LOG_DEBUG(log, "Try load schema diffs.");
 
     Int64 used_version = cur_version;
-    // TODO:这边要看过，不一定可以并行
+    // TODO:改并行
     while (used_version < latest_version)
     {
         used_version++;
@@ -99,7 +97,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
             return -1;
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, shared_mutex_for_table_id_map, partition_id_to_logical_id, used_version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
         builder.applyDiff(*diff);
     }
 }
@@ -108,15 +106,14 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & context, Getter & getter, Int64 version){
     //获取所有 db 和 table，set table_id_to_database_id,更新 cur_version
-    Int64 version_after_load_all = version;
-    if (!getter.checkSchemaDiffExists(version_after_load_all))
+    if (!getter.checkSchemaDiffExists(version))
     {
-        --version_after_load_all;
+        --version;
     }
-    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, version);
+    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
     builder.syncAllSchema();
 
-    return version_after_load_all;
+    return version;
 }
 
 template <bool mock_getter, bool mock_mapper>
@@ -155,8 +152,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     shared_mutex_for_table_id_map.unlock_shared();
 
     // 2. 获取 tableInfo
-    //TODO: 这个 version 怎么处理再 double check 一下
-    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, -1);
+    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
     builder.applyTable(database_id, table_id, table_id_);
 
     return true;

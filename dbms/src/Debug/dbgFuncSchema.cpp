@@ -30,6 +30,7 @@
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -63,7 +64,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
     try
     {
         schema_syncer->syncSchemas(context, NullspaceID);
@@ -103,8 +104,8 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
-    schema_syncer->reset();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    schema_syncer->reset(NullspaceID);
 
     output("reset schemas");
 }

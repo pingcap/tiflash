@@ -56,22 +56,16 @@ static std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd
     {
         // product env
         // Get DBInfo/TableInfo from TiKV, and create table with names `t_${table_id}`
-        // return std::static_pointer_cast<SchemaSyncer>(
-        //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ false, /*mock_mapper*/ false>>(cluster));
         return std::make_shared<TiDBSchemaSyncerManager>(cluster, false, false);
     }
     else if (!for_unit_test)
     {
         // mock test
         // Get DBInfo/TableInfo from MockTiDB, and create table with its display names
-        // return std::static_pointer_cast<SchemaSyncer>(
-        //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ true>>(cluster));
         return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, true);
     }
     // unit test.
     // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
-    // return std::static_pointer_cast<SchemaSyncer>(
-    //     std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
     return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, false);
 }
 
@@ -257,12 +251,6 @@ TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_orde
 {
     return store_status.load(memory_order);
 }
-
-// SchemaSyncerPtr TMTContext::getSchemaSyncer() const
-// {
-//     std::lock_guard lock(mutex);
-//     return schema_syncer;
-// }
 
 std::shared_ptr<TiDBSchemaSyncerManager> TMTContext::getSchemaSyncerManager() const
 {

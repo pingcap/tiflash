@@ -31,8 +31,6 @@ class PathPool;
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
-// class SchemaSyncer;
-// using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class TiDBSchemaSyncerManager;
 
 class BackgroundService;

@@ -1330,20 +1330,7 @@ try
 
     for (const auto & command : commands)
     {
-        if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
-        {
-            // check that add primary key is forbidden
-            throw Exception(fmt::format("Storage engine {} doesn't support modify primary key.", getName()), ErrorCodes::BAD_ARGUMENTS);
-        }
-        else if (command.type == AlterCommand::DROP_COLUMN)
-        {
-            // check that drop hidden columns is forbidden
-            if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception(
-                    fmt::format("Storage engine {} doesn't support drop hidden column: {}", getName(), command.column_name),
-                    ErrorCodes::BAD_ARGUMENTS);
-        }
-        else if (command.type == AlterCommand::TOMBSTONE)
+        if (command.type == AlterCommand::TOMBSTONE)
         {
             tombstone = command.tombstone;
         }
@@ -1353,67 +1340,10 @@ try
         }
     }
 
-    // update the metadata in database, so that we can read the new schema using TiFlash's client
-    ColumnsDescription new_columns = getColumns();
-    for (const auto & command : commands)
-    {
-        if (command.type == AlterCommand::MODIFY_COLUMN)
-        {
-            // find the column we are going to modify
-            auto col_iter = command.findColumn(new_columns.ordinary); // just find in ordinary columns
-            if (unlikely(!isSupportedDataTypeCast(col_iter->type, command.data_type)))
-            {
-                // If this table has no tiflash replica, simply ignore this check because TiDB constraint
-                // on DDL is not strict. (https://github.com/pingcap/tidb/issues/17530)
-                // If users applied unsupported column type change on table with tiflash replica. To get rid of
-                // this exception and avoid of reading broken data, they have truncate that table.
-                if (table_info && table_info.value().get().replica_info.count == 0)
-                {
-                    LOG_WARNING(
-                        log,
-                        "Accept lossy column data type modification. Table (id:{}) modify column {}({}) from {} to {}",
-                        table_info.value().get().id,
-                        command.column_name,
-                        command.column_id,
-                        col_iter->type->getName(),
-                        command.data_type->getName());
-                }
-                else
-                {
-                    // check that lossy changes is forbidden
-                    // check that changing the UNSIGNED attribute is forbidden
-                    throw Exception(
-                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {}({}) from {} to {}",
-                                    getName(),
-                                    command.column_name,
-                                    command.column_id,
-                                    col_iter->type->getName(),
-                                    command.data_type->getName()),
-                        ErrorCodes::NOT_IMPLEMENTED);
-                }
-            }
-        }
-    }
-
-    commands.apply(new_columns); // apply AlterCommands to `new_columns`
-    setColumns(std::move(new_columns));
     if (table_info)
     {
         tidb_table_info = table_info.value();
     }
-
-    {
-        std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
-        if (storeInited())
-        {
-            _store->applyAlters(commands, table_info, max_column_id_used, context);
-        }
-        else
-        {
-            updateTableColumnInfo();
-        }
-    }
-    decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();
@@ -1442,7 +1372,7 @@ catch (Exception & e)
 }
 
 std::tuple<NamesAndTypes, Strings>
-parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
+getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 {
     NamesAndTypes columns;
     std::vector<String> primary_keys;
@@ -1471,7 +1401,7 @@ parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 }
 
 ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info){
-    auto [columns, pks] = parseColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
+    auto [columns, pks] = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
     // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
     ColumnsDescription new_columns;
     for (auto column : columns) {
@@ -1490,7 +1420,7 @@ void StorageDeltaMerge::alterSchemaChange(
     // 1. 更新 table_info ; 2. 更新 columns ; 3. 更新 create table statement ; 4. 更新 store 的 columns
     // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
 
-    ColumnsDescription new_columns = getNewColumnsDescription(table_info);
+    ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
     setColumns(std::move(new_columns));
 
     {
@@ -1498,14 +1428,16 @@ void StorageDeltaMerge::alterSchemaChange(
         if (storeInited())
         {
             _store->applyAlters(table_info);
+        } else {
+            // log_error?
         }
-        else
-        {
-            // TODO: 这边逻辑 check 一下
-            updateTableColumnInfo();
-        }
+        // else // TODO:理论上不应该走到这个分支是吧？
+        // {
+        //     // TODO: 这边逻辑 check 一下
+        //     updateTableColumnInfo();
+        // }
     }
-    decoding_schema_changed = true; // TODO:现在这个模式还需要这个么；也可以，因为读的时候还用不到
+    decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();
@@ -1523,8 +1455,8 @@ void StorageDeltaMerge::alterSchemaChange(
         1, // 后面删掉
         context);
 
-    // TODO:这边应该有些字段要改，比如 engine type 
-    tidb_table_info = table_info;
+    // TODO:这边应该有些字段要改？
+    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
     if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
     {
         auto & tmt_context = context.getTMTContext();

@@ -188,7 +188,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
         }
         else
         {
-            getAndLockStorageWithSchemaVersion(database_name, table_name, settings.schema_version);
+            getAndLockStorageWithSchemaVersion(database_name, table_name);
         }
     }
 
@@ -220,7 +220,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 }
 
 
-void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
+void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name)
 {
     const String qualified_name = database_name + "." + table_name;
 

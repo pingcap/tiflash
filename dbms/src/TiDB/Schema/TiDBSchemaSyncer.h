@@ -59,13 +59,6 @@ private:
 
     LoggerPtr log;
 
-    explicit TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
-        : cluster(std::move(cluster_))
-        , keyspace_id(keyspace_id_)
-        , cur_version(0)
-        , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
-    {}
-
     Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
         [[maybe_unused]] auto tso = cluster->pd_client->getTS();
@@ -86,14 +79,42 @@ private:
     }
 
 public:
+    TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
+        : cluster(std::move(cluster_))
+        , keyspace_id(keyspace_id_)
+        , cur_version(0)
+        , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
+    {}
+
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
 
+    // background 的逻辑本身可以保证同时一个keyspace 只会有一个 线程在做 syncSchema，所以 syncSchema 本身不需要加锁来避免多个同时跑
+    // 不过 syncSchemas 可以跟 syncTableSchema 一起跑么？
+    // syncSchema 主要是更新两个 map，特定 ddl 会更新表本身。syncTableSchema 主要是更新表本身。
+    // 因为 map 和 表本身都各自上锁，应该能保证两个并行跑也不会出问题。不过都要在改 map 和 改表前做确定，do only once，不要多次重复
+    // TODO:目前拍脑袋觉得是可以一起跑的，但是后面还是要看看有没有什么 corner case
     bool syncSchemas(Context & context) override;
 
     // just use when cur_version = 0
     bool syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     bool syncTableSchema(Context & context, TableID table_id_) override;
+
+    void removeTableID(TableID table_id) override {
+        shared_mutex_for_table_id_map.lock();
+        auto it = table_id_to_database_id.find(table_id);
+        if (it == table_id_to_database_id.end()) {
+            LOG_ERROR(log, "table_id {} is already moved in schemaSyncer", table_id);
+        }
+        else {
+            table_id_to_database_id.erase(it);
+        }
+        
+        if (partition_id_to_logical_id.find(table_id) != partition_id_to_logical_id.end()) {
+            partition_id_to_logical_id.erase(table_id);
+        }
+        shared_mutex_for_table_id_map.unlock();
+    }
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
@@ -118,8 +139,20 @@ public:
     void dropAllSchema(Context & context) override
     {
         auto getter = createSchemaGetter(keyspace_id);
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, -1);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
         builder.dropAllSchema();
+    }
+
+    // just for test
+    void reset() override 
+    {
+        std::lock_guard lock(schema_mutex);
+        databases.clear();
+
+        shared_mutex_for_table_id_map.lock();
+        table_id_to_database_id.clear();
+        partition_id_to_logical_id.clear();
+        shared_mutex_for_table_id_map.unlock();
     }
 };
 

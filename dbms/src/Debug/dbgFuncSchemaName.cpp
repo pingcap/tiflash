@@ -26,6 +26,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -39,8 +40,8 @@ using QualifiedName = std::pair<String, String>;
 std::optional<String> mappedDatabase(Context & context, const String & database_name)
 {
     TMTContext & tmt = context.getTMTContext();
-    auto syncer = tmt.getSchemaSyncer();
-    auto db_info = syncer->getDBInfoByName(database_name);
+    auto syncer = tmt.getSchemaSyncerManager();
+    auto db_info = syncer->getDBInfoByName(NullspaceID, database_name);
     if (db_info == nullptr)
         return std::nullopt;
     return SchemaNameMapper().mapDatabaseName(*db_info);

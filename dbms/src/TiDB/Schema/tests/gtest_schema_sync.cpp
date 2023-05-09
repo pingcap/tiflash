@@ -95,7 +95,7 @@ public:
     void refreshSchema()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncer();
+        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
             schema_syncer->syncSchemas(global_ctx, NullspaceID);
@@ -117,7 +117,7 @@ public:
     void resetSchemas()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
-        flash_ctx.getSchemaSyncer()->reset();
+        flash_ctx.getSchemaSyncerManager()->reset(NullspaceID);
     }
 
     // Get the TiFlash synced table

@@ -34,7 +34,6 @@ using ASTPtr = std::shared_ptr<IAST>;
 using ASTs = std::vector<ASTPtr>;
 using DBGInvokerPrinter = std::function<void(const std::string &)>;
 extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
-class TiDBSchemaSyncer;
 
 class SchemaSyncService
     : public std::enable_shared_from_this<SchemaSyncService>
@@ -65,9 +64,9 @@ private:
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
 
-    mutable std::shared_mutex ks_map_mutex;
+    mutable std::shared_mutex keyspace_map_mutex;
     // Handles for each keyspace schema sync task.
-    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
+    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> keyspace_handle_map;
 
     LoggerPtr log;
 };
