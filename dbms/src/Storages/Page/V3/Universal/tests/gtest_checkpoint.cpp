@@ -1067,18 +1067,24 @@ try
         S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
 
         UniversalWriteBatch batch;
-        PS::V3::CheckpointLocation loc21{
-            .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
-            .offset_in_file = 1024,
-            .size_in_file = 1024,
-        };
-        batch.putRemotePage("21", tag, 1024, loc21, {});
-        PS::V3::CheckpointLocation loc22{
-            .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
-            .offset_in_file = 0,
-            .size_in_file = 0,
-        };
-        batch.putRemoteExternal("22", loc22);
+
+        batch.putRemotePage(
+            "21",
+            tag,
+            1024,
+            PS::V3::CheckpointLocation{
+                .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
+                .offset_in_file = 1024,
+                .size_in_file = 1024,
+            },
+            {});
+        batch.putRemoteExternal(
+            "22",
+            PS::V3::CheckpointLocation{
+                .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
+                .offset_in_file = 0,
+                .size_in_file = 0,
+            });
         page_storage->write(std::move(batch));
     }
     uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
@@ -1139,13 +1145,16 @@ try
                     .offset_in_file = 0,
                     .size_in_file = 0,
                 });
-            batch.putRemoteExternal(
+            batch.putRemotePage(
                 "32",
+                tag,
+                128,
                 PS::V3::CheckpointLocation{
                     .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
                     .offset_in_file = 2048,
                     .size_in_file = 128,
-                });
+                },
+                {});
             page_storage->write(std::move(batch));
         }
     }
@@ -1187,13 +1196,15 @@ try
 
         // These ID are persisted in UniPS but not uploaded to S3 manifest
         restored_entry = restored_page_directory->getByID("30", snap);
-        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value());
+        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // not persisted to S3
 
         restored_entry = restored_page_directory->getByID("31", snap);
-        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value());
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_3"); // restored from local WAL
 
         restored_entry = restored_page_directory->getByID("32", snap);
-        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value());
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
     }
 }
 CATCH
