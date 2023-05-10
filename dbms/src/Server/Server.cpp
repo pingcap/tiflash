@@ -1512,8 +1512,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
         TaskSchedulerConfig config{
-            get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-            get_pool_size(settings.pipeline_io_task_thread_pool_size),
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), settings.pipeline_cpu_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_io_task_thread_pool_size), settings.pipeline_io_thread_pool_queue_type},
         };
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);

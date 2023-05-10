@@ -22,9 +22,6 @@
 
 namespace DB
 {
-// TODO support more kind of TaskQueue, such as
-// - multi-level feedback queue
-// - resource group queue
 class TaskQueue
 {
 public:

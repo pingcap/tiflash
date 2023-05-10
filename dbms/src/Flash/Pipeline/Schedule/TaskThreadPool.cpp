@@ -27,13 +27,13 @@
 namespace DB
 {
 template <typename Impl>
-TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
-    : task_queue(Impl::newTaskQueue())
+TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config)
+    : task_queue(Impl::newTaskQueue(config.queue_type))
     , scheduler(scheduler_)
 {
-    RUNTIME_CHECK(thread_num > 0);
-    threads.reserve(thread_num);
-    for (size_t i = 0; i < thread_num; ++i)
+    RUNTIME_CHECK(config.pool_size > 0);
+    threads.reserve(config.pool_size);
+    for (size_t i = 0; i < config.pool_size; ++i)
         threads.emplace_back(&TaskThreadPool::loop, this, i);
 }
 

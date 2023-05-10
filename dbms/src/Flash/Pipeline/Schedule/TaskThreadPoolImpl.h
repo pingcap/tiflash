@@ -16,6 +16,7 @@
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
@@ -33,11 +34,17 @@ struct CPUImpl
         return task->execute();
     }
 
-    using QueueType = std::unique_ptr<CPUMultiLevelFeedbackQueue>;
-
-    static QueueType newTaskQueue()
+    static TaskQueuePtr newTaskQueue(TaskQueueType type)
     {
-        return std::make_unique<CPUMultiLevelFeedbackQueue>();
+        switch (type)
+        {
+        // the default queue is mlfq queue.
+        case TaskQueueType::DEFAULT:
+        case TaskQueueType::MLFQ:
+            return std::make_unique<CPUMultiLevelFeedbackQueue>();
+        case TaskQueueType::FIFO:
+            return std::make_unique<FIFOTaskQueue>();
+        }
     }
 };
 
@@ -54,11 +61,17 @@ struct IOImpl
         return task->executeIO();
     }
 
-    using QueueType = std::unique_ptr<FIFOTaskQueue>;
-
-    static QueueType newTaskQueue()
+    static TaskQueuePtr newTaskQueue(TaskQueueType type)
     {
-        return std::make_unique<FIFOTaskQueue>();
+        switch (type)
+        {
+        // the default queue is fifo queue.
+        case TaskQueueType::DEFAULT:
+        case TaskQueueType::FIFO:
+            return std::make_unique<FIFOTaskQueue>();
+        case TaskQueueType::MLFQ:
+            return std::make_unique<IOMultiLevelFeedbackQueue>();
+        }
     }
 };
 } // namespace DB
