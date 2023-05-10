@@ -239,7 +239,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
-        rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(*request, cq, thisAsUnaryCallback());
     }
 
     bool retryOrDone(String done_msg)
@@ -298,7 +298,7 @@ private:
     int retry_times = 0;
     AsyncRequestStagev1 stage = AsyncRequestStagev1::NEED_INIT;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
@@ -442,9 +442,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<RecvMsgPtr>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<RecvMsgPtr>>(max_buffer_size));
 }
 
 template <typename RPCContext>
