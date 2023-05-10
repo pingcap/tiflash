@@ -29,6 +29,8 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace FailPoints
@@ -113,6 +115,7 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
+    size_t no_copy_cross_probe_threshold_,
     const String & match_helper_name_,
     const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
@@ -137,6 +140,7 @@ Join::Join(
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
+    , no_copy_cross_probe_threshold(no_copy_cross_probe_threshold_ > 0 ? no_copy_cross_probe_threshold_ : std::max(1, max_block_size / 10))
     , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
     , log(Logger::get(req_id))
@@ -309,6 +313,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         collators,
         non_equal_conditions,
         max_block_size,
+        no_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         restore_round + 1,
@@ -956,26 +961,43 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow();
-    auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
-    if (non_equal_conditions.other_cond_expr != nullptr)
+    if (cross_probe_mode == CrossProbeMode::NORMAL)
     {
-        assert(probe_process_info.offsets_to_replicate != nullptr);
-        if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
+        auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
+        if (non_equal_conditions.other_cond_expr != nullptr)
         {
-            probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin() + probe_process_info.start_row,
-                                                            probe_process_info.offsets_to_replicate->begin() + probe_process_info.end_row);
-            if (probe_process_info.filter != nullptr)
-                probe_process_info.filter->assign(probe_process_info.filter->begin() + probe_process_info.start_row,
-                                                  probe_process_info.filter->begin() + probe_process_info.end_row);
+            assert(probe_process_info.offsets_to_replicate != nullptr);
+            if (probe_process_info.end_row - probe_process_info.start_row != probe_process_info.block.rows())
+            {
+                probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin() + probe_process_info.start_row,
+                                                                probe_process_info.offsets_to_replicate->begin() + probe_process_info.end_row);
+                if (probe_process_info.filter != nullptr)
+                    probe_process_info.filter->assign(probe_process_info.filter->begin() + probe_process_info.start_row,
+                                                      probe_process_info.filter->begin() + probe_process_info.end_row);
+            }
+            handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
         }
-        handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
+        return block;
     }
-    return block;
+    else if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
+    {
+        throw Exception("Not supported");
+    }
+    else
+    {
+        throw Exception(fmt::format("Unsupported cross probe mode: {}", magic_enum::enum_name(cross_probe_mode)));
+    }
 }
 
 Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
-    probe_process_info.prepareForCrossProbe(non_equal_conditions.left_filter_column, kind, strictness, sample_block_with_columns_to_add, blocks);
+    probe_process_info.prepareForCrossProbe(
+        non_equal_conditions.left_filter_column,
+        kind,
+        strictness,
+        sample_block_with_columns_to_add,
+        right_rows_to_be_added_when_matched_for_cross_join);
+
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
 
@@ -1247,24 +1269,27 @@ void Join::workAfterBuildFinish()
             null_key_check_all_blocks_directly = static_cast<double>(null_rows_size) > static_cast<double>(total_input_build_rows) / 3.0;
     }
 
-    /// for cross join, if total right rows is less than max_block_size, then merge all
-    /// the right blocks into one block
-    if (isCrossJoin(kind) && strictness == ASTTableJoin::Strictness::All)
+    if (isCrossJoin(kind))
     {
-        size_t right_rows = 0;
+        right_rows_to_be_added_when_matched_for_cross_join = 0;
         for (const auto & block : original_blocks)
-            right_rows += block.rows();
-        if (blocks.size() > 1)
+            right_rows_to_be_added_when_matched_for_cross_join += block.rows();
+        if (strictness == ASTTableJoin::Strictness::Any)
         {
-            if (right_rows < max_block_size)
-            {
-                blocks.clear();
-                auto merged_block = vstackBlocks(std::move(original_blocks));
-                original_blocks.clear();
-                blocks.push_back(merged_block);
-                original_blocks.push_back(merged_block);
-            }
+            /// for cross any join, at most 1 row is added
+            right_rows_to_be_added_when_matched_for_cross_join = std::min(right_rows_to_be_added_when_matched_for_cross_join, 1);
         }
+        else if (blocks.size() > 1 && right_rows_to_be_added_when_matched_for_cross_join <= max_block_size)
+        {
+            /// for cross all join, if total right rows is less than max_block_size, then merge all
+            /// the right blocks into one block
+            blocks.clear();
+            auto merged_block = vstackBlocks(std::move(original_blocks));
+            original_blocks.clear();
+            blocks.push_back(merged_block);
+            original_blocks.push_back(merged_block);
+        }
+        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join >= no_copy_cross_probe_threshold ? CrossProbeMode::NO_COPY_RIGHT_BLOCK : CrossProbeMode::NORMAL;
     }
 
     if (isEnableSpill())

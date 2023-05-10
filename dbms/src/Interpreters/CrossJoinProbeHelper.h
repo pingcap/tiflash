@@ -20,7 +20,14 @@
 
 namespace DB
 {
+/// crossProbeBlock construct the probe block using CrossJoinAdder, the right rows will be added to probe block row by row, used when right side has few rows
 Block crossProbeBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks);
+/// crossProbeBlockNoCopyRightBlock construct the probe block without copy right block, the left row is appended to the right block, used when right side has many rows
+Blocks crossProbeBlockNoCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,

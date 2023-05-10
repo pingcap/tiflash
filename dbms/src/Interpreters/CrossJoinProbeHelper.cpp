@@ -392,6 +392,93 @@ Block crossProbeBlockImpl(
     probe_process_info.all_rows_joined_finish = (probe_process_info.end_row == block_rows);
     return probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns));
 }
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+Blocks crossProbeBlockNoCopyRightBlockImpl(
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks)
+{
+    static_assert(KIND != ASTTableJoin::Kind::Cross_LeftOuterAnti);
+
+    size_t num_existing_columns = probe_process_info.block.columns();
+    if constexpr (has_null_map)
+    {
+        /// skip filtered rows, the filtered rows will be handled at the end of this block
+        while (probe_process_info.start_row < probe_process_info.block.rows() && (*probe_process_info.null_map)[probe_process_info.start_row])
+        {
+            ++probe_process_info.start_row;
+        }
+    }
+    if (probe_process_info.start_row == probe_process_info.block.rows())
+    {
+        assert(probe_process_info.filtered_rows > 0);
+        MutableColumns dst_columns(probe_process_info.result_block_schema.columns());
+        for (size_t i = 0; i < probe_process_info.result_block_schema.columns(); ++i)
+        {
+            dst_columns[i] = probe_process_info.result_block_schema.getByPosition(i).column->cloneEmpty();
+            dst_columns[i]->reserve(probe_process_info.filtered_rows);
+        }
+        auto * filter_ptr = probe_process_info.filter.get();
+        auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
+        IColumn::Offset current_offset = 0;
+        size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - probe_process_info.block.columns();
+        ColumnRawPtrs src_left_columns(num_existing_columns);
+        for (size_t i = 0; i < num_existing_columns; ++i)
+        {
+            src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
+        }
+        for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
+        {
+            if ((*probe_process_info.null_map)[i])
+            {
+                CrossJoinAdder<KIND, STRICTNESS>::addNotFound(
+                    dst_columns,
+                    num_existing_columns,
+                    src_left_columns,
+                    num_columns_to_add,
+                    i,
+                    filter_ptr,
+                    current_offset,
+                    offset_ptr,
+                    probe_process_info.max_block_size);
+            }
+        }
+        probe_process_info.all_rows_joined_finish = true;
+        return {probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns))};
+    }
+    Blocks ret;
+    for (const auto & right_block : right_blocks)
+    {
+        size_t right_row = right_block.rows();
+        if (right_row == 0)
+            continue;
+        Block block = probe_process_info.result_block_schema.cloneEmpty();
+        for (size_t i = 0; i < num_existing_columns; ++i)
+        {
+            /// left columns
+            assert(block.getByPosition(i).column != nullptr);
+            Field value;
+            probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
+            /// todo use constant column?
+            block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value)->convertToFullColumnIfConst();
+        }
+        for (size_t i = 0; i < right_block.columns(); i++)
+        {
+            /// right columns
+            block.getByPosition(i + num_existing_columns).column = right_block.getByPosition(i).column;
+        }
+        if constexpr (KIND == ASTTableJoin::Kind::Cross_LeftOuterSemi)
+        {
+            /// extra match_helper column for LeftOuterSemi join
+            auto helper_index = block.columns() - 1;
+            block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1)->convertToFullColumnIfConst();
+        }
+        ret.push_back(std::move(block));
+    }
+    probe_process_info.end_row = probe_process_info.start_row + 1;
+    probe_process_info.all_rows_joined_finish = probe_process_info.filtered_rows == 0 && probe_process_info.end_row == probe_process_info.block.rows();
+    return ret;
+}
 } // namespace
 
 Block crossProbeBlock(
@@ -439,6 +526,53 @@ Block crossProbeBlock(
 #undef DISPATCH
 
     return block;
+}
+
+Blocks crossProbeBlockNoCopyRightBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks)
+{
+    Blocks ret;
+
+    using enum ASTTableJoin::Strictness;
+    using enum ASTTableJoin::Kind;
+#define DISPATCH(HAS_NULL_MAP)                                                                                               \
+    if (kind == Cross && strictness == All)                                                                                  \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross && strictness == Any)                                                                             \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross_LeftOuter && strictness == All)                                                                   \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_LeftOuter && strictness == Any)                                                                   \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_Anti && strictness == All)                                                                        \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_Anti && strictness == Any)                                                                        \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                               \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                               \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                               \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                               \
+        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else                                                                                                                     \
+        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+
+    if (probe_process_info.null_map)
+    {
+        DISPATCH(true)
+    }
+    else
+    {
+        DISPATCH(false)
+    }
+#undef DISPATCH
+
+    return ret;
 }
 
 } // namespace DB

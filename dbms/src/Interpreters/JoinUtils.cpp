@@ -34,13 +34,14 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     prepare_for_probe_done = false;
     null_map = nullptr;
     null_map_holder = nullptr;
-    key_columns.clear();
-    materialized_columns.clear();
     filter.reset();
     offsets_to_replicate.reset();
+    key_columns.clear();
+    materialized_columns.clear();
     result_block_schema.clear();
     right_column_index.clear();
     right_rows_to_be_added_when_matched = 0;
+    filtered_rows = 0;
 }
 
 void ProbeProcessInfo::updateStartRow()
@@ -162,7 +163,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     const Block & sample_block_with_columns_to_add,
-    const BlocksList & right_blocks)
+    size_t right_rows_to_be_added_when_matched_)
 {
     if (prepare_for_probe_done)
         return;
@@ -185,14 +186,10 @@ void ProbeProcessInfo::prepareForCrossProbe(
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
     for (size_t i = 0; i < num_columns_to_add; ++i)
         right_column_index.push_back(num_existing_columns + i);
-    right_rows_to_be_added_when_matched = 0;
-    for (const Block & block_right : right_blocks)
-    {
-        size_t rows_right = block_right.rows();
-        right_rows_to_be_added_when_matched += rows_right;
-    }
-    if (strictness == ASTTableJoin::Strictness::Any)
-        right_rows_to_be_added_when_matched = std::min(right_rows_to_be_added_when_matched, 1);
+
+    if (null_map != nullptr)
+        filtered_rows = countBytesInFilter(*null_map);
+    right_rows_to_be_added_when_matched = right_rows_to_be_added_when_matched_;
     prepare_for_probe_done = true;
 }
 
