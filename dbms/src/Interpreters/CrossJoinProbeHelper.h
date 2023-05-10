@@ -25,11 +25,12 @@ Block crossProbeBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks);
+    const Blocks & right_blocks);
 /// crossProbeBlockNoCopyRightBlock construct the probe block without copy right block, the left row is appended to the right block, used when right side has many rows
-Blocks crossProbeBlockNoCopyRightBlock(
+/// return <probed_block, is_matched_rows>
+std::pair<Block, bool> crossProbeBlockNoCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks);
+    const Blocks & right_blocks);
 } // namespace DB

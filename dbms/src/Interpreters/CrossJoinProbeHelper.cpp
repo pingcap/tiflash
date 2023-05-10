@@ -31,7 +31,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
         size_t i,
-        const BlocksList & blocks,
+        const Blocks & blocks,
         IColumn::Filter *,
         IColumn::Offset & current_offset,
         IColumn::Offsets * expanded_row_size_after_join [[maybe_unused]],
@@ -97,7 +97,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuter, STRICTNESS>
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
         size_t i,
-        const BlocksList & blocks,
+        const Blocks & blocks,
         IColumn::Filter * is_row_matched,
         IColumn::Offset & current_offset,
         IColumn::Offsets * expanded_row_size_after_join,
@@ -151,7 +151,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         ColumnRawPtrs & /* src_left_columns */,
         size_t /* num_columns_to_add */,
         size_t /* i */,
-        const BlocksList & /* blocks */,
+        const Blocks & /* blocks */,
         IColumn::Filter * /* is_row_matched */,
         IColumn::Offset & /* current_offset */,
         IColumn::Offsets * /* expanded_row_size_after_join */,
@@ -192,7 +192,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
         size_t i,
-        const BlocksList & blocks,
+        const Blocks & blocks,
         IColumn::Filter * is_row_matched,
         IColumn::Offset & current_offset,
         IColumn::Offsets * expanded_row_size_after_join,
@@ -250,7 +250,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
         ColumnRawPtrs & src_left_columns,
         size_t num_columns_to_add,
         size_t i,
-        const BlocksList & blocks,
+        const Blocks & blocks,
         IColumn::Filter * is_row_matched,
         IColumn::Offset & current_offset,
         IColumn::Offsets * expanded_row_size_after_join,
@@ -303,7 +303,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_LeftOuterSemi, STRICTNESS>
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
 Block crossProbeBlockImpl(
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks)
+    const Blocks & right_blocks)
 {
     size_t num_existing_columns = probe_process_info.block.columns();
     size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - num_existing_columns;
@@ -388,17 +388,17 @@ Block crossProbeBlockImpl(
         if (block_full)
             break;
     }
-    probe_process_info.end_row = current_row;
-    probe_process_info.all_rows_joined_finish = (probe_process_info.end_row == block_rows);
+    probe_process_info.updateEndRow<false>(current_row);
     return probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns));
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-Blocks crossProbeBlockNoCopyRightBlockImpl(
+std::pair<Block, bool> crossProbeBlockNoCopyRightBlockImpl(
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks)
+    const Blocks & right_blocks)
 {
     static_assert(KIND != ASTTableJoin::Kind::Cross_LeftOuterAnti);
+    assert(probe_process_info.offsets_to_replicate != nullptr);
 
     size_t num_existing_columns = probe_process_info.block.columns();
     if constexpr (has_null_map)
@@ -409,14 +409,15 @@ Blocks crossProbeBlockNoCopyRightBlockImpl(
             ++probe_process_info.start_row;
         }
     }
+
     if (probe_process_info.start_row == probe_process_info.block.rows())
     {
-        assert(probe_process_info.filtered_rows > 0);
-        MutableColumns dst_columns(probe_process_info.result_block_schema.columns());
-        for (size_t i = 0; i < probe_process_info.result_block_schema.columns(); ++i)
+        /// current probe block is done, collect un-matched rows
+        MutableColumns dst_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
+        if (probe_process_info.filtered_rows > 0)
         {
-            dst_columns[i] = probe_process_info.result_block_schema.getByPosition(i).column->cloneEmpty();
-            dst_columns[i]->reserve(probe_process_info.filtered_rows);
+            for (auto & dst_column : dst_columns)
+                dst_column->reserve(probe_process_info.filtered_rows);
         }
         auto * filter_ptr = probe_process_info.filter.get();
         auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
@@ -427,6 +428,7 @@ Blocks crossProbeBlockNoCopyRightBlockImpl(
         {
             src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
         }
+        IColumn::Filter::value_type filter_column_value{};
         for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
         {
             if ((*probe_process_info.null_map)[i])
@@ -441,43 +443,69 @@ Blocks crossProbeBlockNoCopyRightBlockImpl(
                     current_offset,
                     offset_ptr,
                     probe_process_info.max_block_size);
+                if (filter_ptr != nullptr)
+                    filter_column_value = (*filter_ptr)[i];
+            }
+        }
+        /// construct fill filter and offset column
+        if (!dst_columns[0]->empty())
+        {
+            assert(dst_columns[0]->size() == probe_process_info.filtered_rows);
+            if (filter_ptr != nullptr)
+            {
+                for (size_t i = 0; i < probe_process_info.filtered_rows; ++i)
+                {
+                    (*filter_ptr)[i] = filter_column_value;
+                }
+            }
+            for (size_t i = 0; i < probe_process_info.filtered_rows; ++i)
+            {
+                (*offset_ptr)[i] = i + 1;
             }
         }
         probe_process_info.all_rows_joined_finish = true;
-        return {probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns))};
+        return {probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns)), false};
     }
-    Blocks ret;
-    for (const auto & right_block : right_blocks)
+    assert(probe_process_info.next_right_block_index < right_blocks.size());
+
+    Block right_block = right_blocks[probe_process_info.next_right_block_index];
+    assert(right_block.rows() > 0);
+    size_t right_row = right_block.rows();
+
+    Block block = probe_process_info.result_block_schema.cloneEmpty();
+    for (size_t i = 0; i < num_existing_columns; ++i)
     {
-        size_t right_row = right_block.rows();
-        if (right_row == 0)
-            continue;
-        Block block = probe_process_info.result_block_schema.cloneEmpty();
-        for (size_t i = 0; i < num_existing_columns; ++i)
-        {
-            /// left columns
-            assert(block.getByPosition(i).column != nullptr);
-            Field value;
-            probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
+        /// left columns
+        assert(block.getByPosition(i).column != nullptr);
+        Field value;
+        probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
+        if (block.getByPosition(i).column->isColumnConst())
+            block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);
+        else
             /// todo use constant column?
             block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value)->convertToFullColumnIfConst();
-        }
-        for (size_t i = 0; i < right_block.columns(); i++)
-        {
-            /// right columns
-            block.getByPosition(i + num_existing_columns).column = right_block.getByPosition(i).column;
-        }
-        if constexpr (KIND == ASTTableJoin::Kind::Cross_LeftOuterSemi)
-        {
-            /// extra match_helper column for LeftOuterSemi join
-            auto helper_index = block.columns() - 1;
-            block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1)->convertToFullColumnIfConst();
-        }
-        ret.push_back(std::move(block));
     }
-    probe_process_info.end_row = probe_process_info.start_row + 1;
-    probe_process_info.all_rows_joined_finish = probe_process_info.filtered_rows == 0 && probe_process_info.end_row == probe_process_info.block.rows();
-    return ret;
+    for (size_t i = 0; i < right_block.columns(); i++)
+    {
+        /// right columns
+        block.getByPosition(i + num_existing_columns).column = right_block.getByPosition(i).column;
+    }
+    if constexpr (KIND == ASTTableJoin::Kind::Cross_LeftOuterSemi)
+    {
+        /// extra match_helper column for LeftOuterSemi join
+        auto helper_index = block.columns() - 1;
+        /// todo use constant column?
+        block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1)->convertToFullColumnIfConst();
+    }
+    /// construct filter and offset column
+    if (probe_process_info.filter != nullptr)
+    {
+        (*probe_process_info.filter)[0] = 1;
+    }
+    (*probe_process_info.offsets_to_replicate)[0] = right_row;
+    probe_process_info.next_right_block_index++;
+    probe_process_info.updateEndRow<true>(probe_process_info.start_row + 1);
+    return {block, true};
 }
 } // namespace
 
@@ -485,34 +513,32 @@ Block crossProbeBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks)
+    const Blocks & right_blocks)
 {
-    Block block{};
-
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
-#define DISPATCH(HAS_NULL_MAP)                                                                                 \
-    if (kind == Cross && strictness == All)                                                                    \
-        block = crossProbeBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross && strictness == Any)                                                               \
-        block = crossProbeBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross_LeftOuter && strictness == All)                                                     \
-        block = crossProbeBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_LeftOuter && strictness == Any)                                                     \
-        block = crossProbeBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_Anti && strictness == All)                                                          \
-        block = crossProbeBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_Anti && strictness == Any)                                                          \
-        block = crossProbeBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                 \
-        block = crossProbeBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                 \
-        block = crossProbeBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                 \
-        block = crossProbeBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                 \
-        block = crossProbeBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else                                                                                                       \
+#define DISPATCH(HAS_NULL_MAP)                                                                                \
+    if (kind == Cross && strictness == All)                                                                   \
+        return crossProbeBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross && strictness == Any)                                                              \
+        return crossProbeBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross_LeftOuter && strictness == All)                                                    \
+        return crossProbeBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_LeftOuter && strictness == Any)                                                    \
+        return crossProbeBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_Anti && strictness == All)                                                         \
+        return crossProbeBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_Anti && strictness == Any)                                                         \
+        return crossProbeBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                \
+        return crossProbeBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                \
+        return crossProbeBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                \
+        return crossProbeBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                \
+        return crossProbeBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else                                                                                                      \
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     if (probe_process_info.null_map)
@@ -524,42 +550,38 @@ Block crossProbeBlock(
         DISPATCH(false)
     }
 #undef DISPATCH
-
-    return block;
 }
 
-Blocks crossProbeBlockNoCopyRightBlock(
+std::pair<Block, bool> crossProbeBlockNoCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks)
+    const Blocks & right_blocks)
 {
-    Blocks ret;
-
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
-#define DISPATCH(HAS_NULL_MAP)                                                                                               \
-    if (kind == Cross && strictness == All)                                                                                  \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross && strictness == Any)                                                                             \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
-    else if (kind == Cross_LeftOuter && strictness == All)                                                                   \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_LeftOuter && strictness == Any)                                                                   \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
-    else if (kind == Cross_Anti && strictness == All)                                                                        \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_Anti && strictness == Any)                                                                        \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
-    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                               \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                               \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                               \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                               \
-        ret = crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
-    else                                                                                                                     \
+#define DISPATCH(HAS_NULL_MAP)                                                                                                \
+    if (kind == Cross && strictness == All)                                                                                   \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross, All, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross && strictness == Any)                                                                              \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);               \
+    else if (kind == Cross_LeftOuter && strictness == All)                                                                    \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, All, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_LeftOuter && strictness == Any)                                                                    \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuter, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);     \
+    else if (kind == Cross_Anti && strictness == All)                                                                         \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, All, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_Anti && strictness == Any)                                                                         \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_Anti, Any, HAS_NULL_MAP>(probe_process_info, right_blocks);          \
+    else if (kind == Cross_LeftOuterSemi && strictness == All)                                                                \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterSemi && strictness == Any)                                                                \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == All)                                                                \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, All, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else if (kind == Cross_LeftOuterAnti && strictness == Any)                                                                \
+        return crossProbeBlockNoCopyRightBlockImpl<Cross_LeftOuterSemi, Any, HAS_NULL_MAP>(probe_process_info, right_blocks); \
+    else                                                                                                                      \
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     if (probe_process_info.null_map)
@@ -571,8 +593,6 @@ Blocks crossProbeBlockNoCopyRightBlock(
         DISPATCH(false)
     }
 #undef DISPATCH
-
-    return ret;
 }
 
 } // namespace DB

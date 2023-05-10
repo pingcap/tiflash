@@ -164,6 +164,27 @@ struct ProbeProcessInfo
         if (offsets_to_replicate != nullptr)
             offsets_to_replicate->resize(block.rows());
     }
+
+    template <bool cross_join>
+    void updateEndRow(size_t next_row_to_probe)
+    {
+        if constexpr (cross_join)
+        {
+            if (use_incremental_probe && next_right_block_index < right_block_size)
+            {
+                /// current probe is not finished, just return
+                return;
+            }
+            end_row = next_row_to_probe;
+            all_rows_joined_finish = filtered_rows == 0 && end_row == block.rows();
+        }
+        else
+        {
+            end_row = next_row_to_probe;
+            all_rows_joined_finish = end_row == block.rows();
+        }
+    }
+
     void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
     void prepareForCrossProbe(
         const String & filter_column,

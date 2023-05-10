@@ -358,6 +358,8 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
+    if unlikely (block.rows() == 0)
+        return;
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrency());
     total_input_build_rows += block.rows();
@@ -963,7 +965,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     probe_process_info.updateStartRow<true>();
     if (cross_probe_mode == CrossProbeMode::NORMAL)
     {
-        auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
+        auto block = crossProbeBlock(kind, strictness, probe_process_info, original_blocks);
         if (non_equal_conditions.other_cond_expr != nullptr)
         {
             assert(probe_process_info.offsets_to_replicate != nullptr);
@@ -981,7 +983,38 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     }
     else if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
     {
-        throw Exception("Not supported");
+        auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        if (incremental_probe)
+        {
+            if (non_equal_conditions.other_cond_expr != nullptr)
+            {
+                size_t left_rows = is_matched_rows ? 1 : block.rows();
+                probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin(),
+                                                                probe_process_info.offsets_to_replicate->begin() + left_rows);
+                if (probe_process_info.filter != nullptr)
+                    probe_process_info.filter->assign(probe_process_info.filter->begin(),
+                                                      probe_process_info.filter->begin() + left_rows);
+                handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
+            }
+            return block;
+        }
+        else
+        {
+            auto ret_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
+            if (kind == ASTTableJoin::Kind::Cross_LeftOuterAnti || kind == ASTTableJoin::Kind::Cross_LeftOuterSemi)
+            {
+                for (auto & ret_column : ret_columns)
+                    ret_column->reserve(probe_process_info.block.rows());
+            }
+            assert(non_equal_conditions.other_cond_expr != nullptr);
+            size_t left_rows = is_matched_rows ? 1 : block.rows();
+            probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin(),
+                                                            probe_process_info.offsets_to_replicate->begin() + left_rows);
+            if (probe_process_info.filter != nullptr)
+                probe_process_info.filter->assign(probe_process_info.filter->begin(),
+                                                  probe_process_info.filter->begin() + left_rows);
+        }
+        throw Exception(fmt::format("Unsupported cross probe mode: {}", magic_enum::enum_name(cross_probe_mode)));
     }
     else
     {
