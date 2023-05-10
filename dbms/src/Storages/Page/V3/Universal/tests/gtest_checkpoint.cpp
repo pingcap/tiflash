@@ -1021,7 +1021,7 @@ try
         batch.delPage("3");
         page_storage->write(std::move(batch));
     }
-    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
 
     { // check the first manifest
         UInt64 upload_seq = 1;
@@ -1087,7 +1087,7 @@ try
             });
         page_storage->write(std::move(batch));
     }
-    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
 
     { // check the second manifest
         UInt64 upload_seq = 2;

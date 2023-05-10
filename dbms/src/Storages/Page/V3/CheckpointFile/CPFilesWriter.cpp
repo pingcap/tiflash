@@ -67,7 +67,7 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
 
 CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     universal::PageEntriesEdit & edits,
-    const std::unordered_set<String> & file_ids_to_compact)
+    const CPFilesWriter::CompactOptions & options)
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
@@ -136,7 +136,7 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         if (rec_edit.entry.checkpoint_info.has_value())
         {
             const auto file_id = *rec_edit.entry.checkpoint_info.data_location.data_file_id;
-            if (!file_ids_to_compact.contains(file_id))
+            if (!options.compact_all_data && !options.file_ids.contains(file_id))
             {
                 // add lock for the s3 fullpath that was written in the previous uploaded CheckpointDataFile
                 locked_files.emplace(file_id);
