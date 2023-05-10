@@ -305,9 +305,9 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
+        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
         auto & ori_entry = last_iter->second.entry;
-        RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
+        RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
@@ -559,7 +559,14 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     {
         // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
         RUNTIME_CHECK(iter->second.isEntry());
+
+        bool is_local_data_reclaimed = false;
+        if (iter->second.entry.checkpoint_info.has_value())
+            is_local_data_reclaimed = iter->second.entry.checkpoint_info.is_local_data_reclaimed;
+        // else it does not have checkpoint_info, local data must be not reclaimed
+
         iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
+        iter->second.entry.checkpoint_info.is_local_data_reclaimed = is_local_data_reclaimed; // keep this field value
 
         if (iter == entries.begin())
             break;
