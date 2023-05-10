@@ -14,9 +14,10 @@
 
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/mockExecutor.h>
+
 #include <optional>
 #include <utility>
-#include <TestUtils/mockExecutor.h>
 
 namespace DB::tests
 {
@@ -145,7 +146,7 @@ try
         {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
          toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
          toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
-         unbounded_type_frame);
+        unbounded_type_frame);
 
     executeFunctionAndAssert(
         toNullableVec<String>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
@@ -153,7 +154,7 @@ try
         {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
          toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
          toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})},
-         unbounded_type_frame);
+        unbounded_type_frame);
 
     // TODO support unsigned int.
     testInt<Int8>();

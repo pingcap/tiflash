@@ -167,13 +167,13 @@ public:
         switch (action.window_description.frame.end_type)
         {
         case WindowFrame::BoundaryType::Current:
-            processFrameTypeCurrent(action, function_index, arguments);
+            processBoundryTypeCurrent(action, function_index, arguments);
             break;
         case WindowFrame::BoundaryType::Unbounded:
-            processFrameTypeUnbounded(action, function_index, arguments);
+            processBoundryTypeUnbounded(action, function_index, arguments);
             break;
         case WindowFrame::BoundaryType::Offset:
-            processFrameTypeOffset(action, function_index, arguments);
+            processBoundryTypeOffset(action, function_index, arguments);
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not supported frame BoundaryType");
@@ -181,7 +181,7 @@ public:
     }
 
 private:
-    static void processFrameTypeCurrent(
+    static void processBoundryTypeCurrent(
         WindowTransformAction & action,
         size_t function_index,
         const ColumnNumbers & arguments)
@@ -192,7 +192,7 @@ private:
         to.insert(value_field);
     }
 
-    void processFrameTypeUnbounded(
+    void processBoundryTypeUnbounded(
         WindowTransformAction & action,
         size_t function_index,
         const ColumnNumbers & arguments)
@@ -224,7 +224,7 @@ private:
         unassigned_row_num = 0;
     }
 
-    static void processFrameTypeOffset(
+    static void processBoundryTypeOffset(
         WindowTransformAction & /*action*/,
         size_t /*function_index*/,
         const ColumnNumbers & /*arguments*/)
