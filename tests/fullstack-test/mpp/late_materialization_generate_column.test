@@ -71,3 +71,4 @@ mysql> set tidb_isolation_read_engines='tiflash'; select * from test.IDT_26539 w
 +--------+--------+------+------+------+------+------+
 
 mysql> set tidb_isolation_read_engines='tiflash'; select * from test.IDT_26539 where col1 is not NULL and col4 is not NULL;
+mysql> drop TABLE if exists test.`IDT_26539`;
