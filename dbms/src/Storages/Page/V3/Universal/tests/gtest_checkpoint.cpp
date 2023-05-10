@@ -1136,15 +1136,16 @@ try
         // Persist some new WriteBatch but checkpoint is not uploaded
         {
             UniversalWriteBatch batch;
-            batch.delPage("2");
-            batch.putPage("30", tag, "testing");
+            batch.delPage("2"); // delete
+            batch.putPage("10", tag, "new version data");
+            batch.putPage("30", tag, "testing"); // new page_id
             batch.putRemoteExternal(
                 "31",
                 PS::V3::CheckpointLocation{
                     .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
                     .offset_in_file = 0,
                     .size_in_file = 0,
-                });
+                }); // new ingest id
             batch.putRemotePage(
                 "32",
                 tag,
@@ -1154,7 +1155,7 @@ try
                     .offset_in_file = 2048,
                     .size_in_file = 128,
                 },
-                {});
+                {}); // new ingest id
             page_storage->write(std::move(batch));
         }
     }
@@ -1175,36 +1176,42 @@ try
         EXPECT_EQ(restored_page_directory->numPages(), 8) << fmt::format("{}", restored_page_directory->getAllPageIds());
 
         auto restored_entry = restored_page_directory->getByID("10", snap);
-        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
-        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_1_0.lock_s2_1");
+        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // new version is not persisted to S3
 
         restored_entry = restored_page_directory->getByID("20", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_2_0.lock_s2_2"); // second checkpoint
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
 
         restored_entry = restored_page_directory->getByID("21", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_2");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
 
         restored_entry = restored_page_directory->getByID("22", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_2");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
 
         restored_entry = restored_page_directory->getByID("5", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_1_0.lock_s2_1");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
 
         // These ID are persisted in UniPS but not uploaded to S3 manifest
         restored_entry = restored_page_directory->getByID("30", snap);
         ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // not persisted to S3
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
 
         restored_entry = restored_page_directory->getByID("31", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
 
         restored_entry = restored_page_directory->getByID("32", snap);
         ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
     }
 }
 CATCH
