@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
-#include <common/likely.h>
-
 #include <assert.h>
+#include <common/likely.h>
 
 namespace DB
 {
