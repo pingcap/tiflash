@@ -411,8 +411,6 @@ public:
         const std::vector<size_t> & remote_cache_capacity_quota = {});
     PathCapacityMetricsPtr getPathCapacity() const;
 
-    void initializeTiFlashMetrics() const;
-
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 

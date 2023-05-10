@@ -16,13 +16,16 @@
 
 #include <Common/Exception.h>
 #include <Common/SimpleIntrusiveNode.h>
+#include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <common/defines.h>
 #include <common/types.h>
+#include <prometheus/histogram.h>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <ext/scope_guard.h>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -74,6 +77,18 @@ public:
     using Status = MPMCQueueStatus;
     using Result = MPMCQueueResult;
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
+
+    struct Metrics
+    {
+        prometheus::Histogram * push_duration = nullptr;
+        prometheus::Histogram * pop_duration = nullptr;
+        prometheus::Gauge * n_active = nullptr;
+        prometheus::Gauge * n_capacity = nullptr;
+        prometheus::Gauge * n_pending_push = nullptr;
+        prometheus::Gauge * n_pending_pop = nullptr;
+
+        // (active + pending_push) / capacity = saturation (saturation may be > 100%)
+    };
 
     explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
@@ -201,6 +216,17 @@ public:
         });
     }
 
+    void setMetrics(const Metrics & m)
+    {
+        std::unique_lock lock(mu);
+        metrics = m;
+
+        if (metrics.n_capacity)
+            metrics.n_capacity->Set(capacity);
+        if (metrics.n_active)
+            metrics.n_active->Set(write_pos - read_pos);
+    }
+
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
@@ -310,6 +336,17 @@ private:
             auto pred = [&] {
                 return read_pos < write_pos || !isNormal();
             };
+
+            Stopwatch watch(CLOCK_MONOTONIC_COARSE);
+            if (metrics.n_pending_pop)
+                metrics.n_pending_pop->Increment();
+            SCOPE_EXIT({
+                if (metrics.pop_duration)
+                    metrics.pop_duration->Observe(watch.elapsedSeconds());
+                if (metrics.n_pending_pop)
+                    metrics.n_pending_pop->Decrement();
+            });
+
             if (!wait(lock, reader_head, node, pred, deadline))
                 is_timeout = true;
         }
@@ -323,6 +360,9 @@ private:
 
             /// update pos only after all operations that may throw an exception.
             ++read_pos;
+            if (metrics.n_active)
+                metrics.n_active->Set(write_pos - read_pos);
+
             /// assert so in debug mode, we can get notified if some bugs happens when updating current_auxiliary_memory_usage
             assert(read_pos != write_pos || current_auxiliary_memory_usage == 0);
             if (read_pos == write_pos)
@@ -370,6 +410,17 @@ private:
             auto pred = [&] {
                 return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage) || !isNormal();
             };
+
+            Stopwatch watch(CLOCK_MONOTONIC_COARSE);
+            if (metrics.n_pending_push)
+                metrics.n_pending_push->Increment();
+            SCOPE_EXIT({
+                if (metrics.push_duration)
+                    metrics.push_duration->Observe(watch.elapsedSeconds());
+                if (metrics.n_pending_push)
+                    metrics.n_pending_push->Decrement();
+            });
+
             if (!wait(lock, writer_head, node, pred, deadline))
                 is_timeout = true;
         }
@@ -384,6 +435,8 @@ private:
 
             /// update pos only after all operations that may throw an exception.
             ++write_pos;
+            if (metrics.n_active)
+                metrics.n_active->Set(write_pos - read_pos);
 
             /// See comments in `popObj`.
             notifyNext(reader_head);
@@ -452,6 +505,10 @@ private:
 
         read_pos = 0;
         write_pos = 0;
+
+        if (metrics.n_active)
+            metrics.n_active->Set(write_pos - read_pos);
+
         current_auxiliary_memory_usage = 0;
     }
 
@@ -498,6 +555,8 @@ private:
     /// one element can be pushed to the queue even if its auxiliary memory exceeds max_auxiliary_memory_usage
     const Int64 max_auxiliary_memory_usage;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
+
+    Metrics metrics;
 
     mutable std::mutex mu;
     WaitingNode reader_head;

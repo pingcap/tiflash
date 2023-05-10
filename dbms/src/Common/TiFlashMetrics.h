@@ -261,6 +261,30 @@ namespace DB
     M(tiflash_object_count, "Number of objects", Gauge,                                                                                             \
         F(type_count_of_establish_calldata, {"type", "count_of_establish_calldata"}),                                                               \
         F(type_count_of_mpptunnel, {"type", "count_of_mpptunnel"}))                                                                                 \
+    M(tiflash_queue_push_duration_seconds, "Duration of push to queue", Histogram,                                                                  \
+        F(type_disagg_page_receiver, {{"type", "disagg_page_receiver"}}, ExpBuckets{0.01, 2, 20}))                                                 \
+    M(tiflash_queue_active, "In-queue elements", Gauge,                                                                                             \
+        F(type_disagg_page_receiver, {"type", "disagg_page_receiver"}))                                                                             \
+    M(tiflash_queue_capacity, "Queue capacity", Gauge,                                                                                              \
+        F(type_disagg_page_receiver, {"type", "disagg_page_receiver"}))                                                                             \
+    M(tiflash_queue_pending_push, "Pending elements to push to queue", Gauge,                                                                       \
+        F(type_disagg_page_receiver, {"type", "disagg_page_receiver"}))                                                                             \
+    M(tiflash_uni_thread_queue_duration_seconds, "Duration of queuing in the uni thread pool", Histogram,                                           \
+        F(type_global, {{"type", "global"}}, ExpBuckets{0.01, 2, 20}),                                                                             \
+        F(type_disagg_page_preparer, {{"type", "disagg_page_preparer"}}, ExpBuckets{0.01, 2, 20}),                                                 \
+        F(type_disagg_read_task, {{"type", "disagg_read_task"}}, ExpBuckets{0.01, 2, 20}))                                                         \
+    M(tiflash_uni_thread_queued, "In-queue tasks in the uni thread pool", Gauge,                                                                    \
+        F(type_global, {"type", "global"}),                                                                                                         \
+        F(type_disagg_page_preparer, {"type", "disagg_page_preparer"}),                                                                             \
+        F(type_disagg_read_task, {"type", "disagg_read_task"}))                                                                                     \
+    M(tiflash_uni_thread_capacity, "Max threads of the uni thread pool", Gauge,                                                                     \
+        F(type_global, {"type", "global"}),                                                                                                         \
+        F(type_disagg_page_preparer, {"type", "disagg_page_preparer"}),                                                                             \
+        F(type_disagg_read_task, {"type", "disagg_read_task"}))                                                                                     \
+    M(tiflash_uni_thread_pending, "Pending tasks to push to queue in the uni thread pool", Gauge,                                                   \
+        F(type_global, {"type", "global"}),                                                                                                         \
+        F(type_disagg_page_preparer, {"type", "disagg_page_preparer"}),                                                                             \
+        F(type_disagg_read_task, {"type", "disagg_read_task"}))                                                                                     \
     M(tiflash_thread_count, "Number of threads", Gauge,                                                                                             \
         F(type_max_threads_of_thdpool, {"type", "thread_pool_total_max"}),                                                                          \
         F(type_active_threads_of_thdpool, {"type", "thread_pool_active"}),                                                                          \
