@@ -298,7 +298,7 @@ private:
     int retry_times = 0;
     AsyncRequestStagev1 stage = AsyncRequestStagev1::NEED_INIT;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();

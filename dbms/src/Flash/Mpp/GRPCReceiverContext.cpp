@@ -411,7 +411,7 @@ void GRPCReceiverContext::makeAsyncReader(
     grpc::CompletionQueue * cq,
     UnaryCallback<bool> * callback) const
 {
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
+    reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
     reader->init(callback);
 }
 

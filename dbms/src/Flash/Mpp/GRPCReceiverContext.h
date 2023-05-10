@@ -55,7 +55,7 @@ public:
     virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
     virtual grpc::ClientContext * getClientContext() = 0;
 };
-using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
+using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
 
 struct ExchangeRecvRequest
 {

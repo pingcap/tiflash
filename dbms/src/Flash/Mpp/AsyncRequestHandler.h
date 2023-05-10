@@ -26,6 +26,7 @@
 #include <grpcpp/completion_queue.h>
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 
 namespace DB
@@ -371,7 +372,6 @@ private:
 
     void closeGrpcConnection()
     {
-        RUNTIME_ASSERT(reader.use_count() <= 1, "reader should be uniquely held");
         reader.reset();
     }
 
@@ -391,7 +391,7 @@ private:
     Int32 received_packet_index;
     TrackedMppDataPacketPtrs packets;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
     Status finish_status;
     LoggerPtr log;
