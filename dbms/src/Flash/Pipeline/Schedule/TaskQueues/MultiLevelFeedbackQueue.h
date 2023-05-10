@@ -142,7 +142,7 @@ struct CPUTimeGetter
     static UInt64 get(const TaskPtr & task)
     {
         assert(task);
-        return task->profile_info.cpu_execute_time;
+        return task->profile_info.getCPUExecuteTime();
     }
 };
 using CPUMultiLevelFeedbackQueue = MultiLevelFeedbackQueue<CPUTimeGetter>;
@@ -152,7 +152,7 @@ struct IOTimeGetter
     static UInt64 get(const TaskPtr & task)
     {
         assert(task);
-        return task->profile_info.io_execute_time;
+        return task->profile_info.getIOExecuteTime();
     }
 };
 using IOMultiLevelFeedbackQueue = MultiLevelFeedbackQueue<IOTimeGetter>;

@@ -20,18 +20,8 @@
 
 namespace DB
 {
-#define PROFILE_MEMBER(UnitType)   \
-    UnitType cpu_execute_time = 0; \
-    UnitType cpu_pending_time = 0; \
-    UnitType io_execute_time = 0;  \
-    UnitType io_pending_time = 0;  \
-    UnitType await_time = 0;
-
-class LocalTaskProfileInfo
+class TaskProfileInfo
 {
-public:
-    PROFILE_MEMBER(UInt64)
-
 public:
     void startTimer() noexcept;
 
@@ -49,8 +39,17 @@ public:
 
     String toJson() const;
 
+    UInt64 getCPUExecuteTime() const;
+    UInt64 getIOExecuteTime() const;
+
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+
+    UInt64 cpu_execute_time = 0;
+    UInt64 cpu_pending_time = 0;
+    UInt64 io_execute_time = 0;
+    UInt64 io_pending_time = 0;
+    UInt64 await_time = 0;
 };
 
 } // namespace DB

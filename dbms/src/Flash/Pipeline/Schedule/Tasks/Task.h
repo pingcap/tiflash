@@ -81,7 +81,7 @@ private:
     void assertStatus(ExecTaskStatus expect);
 
 public:
-    LocalTaskProfileInfo profile_info;
+    TaskProfileInfo profile_info;
 
     // level of multi-level feedback queue.
     size_t mlfq_level{0};

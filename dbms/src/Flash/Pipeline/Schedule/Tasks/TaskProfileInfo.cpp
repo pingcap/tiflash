@@ -17,58 +17,59 @@
 
 namespace DB
 {
-namespace
-{
-template <typename ProfileInfo>
-String profileInfoToJson(const ProfileInfo & profile_info)
-{
-    return fmt::format(
-        R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
-        profile_info.cpu_execute_time,
-        profile_info.cpu_pending_time,
-        profile_info.io_execute_time,
-        profile_info.io_pending_time,
-        profile_info.await_time);
-}
-} // namespace
-
-void LocalTaskProfileInfo::startTimer() noexcept
+void TaskProfileInfo::startTimer() noexcept
 {
     stopwatch.start();
 }
 
-UInt64 LocalTaskProfileInfo::elapsedFromPrev() noexcept
+UInt64 TaskProfileInfo::elapsedFromPrev() noexcept
 {
     return stopwatch.elapsedFromLastTime();
 }
 
-void LocalTaskProfileInfo::addCPUExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addCPUExecuteTime(UInt64 value) noexcept
 {
     cpu_execute_time += value;
 }
 
-void LocalTaskProfileInfo::elapsedCPUPendingTime() noexcept
+void TaskProfileInfo::elapsedCPUPendingTime() noexcept
 {
     cpu_pending_time += elapsedFromPrev();
 }
 
-void LocalTaskProfileInfo::addIOExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addIOExecuteTime(UInt64 value) noexcept
 {
     io_execute_time += value;
 }
 
-void LocalTaskProfileInfo::elapsedIOPendingTime() noexcept
+void TaskProfileInfo::elapsedIOPendingTime() noexcept
 {
     io_pending_time += elapsedFromPrev();
 }
 
-void LocalTaskProfileInfo::elapsedAwaitTime() noexcept
+void TaskProfileInfo::elapsedAwaitTime() noexcept
 {
     await_time += elapsedFromPrev();
 }
 
-String LocalTaskProfileInfo::toJson() const
+String TaskProfileInfo::toJson() const
 {
-    return profileInfoToJson(*this);
+    return fmt::format(
+        R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
+        cpu_execute_time,
+        cpu_pending_time,
+        io_execute_time,
+        io_pending_time,
+        await_time);
+}
+
+UInt64 TaskProfileInfo::getCPUExecuteTime() const
+{
+    return cpu_execute_time;
+}
+
+UInt64 TaskProfileInfo::getIOExecuteTime() const
+{
+    return io_execute_time;
 }
 } // namespace DB
