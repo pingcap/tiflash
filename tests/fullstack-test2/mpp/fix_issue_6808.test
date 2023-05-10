@@ -21,10 +21,5 @@ mysql> insert into test.t values(1, 1);
 func> wait_table test t
 
 mysql> use test; set tidb_enforce_mpp=on; set tidb_isolation_read_engines='tiflash'; select sum(1) as c from test.t having count(*)>1 or count(a)= null;
-+---+
-| c |
-+---+
-| 0 |
-+---+
 
 mysql> drop table if exists test.t
