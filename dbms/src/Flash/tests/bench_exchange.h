@@ -136,11 +136,13 @@ struct MockReceiverContext
     }
 
     bool supportAsync(const Request &) const { return false; }
-    void makeAsyncReader(
+    std::unique_ptr<AsyncReader> makeAsyncReader(
         const Request &,
-        std::unique_ptr<AsyncReader> &,
         grpc::CompletionQueue *,
-        UnaryCallback<bool> *) const {}
+        UnaryCallback<bool> *) const
+    {
+        return nullptr;
+    }
 
     std::vector<PacketQueuePtr> queues;
     std::vector<tipb::FieldType> field_types;

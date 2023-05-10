@@ -44,7 +44,7 @@ public:
     virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
 };
-using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
+using ExchangePacketReaderPtr = std::unique_ptr<ExchangePacketReader>;
 
 class AsyncExchangePacketReader
 {
@@ -92,9 +92,8 @@ public:
 
     ExchangePacketReaderPtr makeSyncReader(const ExchangeRecvRequest & request) const;
 
-    void makeAsyncReader(
+    AsyncExchangePacketReaderPtr makeAsyncReader(
         const ExchangeRecvRequest & request,
-        AsyncExchangePacketReaderPtr & reader,
         grpc::CompletionQueue * cq,
         UnaryCallback<bool> * callback) const;
 

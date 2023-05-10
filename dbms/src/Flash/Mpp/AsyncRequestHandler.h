@@ -287,7 +287,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(make_reader_mu);
-        rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(request, cq, thisAsUnaryCallback());
     }
 
     void retryOrDone(String && done_msg, const String & log_msg)

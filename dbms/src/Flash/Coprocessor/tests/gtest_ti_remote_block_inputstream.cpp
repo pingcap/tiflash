@@ -252,9 +252,9 @@ struct MockReceiverContext
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeSyncReader(const Request &)
+    std::unique_ptr<Reader> makeSyncReader(const Request &)
     {
-        return std::make_shared<Reader>(queue);
+        return std::make_unique<Reader>(queue);
     }
 
     static void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
@@ -274,11 +274,13 @@ struct MockReceiverContext
 
     static bool supportAsync(const Request &) { return false; }
 
-    void makeAsyncReader(
+    static std::unique_ptr<AsyncReader> makeAsyncReader(
         const Request &,
-        std::unique_ptr<AsyncReader> &,
         grpc::CompletionQueue *,
-        UnaryCallback<bool> *) const {}
+        UnaryCallback<bool> *)
+    {
+        return nullptr;
+    }
 
     std::shared_ptr<Reader> makeReader(const Request &)
     {
