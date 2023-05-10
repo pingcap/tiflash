@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
+
 #include <memory.h>
 
 namespace DB
