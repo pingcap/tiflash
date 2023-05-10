@@ -201,29 +201,35 @@ inline Poco::Message generateLogMessage(const std::string & logger_name, const c
 const LoggerPtr & getDefaultFatalLogger();
 
 template <typename... Args>
-inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
+inline void logAndTerminate(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
 {
+    auto message = generateLogMessage(
+        logger->name(),
+        filename,
+        lineno,
+        condition,
+        std::forward<Args>(args)...);
     if (logger->is(Poco::Message::Priority::PRIO_FATAL))
-    {
-        auto message = generateLogMessage(
-            logger->name(),
-            filename,
-            lineno,
-            condition,
-            std::forward<Args>(args)...);
         logger->log(message);
+    try
+    {
+        throw Exception(message.getText());
+    }
+    catch (...)
+    {
+        std::terminate();
     }
 }
 
-inline void log(const char * filename, int lineno, const char * condition)
+inline void logAndTerminate(const char * filename, int lineno, const char * condition)
 {
-    log(filename, lineno, condition, getDefaultFatalLogger());
+    logAndTerminate(filename, lineno, condition, getDefaultFatalLogger());
 }
 
 template <typename... Args>
-inline void log(const char * filename, int lineno, const char * condition, const char * fmt_str, Args &&... args)
+inline void logAndTerminate(const char * filename, int lineno, const char * condition, const char * fmt_str, Args &&... args)
 {
-    log(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
+    logAndTerminate(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
 }
 
 /**
@@ -327,12 +333,11 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
     {                                                                  \
         if (unlikely(!(condition)))                                    \
         {                                                              \
-            ::DB::exception_details::log(                              \
+            ::DB::exception_details::logAndTerminate(                  \
                 &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
                 __LINE__,                                              \
                 #condition,                                            \
                 ##__VA_ARGS__);                                        \
-            std::terminate();                                          \
         }                                                              \
     } while (false)
 
