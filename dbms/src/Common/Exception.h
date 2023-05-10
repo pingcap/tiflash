@@ -338,6 +338,8 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
                 __LINE__,                                              \
                 #condition,                                            \
                 ##__VA_ARGS__);                                        \
+            /*to make c++ compiler happy.*/                            \
+            std::terminate();                                          \
         }                                                              \
     } while (false)
 
