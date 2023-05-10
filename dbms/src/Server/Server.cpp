@@ -1542,7 +1542,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // before this instance can accept requests.
         // Else it just do nothing.
         bg_init_stores.waitUntilFinish();
+    }
 
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && /*has_been_bootstrap*/ store_ident.has_value())
+    {
+        // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
+        // store id is allocated later.
         // Wait until all CheckpointInfo are restored from S3
         auto wn_ps = global_context->getWriteNodePageStorage();
         wn_ps->waitUntilInitedFromRemoteStore();

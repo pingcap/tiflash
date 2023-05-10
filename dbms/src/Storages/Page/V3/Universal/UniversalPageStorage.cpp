@@ -396,6 +396,7 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
 
 void UniversalPageStorage::waitUntilInitedFromRemoteStore() const
 {
+    LOG_INFO(log, "Waiting for restore checkpoint info from S3");
     assert(remote_locks_local_mgr != nullptr);
     remote_locks_local_mgr->waitUntilInited();
 }
@@ -433,7 +434,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
-    if (snap->sequence == last_checkpoint_sequence)
+    if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
@@ -480,13 +481,17 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
-    std::unordered_set<String> file_ids_to_compact;
-    if (options.compact_getter != nullptr)
-    {
-        file_ids_to_compact = options.compact_getter();
-    }
+    PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
+        if (options.full_compact)
+            return PS::V3::CPFilesWriter::CompactOptions(true);
+        if (options.compact_getter == nullptr)
+            return PS::V3::CPFilesWriter::CompactOptions(false);
+        return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
+    }();
     // get the remote file ids that need to be compacted
-    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
+    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(
+        edit_from_mem,
+        compact_opts);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;

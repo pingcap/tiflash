@@ -194,6 +194,12 @@ public:
         std::optional<UInt64> override_sequence = std::nullopt;
 
         /**
+         * Trigger a full compaction aka re-upload all local page data to S3.
+         */
+        bool full_compact = false;
+        /**
+         * When full_compact is false, try use this callback to get the S3 data
+         * file list for compaction.
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
 
