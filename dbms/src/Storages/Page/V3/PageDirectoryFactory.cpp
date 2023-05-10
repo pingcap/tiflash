@@ -82,10 +82,26 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     return dir;
 }
 
+template <typename Trait>
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr
+PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit)
+{
+    PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), nullptr);
+
+    loadEdit(dir, edit);
+    // Reset the `sequence` to the maximum of persisted.
+    dir->sequence = max_applied_ver.sequence;
+
+    // Remove invalid entries
+    dir->gcInMemEntries({.need_removed_entries = false});
+
+    return dir;
+}
+
 // just for test
 template <typename Trait>
 typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::createFromEdit(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
+PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;

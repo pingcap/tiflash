@@ -26,6 +26,7 @@
 #include <grpcpp/completion_queue.h>
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 
 namespace DB
@@ -274,6 +275,7 @@ private:
         {
             stage = AsyncRequestStage::FINISHED;
             close_conn(!msg.empty(), msg, log);
+            closeGrpcConnection();
             is_close_conn_called = true;
         }
         condition_cv.notify_all();
@@ -285,7 +287,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(make_reader_mu);
-        rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(request, cq, thisAsUnaryCallback());
     }
 
     void retryOrDone(String && done_msg, const String & log_msg)
@@ -368,6 +370,11 @@ private:
         async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
     }
 
+    void closeGrpcConnection()
+    {
+        reader.reset();
+    }
+
     // won't be null and do not delete this pointer
     grpc::CompletionQueue * cq;
 
@@ -384,7 +391,7 @@ private:
     Int32 received_packet_index;
     TrackedMppDataPacketPtrs packets;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
     Status finish_status;
     LoggerPtr log;
