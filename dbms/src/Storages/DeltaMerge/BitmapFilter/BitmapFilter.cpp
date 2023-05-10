@@ -79,6 +79,12 @@ void BitmapFilter::set(UInt32 start, UInt32 limit)
     std::fill(filter.begin() + start, filter.begin() + start + limit, true);
 }
 
+void BitmapFilter::set(IColumn::Filter & f, UInt32 start, UInt32 limit)
+{
+    RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
+    std::transform(f.cbegin(), f.cend(), filter.begin() + start, [](const UInt8 a) { return a != 0; });
+}
+
 bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
     RUNTIME_CHECK(start + limit <= filter.size(), start, limit, filter.size());
@@ -97,11 +103,19 @@ bool BitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 
 void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
-    RUNTIME_CHECK(start + limit <= filter.size() && f.size() == limit);
+    RUNTIME_CHECK(start + limit <= filter.size());
     auto begin = filter.cbegin() + start;
     if (!all_match)
     {
         std::transform(f.begin(), f.end(), begin, f.begin(), [](const UInt8 a, const bool b) { return a != 0 && b; });
+    }
+}
+
+void BitmapFilter::rangeAnd(BitmapFilterPtr & f) const
+{
+    if (!all_match)
+    {
+        std::transform(filter.cbegin(), filter.cend(), f->filter.cbegin(), f->filter.begin(), [](const bool a, const bool b) { return a && b; });
     }
 }
 

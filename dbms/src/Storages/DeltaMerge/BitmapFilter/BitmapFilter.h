@@ -20,6 +20,9 @@
 namespace DB::DM
 {
 
+class BitmapFilter;
+using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
+
 class BitmapFilter
 {
 public:
@@ -29,20 +32,22 @@ public:
     void set(const ColumnPtr & col, const FilterPtr & f);
     void set(const UInt32 * data, UInt32 size, const FilterPtr & f);
     void set(UInt32 start, UInt32 limit);
+    void set(IColumn::Filter & f, UInt32 start, UInt32 limit);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
     // filter[start, limit] & f -> f
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    void rangeAnd(BitmapFilterPtr & f) const;
 
     void runOptimize();
 
     String toDebugString() const;
     size_t count() const;
+    size_t size() const { return filter.size(); }
 
 private:
     std::vector<bool> filter;
     bool all_match;
 };
 
-using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM

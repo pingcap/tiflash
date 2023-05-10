@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/FilterExpressionCache.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -146,13 +147,13 @@ public:
 
     struct SegmentMetaInfo
     {
-        SegmentFormat::Version version;
-        UInt64 epoch;
+        SegmentFormat::Version version{};
+        UInt64 epoch{};
         RowKeyRange range;
-        PageIdU64 segment_id;
-        PageIdU64 next_segment_id;
-        PageIdU64 delta_id;
-        PageIdU64 stable_id;
+        PageIdU64 segment_id{};
+        PageIdU64 next_segment_id{};
+        PageIdU64 delta_id{};
+        PageIdU64 stable_id{};
     };
 
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
@@ -699,6 +700,9 @@ private:
     // This involves to check the valid data ratio in the background gc thread,
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
+
+    // The cache of push down filter expression.
+    FilterExpressionCache filter_expression_cache;
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;

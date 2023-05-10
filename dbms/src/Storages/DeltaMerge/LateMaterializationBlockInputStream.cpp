@@ -28,12 +28,19 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     BlockInputStreamPtr filter_column_stream_,
     SkippableBlockInputStreamPtr rest_column_stream_,
     const BitmapFilterPtr & bitmap_filter_,
+    size_t stable_rows_,
+    String filter_expression_,
+    FilterExpressionCache & filter_expression_cache_,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , filter_column_name(filter_column_name_)
     , filter_column_stream(filter_column_stream_)
     , rest_column_stream(rest_column_stream_)
     , bitmap_filter(bitmap_filter_)
+    , stable_rows(stable_rows_)
+    , filter_expression(std::move(filter_expression_))
+    , cache_bitmap(std::make_shared<BitmapFilter>(stable_rows, false))
+    , filter_expression_cache(filter_expression_cache_)
     , log(Logger::get(NAME, req_id_))
 {}
 
@@ -52,13 +59,19 @@ Block LateMaterializationBlockInputStream::readImpl()
         if (!filter_column_block)
             return filter_column_block;
 
+        size_t rows = filter_column_block.rows();
+        size_t start_offset = filter_column_block.startOffset();
         // If filter is nullptr, it means that these push down filters are always true.
         if (!filter)
         {
+            // update cache_bitmap, cache_bitmap[startOffset, startOffset + rows) = true
+            if (start_offset < stable_rows)
+                cache_bitmap->set(start_offset, rows);
+
             IColumn::Filter col_filter;
-            col_filter.resize(filter_column_block.rows());
+            col_filter.resize(rows);
             Block rest_column_block;
-            if (bitmap_filter->get(col_filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            if (bitmap_filter->get(col_filter, start_offset, rows))
             {
                 rest_column_block = rest_column_stream->read();
             }
@@ -78,9 +91,11 @@ Block LateMaterializationBlockInputStream::readImpl()
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
 
-        size_t rows = filter_column_block.rows();
+        // update cache_bitmap, cache_bitmap[startOffset, startOffset + rows) = filter
+        if (start_offset < stable_rows)
+            cache_bitmap->set(*filter, start_offset, rows);
         // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
-        bitmap_filter->rangeAnd(*filter, filter_column_block.startOffset(), rows);
+        bitmap_filter->rangeAnd(*filter, start_offset, rows);
 
         if (size_t passed_count = countBytesInFilter(*filter); passed_count == 0)
         {
@@ -92,7 +107,7 @@ Block LateMaterializationBlockInputStream::readImpl()
                 //       but the filter_column_stream doesn't meet the end of stream
                 //       so it is an unexpected behavior.
                 rest_column_stream->read();
-                LOG_ERROR(log, "Late materialization skip block failed, at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
+                LOG_ERROR(log, "Late materialization skip block failed, at start_offset: {}, rows: {}", start_offset, rows);
             }
         }
         else
@@ -151,6 +166,16 @@ Block LateMaterializationBlockInputStream::readImpl()
     }
 
     return filter_column_block;
+}
+
+void LateMaterializationBlockInputStream::readSuffixImpl()
+{
+    filter_column_stream->readSuffix();
+    rest_column_stream->readSuffix();
+    // Update filter_expression_cache
+    cache_bitmap->runOptimize();
+    filter_expression_cache.set(filter_expression, cache_bitmap);
+    // LOG_DEBUG(log, "Late materialization readSuffix, filter_expression: {}, cache_bitmap: {}/{}", filter_expression, cache_bitmap->count(), cache_bitmap->size());
 }
 
 } // namespace DB::DM

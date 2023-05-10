@@ -2810,7 +2810,16 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         dm_context.tracing_id);
 
     // construct late materialization stream
-    return std::make_shared<LateMaterializationBlockInputStream>(columns_to_read, filter->filter_column_name, filter_column_stream, rest_column_stream, bitmap_filter, dm_context.tracing_id);
+    return std::make_shared<LateMaterializationBlockInputStream>(
+        columns_to_read,
+        filter->filter_column_name,
+        filter_column_stream,
+        rest_column_stream,
+        bitmap_filter,
+        segment_snap->stable->getDMFilesRows(),
+        filter->before_where->dumpActions(),
+        filter_expression_cache,
+        dm_context.tracing_id);
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
@@ -2838,6 +2847,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
+    // TODO: use cache to accelerate building bitmap filter
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
@@ -2849,15 +2859,32 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
     if (filter && filter->before_where)
     {
         // if has filter conditions pushed down, use late materialization
-        return getLateMaterializationStream(
-            std::move(bitmap_filter),
-            dm_context,
-            columns_to_read,
-            segment_snap,
-            real_ranges,
-            filter,
-            max_version,
-            expected_block_size);
+        // If the filter expression is not in the cache, we need to build a late materialization stream
+        // and add the filter expression to the cache
+        // Otherwise, we can directly use the cached bitmap filter to build a bitmap filter stream
+        const auto filter_expression = filter->before_where->dumpActions();
+        const auto cache_result = filter_expression_cache.get(filter_expression);
+        if (!cache_result.has_value())
+        {
+            LOG_DEBUG(log, "Cache miss for filter expression: {}, cache size: {}", filter_expression, filter_expression_cache.size());
+            return getLateMaterializationStream(
+                std::move(bitmap_filter),
+                dm_context,
+                columns_to_read,
+                segment_snap,
+                real_ranges,
+                filter,
+                max_version,
+                expected_block_size);
+        }
+        LOG_DEBUG(log, "Cache hit for filter expression: {}", filter_expression);
+        // The size of the cache should be equal to the number of rows in the stable layer of the segment
+        RUNTIME_CHECK(cache_result->get()->size() == segment_snap->stable->getDMFilesRows());
+        // cache_result & bitmap_filter[0:stable_rows] = bitmap_filter[0:stable_rows]
+        cache_result->get()->rangeAnd(bitmap_filter);
+        // TODO: call runOptimize twice here, should be optimized
+        bitmap_filter->runOptimize();
+        // TODO: use bitmap_filter to skip read rows
     }
 
     return getBitmapFilterInputStream(
