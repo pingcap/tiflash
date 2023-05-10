@@ -30,6 +30,8 @@ public:
 
     bool take(TaskPtr & task) noexcept override;
 
+    void updateStatistics(const TaskPtr &, size_t) noexcept override {}
+
     bool empty() noexcept override;
 
     void close() override;

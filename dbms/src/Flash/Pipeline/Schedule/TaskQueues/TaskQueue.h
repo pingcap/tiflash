@@ -22,9 +22,6 @@
 
 namespace DB
 {
-// TODO support more kind of TaskQueue, such as
-// - multi-level feedback queue
-// - resource group queue
 class TaskQueue
 {
 public:
@@ -36,6 +33,10 @@ public:
 
     // return false if the queue had been closed.
     virtual bool take(TaskPtr & task) noexcept = 0;
+
+    // Update the execution metrics of the task taken from the queue.
+    // Used to adjust the priority of tasks within a queue.
+    virtual void updateStatistics(const TaskPtr & task, size_t inc_value) noexcept = 0;
 
     virtual bool empty() noexcept = 0;
 

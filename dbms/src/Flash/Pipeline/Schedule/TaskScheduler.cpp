@@ -23,8 +23,8 @@
 namespace DB
 {
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
-    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_size)
-    , io_task_thread_pool(*this, config.io_task_thread_pool_size)
+    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config)
+    , io_task_thread_pool(*this, config.io_task_thread_pool_config)
     , wait_reactor(*this)
 {
 }
@@ -52,7 +52,9 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
     for (auto & task : tasks)
     {
         assert(task);
+        task->profile_info.startTimer();
         // A quick check to avoid an unnecessary round into `running_tasks` then being scheduled out immediately.
+        // Skip `task->profile_info.elapsedAwaitTime()` here because the `await` will end instantly.
         auto status = task->await();
         switch (status)
         {

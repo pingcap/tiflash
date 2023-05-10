@@ -14,38 +14,42 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Common/Stopwatch.h>
 
 #include <atomic>
 
 namespace DB
 {
-template <bool is_cpu>
-class TaskThreadPoolMetrics
+class TaskProfileInfo
 {
 public:
-    TaskThreadPoolMetrics();
+    void startTimer() noexcept;
 
-    void incPendingTask(size_t task_count);
+    UInt64 elapsedFromPrev() noexcept;
 
-    void decPendingTask();
+    void addCPUExecuteTime(UInt64 value) noexcept;
 
-    void elapsedPendingTime(TaskPtr & task);
+    void elapsedCPUPendingTime() noexcept;
 
-    void incExecutingTask();
+    void addIOExecuteTime(UInt64 value) noexcept;
 
-    void decExecutingTask();
+    void elapsedIOPendingTime() noexcept;
 
-    void addExecuteTime(TaskPtr & task, UInt64 value);
+    void elapsedAwaitTime() noexcept;
 
-    void incThreadCnt();
+    String toJson() const;
 
-    void decThreadCnt();
-
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+    UInt64 getCPUExecuteTime() const;
+    UInt64 getIOExecuteTime() const;
 
 private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+
+    UInt64 cpu_execute_time = 0;
+    UInt64 cpu_pending_time = 0;
+    UInt64 io_execute_time = 0;
+    UInt64 io_pending_time = 0;
+    UInt64 await_time = 0;
 };
 
 } // namespace DB
