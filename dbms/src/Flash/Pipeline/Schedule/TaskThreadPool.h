@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPoolMetrics.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
@@ -26,11 +27,27 @@ namespace DB
 {
 class TaskScheduler;
 
+struct ThreadPoolConfig
+{
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    ThreadPoolConfig(size_t pool_size_)
+        : pool_size(pool_size_)
+    {}
+
+    ThreadPoolConfig(size_t pool_size_, TaskQueueType queue_type_)
+        : pool_size(pool_size_)
+        , queue_type(queue_type_)
+    {}
+
+    size_t pool_size;
+    TaskQueueType queue_type = TaskQueueType::DEFAULT;
+};
+
 template <typename Impl>
 class TaskThreadPool
 {
 public:
-    TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
+    TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config);
 
     void close();
 
@@ -46,7 +63,7 @@ private:
     void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
 
 private:
-    typename Impl::QueueType task_queue;
+    TaskQueuePtr task_queue;
 
     LoggerPtr logger = Logger::get(Impl::NAME);
 
