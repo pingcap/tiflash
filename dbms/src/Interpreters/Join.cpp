@@ -786,7 +786,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     assert(probe_process_info.prepare_for_probe_done);
-    probe_process_info.updateStartRow();
+    probe_process_info.updateStartRow<false>();
     /// this makes a copy of `probe_process_info.block`
     Block block = probe_process_info.block;
     size_t keys_size = key_names_left.size();
@@ -960,7 +960,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
-    probe_process_info.updateStartRow();
+    probe_process_info.updateStartRow<true>();
     if (cross_probe_mode == CrossProbeMode::NORMAL)
     {
         auto block = crossProbeBlock(kind, strictness, probe_process_info, blocks);
@@ -996,7 +996,9 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
         kind,
         strictness,
         sample_block_with_columns_to_add,
-        right_rows_to_be_added_when_matched_for_cross_join);
+        right_rows_to_be_added_when_matched_for_cross_join,
+        incremental_probe,
+        blocks.size());
 
     std::vector<Block> result_blocks;
     size_t result_rows = 0;
@@ -1290,6 +1292,10 @@ void Join::workAfterBuildFinish()
             original_blocks.push_back(merged_block);
         }
         cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join >= no_copy_cross_probe_threshold ? CrossProbeMode::NO_COPY_RIGHT_BLOCK : CrossProbeMode::NORMAL;
+        if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
+        {
+            incremental_probe = supportIncrementalProbeForCrossJoin(kind);
+        }
     }
 
     if (isEnableSpill())

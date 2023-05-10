@@ -130,8 +130,11 @@ struct ProbeProcessInfo
     Block result_block_schema;
     std::vector<size_t> right_column_index;
     size_t right_rows_to_be_added_when_matched = 0;
+    size_t right_block_size = 0;
+    size_t next_right_block_index = 0;
     /// row number that is filtered by left condition
     size_t filtered_rows = 0;
+    bool use_incremental_probe = false;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : partition_index(0)
@@ -142,14 +145,34 @@ struct ProbeProcessInfo
         , all_rows_joined_finish(true){};
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
-    void updateStartRow();
+    template <bool cross_join>
+    void updateStartRow()
+    {
+        if constexpr (cross_join)
+        {
+            if (use_incremental_probe)
+            {
+                if (next_right_block_index < right_block_size)
+                    return;
+                next_right_block_index = 0;
+            }
+        }
+        assert(start_row <= end_row);
+        start_row = end_row;
+        if (filter != nullptr)
+            filter->resize(block.rows());
+        if (offsets_to_replicate != nullptr)
+            offsets_to_replicate->resize(block.rows());
+    }
     void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
     void prepareForCrossProbe(
         const String & filter_column,
         ASTTableJoin::Kind kind,
         ASTTableJoin::Strictness strictness,
         const Block & sample_block_with_columns_to_add,
-        size_t right_rows_to_be_added_when_matched);
+        size_t right_rows_to_be_added_when_matched,
+        bool use_incremental_probe,
+        size_t right_block_size);
 };
 struct JoinBuildInfo
 {

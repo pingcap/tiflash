@@ -341,6 +341,7 @@ private:
     CrossProbeMode cross_probe_mode = CrossProbeMode::NORMAL;
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
     size_t no_copy_cross_probe_threshold;
+    bool incremental_probe = false;
 
 private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;

@@ -41,17 +41,10 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     result_block_schema.clear();
     right_column_index.clear();
     right_rows_to_be_added_when_matched = 0;
+    use_incremental_probe = false;
+    right_block_size = 0;
+    next_right_block_index = 0;
     filtered_rows = 0;
-}
-
-void ProbeProcessInfo::updateStartRow()
-{
-    assert(start_row <= end_row);
-    start_row = end_row;
-    if (filter != nullptr)
-        filter->resize(block.rows());
-    if (offsets_to_replicate != nullptr)
-        offsets_to_replicate->resize(block.rows());
 }
 
 ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names)
@@ -163,10 +156,16 @@ void ProbeProcessInfo::prepareForCrossProbe(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     const Block & sample_block_with_columns_to_add,
-    size_t right_rows_to_be_added_when_matched_)
+    size_t right_rows_to_be_added_when_matched_,
+    bool use_incremental_probe_,
+    size_t right_block_size_)
 {
     if (prepare_for_probe_done)
         return;
+
+    right_rows_to_be_added_when_matched = right_rows_to_be_added_when_matched_;
+    use_incremental_probe = use_incremental_probe_;
+    right_block_size = right_block_size_;
 
     recordFilteredRows(block, filter_column, null_map_holder, null_map);
     if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
@@ -189,7 +188,6 @@ void ProbeProcessInfo::prepareForCrossProbe(
 
     if (null_map != nullptr)
         filtered_rows = countBytesInFilter(*null_map);
-    right_rows_to_be_added_when_matched = right_rows_to_be_added_when_matched_;
     prepare_for_probe_done = true;
 }
 
