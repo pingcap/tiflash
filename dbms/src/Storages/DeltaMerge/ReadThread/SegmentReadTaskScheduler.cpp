@@ -11,9 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentReadResultChannel.h>
 
 namespace DB::DM
 {
@@ -44,11 +46,9 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         auto seg_id = pa.first;
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
     }
-    auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
+    LOG_DEBUG(log, "Added, pool_id={} table_id={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
               pool->poolId(),
               pool->tableId(),
-              block_slots,
               tasks.size(),
               read_pools.size(),
               sw_add.elapsed(),
@@ -74,7 +74,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
         return {merged_task, true};
     }
 
-    if (!pool->valid())
+    if (!pool->getResultChannel()->valid())
     {
         return {nullptr, true};
     }
@@ -121,7 +121,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 
 bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr & pool)
 {
-    return pool->getFreeBlockSlots() > 0 && // Block queue is not full and
+    return !pool->getResultChannel()->isFull() && // Block queue is not full and
         (merged_task_pool.has(pool->poolId()) || // can schedule a segment from MergedTaskPool or
          pool->getFreeActiveSegments() > 0); // schedule a new segment.
 }
@@ -133,7 +133,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
     {
         auto pool = read_pools.next();
         // If !pool->valid(), schedule it for clean MergedTaskPool.
-        if (pool != nullptr && (needScheduleToRead(pool) || !pool->valid()))
+        if (pool != nullptr && (needScheduleToRead(pool) || !pool->getResultChannel()->valid()))
         {
             return pool;
         }

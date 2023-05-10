@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/Exception.h>
 #include <stdint.h>
 
 #include <cassert>
@@ -114,7 +115,7 @@ public:
             }
             if (queue.empty())
             {
-                assert(done);
+                RUNTIME_CHECK(done);
                 return false;
             }
             item = std::move(queue.front());
@@ -130,7 +131,7 @@ public:
    *
    * @param[out] item  If `tryPop` returns `true`, it contains the popped item or is modified
    *                    if `tryPop` returns `false`, it is unmodified
-   * @returns          True upon success or `finish()` has been called. 
+   * @returns          True upon success or `finish()` has been called.
    *                    False if the queue is empty
    */
     bool tryPop(T & item)
@@ -179,7 +180,7 @@ public:
     {
         {
             std::lock_guard lock(mu);
-            assert(!done);
+            RUNTIME_CHECK(!done);
             done = true;
         }
         reader_cv.notify_all();

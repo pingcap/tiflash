@@ -38,8 +38,8 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
     while (true)
     {
         Block res;
-        if (!task_pool->tryPopBlock(res))
-            return OperatorStatus::WAITING;
+        // if (!task_pool->tryPopBlock(res))
+        //     return OperatorStatus::WAITING;
         if (res)
         {
             if (unlikely(res.rows() == 0))

@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
+#include <Storages/DeltaMerge/SegmentReadResultChannel.h>
 
 namespace DB::FailPoints
 {
@@ -42,7 +44,7 @@ void MergedTask::initOnce()
     for (cur_idx = 0; cur_idx < static_cast<int>(units.size()); cur_idx++)
     {
         auto & [pool, task, stream] = units[cur_idx];
-        if (!pool->valid())
+        if (!pool->getResultChannel()->valid())
         {
             setStreamFinished(cur_idx);
             continue;
@@ -68,13 +70,13 @@ int MergedTask::readOneBlock()
 
         auto & [pool, task, stream] = units[cur_idx];
 
-        if (!pool->valid())
+        if (!pool->getResultChannel()->valid())
         {
             setStreamFinished(cur_idx);
             continue;
         }
 
-        if (pool->getFreeBlockSlots() <= 0)
+        if (pool->getResultChannel()->isFull())
         {
             continue;
         }
@@ -97,7 +99,7 @@ void MergedTask::setException(const DB::Exception & e)
     {
         if (unit.pool != nullptr)
         {
-            unit.pool->setException(e);
+            unit.pool->getResultChannel()->finishWithError(e);
         }
     }
 }

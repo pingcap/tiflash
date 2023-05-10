@@ -47,15 +47,16 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        // ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+        // LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
     }
 
     ~UnorderedSourceOp() override
     {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        UNUSED(ref_no);
+        // task_pool->decreaseUnorderedInputStreamRefCount();
+        // LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
     String getName() const override
@@ -70,7 +71,7 @@ protected:
 private:
     void addReadTaskPoolToScheduler()
     {
-        std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
+        // std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
     }
 
 private:

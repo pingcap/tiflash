@@ -18,6 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/SegmentReadResultChannel.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::FailPoints
@@ -33,18 +34,17 @@ class UnorderedInputStream : public IProfilingBlockInputStream
 
 public:
     UnorderedInputStream(
-        const SegmentReadTaskPoolPtr & task_pool_,
+        const SegmentReadResultChannelPtr & result_channel_,
         const ColumnDefines & columns_to_read_,
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
-        : task_pool(task_pool_)
+        : result_channel(result_channel_)
         , header(toEmptyBlock(columns_to_read_))
         , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
         , ref_no(0)
-        , task_pool_added(false)
-
+    // , task_pool_added(false)
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -52,14 +52,14 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        ref_no = result_channel->refConsumer();
+        LOG_DEBUG(log, "Created UnorderedInputStream, ch={} ref_no={}", result_channel->debug_tag, ref_no);
     }
 
     ~UnorderedInputStream() override
     {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        auto remaining_refs = result_channel->derefConsumer();
+        LOG_DEBUG(log, "Destroy UnorderedInputStream, ch={} ref_no={} remaining_refs={}", result_channel->debug_tag, ref_no, remaining_refs);
     }
 
     String getName() const override { return NAME; }
@@ -80,12 +80,12 @@ protected:
         {
             return {};
         }
-        addReadTaskPoolToScheduler();
+        // addReadTaskPoolToScheduler();
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
             Block res;
-            task_pool->popBlock(res);
+            result_channel->popBlock(res);
             if (res)
             {
                 if (action.transform(res))
@@ -107,27 +107,27 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, action.totalRows());
+        LOG_DEBUG(log, "Finish read from storage, ch={} ref_no={} rows={}", result_channel->debug_tag, ref_no, action.totalRows());
     }
 
-    void addReadTaskPoolToScheduler()
-    {
-        if (likely(task_pool_added))
-        {
-            return;
-        }
-        std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
-        task_pool_added = true;
-    }
+    // void addReadTaskPoolToScheduler()
+    // {
+    //     if (likely(task_pool_added))
+    //     {
+    //         return;
+    //     }
+    //     std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
+    //     task_pool_added = true;
+    // }
 
 private:
-    SegmentReadTaskPoolPtr task_pool;
+    SegmentReadResultChannelPtr result_channel;
     Block header;
     SegmentReadTransformAction action;
 
     bool done = false;
     LoggerPtr log;
     int64_t ref_no;
-    bool task_pool_added;
+    // bool task_pool_added;
 };
 } // namespace DB::DM
