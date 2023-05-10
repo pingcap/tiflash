@@ -34,6 +34,8 @@ std::optional<BitmapFilterPtr> FilterExpressionCache::get(const std::string & fi
 
 void FilterExpressionCache::set(const std::string & filter_expression, const BitmapFilterPtr & result)
 {
+    if (result->size() == 0)
+        return;
     std::unique_lock lock(rw_mutex);
     auto it = map.find(filter_expression);
     if (it != map.end())
