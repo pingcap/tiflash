@@ -37,7 +37,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
         // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
         // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
         // as a tombstone and let the SchemaSyncService drop them physically.
-        dropAllSchema(getter, context);
+        dropAllSchema(context);
         cur_version = SchemaGetter::SchemaVersionNotExist;
     } else {
         if (version <= cur_version) {
@@ -62,7 +62,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
             // X-1 is aborted and we can safely ignore it.
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
-            Int64 version_after_load_diff = syncSchemaDiffs(context); // 如何处理失败的问题
+            Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version); // 如何处理失败的问题
             if (version_after_load_diff != -1) {
                 cur_version = version_after_load_diff;
             } else {
@@ -70,7 +70,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
             }
         }
     }
-    
+
     LOG_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
     return true;
 }
@@ -97,9 +97,10 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
             return -1;
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
         builder.applyDiff(*diff);
     }
+    return used_version;
 }
 
 // just use when cur_version = 0
@@ -110,7 +111,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & contex
     {
         --version;
     }
-    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
     builder.syncAllSchema();
 
     return version;
@@ -152,9 +153,14 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     shared_mutex_for_table_id_map.unlock_shared();
 
     // 2. 获取 tableInfo
-    SchemaBuilder<Getter, NameMapper> builder(context, getter, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
     builder.applyTable(database_id, table_id, table_id_);
 
     return true;
 }
+
+template class TiDBSchemaSyncer<false, false>;
+template class TiDBSchemaSyncer<true, false>;
+template class TiDBSchemaSyncer<true, true>;
+
 }

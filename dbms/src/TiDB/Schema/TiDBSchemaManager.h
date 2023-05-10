@@ -39,9 +39,17 @@ public:
             schema_syncers[keyspace_id] = schema_syncer ;
             schema_syncers_mutex.unlock();
             return schema_syncer;
-        } 
+        } else if (mock_getter and mock_mapper) {
+            // for mock test
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+            schema_syncers_mutex.lock();
+            schema_syncers[keyspace_id] = schema_syncer ;
+            schema_syncers_mutex.unlock();
+            return schema_syncer;
+        }
         
-        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+        // for unit test
+        auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
         schema_syncers_mutex.lock();
         schema_syncers[keyspace_id] = schema_syncer ;
         schema_syncers_mutex.unlock();

@@ -45,9 +45,9 @@ private:
 
     KeyspaceID keyspace_id;
 
-    std::mutex schema_mutex; // mutex for ?
-
     Int64 cur_version;
+
+    std::shared_mutex shared_mutex_for_databases; // mutex for databases?
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases; // 这个什么时候会用到呢
 
@@ -118,7 +118,8 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        std::lock_guard lock(schema_mutex);
+        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+        lock.lock();
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
         if (it == databases.end())
@@ -128,7 +129,8 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
-        std::lock_guard lock(schema_mutex);
+        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+        lock.lock();
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
@@ -139,14 +141,15 @@ public:
     void dropAllSchema(Context & context) override
     {
         auto getter = createSchemaGetter(keyspace_id);
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
         builder.dropAllSchema();
     }
 
     // just for test
     void reset() override 
     {
-        std::lock_guard lock(schema_mutex);
+        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+        lock.lock();
         databases.clear();
 
         shared_mutex_for_table_id_map.lock();

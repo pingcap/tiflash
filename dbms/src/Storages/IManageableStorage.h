@@ -120,7 +120,7 @@ public:
         const Context & context)
         = 0;
 
-    virtual DM::ColumnDefines getStoreColumnDefines() const;
+    virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.

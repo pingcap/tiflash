@@ -20,7 +20,6 @@
 
 namespace DB
 {
-using KeyspaceDatabaseMap = std::unordered_map<KeyspaceDatabaseID, TiDB::DBInfoPtr, boost::hash<KeyspaceDatabaseID>>;
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
@@ -29,6 +28,8 @@ struct SchemaBuilder
     Getter & getter;
 
     Context & context;
+
+    std::shared_mutex & shared_mutex_for_databases;
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
 
@@ -45,9 +46,10 @@ struct SchemaBuilder
     SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, 
                   std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id_, 
                   std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id_, 
-                  std::shared_mutex & shared_mutex_for_table_id_map_)
+                  std::shared_mutex & shared_mutex_for_table_id_map_, std::shared_mutex & shared_mutex_for_databases_)
         : getter(getter_)
         , context(context_)
+        , shared_mutex_for_databases(shared_mutex_for_databases_)
         , databases(dbs_)
         , table_id_to_database_id(table_id_to_database_id_)
         , shared_mutex_for_table_id_map(shared_mutex_for_table_id_map_)
@@ -61,6 +63,8 @@ struct SchemaBuilder
     void syncAllSchema();
 
     void dropAllSchema();
+
+    void applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id);
 
 private:
     void applyDropSchema(DatabaseID schema_id);
@@ -92,8 +96,6 @@ private:
     void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
 
     void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
-    
-    void applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id);
 };
 
 } // namespace DB

@@ -200,7 +200,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     // case SchemaActionType::DropColumn:
     // case SchemaActionType::DropColumns:
     // case SchemaActionType::ModifyColumn:
-    // case SchemaActionType::SetDefaultValue:
+    // case SchemaActionType::SetDefaultValue: // TODO:这个要加测试后面看过，现在处理了这个逻辑，直接复制 tableInfo 可能会出问题的。
     // // Add primary key change primary keys to not null, so it's equal to alter table for tiflash.
     // case SchemaActionType::AddPrimaryKey:
     // {
@@ -630,13 +630,17 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
+    shared_mutex_for_databases.lock();
     databases.emplace(db_info->id, db_info);
+    shared_mutex_for_databases.unlock();
+
     LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
 }
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
-{
+{   
+    shared_mutex_for_databases.lock_shared();
     auto it = databases.find(schema_id);
     if (unlikely(it == databases.end()))
     {
@@ -646,8 +650,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
             schema_id);
         return;
     }
+    shared_mutex_for_databases.unlock_shared();
     applyDropSchema(name_mapper.mapDatabaseName(*it->second));
+    shared_mutex_for_databases.lock();
     databases.erase(schema_id);
+    shared_mutex_for_databases.unlock();
 }
 
 template <typename Getter, typename NameMapper>
@@ -879,11 +886,15 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     // TODO:改成并行
     for (const auto & db : all_schemas)
     {
+        shared_mutex_for_databases.lock_shared();
         if (databases.find(db->id) == databases.end())
         {
+            shared_mutex_for_databases.unlock_shared();
             // TODO:create database 感觉就是写入 db.sql, 以及把 database 信息写入 context，如果后面不存 .sql，可以再进行简化
             applyCreateSchema(db);
             LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
+        } else {
+            shared_mutex_for_databases.unlock_shared();
         }
     }
 
@@ -1023,6 +1034,5 @@ template struct SchemaBuilder<SchemaGetter, SchemaNameMapper>;
 template struct SchemaBuilder<MockSchemaGetter, MockSchemaNameMapper>;
 // unit test
 template struct SchemaBuilder<MockSchemaGetter, SchemaNameMapper>;
-
 // end namespace
 } // namespace DB
