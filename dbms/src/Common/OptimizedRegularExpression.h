@@ -122,7 +122,7 @@ public:
     bool match(const char * subject, size_t subject_size, Match & match) const;
     unsigned match(const char * subject, size_t subject_size, MatchVec & matches, unsigned limit) const;
 
-    unsigned getNumberOfSubpatterns() const { return capture_num; }
+    unsigned getNumberOfCaptureGroup() const { return capture_num; }
     Instructions getInstructions(const StringRef & repl);
 
     /// Get the regexp re2 or nullptr if the pattern is trivial (for output to the log).
