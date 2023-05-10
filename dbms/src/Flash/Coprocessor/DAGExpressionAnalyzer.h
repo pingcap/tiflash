@@ -209,6 +209,11 @@ public:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ColumnInfos & table_scan_columns);
 
+    String appendCast(
+        const DataTypePtr & target_type,
+        const ExpressionActionsPtr & actions,
+        const String & expr_name);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -264,11 +269,6 @@ private:
         const Block & sample_block,
         bool create_ordered_set,
         const String & left_arg_name);
-
-    String appendCast(
-        const DataTypePtr & target_type,
-        const ExpressionActionsPtr & actions,
-        const String & expr_name);
 
     String appendCastForFunctionExpr(
         const tipb::Expr & expr,
