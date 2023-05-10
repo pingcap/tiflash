@@ -14,20 +14,15 @@
 
 #pragma once
 
-#include <common/types.h>
+#include <Core/Block.h>
+#include <Interpreters/JoinUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-struct BlockStreamProfileInfo;
-struct BaseRuntimeStatistics
-{
-    size_t rows = 0;
-    size_t blocks = 0;
-    size_t bytes = 0;
-    size_t allocated_bytes = 0;
-    size_t concurrency = 0;
-    UInt64 execution_time_ns = 0;
-
-    void append(const BlockStreamProfileInfo &);
-};
+Block crossProbeBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks);
 } // namespace DB

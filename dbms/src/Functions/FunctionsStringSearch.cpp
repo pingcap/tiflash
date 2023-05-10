@@ -735,7 +735,7 @@ struct ExtractImpl
         int flags = OptimizedRegularExpression::RE_DOT_NL;
         const auto & regexp = Regexps::get<false, false>(pattern, flags);
 
-        unsigned capture = regexp->getNumberOfSubpatterns() > 0 ? 1 : 0;
+        unsigned capture = regexp->getNumberOfCaptureGroup() > 0 ? 1 : 0;
         OptimizedRegularExpression::MatchVec matches;
         matches.reserve(capture + 1);
         size_t prev_offset = 0;
