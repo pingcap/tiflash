@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Columns/ColumnsCommon.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
@@ -37,6 +38,9 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     materialized_columns.clear();
     filter.reset();
     offsets_to_replicate.reset();
+    result_block_schema.clear();
+    right_column_index.clear();
+    right_rows_to_be_added_when_matched = 0;
 }
 
 void ProbeProcessInfo::updateStartRow()
@@ -113,7 +117,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
 }
 
-void ProbeProcessInfo::prepareForProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
+void ProbeProcessInfo::prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
     if (prepare_for_probe_done)
         return;
@@ -150,6 +154,45 @@ void ProbeProcessInfo::prepareForProbe(const Names & key_names, const String & f
         filter = std::make_unique<IColumn::Filter>(block.rows());
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
+    prepare_for_probe_done = true;
+}
+
+void ProbeProcessInfo::prepareForCrossProbe(
+    const String & filter_column,
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    const Block & sample_block_with_columns_to_add,
+    const BlocksList & right_blocks)
+{
+    if (prepare_for_probe_done)
+        return;
+
+    recordFilteredRows(block, filter_column, null_map_holder, null_map);
+    if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
+        /// `CrossJoinAdder<Cross_Anti, Any>` will skip the matched rows directly, so filter is not needed
+        filter = std::make_unique<IColumn::Filter>(block.rows());
+    if (strictness == ASTTableJoin::Strictness::All)
+        offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
+
+    result_block_schema = block.cloneEmpty();
+    for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
+    {
+        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
+        RUNTIME_CHECK_MSG(!result_block_schema.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
+        result_block_schema.insert(src_column);
+    }
+    size_t num_existing_columns = block.columns();
+    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+        right_column_index.push_back(num_existing_columns + i);
+    right_rows_to_be_added_when_matched = 0;
+    for (const Block & block_right : right_blocks)
+    {
+        size_t rows_right = block_right.rows();
+        right_rows_to_be_added_when_matched += rows_right;
+    }
+    if (strictness == ASTTableJoin::Strictness::Any)
+        right_rows_to_be_added_when_matched = std::min(right_rows_to_be_added_when_matched, 1);
     prepare_for_probe_done = true;
 }
 
