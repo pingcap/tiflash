@@ -53,7 +53,7 @@ public:
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
-        size_t concurrency) override;
+        size_t) override;
 
     // generate sourceOps in compile time
     void buildPipeline(
@@ -61,14 +61,8 @@ public:
         Context & context,
         PipelineExecutorStatus & exec_status) override;
 
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-    void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
-    void buildProjection(
-        PipelineExecutorStatus & exec_status,
-        PipelineExecGroupBuilder & group_builder,
-        const NamesAndTypes & storage_schema);
 
 private:
     FilterConditions filter_conditions;
