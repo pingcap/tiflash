@@ -32,7 +32,7 @@ public:
     explicit WaitReactor(TaskScheduler & scheduler_);
 
     // After finish is called, the submitted task will be finalized directly.
-    // And the remaing tasks will be executed normally.
+    // And the remaing tasks in waiting_task_list will be taken out and executed normally.
     void finish();
 
     void waitForStop();

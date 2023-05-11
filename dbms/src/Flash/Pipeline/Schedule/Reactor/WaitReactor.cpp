@@ -65,7 +65,7 @@ void WaitReactor::react(std::list<TaskPtr> & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
-        if (spinner.awaitAndPushReadyTask(std::move(*task_it)))
+        if (spinner.awaitAndCollectReadyTask(std::move(*task_it)))
             task_it = local_waiting_tasks.erase(task_it);
         else
             ++task_it;

@@ -18,7 +18,7 @@
 
 namespace DB
 {
-bool Spinner::awaitAndPushReadyTask(TaskPtr && task)
+bool Spinner::awaitAndCollectReadyTask(TaskPtr && task)
 {
     assert(task);
     TRACE_MEMORY(task);

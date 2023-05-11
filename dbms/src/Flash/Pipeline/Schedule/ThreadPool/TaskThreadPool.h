@@ -50,7 +50,7 @@ public:
     TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config);
 
     // After finish is called, the submitted task will be finalized directly.
-    // And the remaing tasks will be executed normally.
+    // And the remaing tasks in task_queue will be taken out and executed normally.
     void finish();
 
     void waitForStop();
