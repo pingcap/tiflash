@@ -59,18 +59,18 @@ mysql> drop table if exists test.t2;
 # Test first_value
 mysql> drop table if exists test.first;
 mysql> create table test.first(p int not null, o int not null, v varchar(30) null);
-mysql> insert into first values (0, 0, "1"), (1, 1, "2"), (1, 2, "3"), (1, 3, "4"), (1, 4, "5"), (2, 5, "6"), (2, 6, "7"), (2, 7, "8"), (2, 8, "9"), (2, 9, "10"), (3, 10, "11"), (3, 11, "12"), (3, 12, "13");
+mysql> insert into test.first values (0, 0, "1"), (1, 1, "2"), (1, 2, "3"), (1, 3, "4"), (1, 4, "5"), (2, 5, "6"), (2, 6, "7"), (2, 7, "8"), (2, 8, "9"), (2, 9, "10"), (3, 10, "11"), (3, 11, "12"), (3, 12, "13");
 mysql> alter table test.first set tiflash replica 1;
 
 mysql> drop table if exists test.first1;
 mysql> create table test.first1(p int not null, o int not null, v varchar(30) null);
-mysql> insert into first1 values (0, 0, null), (1, 1, null), (1, 2, "3"), (1, 3, "4"), (1, 4, "5"), (2, 5, null), (2, 6, "7"), (2, 7, "8"), (2, 8, "9"), (2, 9, "10"), (3, 10, null), (3, 11, "12"), (3, 12, "13");
+mysql> insert into test.first1 values (0, 0, null), (1, 1, null), (1, 2, "3"), (1, 3, "4"), (1, 4, "5"), (2, 5, null), (2, 6, "7"), (2, 7, "8"), (2, 8, "9"), (2, 9, "10"), (3, 10, null), (3, 11, "12"), (3, 12, "13");
 mysql> alter table test.first1 set tiflash replica 1;
 
 func> wait_table test first
 func> wait_table test first1
 
-mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from first;
+mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -89,7 +89,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partitio
 | 2 |  9 | 10   | 6    |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from first;
+mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first1;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
