@@ -56,14 +56,19 @@ std::string S3RandomAccessFile::getFileName() const
     return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
+bool isRetryableError(int e)
+{
+    return e == ECONNRESET || e == EAGAIN;
+}
+
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
     while (true)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && errno == ECONNRESET))
+        if (unlikely(n < 0 && isRetryableError(errno)))
         {
-            // If it is a "Connection reset by peer" error, then initialize again
+            // If it is a retryable error, then initialize again
             if (initialize())
             {
                 continue;
@@ -75,13 +80,36 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
+    Stopwatch sw;
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
-    if (gcount == 0 && !istr.eof())
+    // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
+    // It's just a double check for more safty.
+    if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
-        LOG_ERROR(log, "Cannot read from istream, errmsg={}", strerror(errno));
+        LOG_ERROR(
+            log,
+            "Cannot read from istream, gcount={}, eof={}, cur_offset={}, content_length={}, errmsg={}, cost={}ns",
+            gcount,
+            istr.eof(),
+            cur_offset,
+            content_length,
+            strerror(errno),
+            sw.elapsed());
         return -1;
+    }
+    auto elapsed_ns = sw.elapsed();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
+    if (elapsed_ns > 10000000) // 10ms
+    {
+        LOG_DEBUG(
+            log,
+            "gcount={} cur_offset={} content_length={} cost={}ns",
+            gcount,
+            cur_offset,
+            content_length,
+            elapsed_ns);
     }
     cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
@@ -93,9 +121,9 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     while (true)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && errno == ECONNRESET))
+        if (unlikely(off < 0 && isRetryableError(errno)))
         {
-            // If it is a "Connection reset by peer" error, then initialize again
+            // If it is a retryable error, then initialize again
             if (initialize())
             {
                 continue;
@@ -119,11 +147,24 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         return cur_offset;
     }
+    Stopwatch sw;
     auto & istr = read_result.GetBody();
     if (!istr.ignore(offset_ - cur_offset))
     {
-        LOG_ERROR(log, "Cannot ignore from istream, errmsg={}", strerror(errno));
+        LOG_ERROR(log, "Cannot ignore from istream, errmsg={}, cost={}ns", strerror(errno), sw.elapsed());
         return -1;
+    }
+    auto elapsed_ns = sw.elapsed();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
+    if (elapsed_ns > 10000000) // 10ms
+    {
+        LOG_DEBUG(
+            log,
+            "ignore_count={} cur_offset={} content_length={} cost={}ns",
+            offset_ - cur_offset,
+            cur_offset,
+            content_length,
+            elapsed_ns);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, offset_ - cur_offset);
     cur_offset = offset_;

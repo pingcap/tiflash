@@ -64,9 +64,10 @@ bool pushPacket(const DM::RNRemoteSegmentReadTaskPtr & seg_task,
             tracked_packet,
             error_ptr);
 
+        // We record pending msg before pushing to channel, because the msg may be consumed immediately
+        // after the push.
+        seg_task->addPendingMsg();
         push_succeed = msg_channel->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-        if (push_succeed)
-            seg_task->addPendingMsg();
     }
 
     LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}", 1, push_succeed);
@@ -204,6 +205,8 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
     if (recv_msg->seg_task->state == DM::SegmentReadTaskState::Receiving
         && !has_pending_msg)
     {
+        // All pending message of current segment task are received,
+        // mark the segment task is ready for reading.
         rpc_context->finishTaskReceive(recv_msg->seg_task);
     }
     return result;

@@ -461,9 +461,11 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
     auto [compatible, need_data_cast] = checkColumnTypeCompatibility(from_type, to_column_define.type);
     if (unlikely(!compatible))
     {
-        throw Exception("Reading mismatch data type pack. Cast from " + from_type->getName() + " to " + to_column_define.type->getName()
-                            + " is NOT supported!",
-                        ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "Reading mismatch data type pack. Cast from {} to {} is NOT supported, column_id={}",
+                        from_type->getName(),
+                        to_column_define.type->getName(),
+                        to_column_define.id);
     }
     if (unlikely(!need_data_cast))
     {
