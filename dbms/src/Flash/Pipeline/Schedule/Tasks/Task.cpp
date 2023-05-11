@@ -117,6 +117,7 @@ void Task::finalize() noexcept
     // To make sure that `finalize` only called once.
     exec_status = ExecTaskStatus::FINALIZE;
     finalizeImpl();
+    LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 }
 
 void Task::switchStatus(ExecTaskStatus to)

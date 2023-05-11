@@ -43,15 +43,18 @@ public:
         auto status = task->await();
         switch (status)
         {
+        case ExecTaskStatus::WAITING:
+            return false;
         case ExecTaskStatus::RUNNING:
+            task->profile_info.elapsedAwaitTime();
             running_tasks.push_back(std::move(task));
             return true;
         case ExecTaskStatus::IO:
+            task->profile_info.elapsedAwaitTime();
             io_tasks.push_back(std::move(task));
             return true;
-        case ExecTaskStatus::WAITING:
-            return false;
         case FINISH_STATUS:
+            task->profile_info.elapsedAwaitTime();
             task->finalize();
             task.reset();
             return true;
@@ -60,11 +63,13 @@ public:
         }
     }
 
-    // return false if there are no ready task to submit.
-    bool submitReadyTasks()
+    void submitReadyTasks()
     {
         if (running_tasks.empty() && io_tasks.empty())
-            return false;
+        {
+            tryYield();
+            return;
+        }
 
         task_scheduler.submitToCPUTaskThreadPool(running_tasks);
         running_tasks.clear();
@@ -73,12 +78,12 @@ public:
         io_tasks.clear();
 
         spin_count = 0;
-        return true;
     }
 
+private:
     void tryYield()
     {
-        assert(running_tasks.empty());
+        assert(running_tasks.empty() && io_tasks.empty());
         ++spin_count;
 
         if (spin_count != 0 && spin_count % 64 == 0)
@@ -164,8 +169,7 @@ void WaitReactor::loop() noexcept
 
         GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
-        if (!spinner.submitReadyTasks())
-            spinner.tryYield();
+        spinner.submitReadyTasks();
     }
 
     LOG_INFO(logger, "wait reactor loop finished");

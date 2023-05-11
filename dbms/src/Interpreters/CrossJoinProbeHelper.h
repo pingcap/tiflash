@@ -14,38 +14,15 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
-
-#include <atomic>
+#include <Core/Block.h>
+#include <Interpreters/JoinUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-template <bool is_cpu>
-class TaskThreadPoolMetrics
-{
-public:
-    TaskThreadPoolMetrics();
-
-    void incPendingTask(size_t task_count);
-
-    void decPendingTask();
-
-    void elapsedPendingTime(TaskPtr & task);
-
-    void incExecutingTask();
-
-    void decExecutingTask();
-
-    void addExecuteTime(TaskPtr & task, UInt64 value);
-
-    void incThreadCnt();
-
-    void decThreadCnt();
-
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
-
-private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
-};
-
+Block crossProbeBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks);
 } // namespace DB
