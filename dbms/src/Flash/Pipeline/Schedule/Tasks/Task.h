@@ -64,6 +64,8 @@ public:
 
     ExecTaskStatus await();
 
+    // `finalize` must be called before destructuring.
+    // `TaskHelper::FINALIZE_TASK` can help this.
     void finalize();
 
 public:
