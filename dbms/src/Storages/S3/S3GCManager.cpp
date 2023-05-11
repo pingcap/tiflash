@@ -601,11 +601,7 @@ void S3GCManager::verifyLocks(const std::unordered_set<String> & valid_lock_file
         }
         LOG_INFO(log, "Checking consistency, lock_key={} data_file_key={}", lock_key, data_file_check_key);
         auto object_info = S3::tryGetObjectInfo(*client, data_file_check_key);
-        // RUNTIME_ASSERT(object_info.exist, log, "S3 file has already been removed! lock_key={} data_file={}", lock_key, data_file_check_key);
-        if (!object_info.exist)
-        {
-            LOG_ERROR(log, "S3 file has already been removed! lock_key={} data_file={}", lock_key, data_file_check_key);
-        }
+        RUNTIME_ASSERT(object_info.exist, log, "S3 file has already been removed! lock_key={} data_file={}", lock_key, data_file_check_key);
     }
     LOG_INFO(log, "All valid lock consistency check passed, num_locks={}", valid_lock_files.size());
 }
@@ -640,8 +636,7 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings 
     for (const auto & manifest_key : manifest_keys)
     {
         LOG_INFO(log, "Reading manifest, key={}", manifest_key);
-        // auto manifest_file = S3RandomAccessFile::create(manifest_key);
-        auto manifest_file = PosixRandomAccessFile::create(manifest_key);
+        auto manifest_file = S3RandomAccessFile::create(manifest_key);
         auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
         auto mf_prefix = reader->readPrefix();
 
@@ -651,10 +646,6 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings 
             auto part_edit = reader->readEdits(strings_cache);
             if (!part_edit)
                 break;
-            // for (const auto & e: part_edit->getRecords())
-            // {
-            //     LOG_INFO(log, "type={} id={} entry={}", magic_enum::enum_name(e.type), e.page_id, e.entry);
-            // }
         }
 
         while (true)
