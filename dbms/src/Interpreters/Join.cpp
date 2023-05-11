@@ -784,7 +784,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
 void Join::handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbeProcessInfo & probe_process_info) const
 {
-    assert(kind != ASTTableJoin::Kind::Cross_RightOuter && kind != ASTTableJoin::Kind::Cross_LeftOuterAnti);
+    assert(kind != ASTTableJoin::Kind::Cross_RightOuter);
     /// inside this function, we can ensure that
     /// 1. probe_process_info.offsets_to_replicate.size() == 1
     /// 2. probe_process_info.offsets_to_replicate[0] == block.rows()
@@ -903,7 +903,7 @@ void Join::handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbePro
         return;
     }
     /// case 5, left outer semi join
-    if (kind == ASTTableJoin::Kind::LeftOuterSemi)
+    if (isLeftOuterSemiFamily(kind))
     {
         if (probe_process_info.has_row_matched || probe_process_info.next_right_block_index == probe_process_info.right_block_size)
         {
