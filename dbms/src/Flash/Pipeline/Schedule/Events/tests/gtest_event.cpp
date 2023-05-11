@@ -379,12 +379,12 @@ private:
 class TestPorfileEvent : public Event
 {
 public:
-    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_)
+    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_, size_t task_num_)
         : Event(exec_status_, nullptr)
+        , task_num(task_num_)
     {}
 
-    // static constexpr size_t task_num = 10;
-    static constexpr size_t task_num = 6;
+    const size_t task_num;
 
 protected:
     void scheduleImpl() override
@@ -662,22 +662,25 @@ CATCH
 TEST_F(EventTestRunner, profile)
 try
 {
-    PipelineExecutorStatus exec_status;
-    auto event = std::make_shared<TestPorfileEvent>(exec_status);
-    if (event->prepare())
-        event->schedule();
-    wait(exec_status);
-    assertNoErr(exec_status);
-    size_t lower_limit = TestPorfileEvent::task_num * TestPorfileTask::min_time;
-    // In order to avoid failure caused by unstable test environment.
-    size_t upper_limit = lower_limit * 5;
-    auto do_assert = [&](UInt64 value) {
-        ASSERT_GE(value, lower_limit);
-        ASSERT_LT(value, upper_limit);
-    };
-    do_assert(exec_status.getQueryProfileInfo().getCPUExecuteTimeNs());
-    do_assert(exec_status.getQueryProfileInfo().getIOExecuteTimeNs());
-    do_assert(exec_status.getQueryProfileInfo().getAwaitTimeNs());
+    for (size_t task_num = 0; task_num < 2 * thread_num; task_num += 2)
+    {
+        PipelineExecutorStatus exec_status;
+        auto event = std::make_shared<TestPorfileEvent>(exec_status, task_num);
+        if (event->prepare())
+            event->schedule();
+        wait(exec_status);
+        assertNoErr(exec_status);
+        size_t lower_limit = task_num * TestPorfileTask::min_time;
+        // In order to avoid failure caused by unstable test environment.
+        size_t upper_limit = lower_limit * 5;
+        auto do_assert = [&](UInt64 value) {
+            ASSERT_GE(value, lower_limit);
+            ASSERT_LE(value, upper_limit);
+        };
+        do_assert(exec_status.getQueryProfileInfo().getCPUExecuteTimeNs());
+        do_assert(exec_status.getQueryProfileInfo().getIOExecuteTimeNs());
+        do_assert(exec_status.getQueryProfileInfo().getAwaitTimeNs());
+    }
 }
 CATCH
 
