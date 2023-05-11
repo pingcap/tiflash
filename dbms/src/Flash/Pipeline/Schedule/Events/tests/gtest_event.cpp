@@ -320,6 +320,8 @@ class TestPorfileTask : public EventTask
 public:
     static constexpr size_t min_time = 500'000'000L; // 500ms
 
+    static constexpr size_t per_execute_time = 10'000'000L; // 10ms
+
     TestPorfileTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
@@ -331,11 +333,10 @@ protected:
     ExecTaskStatus doExecuteImpl() override
     {
         assert(task_status == ExecTaskStatus::RUNNING);
-        if unlikely (!cpu_stopwatch)
-            cpu_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-        if (cpu_stopwatch->elapsed() < min_time)
+        if (cpu_execute_time < min_time)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            cpu_execute_time += per_execute_time;
             return ExecTaskStatus::RUNNING;
         }
         return ExecTaskStatus::IO;
@@ -344,11 +345,10 @@ protected:
     ExecTaskStatus doExecuteIOImpl() override
     {
         assert(task_status == ExecTaskStatus::IO);
-        if unlikely (!io_stopwatch)
-            io_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-        if (io_stopwatch->elapsed() < min_time)
+        if (io_execute_time < min_time)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            io_execute_time += per_execute_time;
             return ExecTaskStatus::IO;
         }
         return ExecTaskStatus::WAITING;
@@ -371,8 +371,8 @@ protected:
     }
 
 private:
-    std::optional<Stopwatch> cpu_stopwatch;
-    std::optional<Stopwatch> io_stopwatch;
+    size_t cpu_execute_time = 0;
+    size_t io_execute_time = 0;
     std::optional<Stopwatch> wait_stopwatch;
 };
 
