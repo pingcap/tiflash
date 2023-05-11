@@ -318,7 +318,7 @@ protected:
 class TestPorfileTask : public EventTask
 {
 public:
-    static constexpr size_t min_time = 200'000'000L;
+    static constexpr size_t min_time = 500'000'000L; // 500ms
 
     TestPorfileTask(
         PipelineExecutorStatus & exec_status_,
@@ -368,8 +368,7 @@ public:
         : Event(exec_status_, nullptr)
     {}
 
-    // static constexpr size_t task_num = 10;
-    static constexpr size_t task_num = 5;
+    static constexpr size_t task_num = 10;
 
 protected:
     void scheduleImpl() override
