@@ -341,11 +341,18 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
-    const auto table_scan_output_header = pipeline.firstStream()->getHeader();
-    NamesAndTypes source_columns;
-    source_columns.reserve(table_scan_output_header.columns());
-    for (const auto & column : table_scan_output_header)
-        source_columns.emplace_back(column.name, column.type);
+    if (!table_scan.getPushedDownFilters().empty())
+    {
+        /// If there are duration type pushed down filters, type of columns may be changed.
+        const auto table_scan_output_header = pipeline.firstStream()->getHeader();
+        for (const auto & col : table_scan_output_header)
+        {
+            const auto & name = col.name;
+            auto it = std::find_if(source_columns.begin(), source_columns.end(), [&name](const auto & c) { return c.name == name; });
+            if (it != source_columns.end() && it->type != col.type)
+                it->type = col.type;
+        }
+    }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     /// handle timezone/duration cast for local and remote table scan.
@@ -394,7 +401,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, is_need_add_cast_column) = getColumnsForTableScan();
+    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
@@ -994,10 +1001,12 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
 {
     Names required_columns_tmp;
     required_columns_tmp.reserve(table_scan.getColumnSize());
+    NamesAndTypes source_columns_tmp;
+    source_columns_tmp.reserve(table_scan.getColumnSize());
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
     String handle_column_name = MutableSupport::tidb_pk_column_name;
@@ -1015,6 +1024,7 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
             const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
             const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
             generated_column_infos.push_back(std::make_tuple(i, col_name, data_type));
+            source_columns_tmp.emplace_back(NameAndTypePair{col_name, data_type});
             continue;
         }
         // Column ID -1 return the handle column
@@ -1025,6 +1035,16 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
             name = MutableSupport::extra_table_id_column_name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
+        if (cid == ExtraTableIDColumnID)
+        {
+            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
+            source_columns_tmp.emplace_back(std::move(extra_table_id_column_pair));
+        }
+        else
+        {
+            auto pair = storage_for_logical_table->getColumns().getPhysical(name);
+            source_columns_tmp.emplace_back(std::move(pair));
+        }
         required_columns_tmp.emplace_back(std::move(name));
     }
 
@@ -1050,7 +1070,7 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
         }
     }
 
-    return {required_columns_tmp, need_cast_column};
+    return {required_columns_tmp, source_columns_tmp, need_cast_column};
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
