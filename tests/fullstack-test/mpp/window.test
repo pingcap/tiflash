@@ -69,7 +69,7 @@ mysql> alter table test.last1 set tiflash replica 1;
 func> wait_table test last
 func> wait_table test last1
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc) as a from last;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc) as a from test.last;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -88,7 +88,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition
 | 3 | 12 | 13   | 13   |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between unbounded preceding and unbounded FOLLOWING) as a from last;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between unbounded preceding and unbounded FOLLOWING) as a from test.last;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -107,7 +107,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition
 | 3 | 12 | 13   | 13   |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between 1 preceding and 1 following) as a from last;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between 1 preceding and 1 following) as a from test.last;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -126,7 +126,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition
 | 3 | 12 | 13   | 13   |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc) as a from last1;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc) as a from test.last1;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -145,7 +145,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition
 | 3 | 12 | NULL | NULL |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between unbounded preceding and unbounded FOLLOWING) as a from last1;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between unbounded preceding and unbounded FOLLOWING) as a from test.last1;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -164,7 +164,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition
 | 3 | 12 | NULL | NULL |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between 1 preceding and 1 following) as a from last1;
+mysql> use test; set enforce_tidb_mpp=1; select *, last_value(v) over (partition by p order by o asc rows between 1 preceding and 1 following) as a from test.last1;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
