@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-mysql> create table if not exists test.t(a time(4), I int);
+mysql> create table if not exists test.t(a time(4), i int);
 
 # insert more than 8192 rows to make sure filter conditions can be pushed down.
-mysql> insert into test.t values('-700:10:10.123456', 1);
-mysql> insert into test.t select * from test.t;
+mysql> insert into test.t values('-700:10:10.123456', 1), ('700:11:11.123500', 2), ('600:11:11.123500', 3);
 mysql> insert into test.t select * from test.t;
 mysql> insert into test.t select * from test.t;
 mysql> insert into test.t select * from test.t;
@@ -35,5 +34,7 @@ mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
-mysql> select * from test.t where a = '700:11:11.123500';
+mysql> select * from test.t where a = '500:11:11.123500';
 # sucess, but the result is empty
+
+mysql> drop table test.t;
