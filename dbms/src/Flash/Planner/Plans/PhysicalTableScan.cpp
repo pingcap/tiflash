@@ -84,7 +84,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
         // This is just a workaround for this case.
         // TODO: Remove this workaround.
         RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type) || strcmp(schema[i].type->getFamilyName(), "MyDuration") == 0,
+            schema[i].type->equals(*storage_schema[i].type) ||  schema[i].type->getName().find("MyDuration") != std::string::npos,
             schema[i].name,
             schema[i].type->getName(),
             storage_schema[i].name,
