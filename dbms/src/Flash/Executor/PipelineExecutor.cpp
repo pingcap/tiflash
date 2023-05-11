@@ -96,6 +96,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         scheduleEvents();
         wait();
     }
+    LOG_TRACE(log, "query finish with {}", status.getQueryProfileInfo().toJson());
     return status.toExecutionResult();
 }
 
@@ -119,8 +120,9 @@ int PipelineExecutor::estimateNewThreadCount()
 
 RU PipelineExecutor::collectRequestUnit()
 {
-    // TODO support collectRequestUnit
-    return 0;
+    const auto & query_profile_info = status.getQueryProfileInfo();
+    auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
+    return toRU(ceil(cpu_time_ns));
 }
 
 Block PipelineExecutor::getSampleBlock() const

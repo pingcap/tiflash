@@ -314,6 +314,70 @@ protected:
         throw Exception("create task fail");
     }
 };
+
+class TestPorfileTask : public EventTask
+{
+public:
+    static constexpr size_t min_time = 200'000'000L;
+
+    TestPorfileTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(exec_status_, event_)
+    {}
+
+protected:
+    // doAwaitImpl ==> doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
+    ExecTaskStatus doExecuteImpl() override
+    {
+        assert(task_status == ExecTaskStatus::RUNNING);
+        std::this_thread::sleep_for(std::chrono::nanoseconds(min_time));
+        return ExecTaskStatus::IO;
+    }
+
+    ExecTaskStatus doExecuteIOImpl() override
+    {
+        assert(task_status == ExecTaskStatus::IO);
+        std::this_thread::sleep_for(std::chrono::nanoseconds(min_time));
+        wait_stopwatch.start();
+        return ExecTaskStatus::WAITING;
+    }
+
+    ExecTaskStatus doAwaitImpl() override
+    {
+        if (task_status == ExecTaskStatus::WAITING)
+        {
+            if (wait_stopwatch.elapsed() < min_time)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                return ExecTaskStatus::WAITING;
+            }
+            return ExecTaskStatus::FINISHED;
+        }
+        return ExecTaskStatus::RUNNING;
+    }
+
+private:
+    Stopwatch wait_stopwatch{CLOCK_MONOTONIC_COARSE};
+};
+
+class TestPorfileEvent : public Event
+{
+public:
+    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_, nullptr)
+    {}
+
+    // static constexpr size_t task_num = 10;
+    static constexpr size_t task_num = 5;
+
+protected:
+    void scheduleImpl() override
+    {
+        for (size_t i = 0; i < task_num; ++i)
+            addTask(std::make_unique<TestPorfileTask>(exec_status, shared_from_this()));
+    }
+};
 } // namespace
 
 class EventTestRunner : public ::testing::Test
@@ -577,6 +641,28 @@ try
     wait(exec_status);
     auto exception_ptr = exec_status.getExceptionPtr();
     ASSERT_TRUE(exception_ptr);
+}
+CATCH
+
+TEST_F(EventTestRunner, profile)
+try
+{
+    PipelineExecutorStatus exec_status;
+    auto event = std::make_shared<TestPorfileEvent>(exec_status);
+    if (event->prepare())
+        event->schedule();
+    wait(exec_status);
+    assertNoErr(exec_status);
+    size_t lower_limit = TestPorfileEvent::task_num * TestPorfileTask::min_time;
+    // In order to avoid failure caused by unstable test environment.
+    size_t upper_limit = lower_limit * 4;
+    auto do_assert = [&](UInt64 value) {
+        ASSERT_GE(value, lower_limit);
+        ASSERT_LT(value, upper_limit);
+    };
+    do_assert(exec_status.getQueryProfileInfo().getCPUExecuteTimeNs());
+    do_assert(exec_status.getQueryProfileInfo().getIOExecuteTimeNs());
+    do_assert(exec_status.getQueryProfileInfo().getAwaitTimeNs());
 }
 CATCH
 

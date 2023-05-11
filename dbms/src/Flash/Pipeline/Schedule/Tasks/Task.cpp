@@ -56,10 +56,10 @@ void addToStatusMetrics(ExecTaskStatus to)
 } // namespace
 
 #define CHECK_FINISHED                                        \
-    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
-                 || exec_status == ExecTaskStatus::ERROR      \
-                 || exec_status == ExecTaskStatus::CANCELLED) \
-        return exec_status;
+    if unlikely (task_status == ExecTaskStatus::FINISHED      \
+                 || task_status == ExecTaskStatus::ERROR      \
+                 || task_status == ExecTaskStatus::CANCELLED) \
+        return task_status;
 
 Task::Task()
     : mem_tracker(nullptr)
@@ -83,7 +83,7 @@ ExecTaskStatus Task::execute() noexcept
     assert(getMemTracker().get() == current_memory_tracker);
     assertStatus(ExecTaskStatus::RUNNING);
     switchStatus(executeImpl());
-    return exec_status;
+    return task_status;
 }
 
 ExecTaskStatus Task::executeIO() noexcept
@@ -92,7 +92,7 @@ ExecTaskStatus Task::executeIO() noexcept
     assert(getMemTracker().get() == current_memory_tracker);
     assertStatus(ExecTaskStatus::IO);
     switchStatus(executeIOImpl());
-    return exec_status;
+    return task_status;
 }
 
 ExecTaskStatus Task::await() noexcept
@@ -101,42 +101,42 @@ ExecTaskStatus Task::await() noexcept
     assert(getMemTracker().get() == current_memory_tracker);
     assertStatus(ExecTaskStatus::WAITING);
     switchStatus(awaitImpl());
-    return exec_status;
+    return task_status;
 }
 
 void Task::finalize() noexcept
 {
     RUNTIME_ASSERT(
-        exec_status == ExecTaskStatus::FINISHED
-            || exec_status == ExecTaskStatus::ERROR
-            || exec_status == ExecTaskStatus::CANCELLED,
+        task_status == ExecTaskStatus::FINISHED
+            || task_status == ExecTaskStatus::ERROR
+            || task_status == ExecTaskStatus::CANCELLED,
         log,
         "finalize must be called in FINISHED/ERROR/CANCELLED status, but actual status is {}",
-        magic_enum::enum_name(exec_status));
+        magic_enum::enum_name(task_status));
 
     // To make sure that `finalize` only called once.
-    exec_status = ExecTaskStatus::FINALIZE;
+    task_status = ExecTaskStatus::FINALIZE;
     finalizeImpl();
     LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 }
 
 void Task::switchStatus(ExecTaskStatus to)
 {
-    if (exec_status != to)
+    if (task_status != to)
     {
-        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(task_status), magic_enum::enum_name(to));
         addToStatusMetrics(to);
-        exec_status = to;
+        task_status = to;
     }
 }
 
 void Task::assertStatus(ExecTaskStatus expect)
 {
     RUNTIME_ASSERT(
-        exec_status == expect || exec_status == ExecTaskStatus::INIT,
+        task_status == expect || task_status == ExecTaskStatus::INIT,
         log,
         "actual status is {}, but expect status are {} and {}",
-        magic_enum::enum_name(exec_status),
+        magic_enum::enum_name(task_status),
         magic_enum::enum_name(expect),
         magic_enum::enum_name(ExecTaskStatus::INIT));
 }

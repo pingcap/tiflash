@@ -46,7 +46,7 @@ EventTask::EventTask(
 EventTask::~EventTask()
 {
     assert(event);
-    event->onTaskFinish();
+    event->onTaskFinish(profile_info);
     event.reset();
 }
 

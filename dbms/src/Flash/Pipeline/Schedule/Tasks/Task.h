@@ -90,8 +90,7 @@ protected:
     MemoryTrackerPtr mem_tracker;
     LoggerPtr log;
 
-private:
-    ExecTaskStatus exec_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status{ExecTaskStatus::INIT};
 };
 using TaskPtr = std::unique_ptr<Task>;
 
