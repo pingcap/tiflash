@@ -341,6 +341,20 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
+    if (!table_scan.getPushedDownFilters().empty())
+    {
+        /// If there are duration type pushed down filters, type of columns may be changed.
+        const auto table_scan_output_header = pipeline.firstStream()->getHeader();
+        for (const auto & col : table_scan_output_header)
+        {
+            const auto & name = col.name;
+            auto it = std::find_if(source_columns.begin(), source_columns.end(), [&name](const auto & c) { return c.name == name; });
+            if (it != source_columns.end() && it->type != col.type)
+                it->type = col.type;
+        }
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     /// handle generated column if necessary.
@@ -388,8 +402,6 @@ void DAGStorageInterpreter::prepare()
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
     std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
-
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
