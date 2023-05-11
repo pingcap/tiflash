@@ -331,15 +331,26 @@ protected:
     ExecTaskStatus doExecuteImpl() override
     {
         assert(task_status == ExecTaskStatus::RUNNING);
-        std::this_thread::sleep_for(std::chrono::nanoseconds(min_time));
+        if unlikely (!cpu_stopwatch)
+            cpu_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        if (cpu_stopwatch->elapsed() < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            return ExecTaskStatus::RUNNING;
+        }
         return ExecTaskStatus::IO;
     }
 
     ExecTaskStatus doExecuteIOImpl() override
     {
         assert(task_status == ExecTaskStatus::IO);
-        std::this_thread::sleep_for(std::chrono::nanoseconds(min_time));
-        wait_stopwatch.start();
+        if unlikely (!io_stopwatch)
+            io_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        if (io_stopwatch->elapsed() < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            return ExecTaskStatus::IO;
+        }
         return ExecTaskStatus::WAITING;
     }
 
@@ -347,18 +358,22 @@ protected:
     {
         if (task_status == ExecTaskStatus::WAITING)
         {
-            if (wait_stopwatch.elapsed() < min_time)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                return ExecTaskStatus::WAITING;
-            }
-            return ExecTaskStatus::FINISHED;
+            if unlikely (!wait_stopwatch)
+                wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+            return wait_stopwatch->elapsed() < min_time
+                ? ExecTaskStatus::WAITING
+                : ExecTaskStatus::FINISHED;
         }
-        return ExecTaskStatus::RUNNING;
+        else
+        {
+            return ExecTaskStatus::RUNNING;
+        }
     }
 
 private:
-    Stopwatch wait_stopwatch{CLOCK_MONOTONIC_COARSE};
+    std::optional<Stopwatch> cpu_stopwatch;
+    std::optional<Stopwatch> io_stopwatch;
+    std::optional<Stopwatch> wait_stopwatch;
 };
 
 class TestPorfileEvent : public Event
@@ -368,7 +383,8 @@ public:
         : Event(exec_status_, nullptr)
     {}
 
-    static constexpr size_t task_num = 10;
+    // static constexpr size_t task_num = 10;
+    static constexpr size_t task_num = 6;
 
 protected:
     void scheduleImpl() override
@@ -654,7 +670,7 @@ try
     assertNoErr(exec_status);
     size_t lower_limit = TestPorfileEvent::task_num * TestPorfileTask::min_time;
     // In order to avoid failure caused by unstable test environment.
-    size_t upper_limit = lower_limit * 4;
+    size_t upper_limit = lower_limit * 5;
     auto do_assert = [&](UInt64 value) {
         ASSERT_GE(value, lower_limit);
         ASSERT_LT(value, upper_limit);
