@@ -970,7 +970,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         /* read_mode */ ReadMode::Raw,
         std::move(tasks),
         after_segment_read,
-        req_info,
+        fmt::format("{}->task_pool", req_info),
         enable_read_thread,
         final_num_stream);
 
@@ -987,7 +987,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                fmt::format("{}->stream#{}", req_info, i));
         }
         else
         {
@@ -1002,7 +1002,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 /* read_mode */ ReadMode::Raw,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                fmt::format("{}->stream#{}", req_info, i));
         }
         res.push_back(stream);
     }
@@ -1079,7 +1079,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         read_mode,
         std::move(tasks),
         after_segment_read,
-        log_tracing_id,
+        fmt::format("{}->task_pool", log_tracing_id),
         enable_read_thread,
         final_num_stream);
 
@@ -1174,7 +1174,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         read_mode,
         std::move(tasks),
         after_segment_read,
-        log_tracing_id,
+        fmt::format("{}->task_pool", log_tracing_id),
         enable_read_thread,
         final_num_stream);
 

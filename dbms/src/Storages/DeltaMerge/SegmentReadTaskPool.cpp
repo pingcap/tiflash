@@ -161,7 +161,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     BlockInputStreamPtr stream;
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
     stream = t->segment->getInputStream(read_mode, *dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
-    LOG_DEBUG(log, "getInputStream succ, read_mode={}, pool_id={} segment_id={}", magic_enum::enum_name(read_mode), pool_id, t->segment->segmentId());
+    LOG_DEBUG(log, "getInputStream succ, read_mode={}, segment_id={}", magic_enum::enum_name(read_mode), t->segment->segmentId());
     return stream;
 }
 
@@ -175,11 +175,12 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     ReadMode read_mode_,
     SegmentReadTasks && tasks_,
     AfterSegmentRead after_segment_read_,
-    const String & tracing_id,
+    const String & debug_tag_,
     bool enable_read_thread_,
     Int64 num_streams_,
     SegmentReadResultChannelPtr result_channel_)
     : pool_id(nextPoolId())
+    , debug_tag(fmt::format("{}#{}", debug_tag_, pool_id))
     , table_id(table_id_)
     , dm_context(dm_context_)
     , columns_to_read(columns_to_read_)
@@ -190,7 +191,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
     , result_channel(result_channel_)
-    , log(Logger::get(tracing_id))
+    , log(Logger::get(debug_tag))
     // , unordered_input_stream_ref_count(0)
     // , exception_happened(false)
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -211,7 +212,7 @@ void SegmentReadTaskPool::initDefaultResultChannel()
 
     RUNTIME_CHECK(result_channel == nullptr);
 
-    std::shared_ptr<SegmentReadTaskPool> this_ptr;
+    SegmentReadTaskPoolPtr this_ptr;
     try
     {
         this_ptr = shared_from_this();
@@ -223,10 +224,9 @@ void SegmentReadTaskPool::initDefaultResultChannel()
 
     result_channel = SegmentReadResultChannel::create({
         .expected_sources = tasks_wrapper.getTasks().size(),
-        .debug_tag = fmt::format("pool_channel_{}", pool_id),
+        .debug_tag = fmt::format("{}->result_channel", debug_tag),
         .max_pending_blocks = static_cast<UInt64>(block_slot_limit),
-        .on_first_read = [this_ptr] {
-            LOG_DEBUG(Logger::get(), "Wenxuan: First read, add this pool to scheduler..., pool_id={}", this_ptr->pool_id);
+        .on_first_read = [this_ptr](SegmentReadResultChannelPtr) {
             SegmentReadTaskScheduler::instance().add(this_ptr);
         },
     });
@@ -234,8 +234,8 @@ void SegmentReadTaskPool::initDefaultResultChannel()
 
 void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
 {
-    LOG_DEBUG(Logger::get(), "Wenxuan: Segment {} is finished, pool_id={}", seg->segmentId(), pool_id);
-    after_segment_read(dm_context, seg);
+    if (after_segment_read)
+        after_segment_read(dm_context, seg);
     bool pool_finished = false;
     {
         std::lock_guard lock(mutex);
@@ -244,17 +244,10 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         result_channel->finish(fmt::format("seg_{}", seg->segmentId())); // TODO: Add store id
         pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
     }
-    LOG_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
-    // if (pool_finished)
-    // {
-    //     // q.finish();
-    // }
-}
+    if (pool_finished)
+        all_finished = true;
 
-bool SegmentReadTaskPool::isAllSegmentsFinished() const
-{
-    std::lock_guard lock(mutex);
-    return active_segment_ids.empty() && tasks_wrapper.empty();
+    LOG_DEBUG(log, "Finished reading segment, segment_id={} pool_finished={}", seg->segmentId(), pool_finished);
 }
 
 SegmentReadTaskPtr SegmentReadTaskPool::nextTask()
@@ -318,12 +311,6 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
-    LOG_DEBUG(
-        Logger::get(),
-        "Wenxuan: readOneBlock from SegmentReadTaskPool, blockNotEmpty={} pool_id={} segment_id={}",
-        !!block,
-        pool_id,
-        seg->segmentId());
     if (block)
     {
         result_channel->pushBlock(std::move(block));

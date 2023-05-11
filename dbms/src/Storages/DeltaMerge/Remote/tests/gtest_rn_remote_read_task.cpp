@@ -77,7 +77,7 @@ public:
                     buildTableTestTask(333, TEST_KS_TABLE_PART0_ID, {400, 401, 402, 403}),
                 }),
         };
-        return std::make_shared<RNRemoteReadTask>(std::move(store_tasks));
+        return std::make_shared<RNRemoteReadTask>("", std::move(store_tasks));
     }
 
 protected:

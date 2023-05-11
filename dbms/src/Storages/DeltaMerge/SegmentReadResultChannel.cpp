@@ -12,31 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/SegmentReadResultChannel.h>
 
 namespace DB::DM
 {
 
-SegmentReadResultChannel::SegmentReadResultChannel(
-    const SegmentReadResultChannelOptions & options)
+SegmentReadResultChannel::SegmentReadResultChannel(const Options & options)
     : expected_sources(options.expected_sources)
     , debug_tag(options.debug_tag)
     , max_pending_blocks(options.max_pending_blocks)
     , on_first_read(options.on_first_read)
+    , log(Logger::get(options.debug_tag))
 {
-    LOG_DEBUG(
-        Logger::get(),
-        "Created ResultChannel {}, expected_sources={}",
-        debug_tag,
-        expected_sources);
+    LOG_DEBUG(log, "Created ResultChannel, expected_sources={}", expected_sources);
 }
 
 SegmentReadResultChannel::~SegmentReadResultChannel()
 {
-    LOG_DEBUG(
-        Logger::get(),
-        "Destroyed ResultChannel {}",
-        debug_tag);
+    LOG_DEBUG(log, "Destroy ResultChannel");
 }
 
 void SegmentReadResultChannel::pushBlock(Block && block)
@@ -50,14 +44,6 @@ void SegmentReadResultChannel::finish(const String debug_source_tag)
 {
     std::unique_lock lock(mu);
 
-    LOG_DEBUG(
-        Logger::get(),
-        "ResultChannel {} finish {}, finished_sources={} expected_sources={}",
-        debug_tag,
-        debug_source_tag,
-        finished_sources.size(),
-        expected_sources);
-
     if (is_finished)
         return;
 
@@ -70,6 +56,13 @@ void SegmentReadResultChannel::finish(const String debug_source_tag)
         finished_sources,
         expected_sources);
 
+    LOG_DEBUG(
+        log,
+        "ResultChannel source finished: {}, finished_sources={} expected_sources={}",
+        debug_source_tag,
+        finished_sources.size(),
+        expected_sources);
+
     if (finished_sources.size() == expected_sources)
     {
         is_finished = true;
@@ -79,11 +72,7 @@ void SegmentReadResultChannel::finish(const String debug_source_tag)
 
 void SegmentReadResultChannel::finishWithError(const DB::Exception & e)
 {
-    LOG_DEBUG(
-        Logger::get(),
-        "ResultChannel {} finishWithError {}",
-        debug_tag,
-        e.message());
+    LOG_DEBUG(log, "ResultChannel finish with error: {}", e.message());
 
     std::unique_lock lock(mu);
     if (!has_error)
@@ -151,7 +140,21 @@ bool SegmentReadResultChannel::hasAliveConsumers() const
 
 void SegmentReadResultChannel::triggerFirstRead()
 {
-    std::call_once(has_read_once, [&]() { on_first_read(); });
+    if (!on_first_read)
+        return;
+
+    std::call_once(has_read_once, [this]() {
+        SegmentReadResultChannelPtr this_ptr;
+        try
+        {
+            this_ptr = shared_from_this();
+        }
+        catch (std::bad_weak_ptr & e)
+        {
+            RUNTIME_CHECK_MSG(false, "Must be called from SegmentReadResultChannelPtr");
+        }
+        on_first_read(this_ptr);
+    });
 }
 
 bool SegmentReadResultChannel::isFull() const

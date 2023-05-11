@@ -38,11 +38,11 @@ public:
         const ColumnDefines & columns_to_read_,
         const int extra_table_id_index,
         const TableID physical_table_id,
-        const String & req_id)
+        const String & debug_tag)
         : result_channel(result_channel_)
         , header(toEmptyBlock(columns_to_read_))
         , action(header, extra_table_id_index, physical_table_id)
-        , log(Logger::get(req_id))
+        , log(Logger::get(debug_tag))
         , ref_no(0)
     // , task_pool_added(false)
     {
@@ -53,13 +53,13 @@ public:
             header.insert(extra_table_id_index, col);
         }
         ref_no = result_channel->refConsumer();
-        LOG_DEBUG(log, "Created UnorderedInputStream, ch={} ref_no={}", result_channel->debug_tag, ref_no);
+        LOG_DEBUG(log, "Created UnorderedInputStream, ref_no={}", ref_no);
     }
 
     ~UnorderedInputStream() override
     {
         auto remaining_refs = result_channel->derefConsumer();
-        LOG_DEBUG(log, "Destroy UnorderedInputStream, ch={} ref_no={} remaining_refs={}", result_channel->debug_tag, ref_no, remaining_refs);
+        LOG_DEBUG(log, "Destroy UnorderedInputStream, ref_no={} remaining_refs={}", ref_no, remaining_refs);
     }
 
     String getName() const override { return NAME; }
@@ -77,10 +77,8 @@ protected:
     Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) override
     {
         if (done)
-        {
             return {};
-        }
-        // addReadTaskPoolToScheduler();
+
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
@@ -107,18 +105,8 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, ch={} ref_no={} rows={}", result_channel->debug_tag, ref_no, action.totalRows());
+        LOG_DEBUG(log, "Finish read from storage, ref_no={} rows={}", ref_no, action.totalRows());
     }
-
-    // void addReadTaskPoolToScheduler()
-    // {
-    //     if (likely(task_pool_added))
-    //     {
-    //         return;
-    //     }
-    //     std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
-    //     task_pool_added = true;
-    // }
 
 private:
     SegmentReadResultChannelPtr result_channel;
@@ -128,6 +116,5 @@ private:
     bool done = false;
     LoggerPtr log;
     int64_t ref_no;
-    // bool task_pool_added;
 };
 } // namespace DB::DM

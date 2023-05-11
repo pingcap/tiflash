@@ -16,6 +16,7 @@
 
 #include <Common/Allocator.h>
 #include <Common/Logger.h>
+#include <Core/Defines.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
@@ -62,7 +63,9 @@ enum class SegmentReadTaskState
 class RNRemoteReadTask
 {
 public:
-    explicit RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_);
+    explicit RNRemoteReadTask(
+        const String & debug_tag,
+        std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_);
 
     ~RNRemoteReadTask();
 
@@ -96,6 +99,9 @@ public:
 
     friend class tests::RNRemoteReadTaskTest;
     friend struct DB::FetchPagesRequest;
+
+public:
+    Int64 todo_physical_table_id = -1;
 
 private:
     void insertTask(const RNRemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
@@ -163,7 +169,7 @@ public:
         const String & address,
         const DisaggTaskId & snapshot_id,
         const RemotePb::RemotePhysicalTable & table,
-        const LoggerPtr & log);
+        const String & debug_tag);
 
     size_t numRemainTasks() const
     {
@@ -198,7 +204,7 @@ public:
         StoreID store_id,
         KeyspaceTableID ks_table_id,
         const String & address,
-        const LoggerPtr & log);
+        const String & debug_tag);
 
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
@@ -209,6 +215,18 @@ public:
         const PushDownFilterPtr & push_down_filter,
         size_t expected_block_size,
         ReadMode read_mode);
+
+    struct ToReadTaskPoolOptions
+    {
+        const ColumnDefines & columns_to_read;
+        UInt64 read_tso;
+        const PushDownFilterPtr & push_down_filter;
+        ReadMode read_mode;
+        Int64 num_streams;
+        size_t expected_block_size;
+        const SegmentReadResultChannelPtr & result_channel;
+    };
+    SegmentReadTaskPoolPtr toReadTaskPool(const ToReadTaskPoolOptions & options);
 
     void addPendingMsg() { num_msg_to_consume += 1; }
 

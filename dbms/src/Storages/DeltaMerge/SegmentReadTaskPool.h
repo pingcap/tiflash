@@ -122,7 +122,7 @@ public:
         ReadMode read_mode_,
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
-        const String & tracing_id,
+        const String & debug_tag,
         bool enable_read_thread_,
         Int64 num_streams_,
         SegmentReadResultChannelPtr result_channel_ = nullptr);
@@ -191,15 +191,19 @@ public:
         return result_channel;
     }
 
+    bool isFinished() const
+    {
+        return all_finished;
+    }
+
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     // bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
-
-    bool isAllSegmentsFinished() const;
     // void pushBlock(Block && block);
 
     const uint64_t pool_id;
+    const String debug_tag;
     const int64_t table_id;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
@@ -211,6 +215,9 @@ private:
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
+
+    std::atomic<bool> all_finished = false;
+
     // WorkQueue<Block> q;
     // BlockStat blk_stat;
 

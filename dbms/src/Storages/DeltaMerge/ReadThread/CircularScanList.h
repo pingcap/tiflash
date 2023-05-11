@@ -11,7 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
+
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
 
 #include <list>
 #include <memory>
@@ -42,18 +46,25 @@ public:
         last_itr = nextItr(last_itr);
         while (!l.empty())
         {
-            if (needScheduled(last_itr))
+            if ((*last_itr)->isFinished() || !(*last_itr)->getResultChannel()->valid())
             {
-                return *last_itr;
-            }
-            else
-            {
+                LOG_DEBUG(
+                    Logger::get(),
+                    "Drop ReadTaskPool from future scheduling, pool_id={} all_segment_finished={} pool_valid={}",
+                    (*last_itr)->poolId(),
+                    (*last_itr)->isFinished(),
+                    (*last_itr)->getResultChannel()->valid());
+
                 m.erase((*last_itr)->poolId());
                 last_itr = l.erase(last_itr);
                 if (last_itr == l.end())
                 {
                     last_itr = l.begin();
                 }
+            }
+            else
+            {
+                return *last_itr;
             }
         }
         return nullptr;
@@ -97,12 +108,6 @@ private:
         {
             return std::next(itr);
         }
-    }
-
-    bool needScheduled(Iter itr)
-    {
-        // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
-        return itr->use_count() > 1;
     }
 
     std::list<ElemPtr> l;

@@ -24,19 +24,4 @@ namespace DB::DM
 class SegmentReadResultChannel;
 using SegmentReadResultChannelPtr = std::shared_ptr<SegmentReadResultChannel>;
 
-struct SegmentReadResultChannelOptions
-{
-    /// The number of "sources". It should be paired when calling `finish()`.
-    /// Conventionally, `source` is `{store_id}_{segment_id}`.
-    const UInt64 expected_sources;
-
-    const String & debug_tag;
-
-    /// If we reaches this limit, we will consider this channel as full.
-    /// This is not a hard limit.
-    const UInt64 max_pending_blocks;
-
-    const std::function<void()> on_first_read;
-};
-
 } // namespace DB::DM

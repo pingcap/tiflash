@@ -34,10 +34,9 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
-    Stopwatch sw_add;
     std::lock_guard add_lock(add_mtx);
     std::lock_guard lock(mtx);
-    Stopwatch sw_do_add;
+
     read_pools.add(pool);
 
     const auto & tasks = pool->getTasks();
@@ -46,13 +45,14 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         auto seg_id = pa.first;
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
     }
-    LOG_DEBUG(log, "Added, pool_id={} table_id={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
-              pool->poolId(),
-              pool->tableId(),
-              tasks.size(),
-              read_pools.size(),
-              sw_add.elapsed(),
-              sw_do_add.elapsed());
+
+    LOG_DEBUG(
+        log,
+        "Added ReadTaskPool to scheduler, pool_id={} table_id={} segments_in_this_pool={} total_pools={}",
+        pool->poolId(),
+        pool->tableId(),
+        tasks.size(),
+        read_pools.size());
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
@@ -213,10 +213,10 @@ bool SegmentReadTaskScheduler::schedule()
         if (merged_task != nullptr)
         {
             auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
-            if (elapsed_ms >= 5)
-            {
-                LOG_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
-            }
+            // if (elapsed_ms >= 5)
+            // {
+            LOG_DEBUG(log, "Schedule MergedTask, segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
+            // }
             SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
         if (!run_sche)

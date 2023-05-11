@@ -52,9 +52,11 @@
 namespace DB::DM
 {
 
-RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_)
+RNRemoteReadTask::RNRemoteReadTask(
+    const String & debug_tag,
+    std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_)
     : num_segments(0)
-    , log(Logger::get())
+    , log(Logger::get(debug_tag))
 {
     for (const auto & store_task : input_tasks_)
     {
@@ -67,6 +69,9 @@ RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && inpu
         // Push all inited tasks to ready queue
         for (const auto & table_task : store_task->table_read_tasks)
         {
+            if (todo_physical_table_id == -1)
+                todo_physical_table_id = table_task->ks_table_id.second;
+
             for (const auto & seg_task : table_task->tasks)
             {
                 // TODO: If all pages are ready in local
@@ -346,8 +351,10 @@ RNRemotePhysicalTableReadTaskPtr RNRemotePhysicalTableReadTask::buildFrom(
     const String & address,
     const DisaggTaskId & snapshot_id,
     const RemotePb::RemotePhysicalTable & remote_table,
-    const LoggerPtr & log)
+    const String & debug_tag)
 {
+    auto log = Logger::get(debug_tag);
+
     // Deserialize from `DisaggregatedPhysicalTable`, this should also
     // ensure the local cache pages.
     auto table_task = std::make_shared<RNRemotePhysicalTableReadTask>(
@@ -377,7 +384,7 @@ RNRemotePhysicalTableReadTaskPtr RNRemotePhysicalTableReadTask::buildFrom(
                 table_task->store_id,
                 table_task->ks_table_id,
                 table_task->address,
-                log);
+                fmt::format("{}->seg_{}", log->identifier(), remote_seg.segment_id()));
         });
 
         futures.emplace_back(task->get_future());
@@ -430,7 +437,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     StoreID store_id,
     KeyspaceTableID ks_table_id,
     const String & address,
-    const LoggerPtr & log)
+    const String & debug_tag)
 {
     RowKeyRange segment_range;
     {
@@ -443,6 +450,8 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         ReadBufferFromString rb(proto.read_key_ranges(i));
         read_ranges[i] = RowKeyRange::deserialize(rb);
     }
+
+    auto log = Logger::get(debug_tag);
 
     auto task = std::make_shared<RNRemoteSegmentReadTask>(
         snapshot_id,
@@ -585,6 +594,30 @@ BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
         push_down_filter,
         read_tso,
         expected_block_size);
+}
+
+SegmentReadTaskPoolPtr RNRemoteSegmentReadTask::toReadTaskPool(const ToReadTaskPoolOptions & options)
+{
+    SegmentReadTasks tasks;
+    tasks.emplace_back(std::make_shared<SegmentReadTask>(
+        segment,
+        segment_snap,
+        read_ranges));
+
+    return std::make_shared<SegmentReadTaskPool>(
+        ks_table_id.second,
+        dm_context,
+        options.columns_to_read,
+        options.push_down_filter,
+        options.read_tso,
+        options.expected_block_size,
+        options.read_mode,
+        std::move(tasks),
+        /* after_segment_read */ nullptr,
+        /* debug_tag */ fmt::format("{}->task_pool", log->identifier()),
+        /* enable_read_thread */ true,
+        options.num_streams,
+        options.result_channel);
 }
 
 } // namespace DB::DM

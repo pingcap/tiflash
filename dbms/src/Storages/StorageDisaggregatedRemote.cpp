@@ -38,10 +38,12 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
@@ -59,6 +61,7 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <memory>
 #include <numeric>
 
 namespace pingcap::kv
@@ -186,7 +189,9 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     // The first exception will be thrown out.
     thread_manager->wait();
 
-    return std::make_shared<DM::RNRemoteReadTask>(std::move(store_read_tasks));
+    return std::make_shared<DM::RNRemoteReadTask>(
+        log->identifier(),
+        std::move(store_read_tasks));
 }
 
 /// Note: This function runs concurrently when there are multiple Write Nodes.
@@ -340,7 +345,7 @@ void StorageDisaggregated::buildDisaggTask(
             batch_cop_task.store_addr,
             snapshot_id,
             table,
-            log);
+            fmt::format("{}->store_{}->table_{}", log->identifier(), resp->store_id(), table.table_id()));
         remote_seg_tasks.emplace_back(task);
 
         LOG_DEBUG(
@@ -486,8 +491,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         executor_id,
         do_prepare);
 
-    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
-    constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
+    const UInt64 max_version = sender_target_mpp_task_id.query_id.start_ts;
+    // constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
@@ -500,28 +505,94 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log);
     auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
 
-    auto sub_streams_size = io_concurrency / num_streams;
-    for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
+    // auto sub_streams_size = io_concurrency / num_streams;
+    // for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
+    // {
+    //     // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
+    //     // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
+
+    //     auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
+    //         db_context,
+    //         remote_read_tasks,
+    //         page_preparer,
+    //         column_defines,
+    //         read_tso,
+    //         sub_streams_size,
+    //         extra_table_id_index,
+    //         push_down_filter,
+    //         extra_info,
+    //         /*tracing_id*/ log->identifier(),
+    //         read_mode);
+    //     RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
+
+    //     auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
+    //     pipeline.streams.emplace_back(std::move(union_stream));
+    // }
+
+    // TODO: Deal with PartitionTable.
+
+    size_t final_num_stream = std::min(num_streams, remote_read_tasks->numSegments());
+    // String req_info;
+    // if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+    //     req_info = db_context.getDAGContext()->getMPPTaskId().toString();
+
+    LOG_INFO(Logger::get(), "Wenxuan: Building new channel, expected_sources={}", remote_read_tasks->numSegments());
+
+    // std::promise<void> wait_read;
+
+    auto start_pipe_fn = [log = this->log, remote_read_tasks, column_defines = column_defines, max_version, push_down_filter, read_mode, final_num_stream](DM::SegmentReadResultChannelPtr result_channel) {
+        // This thread continuously takes ready RemoteReadTask and submits it to the ReadThread.
+        auto pipe_fn = [=] {
+            LOG_DEBUG(log, "Start piping RemoteReadTask to ReadThread");
+            SCOPE_EXIT({
+                LOG_DEBUG(log, "Stop piping RemoteReadTask to ReadThread");
+            });
+
+            while (true)
+            {
+                if (!result_channel->valid()) // Maybe the query is cancelled
+                    break;
+
+                auto cur_read_task = remote_read_tasks->nextReadyTask();
+                if (!cur_read_task) // finished or error
+                    break;
+
+                auto read_task_pool = cur_read_task->toReadTaskPool({
+                    .columns_to_read = *column_defines,
+                    .read_tso = max_version,
+                    .push_down_filter = push_down_filter,
+                    .read_mode = read_mode,
+                    .num_streams = static_cast<Int64>(final_num_stream),
+                    .expected_block_size = DEFAULT_BLOCK_SIZE,
+                    .result_channel = result_channel,
+                });
+                DM::SegmentReadTaskScheduler::instance().add(read_task_pool);
+            }
+
+            // If there are errors when we preparing the RemoteReadTask, let's finish the result channel immediately.
+            if (!remote_read_tasks->getErrorMessage().empty())
+                result_channel->finishWithError(Exception(remote_read_tasks->getErrorMessage()));
+        };
+
+        std::thread(pipe_fn).detach();
+    };
+
+    auto result_channel = DM::SegmentReadResultChannel::create({
+        .expected_sources = remote_read_tasks->numSegments(),
+        .debug_tag = fmt::format("{}->result_channel", log->identifier()),
+        .max_pending_blocks = std::max(num_streams, 3),
+        .on_first_read = start_pipe_fn,
+    });
+
+    for (size_t i = 0; i < final_num_stream; ++i)
     {
-        // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
-        // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
-
-        auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
-            db_context,
-            remote_read_tasks,
-            page_preparer,
-            column_defines,
-            read_tso,
-            sub_streams_size,
+        BlockInputStreamPtr stream = std::make_shared<DM::UnorderedInputStream>(
+            result_channel,
+            *column_defines,
             extra_table_id_index,
-            push_down_filter,
-            extra_info,
-            /*tracing_id*/ log->identifier(),
-            read_mode);
-        RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
-
-        auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
-        pipeline.streams.emplace_back(std::move(union_stream));
+            remote_read_tasks->todo_physical_table_id, // cur_read_task->ks_table_id.second
+            fmt::format("{}->stream#{}", log->identifier(), i));
+        pipeline.streams.emplace_back(stream);
     }
 
     auto * dag_context = db_context.getDAGContext();

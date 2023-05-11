@@ -29,7 +29,9 @@ namespace DB::DM
  * There could be multiple producers generating the result, and
  * multiple consumers (UnorderedInputStream) consuming the result.
  */
-class SegmentReadResultChannel : private boost::noncopyable
+class SegmentReadResultChannel
+    : private boost::noncopyable
+    , public std::enable_shared_from_this<SegmentReadResultChannel>
 {
 public:
     class BlockStat
@@ -90,14 +92,29 @@ public:
         std::atomic<int64_t> total_bytes;
     };
 
+    struct Options
+    {
+        /// The number of "sources". It should be paired when calling `finish()`.
+        /// Conventionally, `source` is `{store_id}_{segment_id}`.
+        const UInt64 expected_sources;
+
+        const String & debug_tag;
+
+        /// If we reaches this limit, we will consider this channel as full.
+        /// This is not a hard limit.
+        const UInt64 max_pending_blocks;
+
+        const std::function<void(SegmentReadResultChannelPtr)> on_first_read;
+    };
+
 
     explicit SegmentReadResultChannel(
-        const SegmentReadResultChannelOptions & options);
+        const Options & options);
 
     ~SegmentReadResultChannel();
 
     static std::shared_ptr<SegmentReadResultChannel> create(
-        const SegmentReadResultChannelOptions & options)
+        const Options & options)
     {
         return std::make_shared<SegmentReadResultChannel>(options);
     }
@@ -148,7 +165,8 @@ public:
     const UInt64 max_pending_blocks;
 
 private:
-    const std::function<void()> on_first_read;
+    const std::function<void(SegmentReadResultChannelPtr)> on_first_read;
+    const LoggerPtr log;
 
     mutable std::mutex mu;
     std::set<String> finished_sources;
