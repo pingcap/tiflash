@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/FailPoint.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelBase.h>
@@ -33,12 +33,12 @@ public:
         , msg_channels(msg_channels_)
     {}
 
-    // "write" means writing the packet to the channel which is a ConcurrentIOQueue.
+    // "write" means writing the packet to the channel which is a LooseBoundedMPMCQueue.
     //
-    // If non_blocking:
-    //    call ConcurrentIOQueue::nonBlockingPush
-    // If !non_blocking:
-    //    call ConcurrentIOQueue::push
+    // If is_force:
+    //    call LooseBoundedMPMCQueue::forcePush
+    // If !is_force:
+    //    call LooseBoundedMPMCQueue::push
     //
     // If enable_fine_grained_shuffle:
     //      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
@@ -47,7 +47,7 @@ public:
     //
     // Return true if all push succeed, otherwise return false.
     // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
-    template <bool enable_fine_grained_shuffle, bool non_blocking = false>
+    template <bool enable_fine_grained_shuffle, bool is_force = false>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
     {
         const auto & packet = tracked_packet->packet;
@@ -55,9 +55,9 @@ public:
         const String * resp_ptr = packet.data().empty() ? nullptr : &packet.data();
 
         WriteToChannelFunc write_func;
-        if constexpr (non_blocking)
+        if constexpr (is_force)
             write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {
-                return (*msg_channels)[i]->nonBlockingPush(std::move(recv_msg));
+                return (*msg_channels)[i]->forcePush(std::move(recv_msg));
             };
         else
             write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {

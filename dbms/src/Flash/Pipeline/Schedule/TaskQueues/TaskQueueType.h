@@ -14,38 +14,13 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
-
-#include <atomic>
-
 namespace DB
 {
-template <bool is_cpu>
-class TaskThreadPoolMetrics
+// TODO support resource group queue.
+enum class TaskQueueType
 {
-public:
-    TaskThreadPoolMetrics();
-
-    void incPendingTask(size_t task_count);
-
-    void decPendingTask();
-
-    void elapsedPendingTime(TaskPtr & task);
-
-    void incExecutingTask();
-
-    void decExecutingTask();
-
-    void addExecuteTime(TaskPtr & task, UInt64 value);
-
-    void incThreadCnt();
-
-    void decThreadCnt();
-
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
-
-private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
+    DEFAULT, // Determined internally by the task thread pool.
+    FIFO, // fifo queue
+    MLFQ, // multi-level feedback queue
 };
-
 } // namespace DB

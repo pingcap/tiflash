@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <memory.h>
 
 namespace DB
@@ -81,6 +82,12 @@ private:
     void switchStatus(ExecTaskStatus to);
 
     void assertNormalStatus(ExecTaskStatus expect);
+
+public:
+    TaskProfileInfo profile_info;
+
+    // level of multi-level feedback queue.
+    size_t mlfq_level{0};
 
 protected:
     MemoryTrackerPtr mem_tracker;

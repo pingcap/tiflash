@@ -125,6 +125,7 @@ void Task::finalize()
     switchStatus(ExecTaskStatus::FINALIZE);
 
     finalizeImpl();
+    LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 }
 
 #undef CHECK_FINISHED

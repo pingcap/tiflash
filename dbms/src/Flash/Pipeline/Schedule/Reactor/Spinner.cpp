@@ -25,15 +25,18 @@ bool Spinner::awaitAndPushReadyTask(TaskPtr && task)
     auto status = task->await();
     switch (status)
     {
+    case ExecTaskStatus::WAITING:
+        return false;
     case ExecTaskStatus::RUNNING:
+        task->profile_info.elapsedAwaitTime();
         cpu_tasks.push_back(std::move(task));
         return true;
     case ExecTaskStatus::IO:
+        task->profile_info.elapsedAwaitTime();
         io_tasks.push_back(std::move(task));
         return true;
-    case ExecTaskStatus::WAITING:
-        return false;
     case FINISH_STATUS:
+        task->profile_info.elapsedAwaitTime();
         FINALIZE_TASK(task);
         return true;
     default:

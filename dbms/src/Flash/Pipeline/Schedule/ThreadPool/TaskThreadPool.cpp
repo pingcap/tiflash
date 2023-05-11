@@ -27,13 +27,13 @@
 namespace DB
 {
 template <typename Impl>
-TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
-    : task_queue(Impl::newTaskQueue())
+TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config)
+    : task_queue(Impl::newTaskQueue(config.queue_type))
     , scheduler(scheduler_)
 {
-    RUNTIME_CHECK(thread_num > 0);
-    threads.reserve(thread_num);
-    for (size_t i = 0; i < thread_num; ++i)
+    RUNTIME_CHECK(config.pool_size > 0);
+    threads.reserve(config.pool_size);
+    for (size_t i = 0; i < config.pool_size; ++i)
         threads.emplace_back(&TaskThreadPool::loop, this, i);
 }
 
@@ -92,21 +92,24 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     TRACE_MEMORY(task);
 
     metrics.incExecutingTask();
+    metrics.elapsedPendingTime(task);
 
-    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
+    UInt64 total_time_spent = 0;
     while (true)
     {
         status = Impl::exec(task);
-        auto execute_time_ns = stopwatch.elapsed();
+        auto inc_time_spent = task->profile_info.elapsedFromPrev();
+        task_queue->updateStatistics(task, inc_time_spent);
+        total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != Impl::TargetStatus || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
         {
-            metrics.updateTaskMaxtimeOnRound(execute_time_ns);
+            metrics.updateTaskMaxtimeOnRound(total_time_spent);
             break;
         }
     }
-
+    metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (status)
     {
