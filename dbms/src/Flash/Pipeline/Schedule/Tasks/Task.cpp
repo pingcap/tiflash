@@ -81,11 +81,11 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
 Task::~Task()
 {
     RUNTIME_ASSERT(
-        exec_status == ExecTaskStatus::FINALIZE,
+        task_status == ExecTaskStatus::FINALIZE,
         log,
         "The state of the Task must be {} before it is destructed, but it is actually {}",
         magic_enum::enum_name(ExecTaskStatus::FINALIZE),
-        magic_enum::enum_name(exec_status));
+        magic_enum::enum_name(task_status));
 }
 
 ExecTaskStatus Task::execute()
@@ -119,7 +119,7 @@ void Task::finalize()
 {
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(
-        exec_status != ExecTaskStatus::FINALIZE,
+        task_status != ExecTaskStatus::FINALIZE,
         log,
         "finalize can only be called once.");
     switchStatus(ExecTaskStatus::FINALIZE);
