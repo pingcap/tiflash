@@ -28,7 +28,7 @@ void UnitQueue::take(TaskPtr & task)
     assert(task);
 }
 
-bool UnitQueue::empty()
+bool UnitQueue::empty() const
 {
     return task_queue.empty();
 }
@@ -48,7 +48,7 @@ template <typename TimeGetter>
 MultiLevelFeedbackQueue<TimeGetter>::~MultiLevelFeedbackQueue()
 {
     for (const auto & unit_queue : level_queues)
-        RUNTIME_ASSERT(unit_queue.empty(), log, "all task should be taken before it is destructed");
+        RUNTIME_ASSERT(unit_queue->empty(), logger, "all task should be taken before it is destructed");
 }
 
 template <typename TimeGetter>
@@ -183,7 +183,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task,
 }
 
 template <typename TimeGetter>
-bool MultiLevelFeedbackQueue<TimeGetter>::empty()
+bool MultiLevelFeedbackQueue<TimeGetter>::empty() const
 {
     std::lock_guard lock(mu);
     for (const auto & queue : level_queues)

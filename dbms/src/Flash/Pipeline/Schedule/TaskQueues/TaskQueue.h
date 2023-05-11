@@ -38,7 +38,7 @@ public:
     // Used to adjust the priority of tasks within a queue.
     virtual void updateStatistics(const TaskPtr & task, size_t inc_value) = 0;
 
-    virtual bool empty() = 0;
+    virtual bool empty() const = 0;
 
     // After finish is called, the submitted task will be finalized directly and will not be taken.
     // And the tasks in the queue can still be taken normally.

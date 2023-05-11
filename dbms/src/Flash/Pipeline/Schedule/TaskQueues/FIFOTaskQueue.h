@@ -30,9 +30,9 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks) override;
 
-    void updateStatistics(const TaskPtr &, size_t) override {}
+    bool take(TaskPtr & task) override;
 
-    bool empty() override;
+    void updateStatistics(const TaskPtr &, size_t) override {}
 
     bool empty() const override;
 

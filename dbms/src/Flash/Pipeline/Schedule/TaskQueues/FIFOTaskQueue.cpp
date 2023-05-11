@@ -20,7 +20,7 @@ namespace DB
 {
 FIFOTaskQueue::~FIFOTaskQueue()
 {
-    RUNTIME_ASSERT(task_queue.empty(), log, "all task should be taken before it is destructed");
+    RUNTIME_ASSERT(task_queue.empty(), logger, "all task should be taken before it is destructed");
 }
 
 bool FIFOTaskQueue::take(TaskPtr & task)
