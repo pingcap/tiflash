@@ -14,6 +14,7 @@
 
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -53,10 +54,11 @@ try
         TaskPtr task;
         queue->take(task);
         ASSERT_EQ(task->mlfq_level, 0);
+        FINALIZE_TASK(task);
     }
     ASSERT_TRUE(queue->empty());
-    queue->close();
-    // No tasks are taken after the queue is closed.
+    queue->finish();
+    // No tasks can be submitted after the queue is finished.
     queue->submit(std::make_unique<PlainTask>());
     TaskPtr task;
     ASSERT_FALSE(queue->take(task));
@@ -84,10 +86,7 @@ try
             task->profile_info.addCPUExecuteTime(value);
             queue->submit(std::move(task));
         }
-        // Close the queue after all valid tasks have been consumed.
-        while (!queue->empty())
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        queue->close();
+        queue->finish();
     });
     // take valid task
     thread_manager->schedule(false, "take", [&]() {
@@ -97,7 +96,7 @@ try
         {
             ASSERT_TRUE(task);
             ++take_task_num;
-            task.reset();
+            FINALIZE_TASK(task);
         }
         ASSERT_EQ(take_task_num, valid_task_num);
     });
@@ -129,6 +128,8 @@ try
     queue.take(task);
     ASSERT_TRUE(queue.empty());
     ASSERT_EQ(task->mlfq_level, CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1);
+    FINALIZE_TASK(task);
+    queue.finish();
 }
 CATCH
 
@@ -160,11 +161,13 @@ try
         TaskPtr task;
         queue.take(task);
         ASSERT_EQ(task->mlfq_level, 0);
+        FINALIZE_TASK(task);
     }
     {
         TaskPtr task;
         queue.take(task);
         ASSERT_EQ(task->mlfq_level, CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1);
+        FINALIZE_TASK(task);
     }
     ASSERT_TRUE(queue.empty());
 
@@ -193,14 +196,17 @@ try
         TaskPtr task;
         queue.take(task);
         ASSERT_EQ(task->mlfq_level, CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1);
+        FINALIZE_TASK(task);
     }
     for (size_t i = 0; i < task_num; ++i)
     {
         TaskPtr task;
         queue.take(task);
         ASSERT_EQ(task->mlfq_level, 0);
+        FINALIZE_TASK(task);
     }
     ASSERT_TRUE(queue.empty());
+    queue.finish();
 }
 CATCH
 

@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolMetrics.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolMetrics.h>
 
 #include <thread>
 #include <vector>
@@ -49,18 +49,21 @@ class TaskThreadPool
 public:
     TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config);
 
-    void close();
+    // After finish is called, the submitted task will be finalized directly.
+    // And the remaing tasks in task_queue will be taken out and executed normally.
+    void finish();
 
     void waitForStop();
 
-    void submit(TaskPtr && task) noexcept;
+    void submit(TaskPtr && task);
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
+    void submit(std::vector<TaskPtr> & tasks);
 
 private:
-    void loop(size_t thread_no) noexcept;
+    void loop(size_t thread_no);
+    void doLoop(size_t thread_no);
 
-    void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
+    void handleTask(TaskPtr & task);
 
 private:
     TaskQueuePtr task_queue;
@@ -73,4 +76,5 @@ private:
 
     TaskThreadPoolMetrics<Impl::is_cpu> metrics;
 };
+
 } // namespace DB

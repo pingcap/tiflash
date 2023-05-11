@@ -137,7 +137,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() noexcept override
+    ExecTaskStatus executeImpl() override
     {
         if (loop_count > 0)
         {
@@ -152,7 +152,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus executeIOImpl() noexcept override
+    ExecTaskStatus executeIOImpl() override
     {
         if (loop_count > 0)
         {
@@ -217,14 +217,14 @@ protected:
         }
     }
 
-    ExecTaskStatus executeIOImpl() noexcept override
+    ExecTaskStatus executeIOImpl() override
     {
         assert(status == TraceTaskStatus::io);
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
         return ExecTaskStatus::RUNNING;
     }
 
-    ExecTaskStatus awaitImpl() noexcept override
+    ExecTaskStatus awaitImpl() override
     {
         if (status == TraceTaskStatus::waiting)
             CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
@@ -239,17 +239,17 @@ private:
 class DeadLoopTask : public Task
 {
 protected:
-    ExecTaskStatus executeImpl() noexcept override
+    ExecTaskStatus executeImpl() override
     {
         return ExecTaskStatus::WAITING;
     }
 
-    ExecTaskStatus awaitImpl() noexcept override
+    ExecTaskStatus awaitImpl() override
     {
         return ExecTaskStatus::IO;
     }
 
-    ExecTaskStatus executeIOImpl() noexcept override
+    ExecTaskStatus executeIOImpl() override
     {
         return ExecTaskStatus::RUNNING;
     }
