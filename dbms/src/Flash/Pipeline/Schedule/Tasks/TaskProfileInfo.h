@@ -74,6 +74,6 @@ private:
 class QueryProfileInfo : public ProfileInfo<std::atomic_uint64_t>
 {
 public:
-    void merge(const TaskProfileInfo & local_one);
+    void merge(const TaskProfileInfo & task_profile_info);
 };
 } // namespace DB
