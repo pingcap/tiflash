@@ -684,14 +684,13 @@ try
         do_assert_for_exec(exec_status.getQueryProfileInfo().getAwaitTimeNs());
 
         /// for pending
-        auto do_assert_for_pending = [&](UInt64 value) {
+        if (task_num > thread_num)
+        {
             // If the number of tasks is greater than the number of threads, there must be tasks in a pending state.
             // To avoid unstable unit tests, we do not check the upper limit.
-            if (task_num > thread_num)
-                ASSERT_GT(value, 0);
-        };
-        do_assert_for_pending(exec_status.getQueryProfileInfo().getCPUPendingTimeNs());
-        do_assert_for_pending(exec_status.getQueryProfileInfo().getIOPendingTimeNs());
+            ASSERT_GT(exec_status.getQueryProfileInfo().getCPUPendingTimeNs(), 0);
+            ASSERT_GT(exec_status.getQueryProfileInfo().getIOPendingTimeNs(), 0);
+        }
     }
 }
 CATCH
