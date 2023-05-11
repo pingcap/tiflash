@@ -79,7 +79,7 @@ public:
 
     void take(TaskPtr & task);
 
-    bool empty();
+    bool empty() const;
 
     double normalizedTime();
 
@@ -98,17 +98,19 @@ class MultiLevelFeedbackQueue : public TaskQueue
 public:
     MultiLevelFeedbackQueue();
 
-    void submit(TaskPtr && task) noexcept override;
+    ~MultiLevelFeedbackQueue() override;
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept override;
+    void submit(TaskPtr && task) override;
 
-    bool take(TaskPtr & task) noexcept override;
+    void submit(std::vector<TaskPtr> & tasks) override;
 
-    void updateStatistics(const TaskPtr & task, size_t inc_value) noexcept override;
+    bool take(TaskPtr & task) override;
 
-    bool empty() noexcept override;
+    void updateStatistics(const TaskPtr & task, size_t inc_value) override;
 
-    void close() noexcept override;
+    bool empty() const override;
+
+    void finish() override;
 
     const UnitQueueInfo & getUnitQueueInfo(size_t level);
 
@@ -124,11 +126,9 @@ private:
     void computeQueueLevel(const TaskPtr & task);
 
 private:
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable cv;
-    bool is_closed = false;
-
-    LoggerPtr logger = Logger::get("MultiLevelFeedbackQueue");
+    std::atomic_bool is_finished = false;
 
     // From high priority to low priority.
     // The higher the priority of the queue,

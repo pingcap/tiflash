@@ -16,9 +16,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -38,9 +38,9 @@ TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoo
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::close()
+void TaskThreadPool<Impl>::finish()
 {
-    task_queue->close();
+    task_queue->finish();
 }
 
 template <typename Impl>
@@ -52,7 +52,17 @@ void TaskThreadPool<Impl>::waitForStop()
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
+void TaskThreadPool<Impl>::loop(size_t thread_no)
+{
+    try
+    {
+        doLoop(thread_no);
+    }
+    CATCH_AND_TERMINATE(logger)
+}
+
+template <typename Impl>
+void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 {
     metrics.incThreadCnt();
     SCOPE_EXIT({ metrics.decThreadCnt(); });
@@ -67,7 +77,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
     while (likely(task_queue->take(task)))
     {
         metrics.decPendingTask();
-        handleTask(task, thread_logger);
+        handleTask(task);
         assert(!task);
         ASSERT_MEMORY_TRACKER
     }
@@ -76,7 +86,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     TRACE_MEMORY(task);
@@ -113,23 +123,22 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
-        task->finalize();
-        task.reset();
+        FINALIZE_TASK(task);
         break;
     default:
-        UNEXPECTED_STATUS(log, status);
+        UNEXPECTED_STATUS(task->log, status);
     }
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
+void TaskThreadPool<Impl>::submit(TaskPtr && task)
 {
     metrics.incPendingTask(1);
     task_queue->submit(std::move(task));
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
+void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks)
 {
     metrics.incPendingTask(tasks.size());
     task_queue->submit(tasks);

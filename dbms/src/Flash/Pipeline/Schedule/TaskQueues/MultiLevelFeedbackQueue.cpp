@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 
@@ -27,7 +28,7 @@ void UnitQueue::take(TaskPtr & task)
     assert(task);
 }
 
-bool UnitQueue::empty()
+bool UnitQueue::empty() const
 {
     return task_queue.empty();
 }
@@ -41,6 +42,13 @@ void UnitQueue::submit(TaskPtr && task)
 double UnitQueue::normalizedTime()
 {
     return accu_consume_time / info.factor_for_normal;
+}
+
+template <typename TimeGetter>
+MultiLevelFeedbackQueue<TimeGetter>::~MultiLevelFeedbackQueue()
+{
+    for (const auto & unit_queue : level_queues)
+        RUNTIME_ASSERT(unit_queue->empty(), logger, "all task should be taken before it is destructed");
 }
 
 template <typename TimeGetter>
@@ -87,9 +95,14 @@ void MultiLevelFeedbackQueue<TimeGetter>::computeQueueLevel(const TaskPtr & task
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task) noexcept
+void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
 {
-    assert(task);
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASK(task);
+        return;
+    }
+
     computeQueueLevel(task);
     {
         std::lock_guard lock(mu);
@@ -100,8 +113,14 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task) noexcept
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks) noexcept
+void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
 {
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASKS(tasks);
+        return;
+    }
+
     if (tasks.empty())
         return;
 
@@ -117,7 +136,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks) n
 }
 
 template <typename TimeGetter>
-bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task) noexcept
+bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 {
     assert(!task);
     {
@@ -127,9 +146,6 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task) noexcept
         std::unique_lock lock(mu);
         while (true)
         {
-            if (unlikely(is_closed))
-                return false;
-
             // Find the queue with the smallest execution time.
             for (size_t i = 0; i < QUEUE_SIZE; ++i)
             {
@@ -148,6 +164,8 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task) noexcept
 
             if (queue_idx >= 0)
                 break;
+            if (unlikely(is_finished))
+                return false;
             cv.wait(lock);
         }
         level_queues[queue_idx]->take(task);
@@ -158,14 +176,14 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task) noexcept
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, size_t inc_value) noexcept
+void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, size_t inc_value)
 {
     assert(task);
     level_queues[task->mlfq_level]->accu_consume_time += inc_value;
 }
 
 template <typename TimeGetter>
-bool MultiLevelFeedbackQueue<TimeGetter>::empty() noexcept
+bool MultiLevelFeedbackQueue<TimeGetter>::empty() const
 {
     std::lock_guard lock(mu);
     for (const auto & queue : level_queues)
@@ -177,11 +195,11 @@ bool MultiLevelFeedbackQueue<TimeGetter>::empty() noexcept
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::close() noexcept
+void MultiLevelFeedbackQueue<TimeGetter>::finish()
 {
     {
         std::lock_guard lock(mu);
-        is_closed = true;
+        is_finished = true;
     }
     cv.notify_all();
 }

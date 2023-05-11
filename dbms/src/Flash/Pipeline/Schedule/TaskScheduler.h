@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/WaitReactor.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 namespace DB
 {
@@ -58,7 +58,7 @@ public:
 
     ~TaskScheduler();
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
+    void submit(std::vector<TaskPtr> & tasks);
 
     void submitToWaitReactor(TaskPtr && task);
     void submitToCPUTaskThreadPool(TaskPtr && task);
