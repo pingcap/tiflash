@@ -86,11 +86,18 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
 }
 
 /// incremental probe means a probe row can be probed by each right block independently
-inline bool supportIncrementalProbeForCrossJoin(ASTTableJoin::Kind kind)
+inline bool supportIncrementalProbeForCrossJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness)
 {
     if (isCrossJoin(kind))
     {
-        return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_LeftOuter || kind == ASTTableJoin::Kind::Cross_RightOuter;
+        if (kind == ASTTableJoin::Kind::Cross_LeftOuter || kind == ASTTableJoin::Kind::Cross_RightOuter)
+        {
+            assert(strictness == ASTTableJoin::Strictness::All);
+            return true;
+        }
+        if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::All)
+            return true;
+        /// cross any join is semi join, don't support incremental probe
     }
     return false;
 }
@@ -130,11 +137,11 @@ struct ProbeProcessInfo
     Block result_block_schema;
     std::vector<size_t> right_column_index;
     size_t right_rows_to_be_added_when_matched = 0;
-    size_t right_block_size = 0;
-    size_t next_right_block_index = 0;
-    /// row number that is filtered by left condition
-    size_t filtered_rows = 0;
+    /// the following 4 fields are used for NO_COPY_RIGHT_BLOCK probe
     bool use_incremental_probe = false;
+    size_t next_right_block_index = 0;
+    size_t right_block_size = 0;
+    size_t row_num_filtered_by_left_condition = 0;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : partition_index(0)
@@ -176,7 +183,7 @@ struct ProbeProcessInfo
                 return;
             }
             end_row = next_row_to_probe;
-            all_rows_joined_finish = filtered_rows == 0 && end_row == block.rows();
+            all_rows_joined_finish = row_num_filtered_by_left_condition == 0 && end_row == block.rows();
         }
         else
         {

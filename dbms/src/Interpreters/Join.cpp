@@ -983,9 +983,9 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     }
     else if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
     {
-        auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
         if (incremental_probe)
         {
+            auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
             if (non_equal_conditions.other_cond_expr != nullptr)
             {
                 size_t left_rows = is_matched_rows ? 1 : block.rows();
@@ -1000,19 +1000,29 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
         }
         else
         {
-            auto ret_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
-            if (kind == ASTTableJoin::Kind::Cross_LeftOuterAnti || kind == ASTTableJoin::Kind::Cross_LeftOuterSemi)
-            {
-                for (auto & ret_column : ret_columns)
-                    ret_column->reserve(probe_process_info.block.rows());
-            }
             assert(non_equal_conditions.other_cond_expr != nullptr);
-            size_t left_rows = is_matched_rows ? 1 : block.rows();
-            probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin(),
-                                                            probe_process_info.offsets_to_replicate->begin() + left_rows);
-            if (probe_process_info.filter != nullptr)
-                probe_process_info.filter->assign(probe_process_info.filter->begin(),
-                                                  probe_process_info.filter->begin() + left_rows);
+            /// if use non incremental probe, then for a left row, doJoinBlockCross must probe all the right blocks before return
+            /// so the init next_right_block_index must be 0
+            assert(probe_process_info.next_right_block_index == 0);
+            bool can_stop = false;
+            do
+            {
+                auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+                size_t left_rows = is_matched_rows ? 1 : block.rows();
+                probe_process_info.offsets_to_replicate->assign(probe_process_info.offsets_to_replicate->begin(),
+                                                                probe_process_info.offsets_to_replicate->begin() + left_rows);
+                if (probe_process_info.filter != nullptr)
+                    probe_process_info.filter->assign(probe_process_info.filter->begin(),
+                                                      probe_process_info.filter->begin() + left_rows);
+                if (!is_matched_rows)
+                {
+                    handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
+                    can_stop = true;
+                }
+                else
+                {
+                }
+            } while (!can_stop);
         }
         throw Exception(fmt::format("Unsupported cross probe mode: {}", magic_enum::enum_name(cross_probe_mode)));
     }
@@ -1324,10 +1334,11 @@ void Join::workAfterBuildFinish()
             blocks.push_back(merged_block);
             original_blocks.push_back(merged_block);
         }
-        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join >= no_copy_cross_probe_threshold ? CrossProbeMode::NO_COPY_RIGHT_BLOCK : CrossProbeMode::NORMAL;
+        /// any join should never use NO_COPY_RIGHT_BLOCK
+        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > no_copy_cross_probe_threshold ? CrossProbeMode::NO_COPY_RIGHT_BLOCK : CrossProbeMode::NORMAL;
         if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
         {
-            incremental_probe = supportIncrementalProbeForCrossJoin(kind);
+            incremental_probe = supportIncrementalProbeForCrossJoin(kind, original_strictness);
         }
     }
 

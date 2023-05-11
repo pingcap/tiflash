@@ -44,7 +44,7 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     use_incremental_probe = false;
     right_block_size = 0;
     next_right_block_index = 0;
-    filtered_rows = 0;
+    row_num_filtered_by_left_condition = 0;
 }
 
 ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names)
@@ -187,7 +187,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
         right_column_index.push_back(num_existing_columns + i);
 
     if (null_map != nullptr)
-        filtered_rows = countBytesInFilter(*null_map);
+        row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
     prepare_for_probe_done = true;
 }
 
