@@ -79,7 +79,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
-        // When filter condition like `col_time = '700:11:11.123500'` is pushed down to table scan, the type of col_time is MyDuration.
+        // When filter condition like `col_time = '700:11:11.123500'` is pushed down to table scan, the type of col_time will be changed to MyDuration.
         // But the type of col_time in storage_schema is still Int64.
         // This is just a workaround for this case.
         // TODO: Remove this workaround.
