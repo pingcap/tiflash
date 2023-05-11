@@ -83,10 +83,12 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
         // But the type of col_time in storage_schema is still Int64.
         // This is just a workaround for this case.
         // TODO: Remove this workaround.
-        if (unlikely(!schema[i].type->equals(*storage_schema[i].type) && strcmp(schema[i].type->getFamilyName(), "MyDuration") != 0))
-        {
-            LOG_ERROR(log, "schema type mismatch, {}, schema: {}, storage_schema: {}", schema[i].name, schema[i].type->getName(), storage_schema[i].type->getName());
-        }
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type) || strcmp(schema[i].type->getFamilyName(), "MyDuration") == 0,
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
         assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }
