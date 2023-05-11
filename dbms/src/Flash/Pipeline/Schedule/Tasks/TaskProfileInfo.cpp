@@ -16,37 +16,37 @@
 
 namespace DB
 {
-void TaskProfileInfo::startTimer() noexcept
+void TaskProfileInfo::startTimer()
 {
     stopwatch.start();
 }
 
-UInt64 TaskProfileInfo::elapsedFromPrev() noexcept
+UInt64 TaskProfileInfo::elapsedFromPrev()
 {
     return stopwatch.elapsedFromLastTime();
 }
 
-void TaskProfileInfo::addCPUExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addCPUExecuteTime(UInt64 value)
 {
     cpu_execute_time_ns += value;
 }
 
-void TaskProfileInfo::elapsedCPUPendingTime() noexcept
+void TaskProfileInfo::elapsedCPUPendingTime()
 {
     cpu_pending_time_ns += elapsedFromPrev();
 }
 
-void TaskProfileInfo::addIOExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addIOExecuteTime(UInt64 value)
 {
     io_execute_time_ns += value;
 }
 
-void TaskProfileInfo::elapsedIOPendingTime() noexcept
+void TaskProfileInfo::elapsedIOPendingTime()
 {
     io_pending_time_ns += elapsedFromPrev();
 }
 
-void TaskProfileInfo::elapsedAwaitTime() noexcept
+void TaskProfileInfo::elapsedAwaitTime()
 {
     await_time_ns += elapsedFromPrev();
 }

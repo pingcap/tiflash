@@ -14,7 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 namespace DB
 {

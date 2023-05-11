@@ -51,34 +51,39 @@ public:
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
-    virtual ~Task() = default;
+    virtual ~Task();
 
     MemoryTrackerPtr getMemTracker() const
     {
         return mem_tracker;
     }
 
-    ExecTaskStatus execute() noexcept;
+    ExecTaskStatus execute();
 
-    ExecTaskStatus executeIO() noexcept;
+    ExecTaskStatus executeIO();
 
-    ExecTaskStatus await() noexcept;
+    ExecTaskStatus await();
 
-    void finalize() noexcept;
+    // `finalize` must be called before destructuring.
+    // `TaskHelper::FINALIZE_TASK` can help this.
+    void finalize();
+
+public:
+    LoggerPtr log;
 
 protected:
-    virtual ExecTaskStatus executeImpl() noexcept = 0;
-    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus executeImpl() = 0;
+    virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
-    virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
     // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalizeImpl() noexcept {}
+    virtual void finalizeImpl() {}
 
 private:
     void switchStatus(ExecTaskStatus to);
 
-    void assertStatus(ExecTaskStatus expect);
+    void assertNormalStatus(ExecTaskStatus expect);
 
 public:
     TaskProfileInfo profile_info;
@@ -88,7 +93,6 @@ public:
 
 protected:
     MemoryTrackerPtr mem_tracker;
-    LoggerPtr log;
 
     ExecTaskStatus task_status{ExecTaskStatus::INIT};
 };

@@ -145,13 +145,7 @@ void Event::scheduleTasks()
         unfinished_tasks);
     if (!tasks.empty())
     {
-        // If query has already been cancelled, we can skip scheduling tasks.
-        // Then tasks will be destroyed and call `onTaskFinish`.
-        if (likely(!exec_status.isCancelled()))
-        {
-            LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-            TaskScheduler::instance->submit(tasks);
-        }
+        TaskScheduler::instance->submit(tasks);
         tasks.clear();
     }
     else

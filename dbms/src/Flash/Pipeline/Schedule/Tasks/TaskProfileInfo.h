@@ -53,19 +53,19 @@ protected:
 class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
-    void startTimer() noexcept;
+    void startTimer();
 
-    UInt64 elapsedFromPrev() noexcept;
+    UInt64 elapsedFromPrev();
 
-    void addCPUExecuteTime(UInt64 value) noexcept;
+    void addCPUExecuteTime(UInt64 value);
 
-    void elapsedCPUPendingTime() noexcept;
+    void elapsedCPUPendingTime();
 
-    void addIOExecuteTime(UInt64 value) noexcept;
+    void addIOExecuteTime(UInt64 value);
 
-    void elapsedIOPendingTime() noexcept;
+    void elapsedIOPendingTime();
 
-    void elapsedAwaitTime() noexcept;
+    void elapsedAwaitTime();
 
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
