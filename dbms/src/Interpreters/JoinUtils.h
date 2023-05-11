@@ -137,11 +137,16 @@ struct ProbeProcessInfo
     Block result_block_schema;
     std::vector<size_t> right_column_index;
     size_t right_rows_to_be_added_when_matched = 0;
-    /// the following 4 fields are used for NO_COPY_RIGHT_BLOCK probe
-    bool use_incremental_probe = false;
-    size_t next_right_block_index = 0;
+    CrossProbeMode cross_probe_mode = CrossProbeMode::NORMAL;
+    /// the following fields are used for NO_COPY_RIGHT_BLOCK probe
     size_t right_block_size = 0;
+    /// the rows that is filtered by left condition
     size_t row_num_filtered_by_left_condition = 0;
+    size_t next_right_block_index = 0;
+    /// used for outer/semi/anti/left outer semi/left outer anti join
+    bool has_row_matched = false;
+    /// used for left outer semi/left outer anti join
+    bool has_row_null = false;
 
     explicit ProbeProcessInfo(UInt64 max_block_size_)
         : partition_index(0)
@@ -157,11 +162,13 @@ struct ProbeProcessInfo
     {
         if constexpr (cross_join)
         {
-            if (use_incremental_probe)
+            if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
             {
                 if (next_right_block_index < right_block_size)
                     return;
                 next_right_block_index = 0;
+                has_row_matched = false;
+                has_row_null = false;
             }
         }
         assert(start_row <= end_row);
@@ -175,19 +182,18 @@ struct ProbeProcessInfo
     template <bool cross_join>
     void updateEndRow(size_t next_row_to_probe)
     {
+        end_row = next_row_to_probe;
         if constexpr (cross_join)
         {
-            if (use_incremental_probe && next_right_block_index < right_block_size)
+            if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK && next_right_block_index < right_block_size)
             {
                 /// current probe is not finished, just return
                 return;
             }
-            end_row = next_row_to_probe;
             all_rows_joined_finish = row_num_filtered_by_left_condition == 0 && end_row == block.rows();
         }
         else
         {
-            end_row = next_row_to_probe;
             all_rows_joined_finish = end_row == block.rows();
         }
     }
@@ -199,8 +205,10 @@ struct ProbeProcessInfo
         ASTTableJoin::Strictness strictness,
         const Block & sample_block_with_columns_to_add,
         size_t right_rows_to_be_added_when_matched,
-        bool use_incremental_probe,
+        CrossProbeMode cross_probe_mode,
         size_t right_block_size);
+
+    void cutFilterAndOffsetVector(size_t start, size_t end);
 };
 struct JoinBuildInfo
 {

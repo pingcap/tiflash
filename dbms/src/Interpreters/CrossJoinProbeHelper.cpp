@@ -429,22 +429,25 @@ std::pair<Block, bool> crossProbeBlockNoCopyRightBlockImpl(
             src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
         }
         IColumn::Filter::value_type filter_column_value{};
-        for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
+        if constexpr (has_null_map)
         {
-            if ((*probe_process_info.null_map)[i])
+            for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
             {
-                CrossJoinAdder<KIND, STRICTNESS>::addNotFound(
-                    dst_columns,
-                    num_existing_columns,
-                    src_left_columns,
-                    num_columns_to_add,
-                    i,
-                    filter_ptr,
-                    current_offset,
-                    offset_ptr,
-                    probe_process_info.max_block_size);
-                if (filter_ptr != nullptr)
-                    filter_column_value = (*filter_ptr)[i];
+                if ((*probe_process_info.null_map)[i])
+                {
+                    CrossJoinAdder<KIND, STRICTNESS>::addNotFound(
+                        dst_columns,
+                        num_existing_columns,
+                        src_left_columns,
+                        num_columns_to_add,
+                        i,
+                        filter_ptr,
+                        current_offset,
+                        offset_ptr,
+                        probe_process_info.max_block_size);
+                    if (filter_ptr != nullptr)
+                        filter_column_value = (*filter_ptr)[i];
+                }
             }
         }
         /// construct fill filter and offset column
