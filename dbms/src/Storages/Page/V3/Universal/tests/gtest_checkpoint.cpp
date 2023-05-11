@@ -1021,7 +1021,7 @@ try
         batch.delPage("3");
         page_storage->write(std::move(batch));
     }
-    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
 
     { // check the first manifest
         UInt64 upload_seq = 1;
@@ -1059,29 +1059,35 @@ try
         page_storage->write(std::move(batch));
     }
     StoreID another_store_id = 99;
-    auto ingest_from_data_file = S3::S3Filename::newCheckpointData(another_store_id, 100, 1);
-    auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
+    const auto ingest_from_data_file = S3::S3Filename::newCheckpointData(another_store_id, 100, 1);
+    const auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
     {
         // create object on s3 for locking
         S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
         S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
 
         UniversalWriteBatch batch;
-        PS::V3::CheckpointLocation loc21{
-            .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
-            .offset_in_file = 1024,
-            .size_in_file = 1024,
-        };
-        batch.putRemotePage("21", tag, 1024, loc21, {});
-        PS::V3::CheckpointLocation loc22{
-            .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
-            .offset_in_file = 0,
-            .size_in_file = 0,
-        };
-        batch.putRemoteExternal("22", loc22);
+
+        batch.putRemotePage(
+            "21",
+            tag,
+            1024,
+            PS::V3::CheckpointLocation{
+                .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
+                .offset_in_file = 1024,
+                .size_in_file = 1024,
+            },
+            {});
+        batch.putRemoteExternal(
+            "22",
+            PS::V3::CheckpointLocation{
+                .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
+                .offset_in_file = 0,
+                .size_in_file = 0,
+            });
         page_storage->write(std::move(batch));
     }
-    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
 
     { // check the second manifest
         UInt64 upload_seq = 2;
@@ -1108,6 +1114,7 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("20", iter->page_id);
+        ASSERT_EQ("lock/s2/dat_2_0.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to second CPDataFile
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
@@ -1125,6 +1132,34 @@ try
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the second manifest
 
+    {
+        // Persist some new WriteBatch but checkpoint is not uploaded
+        {
+            UniversalWriteBatch batch;
+            batch.delPage("2"); // delete
+            batch.putPage("10", tag, "new version data");
+            batch.putPage("30", tag, "testing"); // new page_id
+            batch.putRemoteExternal(
+                "31",
+                PS::V3::CheckpointLocation{
+                    .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
+                    .offset_in_file = 0,
+                    .size_in_file = 0,
+                }); // new ingest id
+            batch.putRemotePage(
+                "32",
+                tag,
+                128,
+                PS::V3::CheckpointLocation{
+                    .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
+                    .offset_in_file = 2048,
+                    .size_in_file = 128,
+                },
+                {}); // new ingest id
+            page_storage->write(std::move(batch));
+        }
+    }
+
     // mock restart
     auto new_service = newService();
     EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 0);
@@ -1132,6 +1167,52 @@ try
     EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9);
     auto upload_info = new_service->uni_page_storage->allocateNewUploadLocksInfo();
     EXPECT_EQ(upload_info.upload_sequence, 3);
+
+    // Check that data_location are restored from S3 latest manifest
+    {
+        auto & restored_page_directory = new_service->uni_page_storage->page_directory;
+        auto snap = restored_page_directory->createSnapshot("");
+        // page_id "2" is deleted
+        EXPECT_EQ(restored_page_directory->numPages(), 8) << fmt::format("{}", restored_page_directory->getAllPageIds());
+
+        auto restored_entry = restored_page_directory->getByID("10", snap);
+        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // new version is not persisted to S3
+
+        restored_entry = restored_page_directory->getByID("20", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_2_0.lock_s2_2"); // second checkpoint
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
+
+        restored_entry = restored_page_directory->getByID("21", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_2");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
+
+        restored_entry = restored_page_directory->getByID("22", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_2");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
+
+        restored_entry = restored_page_directory->getByID("5", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s2/dat_1_0.lock_s2_1");
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
+
+        // These ID are persisted in UniPS but not uploaded to S3 manifest
+        restored_entry = restored_page_directory->getByID("30", snap);
+        ASSERT_FALSE(restored_entry.second.checkpoint_info.has_value()); // not persisted to S3
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, false);
+
+        restored_entry = restored_page_directory->getByID("31", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/t_50/dmf_999.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
+
+        restored_entry = restored_page_directory->getByID("32", snap);
+        ASSERT_TRUE(restored_entry.second.checkpoint_info.has_value());
+        EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
+        EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
+    }
 }
 CATCH
 
