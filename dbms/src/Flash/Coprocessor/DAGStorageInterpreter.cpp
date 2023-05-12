@@ -352,10 +352,11 @@ SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_statu
 
 void DAGStorageInterpreter::executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
 {
+    /// handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
+
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
-
-    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
