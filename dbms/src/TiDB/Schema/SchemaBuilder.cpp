@@ -47,6 +47,8 @@
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
 
+#include "Storages/Transaction/StorageEngineType.h"
+
 namespace DB
 {
 using namespace TiDB;
@@ -1094,8 +1096,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
     /// Normal CREATE table.
     if (table_info->engine_type == StorageEngine::UNSPECIFIED)
     {
-        auto & tmt_context = context.getTMTContext();
-        table_info->engine_type = tmt_context.getEngineType();
+        table_info->engine_type = TiDB::StorageEngine::DT;
     }
 
     String stmt = createTableStmt(*db_info, *table_info, name_mapper, log);
