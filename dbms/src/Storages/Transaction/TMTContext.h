@@ -121,6 +121,8 @@ public:
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
+    ::TiDB::StorageEngine getEngineType() const { return engine; }
+
     void reloadConfig(const Poco::Util::AbstractConfiguration & config);
 
     bool isInitialized() const;
@@ -160,6 +162,8 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
     MPPTaskManagerPtr mpp_task_manager;
+
+    ::TiDB::StorageEngine engine;
 
     std::atomic_uint64_t batch_read_index_timeout_ms;
     std::atomic_uint64_t wait_index_timeout_ms;

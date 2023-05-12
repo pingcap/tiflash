@@ -152,6 +152,7 @@ void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings te
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"system"};
+    raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.for_unit_test = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
