@@ -14,6 +14,7 @@
 
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
+#include <Interpreters/ProbeProcessInfo.h>
 
 namespace DB
 {

@@ -20,6 +20,7 @@
 
 namespace DB
 {
+struct ProbeProcessInfo;
 /// crossProbeBlock construct the probe block using CrossJoinAdder, the right rows will be added to probe block row by row, used when right side has few rows
 Block crossProbeBlock(
     ASTTableJoin::Kind kind,

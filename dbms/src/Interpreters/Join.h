@@ -25,6 +25,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
+#include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
 #include <shared_mutex>
@@ -33,7 +34,6 @@ namespace DB
 {
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 struct RestoreInfo
 {

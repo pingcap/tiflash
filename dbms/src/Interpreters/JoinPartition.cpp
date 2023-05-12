@@ -17,6 +17,7 @@
 #include <Common/FailPoint.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
+#include <Interpreters/ProbeProcessInfo.h>
 
 #include <ext/scope_guard.h>
 
