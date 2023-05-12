@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -58,7 +59,7 @@ try
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
-    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client, PS::V3::universal::PageDirectoryPtr{});
     ASSERT_FALSE(last_mf.has_value());
 
     auto info = mgr.allocateNewUploadLocksInfo();
@@ -134,7 +135,7 @@ try
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
-    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client, PS::V3::universal::PageDirectoryPtr{});
     ASSERT_FALSE(last_mf.has_value());
 
     // Mock FAP ingest following pages from another store

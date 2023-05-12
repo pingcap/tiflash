@@ -51,11 +51,18 @@ public:
 
     bool uploadCheckpoint();
 
+    // Set a flag for sync all data to remote store at next checkpoint
+    void setSyncAllData();
+
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
     void shutdown();
 
-    bool uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store);
+    bool uploadCheckpointImpl(
+        const metapb::Store & store_info,
+        const S3::S3LockClientPtr & s3lock_client,
+        const DM::Remote::IDataStorePtr & remote_store,
+        bool force_sync_data);
 
     static UniversalPageStorageServicePtr
     createForTest(
@@ -73,6 +80,10 @@ private:
 public:
 #endif
     std::atomic_bool is_checkpoint_uploading{false};
+
+    // Once this flag is set, all data will be synced to remote store at next time
+    // `uploadCheckpoint` is called.
+    std::atomic_bool sync_all_at_next_upload{false};
 
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;

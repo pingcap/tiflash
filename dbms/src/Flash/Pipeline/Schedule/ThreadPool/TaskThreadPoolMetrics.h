@@ -16,30 +16,36 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
-#include <list>
-#include <mutex>
+#include <atomic>
 
 namespace DB
 {
-class WaitingTaskList
+template <bool is_cpu>
+class TaskThreadPoolMetrics
 {
 public:
-    /// return false if the waiting task list had been closed.
-    // this function will wait until `!waiting_tasks.empty()`
-    bool take(std::list<TaskPtr> & local_waiting_tasks) noexcept;
-    // this function will return immediately.
-    bool tryTake(std::list<TaskPtr> & local_waiting_tasks) noexcept;
+    TaskThreadPoolMetrics();
 
-    void submit(TaskPtr && task) noexcept;
+    void incPendingTask(size_t task_count);
 
-    void submit(std::list<TaskPtr> & tasks) noexcept;
+    void decPendingTask();
 
-    void close();
+    void elapsedPendingTime(TaskPtr & task);
+
+    void incExecutingTask();
+
+    void decExecutingTask();
+
+    void addExecuteTime(TaskPtr & task, UInt64 value);
+
+    void incThreadCnt();
+
+    void decThreadCnt();
+
+    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
 
 private:
-    std::mutex mu;
-    std::condition_variable cv;
-    std::list<TaskPtr> waiting_tasks;
-    bool is_closed = false;
+    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
 };
+
 } // namespace DB

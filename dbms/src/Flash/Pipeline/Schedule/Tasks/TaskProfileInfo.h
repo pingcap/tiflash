@@ -14,33 +14,42 @@
 
 #pragma once
 
+#include <Common/Stopwatch.h>
+
 #include <atomic>
 
 namespace DB
 {
-// TODO support more metrics after profile info of task has supported.
-template <bool is_cpu>
-class TaskThreadPoolMetrics
+class TaskProfileInfo
 {
 public:
-    TaskThreadPoolMetrics();
+    void startTimer() noexcept;
 
-    void incPendingTask(size_t task_count);
+    UInt64 elapsedFromPrev() noexcept;
 
-    void decPendingTask();
+    void addCPUExecuteTime(UInt64 value) noexcept;
 
-    void incExecutingTask();
+    void elapsedCPUPendingTime() noexcept;
 
-    void decExecutingTask();
+    void addIOExecuteTime(UInt64 value) noexcept;
 
-    void incThreadCnt();
+    void elapsedIOPendingTime() noexcept;
 
-    void decThreadCnt();
+    void elapsedAwaitTime() noexcept;
 
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+    String toJson() const;
+
+    UInt64 getCPUExecuteTime() const;
+    UInt64 getIOExecuteTime() const;
 
 private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+
+    UInt64 cpu_execute_time = 0;
+    UInt64 cpu_pending_time = 0;
+    UInt64 io_execute_time = 0;
+    UInt64 io_pending_time = 0;
+    UInt64 await_time = 0;
 };
 
 } // namespace DB
