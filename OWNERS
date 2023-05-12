@@ -6,18 +6,25 @@ approvers:
   - zanmato1984
   # - tiflash-committers
   - bestwoody
+  - birdstorm
   - breezewish
   - CalvinNeo
   - fuzhe1989
+  - fzhedu
   - gengliqi
   - guo-shaoge
   - hehechen
+  - hongyunya
   - hongyunyan
   - ichn-hu
   - JaySon-Huang
+  - jiaqizho
   - JinheLin
   - lidezhu
+  - littlefall
   - Lloyd-Pottiger
+  - mengxin9014
+  - SchrodingerZhu
   - SeaRise
   - solotzg
   - windtalker
@@ -28,4 +35,5 @@ approvers:
 reviewers:
   # - tiflash-reviewers
   - LiSong0214
+  - xzhangxian1008
   - ywqzzy
