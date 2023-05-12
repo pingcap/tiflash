@@ -82,6 +82,37 @@ protected:
     LoggerPtr log;
 };
 
+TEST_F(OwnerManagerTest, SessionKeepaliveAfterCancelled)
+{
+    auto etcd_endpoint = Poco::Environment::get("ETCD_ENDPOINT", "");
+    if (etcd_endpoint.empty())
+    {
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
+        return;
+    }
+
+    auto ctx = TiFlashTestEnv::getContext();
+    pingcap::ClusterConfig config;
+    pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
+    auto etcd_client = DB::Etcd::Client::create(pd_client, config);
+
+    auto keep_alive_ctx = std::make_unique<grpc::ClientContext>();
+    auto session = etcd_client->createSession(keep_alive_ctx.get(), /*leader_ttl*/ 60);
+
+    ASSERT_TRUE(session->keepAliveOne());
+
+    keep_alive_ctx->TryCancel(); // mock that PD is down
+
+    ASSERT_FALSE(session->keepAliveOne());
+    ASSERT_FALSE(session->keepAliveOne()); // background task wake again, should return false instead of crashes
+}
+
 TEST_F(OwnerManagerTest, BeOwner)
 try
 {
