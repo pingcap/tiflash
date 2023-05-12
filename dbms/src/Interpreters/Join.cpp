@@ -1142,7 +1142,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
         }
         else
         {
-            /// for matched rows, use incremental probe, that is each `doJoinBlockCross` only handle part of the probed data for one left row, the internal
+            /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
             /// state is saved in `probe_process_info`
             probe_process_info.cutFilterAndOffsetVector(0, 1);
             handleOtherConditionsForOneProbeRow(block, probe_process_info);
@@ -1457,7 +1457,7 @@ void Join::workAfterBuildFinish()
             blocks.push_back(merged_block);
             original_blocks.push_back(merged_block);
         }
-        /// any join should never use NO_COPY_RIGHT_BLOCK
+        /// since shallow_copy_probe_threshold is at least 1, any join will never use SHALLOW_COPY_RIGHT_BLOCK
         cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
             ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
             : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
