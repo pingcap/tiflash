@@ -366,13 +366,20 @@ TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
 try
 {
     context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t1_not_null", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
     context.addMockTable("cross_join", "t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2_not_null", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {"1", "3", {}, "2"}), toNullableVec<String>("d", {"3", "4", "3", {}})});
     context.addMockTable("cross_join", "empty_table_t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
-    context.addMockTable("cross_join", "empty_table_t2", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
+    context.addMockTable("cross_join", "empty_table_t1_not_null", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {}), toNullableVec<String>("b", {})});
+    context.addMockTable("cross_join", "empty_table_t2_not_null", {{"c", TiDB::TP::TypeString}, {"d", TiDB::TP::TypeString}}, {toNullableVec<String>("c", {}), toNullableVec<String>("d", {})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num * 4] = {
         // non-empty inner non-empty
-        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {
+            toNullableVec<String>({"2", "2", "2", "2"}),
+            toNullableVec<String>({"4", "4", "4", "4"}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}})},
         // empty inner non-empty
         {},
         // non-empty inner empty
@@ -380,17 +387,33 @@ try
         // empty inner empty
         {},
         // non-empty left non-empty
-        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
+        {
+            toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}),
+            toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}),
+            toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
         // empty left non-empty
         {},
         // non-empty left empty
-        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}})},
+        {
+            toNullableVec<String>({"1", "2", {}, "1"}),
+            toNullableVec<String>({"3", "4", "3", {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}})},
         // empty left empty
         {},
         // non-empty right non-empty
-        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
+        {
+            toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}),
+            toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}),
+            toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}),
+            toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
         // empty right non-empty
-        {toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({{}, {}, {}, {}}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        {
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({{}, {}, {}, {}}),
+            toNullableVec<String>({"1", "3", {}, "2"}),
+            toNullableVec<String>({"3", "4", "3", {}})},
         // non-empty right empty
         {},
         // empty right empty
