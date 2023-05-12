@@ -125,7 +125,9 @@ void Task::finalize()
     switchStatus(ExecTaskStatus::FINALIZE);
 
     finalizeImpl();
+#ifndef NDEBUG
     LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
+#endif // !NDEBUG
 }
 
 #undef CHECK_FINISHED
@@ -134,7 +136,9 @@ void Task::switchStatus(ExecTaskStatus to)
 {
     if (exec_status != to)
     {
+#ifndef NDEBUG
         LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+#endif // !NDEBUG
         addToStatusMetrics(to);
         exec_status = to;
     }
