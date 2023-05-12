@@ -163,7 +163,7 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline
+        && (context.getSettingsRef().enable_pipeline || context.getSettingsRef().force_enable_pipeline)
         && context.getSharedContextDisagg()->notDisaggregatedMode())
     {
         if (auto res = executeAsPipeline(context, internal); res)

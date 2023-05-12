@@ -1505,7 +1505,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // For test mode, TaskScheduler is controlled by test case.
-    bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
+    bool enable_pipeline = (settings.enable_pipeline || settings.force_enable_pipeline) && !global_context->isTest();
     if (enable_pipeline)
     {
         auto get_pool_size = [](const auto & setting) {
