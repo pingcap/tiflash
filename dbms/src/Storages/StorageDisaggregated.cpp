@@ -47,8 +47,7 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    /// S3 config is enabled on the TiFlash compute node, let's read
-    /// data from S3.
+    /// S3 config is enabled on the TiFlash compute node, let's read data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
         return readThroughS3(db_context, query_info, num_streams);
