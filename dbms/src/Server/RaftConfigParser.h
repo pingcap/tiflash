@@ -48,6 +48,9 @@ struct TiFlashRaftConfig
 
     bool for_unit_test = false;
 
+    static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
+    TiDB::StorageEngine engine = DEFAULT_ENGINE;
+
 public:
     TiFlashRaftConfig() = default;
 
