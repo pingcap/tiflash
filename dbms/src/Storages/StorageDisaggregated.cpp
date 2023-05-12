@@ -51,10 +51,14 @@ BlockInputStreams StorageDisaggregated::read(
     /// data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readFromWriteNode(db_context, query_info, num_streams);
+        return readThroughS3(db_context, query_info, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
+    return readThroughExchange(num_streams);
+}
 
+BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+{
     auto remote_table_ranges = buildRemoteTableRanges();
 
     // only send to tiflash node with label {"engine": "tiflash"}
@@ -71,7 +75,9 @@ BlockInputStreams StorageDisaggregated::read(
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
-    filterConditions(std::move(source_columns), pipeline);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    // TODO: push down filter conditions to write node
+    filterConditions(*analyzer, pipeline);
 
     return pipeline.streams;
 }
@@ -289,14 +295,12 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, *analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
