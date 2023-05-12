@@ -57,9 +57,6 @@ public:
     {}
 
     virtual ~Operator() = default;
-    // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus await();
-    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus executeIO();
@@ -91,6 +88,27 @@ protected:
     Block header;
 };
 
+class Awaitable
+{
+public:
+    Awaitable(PipelineExecutorStatus & exec_status_, Operator * op_)
+        : exec_status(exec_status_)
+        , op(op_)
+    {}
+
+    virtual ~Awaitable() = default;
+
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
+    OperatorStatus await();
+    virtual OperatorStatus awaitImpl() = 0;
+
+    Operator * getOp() const { return op; }
+
+protected:
+    PipelineExecutorStatus & exec_status;
+    Operator * op;
+};
+
 // The running status returned by Source can only be `HAS_OUTPUT`.
 class SourceOp : public Operator
 {
@@ -103,8 +121,6 @@ public:
     // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
     OperatorStatus read(Block & block);
     virtual OperatorStatus readImpl(Block & block) = 0;
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::HAS_OUTPUT; }
 };
 using SourceOpPtr = std::unique_ptr<SourceOp>;
 using SourceOps = std::vector<SourceOpPtr>;
@@ -133,8 +149,6 @@ public:
         transformHeaderImpl(header_);
         setHeader(header_);
     }
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using TransformOpPtr = std::unique_ptr<TransformOp>;
 using TransformOps = std::vector<TransformOpPtr>;
@@ -151,8 +165,6 @@ public:
 
     OperatorStatus write(Block && block);
     virtual OperatorStatus writeImpl(Block && block) = 0;
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using SinkOpPtr = std::unique_ptr<SinkOp>;
 } // namespace DB

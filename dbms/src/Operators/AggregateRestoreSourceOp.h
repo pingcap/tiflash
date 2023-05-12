@@ -23,6 +23,7 @@ class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
 class AggregateRestoreSourceOp : public SourceOp
+    , public Awaitable
 {
 public:
     AggregateRestoreSourceOp(

@@ -21,6 +21,7 @@ namespace DB
 {
 // The sink operator for getting the execution results.
 class GetResultSinkOp : public SinkOp
+    , public Awaitable
 {
 public:
     GetResultSinkOp(
@@ -28,6 +29,7 @@ public:
         const String & req_id,
         const ResultQueuePtr & result_queue_)
         : SinkOp(exec_status_, req_id)
+        , Awaitable(exec_status_, this)
         , result_queue(result_queue_)
     {
         assert(result_queue);

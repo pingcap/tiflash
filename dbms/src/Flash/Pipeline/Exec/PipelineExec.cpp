@@ -46,6 +46,41 @@ namespace DB
         return (op_status);                                                                       \
     }
 
+#define HANDLE_AWAITABLE_OP_STATUS(op, op_status)                                                 \
+    switch (op_status)                                                                            \
+    {                                                                                             \
+    case OperatorStatus::NEED_INPUT:                                                              \
+        break;                                                                                    \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
+    case OperatorStatus::IO:                                                                      \
+        assert(!io_op);                                                                           \
+        assert(op);                                                                               \
+        io_op.emplace((op)->getOp());                                                             \
+    /* For unexpected status, an immediate return is required. */                                 \
+    default:                                                                                      \
+        return (op_status);                                                                       \
+    }
+
+PipelineExec::PipelineExec(
+    SourceOpPtr && source_op_,
+    TransformOps && transform_ops_,
+    SinkOpPtr && sink_op_)
+    : source_op(std::move(source_op_))
+    , transform_ops(std::move(transform_ops_))
+    , sink_op(std::move(sink_op_))
+{
+#define FILL_AWAITABLE(op)                                                   \
+    if (auto * awaitable = dynamic_cast<Awaitable *>((op).get()); awaitable) \
+        awaitables.push_back(awaitable);
+    FILL_AWAITABLE(sink_op);
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
+    {
+        FILL_AWAITABLE(*it);
+    }
+    FILL_AWAITABLE(source_op);
+#undef FILL_AWAITABLE
+}
+
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
@@ -148,20 +183,17 @@ OperatorStatus PipelineExec::await()
 }
 OperatorStatus PipelineExec::awaitImpl()
 {
-    auto op_status = sink_op->await();
-    HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
+    for (auto & awaitable : awaitables)
     {
-        // If the transform_op returns `NEED_INPUT`,
-        // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
-        op_status = (*it)->await();
-        HANDLE_OP_STATUS((*it), op_status, OperatorStatus::NEED_INPUT);
+        auto op_status = awaitable->await();
+        HANDLE_AWAITABLE_OP_STATUS(awaitable, op_status);
     }
-    op_status = source_op->await();
-    HANDLE_LAST_OP_STATUS(source_op, op_status);
+    // await must eventually return HAS_OUTPUT.
+    return OperatorStatus::HAS_OUTPUT;
 }
 
 #undef HANDLE_OP_STATUS
 #undef HANDLE_LAST_OP_STATUS
+#undef HANDLE_AWAITABLE_OP_STATUS
 
 } // namespace DB

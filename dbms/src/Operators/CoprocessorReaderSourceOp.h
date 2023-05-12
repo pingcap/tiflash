@@ -24,6 +24,7 @@ namespace DB
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class CoprocessorReaderSourceOp : public SourceOp
+    , public Awaitable
 {
 public:
     CoprocessorReaderSourceOp(

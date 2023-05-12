@@ -31,7 +31,7 @@ extern const char random_pipeline_model_cancel_failpoint[];
     if (unlikely(exec_status.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
-OperatorStatus Operator::await()
+OperatorStatus Awaitable::await()
 {
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.

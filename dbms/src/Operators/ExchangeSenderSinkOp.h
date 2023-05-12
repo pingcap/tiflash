@@ -21,6 +21,7 @@
 namespace DB
 {
 class ExchangeSenderSinkOp : public SinkOp
+    , public Awaitable
 {
 public:
     ExchangeSenderSinkOp(
@@ -28,6 +29,7 @@ public:
         const String & req_id,
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_status_, req_id)
+        , Awaitable(exec_status_, this)
         , writer(std::move(writer))
     {
     }

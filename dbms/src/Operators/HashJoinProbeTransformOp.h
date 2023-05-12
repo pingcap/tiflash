@@ -20,6 +20,7 @@
 namespace DB
 {
 class HashJoinProbeTransformOp : public TransformOp
+    , public Awaitable
 {
 public:
     HashJoinProbeTransformOp(

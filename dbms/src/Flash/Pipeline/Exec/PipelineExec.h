@@ -29,11 +29,7 @@ public:
     PipelineExec(
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
-        SinkOpPtr && sink_op_)
-        : source_op(std::move(source_op_))
-        , transform_ops(std::move(transform_ops_))
-        , sink_op(std::move(sink_op_))
-    {}
+        SinkOpPtr && sink_op_);
 
     void executePrefix();
     void executeSuffix();
@@ -59,6 +55,9 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+
+    // hold the operators that awaitable.
+    std::vector<Awaitable *> awaitables;
 
     // hold the operator which is ready for executing io.
     std::optional<Operator *> io_op;

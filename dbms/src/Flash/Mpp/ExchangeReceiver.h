@@ -123,7 +123,7 @@ public:
     void close();
 
     ReceiveResult receive(size_t stream_id);
-    ReceiveResult nonBlockingReceive(size_t stream_id);
+    ReceiveResult tryReceive(size_t stream_id);
 
     ExchangeReceiverResult toExchangeReceiveResult(
         ReceiveResult & recv_result,
@@ -144,6 +144,8 @@ public:
     std::vector<MsgChannelPtr> & getMsgChannels() { return msg_channels; }
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
+
+    void verifyStreamId(size_t stream_id) const;
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -187,11 +189,8 @@ private:
         const RecvMsgPtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    ReceiveResult receive(
-        size_t stream_id,
-        std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func);
+    ReceiveResult toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg);
 
-private:
     void prepareMsgChannels();
     void prepareGRPCReceiveQueue();
     void addLocalConnectionNum();
@@ -213,6 +212,7 @@ private:
         return !disaggregated_dispatch_reqs.empty();
     }
 
+private:
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
