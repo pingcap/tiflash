@@ -103,7 +103,7 @@ TEST_F(OwnerManagerTest, SessionKeepaliveAfterCancelled)
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
 
     auto keep_alive_ctx = std::make_unique<grpc::ClientContext>();
-    auto session = etcd_client->createSession(keep_alive_ctx.get(), /*leader_ttl*/60);
+    auto session = etcd_client->createSession(keep_alive_ctx.get(), /*leader_ttl*/ 60);
 
     ASSERT_TRUE(session->keepAliveOne());
 
