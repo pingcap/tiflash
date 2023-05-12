@@ -112,6 +112,8 @@ void ProbeProcessInfo::prepareForCrossProbe(
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(block.rows());
 
+    /// Should convert all the columns in block to nullable if it is cross right join, here we don't need
+    /// to do so because cross_right join is converted to cross left join during compile
     result_block_schema = block.cloneEmpty();
     for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
     {

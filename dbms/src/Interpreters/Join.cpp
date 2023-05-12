@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
@@ -30,8 +31,6 @@
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
-
-#include "Columns/ColumnsCommon.h"
 
 namespace DB
 {
@@ -1439,6 +1438,9 @@ void Join::workAfterBuildFinish()
 
     if (isCrossJoin(kind))
     {
+        original_blocks.clear();
+        for (const auto & block : blocks)
+            original_blocks.push_back(block);
         right_rows_to_be_added_when_matched_for_cross_join = 0;
         for (const auto & block : original_blocks)
             right_rows_to_be_added_when_matched_for_cross_join += block.rows();

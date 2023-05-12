@@ -298,7 +298,7 @@ struct Settings
     M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")                                                                                                                                                             \
     M(SettingUInt64, async_recv_version, 2, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
     M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")                                                                                                    \
-    M(SettingUInt64, shallow_copy_cross_probe_threshold, 1, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")
+    M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")
 
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
