@@ -144,7 +144,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
         // execute partial sort and store the sorted block in `sorted_blocks`.
         SortHelper::removeConstantsFromBlock(block);
         sortBlock(block, order_desc, limit);
-        sum_bytes_in_blocks += block.bytes();
+        sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 
         if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)

@@ -21,6 +21,17 @@ namespace tests
 {
 class RegexpReplace : public Regexp
 {
+protected:
+    const char * url1 = "https://go.mail/folder-1/online/ru-en/#lingvo/#1О 50000&price_ashka/rav4/page=/check.xml";
+    const char * url2 = "http://saint-peters-total=меньше 1000-rublyayusche/catalogue/kolasuryat-v-2-kadyirovka-personal/serial_id=0&input_state/apartments/mokrotochki.net/upravda.ru/yandex.ru/GameMain.aspx?mult]/on/orders/50195&text=мыс и орелка в Балаш смотреть онлайн бесплатно в хорошем камбалакс&lr=20030393833539353862643188&op_promo=C-Teaser_id=06d162.html";
+
+    const char * url1_repl = "a$12$13";
+    const char * url1_res = "ago.mail2go.mail3";
+
+    const char * url2_repl = "aaa$1233";
+    const char * url2_res = "aaasaint-peters-total=меньше 1000-rublyayusche233";
+
+    const char * url_pat = "^https?://(?:www\\.)?([^/]+)/.*$";
 };
 
 struct RegexpReplaceCase
@@ -129,35 +140,35 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
     auto uint8_type = std::make_shared<DataTypeUInt8>();
     auto nullable_uint8_type = makeNullable(uint8_type);
 
-    std::vector<String> input_strings{"abb\nabbabb", "abbcabbabb", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<UInt8> input_string_nulls{0, 1, 0, 0, 0};
+    std::vector<String> input_strings{"abb\nabbabb", "abbcabbabb", "abbabbabb", "ABBABBABB", "ABB\nABBABB", url1, url2};
+    std::vector<UInt8> input_string_nulls{0, 1, 0, 0, 0, 0, 0};
 
-    std::vector<String> patterns{"^a.*", "bb", "abc", "abb", "abb.abb"};
-    std::vector<UInt8> pattern_nulls{0, 0, 1, 0, 0};
+    std::vector<String> patterns{"^a.*", "bb", "abc", "abb", "abb.abb", url_pat, url_pat};
+    std::vector<UInt8> pattern_nulls{0, 0, 1, 0, 0, 0, 0};
 
-    std::vector<String> replacements{"xxx", "xxx", "xxx", "xxx", "xxx"};
-    std::vector<UInt8> replacement_nulls{0, 0, 1, 0, 0};
+    std::vector<String> replacements{"xxx", "xxx", "xxx", "xxx", "xxx", url1_repl, url2_repl};
+    std::vector<UInt8> replacement_nulls{0, 0, 1, 0, 0, 0, 0};
 
-    std::vector<Int64> pos{1, 3, 2, 2, 1};
-    std::vector<UInt8> pos_nulls{0, 0, 0, 1, 0};
+    std::vector<Int64> pos{1, 3, 2, 2, 1, 1, 1};
+    std::vector<UInt8> pos_nulls{0, 0, 0, 1, 0, 0, 0};
 
-    std::vector<Int64> occ{0, 2, 0, 0, 0};
-    std::vector<UInt8> occ_nulls{1, 0, 0, 0, 0};
+    std::vector<Int64> occ{0, 2, 0, 0, 0, 1, 0};
+    std::vector<UInt8> occ_nulls{1, 0, 0, 0, 0, 0, 0};
 
-    std::vector<String> match_types{"is", "", "", "i", "ism"};
-    std::vector<UInt8> match_type_nulls{1, 0, 0, 0, 0};
+    std::vector<String> match_types{"is", "", "", "i", "ism", "", ""};
+    std::vector<UInt8> match_type_nulls{1, 0, 0, 0, 0, 0, 0};
 
-    std::vector<String> results{"xxx\nabbabb", "axxxcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> results_with_pos{"xxx\nabbabb", "abbcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> results_with_pos_occ{"xxx\nabbabb", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> results_with_pos_occ_match_type{"xxx", "abbcabbaxxx", "abbabbabb", "ABBxxxxxx", "xxxABB"};
-    std::vector<String> results_with_pos_occ_match_type_binary{"xxx", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> results{"xxx\nabbabb", "axxxcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB", url1_res, url2_res};
+    std::vector<String> results_with_pos{"xxx\nabbabb", "abbcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB", url1_res, url2_res};
+    std::vector<String> results_with_pos_occ{"xxx\nabbabb", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB", url1_res, url2_res};
+    std::vector<String> results_with_pos_occ_match_type{"xxx", "abbcabbaxxx", "abbabbabb", "ABBxxxxxx", "xxxABB", url1_res, url2_res};
+    std::vector<String> results_with_pos_occ_match_type_binary{"xxx", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB", url1_res, url2_res};
 
-    std::vector<String> vec_results{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> vec_results_with_pos{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> vec_results_with_pos_occ{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
-    std::vector<String> vec_results_with_pos_occ_match_type{"xxx", "xxx", "xxx", "xxx", "xxx"};
-    std::vector<String> vec_results_with_pos_occ_match_type_binary{"xxx", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> vec_results{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB", url1, url2};
+    std::vector<String> vec_results_with_pos{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB", url1, url2};
+    std::vector<String> vec_results_with_pos_occ{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB", url1, url2};
+    std::vector<String> vec_results_with_pos_occ_match_type{"xxx", "xxx", "xxx", "xxx", "xxx", url1, url2};
+    std::vector<String> vec_results_with_pos_occ_match_type_binary{"xxx", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB", url1, url2};
 
     size_t row_size = input_strings.size();
     auto const_string_null_column = createConstColumn<Nullable<String>>(row_size, {});
@@ -278,6 +289,7 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", "121212", "1.", "aa", 1, 3, ""},
                       {"121212", "121212", "1.", "aa", 1, 4, ""},
+                      {"sea1dad8 1lal8", "seafood fool", "foo(.?)", "1$1a$18", 1, 0, ""},
                       {"啊ah好a哈哈", "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
@@ -304,6 +316,7 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 3, ""},
                       {"121212", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 4, ""},
+                      {"seafood 1lal8", {0, 0, 0, 0, 0, 0}, "seafood fool", "foo(.?)", "1$1a$18", 1, 2, ""},
                       {"啊ah好a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", {0, 0, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 5, ""},

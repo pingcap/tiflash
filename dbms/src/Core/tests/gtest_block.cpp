@@ -51,7 +51,7 @@ try
         }
     }
     Block block(columns);
-    ASSERT_TRUE(block.bytes() == block.estimateBytesForSpill());
+    ASSERT_TRUE(block.allocatedBytes() == block.estimateBytesForSpill());
 }
 CATCH
 
@@ -81,7 +81,7 @@ try
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
         Block block(columns);
-        ASSERT_NE(block.estimateBytesForSpill(), block.bytes());
+        ASSERT_NE(block.estimateBytesForSpill(), block.allocatedBytes());
         ASSERT_EQ(block.estimateBytesForSpill(), data_size[i] * 10);
     }
     /// case 2, agg function allocate memory in arena
@@ -102,7 +102,7 @@ try
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
         Block block(columns);
-        ASSERT_EQ(block.estimateBytesForSpill(), block.bytes());
+        ASSERT_EQ(block.estimateBytesForSpill(), block.allocatedBytes());
     }
 }
 CATCH

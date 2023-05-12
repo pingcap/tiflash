@@ -176,14 +176,14 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
 }
 
-void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
+void MPPTunnel::forceWrite(TrackedMppDataPacketPtr && data)
 {
-    LOG_TRACE(log, "start non blocking writing");
+    LOG_TRACE(log, "start force writing");
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
-    if (tunnel_sender->nonBlockingPush(std::move(data)))
+    if (tunnel_sender->forcePush(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
@@ -277,7 +277,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", magic_enum::enum_name(mode));
         RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
 
-        auto kick_func_for_test = call_data->getKickFuncForTest();
+        auto kick_func_for_test = call_data->getGRPCSendKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
             async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);
@@ -374,7 +374,7 @@ bool MPPTunnel::isReadyForWrite() const
         return tunnel_sender->isReadyForWrite();
     default:
         // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
-        // and then handled by `nonBlockingWrite`.
+        // and then handled by `forceWrite`.
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return true;
     }

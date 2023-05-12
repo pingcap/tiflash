@@ -102,19 +102,34 @@ inline int getDefaultFlags()
     return flags;
 }
 
+template <bool need_subpattern = false>
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String mode = re2Util::getRE2ModeModifiers(match_type, collator);
-    if (mode.empty())
-        return pattern;
+    if (pattern.empty())
+        throw Exception("Length of the pattern argument must be greater than 0.");
 
-    return fmt::format("{}{}", mode, pattern);
+    String mode = re2Util::getRE2ModeModifiers(match_type, collator);
+    String final_pattern;
+    if constexpr (need_subpattern)
+        final_pattern = fmt::format("({})", pattern);
+    else
+        final_pattern = pattern;
+
+    if (mode.empty())
+        return final_pattern;
+
+    final_pattern = fmt::format("{}{}", mode, final_pattern);
+    return final_pattern;
 }
 
-inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
+template <bool need_subpattern = false>
+inline Regexps::Regexp createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator, int flags = 0)
 {
-    String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
-    return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
+    String final_pattern = addMatchTypeForPattern<need_subpattern>(pattern, match_type, collator);
+    if (flags == 0)
+        return Regexps::createRegexp<false>(final_pattern, getDefaultFlags());
+    else
+        return Regexps::createRegexp<false>(final_pattern, flags);
 }
 
 // Only int types used in ColumnsNumber.h can be valid
@@ -819,23 +834,22 @@ public:
     //  - only pattern column is provided and it's a constant column
     //  - pattern and match type columns are provided and they are both constant columns
     template <bool need_subpattern, typename ExprT, typename MatchTypeT>
-    std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
+    std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator, int flags = 0) const
     {
         if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
             return nullptr;
 
         String final_pattern = pat_param.getString(0);
-        if (unlikely(final_pattern.empty()))
+        if (unlikely(final_pattern.empty())) // TODO delete it
             throw Exception(EMPTY_PAT_ERR_MSG);
 
-        if (need_subpattern)
-            final_pattern = fmt::format("({})", final_pattern);
-
         String match_type = match_type_param.getString(0);
-        final_pattern = FunctionsRegexp::addMatchTypeForPattern(final_pattern, match_type, collator);
+        final_pattern = FunctionsRegexp::addMatchTypeForPattern<need_subpattern>(final_pattern, match_type, collator);
 
-        int flags = FunctionsRegexp::getDefaultFlags();
-        return std::make_unique<Regexps::Regexp>(final_pattern, flags);
+        if (flags == 0)
+            return std::make_unique<Regexps::Regexp>(final_pattern, FunctionsRegexp::getDefaultFlags());
+        else
+            return std::make_unique<Regexps::Regexp>(final_pattern, flags);
     }
 
     // Check if we can memorize the regexp

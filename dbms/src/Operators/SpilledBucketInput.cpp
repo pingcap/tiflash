@@ -29,7 +29,7 @@ bool SpilledBucketInput::needLoad() const
 
 void SpilledBucketInput::load()
 {
-    assert(needLoad());
+    RUNTIME_CHECK(needLoad());
     Block ret = stream->read();
     if unlikely (!ret)
     {
@@ -39,7 +39,7 @@ void SpilledBucketInput::load()
     else
     {
         /// Only two level data can be spilled.
-        assert(ret.info.bucket_num != -1);
+        RUNTIME_CHECK(ret.info.bucket_num != -1);
         output.emplace(std::move(ret));
     }
 }
@@ -51,13 +51,13 @@ bool SpilledBucketInput::hasOutput() const
 
 Int32 SpilledBucketInput::bucketNum() const
 {
-    assert(hasOutput());
+    RUNTIME_CHECK(hasOutput());
     return output->info.bucket_num;
 }
 
 Block SpilledBucketInput::popOutput()
 {
-    assert(hasOutput());
+    RUNTIME_CHECK(hasOutput());
     Block ret = std::move(*output);
     output.reset();
     return ret;
@@ -65,7 +65,7 @@ Block SpilledBucketInput::popOutput()
 
 Int32 SpilledBucketInput::getMinBucketNum(const SpilledBucketInputs & inputs)
 {
-    assert(!inputs.empty());
+    RUNTIME_CHECK(!inputs.empty());
     Int32 min_bucket_num = NUM_BUCKETS;
     for (const auto & input : inputs)
     {
@@ -84,7 +84,7 @@ BlocksList SpilledBucketInput::popOutputs(SpilledBucketInputs & inputs, Int32 ta
         if (input.hasOutput() && target_bucket_num == input.bucketNum())
             bucket_data.push_back(input.popOutput());
     }
-    assert(!bucket_data.empty());
+    RUNTIME_CHECK(!bucket_data.empty());
     return bucket_data;
 }
 } // namespace DB

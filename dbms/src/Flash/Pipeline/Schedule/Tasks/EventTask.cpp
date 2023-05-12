@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_pipeline_model_task_run_failpoint[];
-} // namespace FailPoints
-
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_)
@@ -43,69 +37,32 @@ EventTask::EventTask(
     RUNTIME_CHECK(event);
 }
 
-EventTask::~EventTask()
+void EventTask::finalizeImpl()
 {
-    assert(event);
+    try
+    {
+        doFinalizeImpl();
+    }
+    catch (...)
+    {
+        exec_status.onErrorOccurred(std::current_exception());
+    }
     event->onTaskFinish();
     event.reset();
 }
 
-void EventTask::finalize() noexcept
-{
-    try
-    {
-        RUNTIME_CHECK(!finalized);
-        finalized = true;
-        finalizeImpl();
-    }
-    catch (...)
-    {
-        exec_status.onErrorOccurred(std::current_exception());
-    }
-}
-
-ExecTaskStatus EventTask::executeImpl() noexcept
+ExecTaskStatus EventTask::executeImpl()
 {
     return doTaskAction([&] { return doExecuteImpl(); });
 }
 
-ExecTaskStatus EventTask::executeIOImpl() noexcept
+ExecTaskStatus EventTask::executeIOImpl()
 {
     return doTaskAction([&] { return doExecuteIOImpl(); });
 }
 
-ExecTaskStatus EventTask::awaitImpl() noexcept
+ExecTaskStatus EventTask::awaitImpl()
 {
     return doTaskAction([&] { return doAwaitImpl(); });
 }
-
-ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action)
-{
-    if (unlikely(exec_status.isCancelled()))
-    {
-        finalize();
-        return ExecTaskStatus::CANCELLED;
-    }
-    try
-    {
-        auto status = action();
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint);
-        switch (status)
-        {
-        case FINISH_STATUS:
-            finalize();
-        default:
-            return status;
-        }
-    }
-    catch (...)
-    {
-        finalize();
-        assert(event);
-        LOG_WARNING(log, "error occurred and cancel the query");
-        exec_status.onErrorOccurred(std::current_exception());
-        return ExecTaskStatus::ERROR;
-    }
-}
-
 } // namespace DB

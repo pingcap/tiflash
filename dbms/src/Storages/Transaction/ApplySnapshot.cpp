@@ -84,9 +84,9 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryFlushRegion(old_region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(old_region, false);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, region_lock, "save previous region before apply");
+            persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
     }
 
@@ -209,7 +209,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         {
             try
             {
-                auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
+                auto tmp = region_table.tryWriteBlockByRegionAndFlush(new_region_wrap, false);
                 {
                     std::lock_guard lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
@@ -261,7 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, region_lock, "save current region after apply");
+        persistRegion(*new_region, &region_lock, "save current region after apply");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -506,7 +506,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
             return;
         try
         {
-            tmt.getRegionTable().tryFlushRegion(region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region, false);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
@@ -533,7 +533,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
     else
     {
-        persistRegion(*region, region_task_lock, __FUNCTION__);
+        persistRegion(*region, &region_task_lock, __FUNCTION__);
         return EngineStoreApplyRes::Persist;
     }
 }

@@ -23,24 +23,24 @@
 namespace DB
 {
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
-    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_size)
-    , io_task_thread_pool(*this, config.io_task_thread_pool_size)
+    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config)
+    , io_task_thread_pool(*this, config.io_task_thread_pool_config)
     , wait_reactor(*this)
 {
 }
 
 TaskScheduler::~TaskScheduler()
 {
-    cpu_task_thread_pool.close();
-    io_task_thread_pool.close();
-    wait_reactor.close();
+    cpu_task_thread_pool.finish();
+    io_task_thread_pool.finish();
+    wait_reactor.finish();
 
     cpu_task_thread_pool.waitForStop();
     io_task_thread_pool.waitForStop();
     wait_reactor.waitForStop();
 }
 
-void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
+void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 {
     if (unlikely(tasks.empty()))
         return;
@@ -52,7 +52,9 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
     for (auto & task : tasks)
     {
         assert(task);
+        task->profile_info.startTimer();
         // A quick check to avoid an unnecessary round into `running_tasks` then being scheduled out immediately.
+        // Skip `task->profile_info.elapsedAwaitTime()` here because the `await` will end instantly.
         auto status = task->await();
         switch (status)
         {
@@ -66,7 +68,7 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
             waiting_tasks.push_back(std::move(task));
             break;
         case FINISH_STATUS:
-            task.reset();
+            FINALIZE_TASK(task);
             break;
         default:
             UNEXPECTED_STATUS(logger, status);

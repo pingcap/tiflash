@@ -235,7 +235,7 @@ void JoinPartition::initMap()
 void JoinPartition::insertBlockForBuild(Block && block)
 {
     size_t rows = block.rows();
-    size_t bytes = block.bytes();
+    size_t bytes = block.estimateBytesForSpill();
     build_partition.rows += rows;
     build_partition.bytes += bytes;
     build_partition.blocks.push_back(block);
@@ -246,7 +246,7 @@ void JoinPartition::insertBlockForBuild(Block && block)
 void JoinPartition::insertBlockForProbe(Block && block)
 {
     size_t rows = block.rows();
-    size_t bytes = block.bytes();
+    size_t bytes = block.estimateBytesForSpill();
     probe_partition.rows += rows;
     probe_partition.bytes += bytes;
     probe_partition.blocks.push_back(std::move(block));
@@ -1148,8 +1148,8 @@ void NO_INLINE probeBlockImplTypeCase(
     }
 
     probe_process_info.end_row = i;
-    // if i == rows, it means that all probe rows have been joined finish.
-    probe_process_info.all_rows_joined_finish = (i == rows);
+    // if end_row == rows, it means that all probe rows have been joined finish.
+    probe_process_info.all_rows_joined_finish = (probe_process_info.end_row == rows);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool row_flagged_map>
