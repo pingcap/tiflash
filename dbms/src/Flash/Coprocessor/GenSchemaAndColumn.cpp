@@ -96,7 +96,6 @@ std::tuple<DM::ColumnDefinesPtr, size_t> genColumnDefinesForDisaggregatedRead(co
         // Even if the id is pk_column or extra_table_id, we still output it as
         // a exchange receiver output column
         const auto output_name = genNameForExchangeReceiver(i);
-        // TODO: Support generated column, which is a virtual column.
         switch (column_info.id)
         {
         case TiDBPkColumnID:

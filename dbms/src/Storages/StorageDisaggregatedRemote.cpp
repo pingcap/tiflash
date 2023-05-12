@@ -160,6 +160,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
+    // If the column is not in the columns of pushed down filter, append a cast to the column.
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
     std::unordered_set<ColumnID> col_id_set;
