@@ -406,7 +406,7 @@ private:
       */
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
-    void handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbeProcessInfo & probe_process_info) const;
+    void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
     Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 

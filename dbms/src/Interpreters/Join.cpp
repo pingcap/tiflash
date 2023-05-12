@@ -31,6 +31,8 @@
 
 #include <magic_enum.hpp>
 
+#include "Columns/ColumnsCommon.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -782,7 +784,8 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }
 
-void Join::handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbeProcessInfo & probe_process_info) const
+// Now this function only support cross join, todo support hash join
+void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const
 {
     assert(kind != ASTTableJoin::Kind::Cross_RightOuter);
     /// inside this function, we can ensure that
@@ -790,13 +793,18 @@ void Join::handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbePro
     /// 2. probe_process_info.offsets_to_replicate[0] == block.rows()
     /// 3. for anti semi join: probe_process_info.filter[0] == 1
     /// 4. for left outer semi join: match_helper_column[0] == 1
+    assert(probe_process_info.offsets_to_replicate->size() == 1);
+    assert((*probe_process_info.offsets_to_replicate)[0] == block.rows());
+
     non_equal_conditions.other_cond_expr->execute(block);
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
+    bool matched_row_count_in_current_block = 0;
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
+        assert(probe_process_info.has_row_matched == false);
         auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
         for (size_t i = 0; i < block.rows(); ++i)
         {
@@ -814,33 +822,31 @@ void Join::handleOtherConditionsForIncrementalCrossProbe(Block & block, ProbePro
     else
     {
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
-        if (!probe_process_info.has_row_matched)
-        {
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                if (filter[i])
-                {
-                    probe_process_info.has_row_matched = true;
-                    break;
-                }
-            }
-        }
+        matched_row_count_in_current_block = countBytesInFilter(filter);
+        probe_process_info.has_row_matched |= matched_row_count_in_current_block != 0;
     }
     /// case 1, inner join
     if (kind == ASTTableJoin::Kind::Cross && original_strictness == ASTTableJoin::Strictness::All)
     {
-        for (size_t i = 0; i < block.columns(); ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
+        if (matched_row_count_in_current_block > 0)
+        {
+            for (size_t i = 0; i < block.columns(); ++i)
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, matched_row_count_in_current_block);
+        }
+        else
+        {
+            block = block.cloneEmpty();
+        }
         return;
     }
     /// case 2, left outer join
     if (kind == ASTTableJoin::Kind::Cross_LeftOuter)
     {
         assert(original_strictness == ASTTableJoin::Strictness::All);
-        if (probe_process_info.has_row_matched)
+        if (matched_row_count_in_current_block > 0)
         {
             for (size_t i = 0; i < block.columns(); ++i)
-                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, matched_row_count_in_current_block);
         }
         else if (probe_process_info.next_right_block_index == probe_process_info.right_block_size)
         {
@@ -1139,7 +1145,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             /// for matched rows, use incremental probe, that is each `doJoinBlockCross` only handle part of the probed data for one left row, the internal
             /// state is saved in `probe_process_info`
             probe_process_info.cutFilterAndOffsetVector(0, 1);
-            handleOtherConditionsForIncrementalCrossProbe(block, probe_process_info);
+            handleOtherConditionsForOneProbeRow(block, probe_process_info);
             return block;
         }
         /*
