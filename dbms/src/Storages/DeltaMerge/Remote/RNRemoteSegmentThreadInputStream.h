@@ -69,6 +69,8 @@ public:
 
     ~RNRemoteSegmentThreadInputStream() override;
 
+    void cancel(bool kill) override;
+
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }

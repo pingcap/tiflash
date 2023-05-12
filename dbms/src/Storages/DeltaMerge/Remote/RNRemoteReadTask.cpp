@@ -33,6 +33,7 @@
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNDataProvider.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadCanceller.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
@@ -52,8 +53,11 @@
 namespace DB::DM
 {
 
-RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_)
-    : num_segments(0)
+RNRemoteReadTask::RNRemoteReadTask(
+    std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_,
+    const RNRemoteReadCancellerPtr & canceller_)
+    : canceller(canceller_)
+    , num_segments(0)
     , log(Logger::get())
 {
     for (const auto & store_task : input_tasks_)
@@ -89,6 +93,11 @@ RNRemoteReadTask::~RNRemoteReadTask()
 size_t RNRemoteReadTask::numSegments() const
 {
     return num_segments;
+}
+
+void RNRemoteReadTask::notifyCancel()
+{
+    canceller->notifyCancel();
 }
 
 RNRemoteSegmentReadTaskPtr RNRemoteReadTask::nextFetchTask()

@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadCanceller_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/IStorage.h>
 
@@ -88,10 +89,12 @@ private:
         const Context & db_context,
         const SelectQueryInfo & query_info,
         unsigned num_streams);
+
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
-        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks,
+        const DM::RNRemoteReadCancellerPtr & canceller);
     void buildDisaggTask(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
@@ -102,6 +105,7 @@ private:
     buildDisaggTaskForNode(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+
     DM::RSOperatorPtr buildRSOperator(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);

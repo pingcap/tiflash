@@ -719,6 +719,38 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     return grpc::Status::OK;
 }
 
+grpc::Status FlashService::CancelDisaggTask(
+    grpc::ServerContext * grpc_context,
+    const disaggregated::CancelDisaggTaskRequest * request,
+    disaggregated::CancelDisaggTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling CancelDisaggTask request: {}", request->ShortDebugString());
+
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "CancelDisaggTask should only be called on write node");
+
+    const DM::DisaggTaskId task_id(request->meta());
+    auto logger = Logger::get(task_id);
+
+    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
+    auto succeeded = snaps->unregisterSnapshot(task_id);
+
+    if (!succeeded)
+        LOG_WARNING(log, "CancelDisaggTask skipped due to snapshot is not found, task_id={}", task_id);
+
+    UNUSED(response);
+
+    return grpc::Status::OK;
+}
+
 grpc::Status FlashService::FetchDisaggPages(
     grpc::ServerContext * grpc_context,
     const disaggregated::FetchDisaggPagesRequest * request,

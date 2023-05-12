@@ -40,6 +40,7 @@
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadCanceller.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/SelectQueryInfo.h>
@@ -108,66 +109,81 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
     });
 
-    kv::Backoffer bo(kv::copNextMaxBackoff);
-    while (true)
+    const auto & executor_id = table_scan.getTableScanExecutorID();
+    const DM::DisaggTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
+    auto canceller = DM::RNRemoteReadCanceller::create(db_context, task_id);
+
+    try // Post-process all fatal errors
     {
-        // TODO: We could only retry failed stores.
-
-        try
+        kv::Backoffer bo(kv::copNextMaxBackoff);
+        while (true)
         {
-            auto remote_table_ranges = buildRemoteTableRanges();
-            // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
-            auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
-            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
-            RUNTIME_CHECK(!batch_cop_tasks.empty());
+            // TODO: We could only retry failed stores.
 
-            // Fetch the remote segment read tasks from write nodes
-            remote_read_tasks = buildDisaggTasks(
-                db_context,
-                scan_context,
-                batch_cop_tasks);
+            try
+            {
+                auto remote_table_ranges = buildRemoteTableRanges();
+                // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
+                auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+                auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
+                RUNTIME_CHECK(!batch_cop_tasks.empty());
 
-            break;
+                for (const auto & task : batch_cop_tasks)
+                    canceller->addStore(task.store_addr);
+
+                // Fetch the remote segment read tasks from write nodes
+                remote_read_tasks = buildDisaggTasks(
+                    db_context,
+                    scan_context,
+                    batch_cop_tasks,
+                    canceller);
+
+                break;
+            }
+            catch (DB::Exception & e)
+            {
+                if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
+                    throw;
+
+                Stopwatch w_backoff;
+                SCOPE_EXIT({
+                    total_backoff_seconds += w_backoff.elapsedSeconds();
+                });
+
+                LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
+                bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+            }
         }
-        catch (DB::Exception & e)
-        {
-            if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
-                throw;
 
-            Stopwatch w_backoff;
-            SCOPE_EXIT({
-                total_backoff_seconds += w_backoff.elapsedSeconds();
-            });
-
-            LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
-        }
+        // Build InputStream according to the remote segment read tasks
+        DAGPipeline pipeline;
+        buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
+        NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+        filterConditions(std::move(source_columns), pipeline);
+        return pipeline.streams;
     }
-
-    // Build InputStream according to the remote segment read tasks
-    DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    filterConditions(std::move(source_columns), pipeline);
-    return pipeline.streams;
+    catch (...)
+    {
+        canceller->notifyCancel();
+        throw;
+    }
 }
 
 
 DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     const Context & db_context,
     const DM::ScanContextPtr & scan_context,
-    const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
+    const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks,
+    const DM::RNRemoteReadCancellerPtr & canceller)
 {
     size_t tasks_n = batch_cop_tasks.size();
 
     std::mutex store_read_tasks_lock;
     std::vector<DM::RNRemoteStoreReadTaskPtr> store_read_tasks;
+
     store_read_tasks.reserve(tasks_n);
 
     auto thread_manager = newThreadManager();
-    const auto & executor_id = table_scan.getTableScanExecutorID();
-    const DM::DisaggTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
-
     for (const auto & cop_task : batch_cop_tasks)
     {
         thread_manager->schedule(
@@ -186,7 +202,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     // The first exception will be thrown out.
     thread_manager->wait();
 
-    return std::make_shared<DM::RNRemoteReadTask>(std::move(store_read_tasks));
+    return std::make_shared<DM::RNRemoteReadTask>(std::move(store_read_tasks), canceller);
 }
 
 /// Note: This function runs concurrently when there are multiple Write Nodes.
