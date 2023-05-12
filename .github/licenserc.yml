@@ -37,11 +37,7 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
-<<<<<<< HEAD
-=======
-    - '.devcontainer/'
     - '**/OWNERS'
     - 'OWNERS_ALIASES'
->>>>>>> 522bea2e51 (chore: migrate to new prow reviewing (#7227))
 
   comment: on-failure
