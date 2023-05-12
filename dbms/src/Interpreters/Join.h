@@ -147,7 +147,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
-         size_t no_copy_cross_probe_threshold_ = 0,
+         size_t shallow_copy_cross_probe_threshold_ = 0,
          const String & match_helper_name_ = "",
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
@@ -338,10 +338,9 @@ private:
 
     bool has_build_data_in_memory = false;
 
-    CrossProbeMode cross_probe_mode = CrossProbeMode::NORMAL;
+    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
-    size_t no_copy_cross_probe_threshold;
-    bool incremental_probe = false;
+    size_t shallow_copy_cross_probe_threshold;
 
 private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;

@@ -41,7 +41,7 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     result_block_schema.clear();
     right_column_index.clear();
     right_rows_to_be_added_when_matched = 0;
-    cross_probe_mode = CrossProbeMode::NORMAL;
+    cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     right_block_size = 0;
     next_right_block_index = 0;
     row_num_filtered_by_left_condition = 0;
@@ -124,7 +124,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
     for (size_t i = 0; i < num_columns_to_add; ++i)
         right_column_index.push_back(num_existing_columns + i);
 
-    if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK && null_map != nullptr)
+    if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
         row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
     prepare_for_probe_done = true;
 }

@@ -132,7 +132,7 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
-    size_t no_copy_cross_probe_threshold_,
+    size_t shallow_copy_cross_probe_threshold_,
     const String & match_helper_name_,
     const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
@@ -157,7 +157,7 @@ Join::Join(
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
-    , no_copy_cross_probe_threshold(no_copy_cross_probe_threshold_ > 0 ? no_copy_cross_probe_threshold_ : std::max(1, max_block_size / 10))
+    , shallow_copy_cross_probe_threshold(shallow_copy_cross_probe_threshold_ > 0 ? shallow_copy_cross_probe_threshold_ : std::max(1, max_block_size / 10))
     , tidb_output_column_names(tidb_output_column_names_)
     , is_test(is_test_)
     , log(Logger::get(req_id))
@@ -330,7 +330,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         collators,
         non_equal_conditions,
         max_block_size,
-        no_copy_cross_probe_threshold,
+        shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         restore_round + 1,
@@ -1113,9 +1113,9 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
     probe_process_info.updateStartRow<true>();
-    if (cross_probe_mode == CrossProbeMode::NORMAL)
+    if (cross_probe_mode == CrossProbeMode::DEEP_COPY_RIGHT_BLOCK)
     {
-        auto block = crossProbeBlock(kind, strictness, probe_process_info, original_blocks);
+        auto block = crossProbeBlockDeepCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
         if (non_equal_conditions.other_cond_expr != nullptr)
         {
             assert(probe_process_info.offsets_to_replicate != nullptr);
@@ -1127,9 +1127,9 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
         }
         return block;
     }
-    else if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
+    else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
     {
-        auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
+        auto [block, is_matched_rows] = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
         if (non_equal_conditions.other_cond_expr == nullptr)
             return block;
         size_t left_rows = is_matched_rows ? 1 : block.rows();
@@ -1148,98 +1148,6 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             handleOtherConditionsForOneProbeRow(block, probe_process_info);
             return block;
         }
-        /*
-        if (incremental_probe || probe_process_info.start_row == probe_process_info.block.rows())
-        {
-            auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
-            if (non_equal_conditions.other_cond_expr != nullptr)
-            {
-                size_t left_rows = is_matched_rows ? 1 : block.rows();
-                probe_process_info.cutFilterAndOffsetVector(0, left_rows);
-                handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
-            }
-            return block;
-        }
-        else
-        {
-            assert(kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Anti || kind == ASTTableJoin::Kind::Cross_LeftOuterSemi);
-            assert(original_strictness == ASTTableJoin::Strictness::Any);
-            assert(non_equal_conditions.other_cond_expr != nullptr);
-            /// if use non incremental probe, then for a left row, doJoinBlockCross must probe all the right blocks before return
-            /// so the init next_right_block_index must be 0
-            assert(probe_process_info.next_right_block_index == 0);
-            Block return_block{};
-            bool has_row_matched = false;
-            bool has_row_null = false;
-            while (probe_process_info.next_right_block_index < probe_process_info.right_block_size)
-            {
-                auto [block, is_matched_rows] = crossProbeBlockNoCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
-                assert(is_matched_rows);
-                probe_process_info.cutFilterAndOffsetVector(0, 1);
-                non_equal_conditions.other_cond_expr->execute(block);
-                auto filter_column = ColumnUInt8::create();
-                auto & filter = filter_column->getData();
-                filter.assign(block.rows(), static_cast<UInt8>(1));
-                mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
-                if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
-                {
-                    auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
-                    for (size_t i = 0; i < block.rows(); ++i)
-                    {
-                        if (!filter[i])
-                            continue;
-                        if (eq_in_nullmap && eq_in_nullmap->operator[](i))
-                            has_row_null = true;
-                        else if (eq_in_vec->operator[](i))
-                        {
-                            has_row_matched = true;
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
-                    for (size_t i = 0; i < block.rows(); ++i)
-                    {
-                        if (filter[i])
-                        {
-                            has_row_matched = true;
-                            break;
-                        }
-                    }
-                }
-                if (!return_block)
-                    return_block = block;
-                if (has_row_matched)
-                    break;
-            }
-            assert(!return_block);
-            if (isLeftOuterSemiFamily(kind))
-            {
-                auto match_col = ColumnInt8::create(1, 0);
-                auto & match_vec = match_col->getData();
-                auto match_nullmap = ColumnUInt8::create(1, 0);
-                auto & match_nullmap_vec = match_nullmap->getData();
-                if (has_row_matched)
-                    match_vec[0] = 1;
-                else if (has_row_null)
-                    match_nullmap_vec[0] = 1;
-                return_block.getByName(match_helper_name).column = ColumnNullable::create(std::move(match_col), std::move(match_nullmap));
-            }
-
-            bool return_empty_block = (has_row_matched && isAntiJoin(kind)) || (!has_row_matched && kind == ASTTableJoin::Kind::Cross);
-            if (return_empty_block)
-                return_block = return_block.cloneEmpty();
-            else
-            {
-                for (size_t i = 0; i < return_block.columns(); ++i)
-                    return_block.getByPosition(i).column = return_block.getByPosition(i).column->cut(0, 1);
-            }
-            probe_process_info.next_right_block_index = probe_process_info.right_block_size;
-            return return_block;
-        }
-         */
     }
     else
     {
@@ -1550,11 +1458,9 @@ void Join::workAfterBuildFinish()
             original_blocks.push_back(merged_block);
         }
         /// any join should never use NO_COPY_RIGHT_BLOCK
-        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > no_copy_cross_probe_threshold ? CrossProbeMode::NO_COPY_RIGHT_BLOCK : CrossProbeMode::NORMAL;
-        if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
-        {
-            incremental_probe = supportIncrementalProbeForCrossJoin(kind, original_strictness);
-        }
+        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
+            ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
+            : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     }
 
     if (isEnableSpill())

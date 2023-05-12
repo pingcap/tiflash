@@ -22,8 +22,11 @@ namespace DB
 {
 enum class CrossProbeMode
 {
-    NORMAL,
-    NO_COPY_RIGHT_BLOCK,
+    /// DEEP_COPY_RIGHT_BLOCK construct the probe block using CrossJoinAdder, the right rows will be added to probe block row by row, used when right side has few rows
+    DEEP_COPY_RIGHT_BLOCK,
+    /// SHALLOW_COPY_RIGHT_BLOCK construct the probe block without copy right block, the left row is appended to the right block, used when right side has many rows
+    /// Note for the rows that is filtered by left condition, it still use CrossJoinAdder to construct the probe block
+    SHALLOW_COPY_RIGHT_BLOCK,
 };
 
 struct ProbeProcessInfo
@@ -40,7 +43,7 @@ struct ProbeProcessInfo
     bool prepare_for_probe_done = false;
     ColumnPtr null_map_holder = nullptr;
     ConstNullMapPtr null_map = nullptr;
-    /// Used with ANY INNER JOIN
+    /// Used with ANY INNER ANTI JOIN
     std::unique_ptr<IColumn::Filter> filter = nullptr;
     /// Used with ALL ... JOIN
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate = nullptr;
@@ -53,7 +56,7 @@ struct ProbeProcessInfo
     Block result_block_schema;
     std::vector<size_t> right_column_index;
     size_t right_rows_to_be_added_when_matched = 0;
-    CrossProbeMode cross_probe_mode = CrossProbeMode::NORMAL;
+    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
     /// the following fields are used for NO_COPY_RIGHT_BLOCK probe
     size_t right_block_size = 0;
     /// the rows that is filtered by left condition
@@ -78,7 +81,7 @@ struct ProbeProcessInfo
     {
         if constexpr (cross_join)
         {
-            if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK)
+            if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
             {
                 if (next_right_block_index < right_block_size)
                     return;
@@ -101,7 +104,7 @@ struct ProbeProcessInfo
         end_row = next_row_to_probe;
         if constexpr (cross_join)
         {
-            if (cross_probe_mode == CrossProbeMode::NO_COPY_RIGHT_BLOCK && next_right_block_index < right_block_size)
+            if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && next_right_block_index < right_block_size)
             {
                 /// current probe is not finished, just return
                 return;

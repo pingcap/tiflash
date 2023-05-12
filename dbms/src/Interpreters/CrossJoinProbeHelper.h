@@ -21,15 +21,13 @@
 namespace DB
 {
 struct ProbeProcessInfo;
-/// crossProbeBlock construct the probe block using CrossJoinAdder, the right rows will be added to probe block row by row, used when right side has few rows
-Block crossProbeBlock(
+Block crossProbeBlockDeepCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
     const Blocks & right_blocks);
-/// crossProbeBlockNoCopyRightBlock construct the probe block without copy right block, the left row is appended to the right block, used when right side has many rows
 /// return <probed_block, is_matched_rows>
-std::pair<Block, bool> crossProbeBlockNoCopyRightBlock(
+std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
