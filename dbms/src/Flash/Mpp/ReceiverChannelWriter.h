@@ -76,7 +76,7 @@ public:
         return success;
     }
 
-    bool isReadyForWrite() const;
+    bool isWritable() const;
 
 private:
     using WriteToChannelFunc = std::function<MPMCQueueResult(size_t, ReceivedMessagePtr &&)>;

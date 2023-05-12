@@ -352,7 +352,7 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
         throw Exception(fmt::format("MPPTunnel {} can not be connected because MPPTask is cancelled", tunnel_id));
 }
 
-bool MPPTunnel::isReadyForWrite() const
+bool MPPTunnel::isWritable() const
 {
     std::unique_lock lk(mu);
     switch (status)
@@ -371,7 +371,7 @@ bool MPPTunnel::isReadyForWrite() const
     }
     case TunnelStatus::Connected:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return tunnel_sender->isReadyForWrite();
+        return tunnel_sender->isWritable();
     default:
         // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
         // and then handled by `forceWrite`.
