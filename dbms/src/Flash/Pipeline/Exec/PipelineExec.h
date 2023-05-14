@@ -41,11 +41,11 @@ public:
     OperatorStatus await();
 
 private:
-    OperatorStatus executeImpl();
+    inline OperatorStatus executeImpl();
 
-    OperatorStatus executeIOImpl();
+    inline OperatorStatus executeIOImpl();
 
-    OperatorStatus awaitImpl();
+    inline OperatorStatus awaitImpl();
 
     OperatorStatus fetchBlock(
         Block & block,

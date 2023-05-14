@@ -81,9 +81,9 @@ protected:
     virtual void finalizeImpl() {}
 
 private:
-    void switchStatus(ExecTaskStatus to);
+    inline void switchStatus(ExecTaskStatus to);
 
-    void assertNormalStatus(ExecTaskStatus expect);
+    inline void assertNormalStatus(ExecTaskStatus expect);
 
 public:
     TaskProfileInfo profile_info;

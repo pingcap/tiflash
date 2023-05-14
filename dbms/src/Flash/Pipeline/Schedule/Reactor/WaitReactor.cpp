@@ -25,10 +25,67 @@ namespace DB
 {
 WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
-    , spinner{scheduler, logger}
 {
     GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
+}
+
+bool WaitReactor::awaitAndCollectReadyTask(TaskPtr && task)
+{
+    assert(task);
+    TRACE_MEMORY(task);
+    auto status = task->await();
+    switch (status)
+    {
+    case ExecTaskStatus::WAITING:
+        return false;
+    case ExecTaskStatus::RUNNING:
+        task->profile_info.elapsedAwaitTime();
+        cpu_tasks.push_back(std::move(task));
+        return true;
+    case ExecTaskStatus::IO:
+        task->profile_info.elapsedAwaitTime();
+        io_tasks.push_back(std::move(task));
+        return true;
+    case FINISH_STATUS:
+        task->profile_info.elapsedAwaitTime();
+        FINALIZE_TASK(task);
+        return true;
+    default:
+        UNEXPECTED_STATUS(logger, status);
+    }
+}
+
+void WaitReactor::submitReadyTasks()
+{
+    if (cpu_tasks.empty() && io_tasks.empty())
+    {
+        tryYield();
+        return;
+    }
+
+    scheduler.submitToCPUTaskThreadPool(cpu_tasks);
+    cpu_tasks.clear();
+
+    scheduler.submitToIOTaskThreadPool(io_tasks);
+    io_tasks.clear();
+
+    spin_count = 0;
+}
+
+void WaitReactor::tryYield()
+{
+    ++spin_count;
+
+    if (spin_count != 0 && spin_count % 64 == 0)
+    {
+        sched_yield();
+        if (spin_count == 640)
+        {
+            spin_count = 0;
+            sched_yield();
+        }
+    }
 }
 
 void WaitReactor::finish()
@@ -65,7 +122,7 @@ void WaitReactor::react(std::list<TaskPtr> & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
-        if (spinner.awaitAndCollectReadyTask(std::move(*task_it)))
+        if (awaitAndCollectReadyTask(std::move(*task_it)))
             task_it = local_waiting_tasks.erase(task_it);
         else
             ++task_it;
@@ -73,7 +130,7 @@ void WaitReactor::react(std::list<TaskPtr> & local_waiting_tasks)
     }
     GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
-    spinner.submitReadyTasks();
+    submitReadyTasks();
 }
 
 void WaitReactor::loop()

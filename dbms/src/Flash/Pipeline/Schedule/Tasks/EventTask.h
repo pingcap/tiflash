@@ -55,7 +55,7 @@ protected:
 
 private:
     template <typename Action>
-    ExecTaskStatus doTaskAction(Action && action)
+    ALWAYS_INLINE ExecTaskStatus doTaskAction(Action && action)
     {
         if (unlikely(exec_status.isCancelled()))
             return ExecTaskStatus::CANCELLED;
