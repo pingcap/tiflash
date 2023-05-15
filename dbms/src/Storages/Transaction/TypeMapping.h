@@ -37,6 +37,8 @@ DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_i
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
 DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type);
 
+DataTypePtr getDataTypeByColumnInfoForDisaggregatedStorageLayer(const ColumnInfo & column_info);
+
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 
 // Try best to reverse get TiDB's column info from TiFlash info.

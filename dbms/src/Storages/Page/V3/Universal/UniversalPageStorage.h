@@ -136,6 +136,8 @@ public:
 
     std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
+    void waitUntilInitedFromRemoteStore() const;
+
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client);
 
     bool canSkipCheckpoint() const;
@@ -192,6 +194,12 @@ public:
         std::optional<UInt64> override_sequence = std::nullopt;
 
         /**
+         * Trigger a full compaction aka re-upload all local page data to S3.
+         */
+        bool full_compact = false;
+        /**
+         * When full_compact is false, try use this callback to get the S3 data
+         * file list for compaction.
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
 

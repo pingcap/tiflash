@@ -260,6 +260,8 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                     lease_id,
                     status.error_code(),
                     status.error_message());
+                static constexpr std::chrono::milliseconds CampaignRetryInterval(200);
+                std::this_thread::sleep_for(CampaignRetryInterval);
                 continue;
             }
 
