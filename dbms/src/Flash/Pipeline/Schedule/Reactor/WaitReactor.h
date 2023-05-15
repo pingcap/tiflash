@@ -25,8 +25,6 @@ namespace DB
 {
 class TaskScheduler;
 
-class Spinner;
-
 /// Used for batch calling task.await and submitting the tasks that have been removed from the waiting state to task thread pools.
 /// When there is no non-waiting state task for a long time, it will try to let the current thread rest for a period of time to give the CPU to other threads.
 class WaitReactor
