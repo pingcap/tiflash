@@ -44,7 +44,7 @@ mysql> insert into test_new.e2 values (3, 'a', 'b');
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
 >> DBGInvoke __refresh_schemas()
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -59,13 +59,13 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2;
 |  1 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 2, exchange partition across databases, no error happens
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __refresh_schemas()
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -80,16 +80,16 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  2 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 >> DBGInvoke __init_fail_point()
 # case 3, exchagne partition in the same database, error happens after exchange step 1
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_1_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -104,15 +104,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2;
 |  3 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 4, exchagne partition in the same database, error happens after exchange step 2
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_2_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -127,15 +127,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2;
 |  1 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 5, exchagne partition in the same database, error happens after exchange step 3
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_3_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -150,15 +150,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2;
 |  3 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 6, exchagne partition across databases, error happens after exchange step 1
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_1_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -173,15 +173,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  1 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 7, exchagne partition across databases, error happens before rename in exchange step 2
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_before_step_2_rename_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -196,15 +196,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  2 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 8, exchagne partition across databases, error happens after exchange step 2
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_2_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -219,15 +219,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  1 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 9, exchagne partition across databases, error happens before rename in exchange step 3
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_before_step_3_rename_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -242,15 +242,15 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  2 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 # case 10, exchagne partition across databases, error happens after exchange step 3
 mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test_new.e2
 >> DBGInvoke __enable_fail_point(exception_after_step_3_in_exchange_partition)
 >> DBGInvoke __refresh_schemas()
->> DBGInvoke __refresh_schemas()
+
 mysql> alter table test.e add column c1 int;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
 +-----+-------+-------+------+
 | id  | fname | lname | c1   |
@@ -265,7 +265,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 |  1 | a     | b     |
 +----+-------+-------+
 mysql> alter table test.e drop column c1;
->> DBGInvoke __refresh_schemas()
+>> DBGInvoke __refresh_table_schema(test, e)
 
 mysql> drop table if exists test.e;
 mysql> drop table if exists test.e2;

@@ -399,12 +399,12 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException(fmt::format("miss old table id in TiKV {}", table_id), Errors::DDL::StaleSchema);
+        LOG_ERROR(log, "miss old table id in TiKV {}", table_id);
+        return;
     }
     if (!table_info->isLogicalPartitionTable())
     {
-        throw TiFlashException(fmt::format("new table in TiKV not partition table {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
-                               Errors::DDL::TableTypeNotMatch);
+        LOG_ERROR(log, "new table in TiKV not partition table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
     }
 
     auto & tmt_context = context.getTMTContext();
