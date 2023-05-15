@@ -1156,7 +1156,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
             }
         }
         if (isLeftOuterSemiFamily(kind))
-            block.getByPosition(block.columns()-1).column = block.getByPosition(block.columns()-1).column->convertToFullColumnIfConst();
+            block.getByPosition(block.columns() - 1).column = block.getByPosition(block.columns() - 1).column->convertToFullColumnIfConst();
         return block;
     }
     else

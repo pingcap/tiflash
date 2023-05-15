@@ -484,7 +484,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
         Field value;
         probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
         //if (block.getByPosition(i).column->isColumnConst())
-            block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);
+        block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);
         //else
         //    /// todo use constant column?
         //    block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value)->convertToFullColumnIfConst();
