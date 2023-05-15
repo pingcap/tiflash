@@ -124,8 +124,9 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
+        task->finalize();
         task->endTraceMemory();
-        FINALIZE_TASK(task);
+        task.reset();
         break;
     default:
         UNEXPECTED_STATUS(task->log, status);

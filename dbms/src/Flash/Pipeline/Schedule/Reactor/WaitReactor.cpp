@@ -52,8 +52,9 @@ bool WaitReactor::awaitAndCollectReadyTask(TaskPtr && task)
         return true;
     case FINISH_STATUS:
         task->profile_info.elapsedAwaitTime();
+        task->finalize();
         task->endTraceMemory();
-        FINALIZE_TASK(task);
+        task.reset();
         return true;
     default:
         UNEXPECTED_STATUS(logger, status);
