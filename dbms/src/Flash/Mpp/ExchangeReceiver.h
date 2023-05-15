@@ -189,7 +189,7 @@ private:
         const RecvMsgPtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    ReceiveResult toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg);
+    inline ReceiveResult toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg);
 
     void prepareMsgChannels();
     void prepareGRPCReceiveQueue();
