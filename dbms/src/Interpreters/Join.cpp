@@ -1129,24 +1129,35 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
     {
         auto [block, is_matched_rows] = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
-        if (non_equal_conditions.other_cond_expr == nullptr)
-            return block;
-        size_t left_rows = is_matched_rows ? 1 : block.rows();
-        probe_process_info.cutFilterAndOffsetVector(0, left_rows);
-        if (!is_matched_rows)
+        if (non_equal_conditions.other_cond_expr != nullptr)
         {
-            /// for not matched rows, use handleOtherConditions is enough
-            handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
-            return block;
+            size_t left_rows = is_matched_rows ? 1 : block.rows();
+            probe_process_info.cutFilterAndOffsetVector(0, left_rows);
+            if (!is_matched_rows)
+            {
+                /// for not matched rows, use handleOtherConditions is enough
+                handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
+                return block;
+            }
+            else
+            {
+                /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
+                /// state is saved in `probe_process_info`
+                probe_process_info.cutFilterAndOffsetVector(0, 1);
+                handleOtherConditionsForOneProbeRow(block, probe_process_info);
+                return block;
+            }
         }
-        else
+        for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
         {
-            /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
-            /// state is saved in `probe_process_info`
-            probe_process_info.cutFilterAndOffsetVector(0, 1);
-            handleOtherConditionsForOneProbeRow(block, probe_process_info);
-            return block;
+            if (!probe_process_info.block.getByPosition(i).column->isColumnConst())
+            {
+                block.getByPosition(i).column = block.getByPosition(i).column->convertToFullColumnIfConst();
+            }
         }
+        if (isLeftOuterSemiFamily(kind))
+            block.getByPosition(block.columns()-1).column = block.getByPosition(block.columns()-1).column->convertToFullColumnIfConst();
+        return block;
     }
     else
     {
