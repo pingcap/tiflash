@@ -75,7 +75,7 @@ public:
     bool push(AsyncRetryConnection conn)
     {
         std::lock_guard lock(mu);
-        if (is_closed)
+        if unlikely (is_closed)
             return false;
         wait_retry_queue.push(conn);
         return true;
