@@ -37,7 +37,7 @@ struct SchemaBuilder
 
     std::shared_mutex & shared_mutex_for_table_id_map;
 
-    std::unordered_map<DB::TableID, DB::TableID> partition_id_to_logical_id; // 这个我们只存分区表的对应关系
+    std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id; // 这个我们只存分区表的对应关系
 
     const KeyspaceID keyspace_id;
 

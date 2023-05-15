@@ -21,7 +21,7 @@
 
 ## create table and apply an empty snapshot
 => DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test_dm)
 => select database,name,engine from system.tables where database='default' and name='test_dm'
 ┌─database─┬─name────┬─engine─────┐
 │ default  │ test_dm │ DeltaMerge │
@@ -71,7 +71,7 @@
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 => DBGInvoke __add_column_to_tidb_table(default, test_dm, 'col_2 Nullable(Int64) default 23333')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test_dm)
 => DBGInvoke __region_snapshot_apply_block(5)
 => select (*) from default.test_dm order by col_1
 ┌─col_1─┬─_tidb_rowid─┬─col_2─┐

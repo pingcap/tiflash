@@ -13,6 +13,7 @@
 // limitations under the License.
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/types.h>
+#include <shared_mutex>
 
 namespace DB
 {
@@ -105,7 +106,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
 
 // just use when cur_version = 0
 template <bool mock_getter, bool mock_mapper>
-bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & context, Getter & getter, Int64 version){
+Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & context, Getter & getter, Int64 version){
     //获取所有 db 和 table，set table_id_to_database_id,更新 cur_version
     if (!getter.checkSchemaDiffExists(version))
     {
@@ -118,40 +119,55 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & contex
 }
 
 template <bool mock_getter, bool mock_mapper>
+std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID table_id_){
+    std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+    auto database_iter = table_id_to_database_id.find(table_id_);
+    DatabaseID database_id;
+    TableID table_id = table_id_;
+    bool find = false;
+    if (database_iter == table_id_to_database_id.end())
+    {
+        // 找不到 db，先尝试看看自己是不是 partition_table_id
+        auto logical_table_iter = partition_id_to_logical_id.find(table_id_);
+        if (logical_table_iter != partition_id_to_logical_id.end())
+        {
+            table_id = logical_table_iter->second;
+            database_iter = table_id_to_database_id.find(table_id);
+            if (database_iter != table_id_to_database_id.end())
+            {
+                database_id = database_iter->second;
+                find = true;
+            }
+        }
+    } else {
+        database_id = database_iter->second;
+        find = true;
+    }
+
+    if (find) {
+        return std::make_tuple(true, database_id, table_id);
+    }
+
+    return std::make_tuple(false, 0, 0);
+}
+
+template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID table_id_) {
     // 通过获取 table_id 对应的 database_id，获取到目前的 TableInfo 来更新表的 schema 
     auto getter = createSchemaGetter(keyspace_id);
     // TODO:怎么感觉 单表的 schema_version 没有什么用
 
     // 1. get table_id and database_id, 如果是分区表的话，table_id_ != table_id
-    shared_mutex_for_table_id_map.lock_shared();
-    auto iter = table_id_to_database_id.find(table_id_);
-    DatabaseID database_id;
-    TableID table_id = table_id_;
-    if (iter == table_id_to_database_id.end())
-    {
-        auto logical_iter = partition_id_to_logical_id.find(table_id_);
-        if (logical_iter == partition_id_to_logical_id.end())
-        {
-            // TODO:这边确认一下用什么等级的报错，error 还是 throw 
-            LOG_ERROR(log, "Table {} not found in table_id_to_database_id and partition_id_to_logical_id", table_id_);
+    auto [find, database_id, table_id] = findDatabaseIDAndTableID(table_id_);
+    if (!find){
+        LOG_WARNING(log, "Can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", table_id_);
+        syncSchemas(context);
+        std::tie(find, database_id, table_id) = findDatabaseIDAndTableID(table_id_);
+        if (!find) {
+            LOG_ERROR(log, "Still can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id", table_id_);
             return false;
-        } else {
-            auto table_id = logical_iter->second;
-            auto database_iter = table_id_to_database_id.find(table_id);
-            if (database_iter == table_id_to_database_id.end())
-            {
-                LOG_ERROR(log, "partition table {} in logical table {} not found in table_id_to_database_id", table_id_, table_id);
-                return false;
-            } else {
-                database_id = database_iter->second;
-            }
         }
-    } else {
-        database_id = iter->second;
     }
-    shared_mutex_for_table_id_map.unlock_shared();
-
     // 2. 获取 tableInfo
     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
     builder.applyTable(database_id, table_id, table_id_);

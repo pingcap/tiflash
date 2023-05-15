@@ -1623,17 +1623,17 @@ void DeltaMergeStore::applyAlters(
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
-    std::unordered_map<ColumnID, ColumnDefine> original_columns_map;
-    for (const auto& column : new_original_table_columns) {
-        original_columns_map[column.id] = column;
-    }   
+    std::unordered_map<ColumnID, int> original_columns_index_map;
+    for (size_t index = 0; index < new_original_table_columns.size(); ++index) {
+        original_columns_index_map[new_original_table_columns[index].id] = index;
+    }
 
     std::set<ColumnID> new_column_ids;
     for (const auto& column : table_info.columns){
         auto column_id = column.id;
         new_column_ids.insert(column_id);
-        auto iter = original_columns_map.find(column_id);
-        if (iter == original_columns_map.end()) {
+        auto iter = original_columns_index_map.find(column_id);
+        if (iter == original_columns_index_map.end()) {
             // 创建新的列
             ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
             define.default_value = column.defaultValueToField();
@@ -1641,14 +1641,13 @@ void DeltaMergeStore::applyAlters(
             new_original_table_columns.emplace_back(std::move(define));
         } else {
             // 更新列, 包括 rename column(同时要改 index 里的，虽然觉得没什么必要的样子）, type change,
-            auto original_column = iter->second;
-            auto new_data_type = getDataTypeByColumnInfo(column);
+            auto & original_column = new_original_table_columns[iter->second];
+            auto new_data_type = getDataTypeByColumnInfo(column)->getName();
             original_column.default_value = column.defaultValueToField();
-            if (original_column.name == column.name and original_column.type == new_data_type) {
+            if (original_column.name == column.name and original_column.type->getName() == new_data_type) {
                 // 啥也不需要改
                 continue;
-            } 
-
+            }
             // 改 name 和 type，可以进一步确认一下哪些要改，也可以直接暴力都改
 
             if (original_column.name != column.name && table_info.is_common_handle)
@@ -1666,8 +1665,7 @@ void DeltaMergeStore::applyAlters(
                 }
             }
             original_column.name = column.name;
-            original_column.type = getDataTypeByColumnInfo(column);
-            
+            original_column.type = getDataTypeByColumnInfo(column);      
         }
     }
 
@@ -1675,7 +1673,9 @@ void DeltaMergeStore::applyAlters(
     auto iter = new_original_table_columns.begin();
     while (iter != new_original_table_columns.end()) {
         if (new_column_ids.count(iter->id) == 0) {
-            new_original_table_columns.erase(iter);
+            iter = new_original_table_columns.erase(iter);
+        } else {
+            iter++;
         }
     }
 

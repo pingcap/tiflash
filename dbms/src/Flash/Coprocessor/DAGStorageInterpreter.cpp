@@ -447,6 +447,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
+// 离谱，columns.name 都是空，不放的，默认值不填 refer toTiDBColumnInfo
+// 不过 default value 不比较理论上对 tiflash 这边没有影响，他本来就不用管后续 default value 的变更？
 bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns) {
     auto columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
@@ -458,12 +460,11 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
     for (const auto & column : columns){
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end()) {
+            LOG_ERROR(Logger::get("hyy"), "column id {} not found", column.id);
             return false;
         }
-        if (iter->second.name != column.name || getDataTypeByColumnInfo(column) != iter->second.type) {
-            return false;
-        }
-        if (iter->second.default_value != column.defaultValueToField()){
+        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName()) {
+            LOG_ERROR(Logger::get("hyy"), "column {}'s data type {} not match {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
             return false;
         }
     }
@@ -1150,31 +1151,38 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         return {nullptr, {}, false};
     };
 
-    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, bool> {
+    // TODO:ok 这个可以删掉
+    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<TableID>, bool> {
         std::vector<ManageableStoragePtr> table_storages;
         std::vector<TableStructureLockHolder> table_locks;
 
-        auto [logical_table_storage, logical_table_lock, ok] = get_and_lock_storage(schema_synced, logical_table_id);
-        if (!ok)
-            return {{}, {}, false};
-        table_storages.emplace_back(std::move(logical_table_storage));
-        table_locks.emplace_back(std::move(logical_table_lock));
+        std::vector<TableID> need_sync_table_ids;
 
+        auto [logical_table_storage, logical_table_lock, ok] = get_and_lock_storage(schema_synced, logical_table_id);
+        if (!ok){
+            need_sync_table_ids.push_back(logical_table_id);
+        }
+        else {
+            table_storages.emplace_back(std::move(logical_table_storage));
+            table_locks.emplace_back(std::move(logical_table_lock));
+        }   
+        
         if (!table_scan.isPartitionTableScan())
         {
-            return {table_storages, table_locks, true};
+            return {table_storages, table_locks, need_sync_table_ids, need_sync_table_ids.empty()};
         }
         for (auto const physical_table_id : table_scan.getPhysicalTableIDs())
         {
             auto [physical_table_storage, physical_table_lock, ok] = get_and_lock_storage(schema_synced, physical_table_id);
             if (!ok)
             {
-                return {{}, {}, false};
+                need_sync_table_ids.push_back(physical_table_id);
+            } else {
+                table_storages.emplace_back(std::move(physical_table_storage));
+                table_locks.emplace_back(std::move(physical_table_lock));
             }
-            table_storages.emplace_back(std::move(physical_table_storage));
-            table_locks.emplace_back(std::move(physical_table_lock));
         }
-        return {table_storages, table_locks, true};
+        return {table_storages, table_locks, need_sync_table_ids, need_sync_table_ids.empty()};
     };
 
     auto sync_schema = [&](TableID table_id) {
@@ -1186,7 +1194,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     };
 
     /// Try get storage and lock once.
-    auto [storages, locks, ok] = get_and_lock_storages(false);
+    auto [storages, locks, need_sync_table_ids, ok] = get_and_lock_storages(false);
     if (ok)
     {
         LOG_DEBUG(log, "OK, no syncing required.");
@@ -1196,14 +1204,13 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     {
         LOG_DEBUG(log, "not OK, syncing schemas.");
 
-        for (auto & storage : storages)
+        for (auto & table_id : need_sync_table_ids)
         {
-            auto const table_id = storage->getTableInfo().id;
             sync_schema(table_id);
         }
         
 
-        std::tie(storages, locks, ok) = get_and_lock_storages(true);
+        std::tie(storages, locks, need_sync_table_ids, ok) = get_and_lock_storages(true);
         if (ok)
         {
             LOG_DEBUG(log, "OK after syncing.");

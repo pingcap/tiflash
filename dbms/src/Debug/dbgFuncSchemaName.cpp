@@ -50,12 +50,18 @@ std::optional<String> mappedDatabase(Context & context, const String & database_
 std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name)
 {
     auto mapped_db = mappedDatabase(context, database_name);
-    if (mapped_db == std::nullopt)
+    if (mapped_db == std::nullopt){
+        //std::cout << "mapped_db is null" << std::endl;
         return std::nullopt;
+    }
+
     TMTContext & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
-    if (storage == nullptr)
+    if (storage == nullptr){
+        //std::cout << "storage is null" << std::endl;
         return std::nullopt;
+    }
+
     return std::make_pair(storage->getDatabaseName(), storage->getTableName());
 }
 

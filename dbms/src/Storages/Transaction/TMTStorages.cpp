@@ -65,6 +65,10 @@ KeyspaceSet ManagedStorages::getAllKeyspaces() const
 ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table, bool include_tombstone) const
 {
     std::lock_guard lock(mutex);
+    // std::cout << " into ManagedStorages::getByName " << std::endl;
+    // for (const auto & storage: storages) {
+    //     std::cout << "storage: db and table name " << storage.second->getDatabaseName() << " " << storage.second->getTableInfo().name << std::endl;
+    // }
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {
         const auto & storage = pair.second;

@@ -15,6 +15,7 @@
 # Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
 # Preparation.
 # Use 'mpp_query:true' to make the logging contains tso prefix
+=> DBGInvoke __reset_schemas()
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
@@ -27,7 +28,7 @@
 # Data.
 => DBGInvoke __mock_tidb_db(default)
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64, col_2 default \'asTiDBType|timestamp(5)\'')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 50, '2019-06-10 09:00:00')
 => DBGInvoke __raft_insert_row(default, test, 4, 51, 51, '2019-06-11 07:00:00')

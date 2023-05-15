@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Preparation.
+=> DBGInvoke __reset_schemas()
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
@@ -22,7 +23,7 @@
 
 # Sync add column by checking missing column in CH when flushing.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => select col_1 from default.test
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Nullable(Int8)')
@@ -86,7 +87,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 
 # Sync add column and type change together by checking value overflow in CH when flushing.
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt8')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_3 UInt64')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_4 Nullable(UInt8)')
 # For DeltaTree, each write will trigger schema sync.
@@ -121,7 +122,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 │ -9223372036854775807 │ 18446744073709551615 │     1 │
 │  9223372036854775807 │ 18446744073709551615 │     1 │
 └──────────────────────┴──────────────────────┴───────┘
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => selraw nokvstore col_3 from default.test
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_3.

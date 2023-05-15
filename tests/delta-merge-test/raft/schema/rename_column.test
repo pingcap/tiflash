@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Preparation.
+=> DBGInvoke __reset_schemas()
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
@@ -23,7 +24,7 @@
 
 # create table and insert some rows
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
@@ -45,7 +46,7 @@
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_3, col_2)
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_1 Nullable(Int32)')
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_2 Nullable(String)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 # test doesn't check column name, so we select columns one by one.
 => select col_2 from default.test
 ┌─col_2─┐
@@ -63,7 +64,7 @@
 => DBGInvoke __refresh_schemas()
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
@@ -83,7 +84,7 @@
 
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_1 Nullable(String)')
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_2 Nullable(Int32)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select * from default.test
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test  │     1 │          50 │
@@ -93,7 +94,7 @@
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_1, col_3)
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_2, col_1)
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_3, col_2)
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select col_2 from default.test
 ┌─col_2─┐
 │ test  │
@@ -111,7 +112,7 @@
 
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
@@ -131,14 +132,14 @@
 
 => DBGInvoke __drop_column_from_tidb_table(default, test, col_1)
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_2, col_1)
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select col_1 from default.test
 ┌─col_1─┐
 │     1 │
 │     2 │
 └───────┘
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Nullable(Int8)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select col_2 from default.test
 ┌─col_2─┐
 │    \N │
@@ -151,7 +152,7 @@
 # do a lot of change and sync at once.
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
@@ -173,8 +174,7 @@
 => DBGInvoke __rename_column_in_tidb_table(default, test, col_2, col_1)
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Nullable(Int8) default 0')
 => DBGInvoke __modify_column_in_tidb_table(default, test, 'col_1 Nullable(Int32)')
-=> DBGInvoke __reset_schemas()
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __put_region(5, 101, 200, default, test)
 => DBGInvoke __raft_insert_row(default, test, 5, 150, NULL, NULL)
 => DBGInvoke __raft_insert_row(default, test, 5, 151, NULL, NULL)
@@ -193,7 +193,7 @@
 
 ## test for partial-linked rename
 => DBGInvoke __mock_tidb_table(default, test, 'a String, b Int8', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
@@ -212,7 +212,7 @@
 # rename a -> c, and b -> a
 => DBGInvoke __rename_column_in_tidb_table(default, test, a, c)
 => DBGInvoke __rename_column_in_tidb_table(default, test, b, a)
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => select a, c from default.test order by _tidb_rowid
 ┌─a─┬─c────┐
 │ 1 │ test │

@@ -153,7 +153,12 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
 
     if (databases.find(database_name) == databases.end())
     {
-        schema_id = databases.size() + 1;
+        if (databases.empty()) {
+            schema_id = 1;
+        }
+        else {
+            schema_id = databases.cbegin()->second + 1;
+        }
         databases.emplace(database_name, schema_id);
     }
 

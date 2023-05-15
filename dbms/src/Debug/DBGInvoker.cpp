@@ -90,6 +90,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("gc_schemas", dbgFuncGcSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
+    regSchemalessFunc("refresh_table_schema", dbgFuncRefreshTableSchema);
+    regSchemalessFunc("refresh_table_schema2", dbgFuncRefreshTableSchema2);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);

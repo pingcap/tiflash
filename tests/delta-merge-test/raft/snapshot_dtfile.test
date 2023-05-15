@@ -21,7 +21,7 @@
 #####
 ## Pre-handle region to dt files then apply
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 6, 'col_1 Int64', '')
 ┌─region_snapshot_pre_handle_file(default, test, 4, 3, 6)────────┐

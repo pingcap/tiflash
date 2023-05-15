@@ -20,7 +20,7 @@
 
 ## create table
 => DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(default, test_dm)
 => select database,name,engine from system.tables where database='default' and name='test_dm'
 ┌─database─┬─name────┬─engine─────┐
 │ default  │ test_dm │ DeltaMerge │

@@ -19,11 +19,11 @@
 => DBGInvoke __drop_tidb_db(db3)
 => DBGInvoke __drop_tidb_db(db4)
 => DBGInvoke __drop_tidb_db(db5)
-=> DBGInvoke __refresh_schemas()
 => drop table if exists default.test
 => drop database if exists db3
 => drop database if exists db4
 => drop database if exists db5
+=> DBGInvoke __reset_schemas()
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
@@ -35,6 +35,8 @@
 => DBGInvoke __mock_tidb_table(db3, test3, 'col_1 String', '', 'dt')
 => DBGInvoke __mock_tidb_table(db4, test, 'col_1 String', '', 'dt')
 => DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_table_schema2(db3, test3)
+=> DBGInvoke __refresh_table_schema2(db4, test)
 => select name from system.databases where name like '%db%' and is_tombstone = 0
 ┌─name────┐
 │ db3     │
@@ -43,7 +45,6 @@
 
 # Reset schema to mock that TiFlash process is stopped
 # And then drop database and table in TiDB side
-=> DBGInvoke __reset_schemas()
 => DBGInvoke __drop_tidb_db(db3);
 => DBGInvoke __drop_tidb_table(db4, test);
 # Mock that TiFlash process starts and sync schema with TiDB
@@ -72,7 +73,6 @@
 └─────────┘
 # Reset schema to mock that TiFlash process is stopped
 # And then drop databases in TiDB side
-=> DBGInvoke __reset_schemas()
 => DBGInvoke __drop_tidb_db(db5);
 => DBGInvoke __drop_tidb_db(db4);
 # Mock that TiFlash process starts and sync schema with TiDB

@@ -30,7 +30,9 @@
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
+#include <ostream>
 #include "Storages/Transaction/Types.h"
+#include "Debug/dbgFuncSchemaName.h"
 
 namespace DB
 {
@@ -83,6 +85,96 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     }
 
     output("schemas refreshed");
+}
+
+
+using QualifiedName = std::pair<String, String>;
+std::optional<String> mappedDatabase(Context & context, const String & database_name);
+std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name);
+void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto mapped_db = mappedDatabase(context, database_name);
+    if (mapped_db == std::nullopt){
+        return;
+    }
+    TMTContext & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
+    if (storage == nullptr) {
+        return;
+    }   
+
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    try
+    {
+        schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, storage->getTableInfo().id);
+        if (storage->getTableInfo().partition.num > 0) {
+            for (const auto & def : storage->getTableInfo().partition.definitions){
+                schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, def.id);
+            }
+        }
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+        {
+            output(e.message());
+            return;
+        }
+        else
+        {
+            throw;
+        }
+    }
+
+    output("table schema refreshed");
+}
+
+
+void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker::Printer output){
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    std::cout << " begin dbgFuncRefreshTableSchema2 " << std::endl;
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    auto table_id = table->table_info.id;
+    auto keyspace_id = table->table_info.keyspace_id;
+
+    TMTContext & tmt = context.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    try
+    {
+        schema_syncer->syncTableSchema(context, keyspace_id, table_id);
+        if (table->table_info.partition.num > 0) {
+            for (const auto & def : table->table_info.partition.definitions){
+                schema_syncer->syncTableSchema(context, keyspace_id, def.id);
+            }
+        }
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+        {
+            output(e.message());
+            return;
+        }
+        else
+        {
+            throw;
+        }
+    }
+
+    output("table schema refreshed");
+
 }
 
 // Trigger gc on all databases / tables.
