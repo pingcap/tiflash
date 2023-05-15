@@ -121,8 +121,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     tiflash_join.fillJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names, join_non_equal_conditions);
 
     const Settings & settings = context.getSettingsRef();
-    // Currently, the pipeline model does not support disk-based joins, so when force_enable_pipeline is true, the disk-based join will be disabled.
-    size_t max_bytes_before_external_join = settings.force_enable_pipeline ? 0 : static_cast<size_t>(settings.max_bytes_before_external_join);
+    size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
+    if (settings.force_enable_pipeline && max_bytes_before_external_join > 0)
+    {
+        // Currently, the pipeline model does not support disk-based join, so when force_enable_pipeline is true, the disk-based join will be disabled.
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
+    }
     SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     size_t max_block_size = settings.max_block_size;
