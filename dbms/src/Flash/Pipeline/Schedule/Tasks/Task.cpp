@@ -29,7 +29,7 @@ extern const char random_pipeline_model_task_construct_failpoint[];
 namespace
 {
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
-inline void addToStatusMetrics(ExecTaskStatus to)
+ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 {
 #define M(expect_status, metric_name)                                                \
     case (expect_status):                                                            \
@@ -56,15 +56,10 @@ inline void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-#define CHECK_FINISHED                                        \
-    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
-                 || exec_status == ExecTaskStatus::ERROR      \
-                 || exec_status == ExecTaskStatus::CANCELLED) \
-        return exec_status;
-
 Task::Task()
     : log(Logger::get())
-    , mem_tracker(nullptr)
+    , mem_tracker_holder(nullptr)
+    , mem_tracker_ptr(nullptr)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
@@ -72,8 +67,10 @@ Task::Task()
 
 Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
     : log(Logger::get(req_id))
-    , mem_tracker(std::move(mem_tracker_))
+    , mem_tracker_holder(std::move(mem_tracker_))
+    , mem_tracker_ptr(mem_tracker_holder.get())
 {
+    assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
@@ -88,11 +85,17 @@ Task::~Task()
         magic_enum::enum_name(exec_status));
 }
 
+#define CHECK_FINISHED                                        \
+    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
+                 || exec_status == ExecTaskStatus::ERROR      \
+                 || exec_status == ExecTaskStatus::CANCELLED) \
+        return exec_status;
+
 ExecTaskStatus Task::execute()
 {
     CHECK_FINISHED
-    assert(mem_tracker.get() == current_memory_tracker);
-    assertNormalStatus(ExecTaskStatus::RUNNING);
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::RUNNING || exec_status == ExecTaskStatus::INIT);
     switchStatus(executeImpl());
     return exec_status;
 }
@@ -100,8 +103,8 @@ ExecTaskStatus Task::execute()
 ExecTaskStatus Task::executeIO()
 {
     CHECK_FINISHED
-    assert(mem_tracker.get() == current_memory_tracker);
-    assertNormalStatus(ExecTaskStatus::IO);
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::IO || exec_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
     return exec_status;
 }
@@ -109,8 +112,8 @@ ExecTaskStatus Task::executeIO()
 ExecTaskStatus Task::await()
 {
     CHECK_FINISHED
-    assert(mem_tracker.get() == current_memory_tracker);
-    assertNormalStatus(ExecTaskStatus::WAITING);
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::WAITING || exec_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
     return exec_status;
 }
@@ -142,16 +145,5 @@ void Task::switchStatus(ExecTaskStatus to)
         addToStatusMetrics(to);
         exec_status = to;
     }
-}
-
-void Task::assertNormalStatus(ExecTaskStatus expect)
-{
-    RUNTIME_ASSERT(
-        exec_status == expect || exec_status == ExecTaskStatus::INIT,
-        log,
-        "actual status is {}, but expect status are {} and {}",
-        magic_enum::enum_name(exec_status),
-        magic_enum::enum_name(expect),
-        magic_enum::enum_name(ExecTaskStatus::INIT));
 }
 } // namespace DB

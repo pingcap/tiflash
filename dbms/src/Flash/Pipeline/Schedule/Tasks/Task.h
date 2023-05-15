@@ -67,7 +67,7 @@ public:
     {
         assert(nullptr == current_memory_tracker);
         assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
-        current_memory_tracker = mem_tracker.get();
+        current_memory_tracker = mem_tracker_ptr;
     }
     ALWAYS_INLINE void endTraceMemory()
     {
@@ -90,18 +90,18 @@ protected:
 private:
     inline void switchStatus(ExecTaskStatus to);
 
-    inline void assertNormalStatus(ExecTaskStatus expect);
-
 public:
     TaskProfileInfo profile_info;
 
     // level of multi-level feedback queue.
     size_t mlfq_level{0};
 
-protected:
-    MemoryTrackerPtr mem_tracker;
-
 private:
+    // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
+    MemoryTrackerPtr mem_tracker_holder;
+    // To reduce the overheads of `mem_tracker.get()`
+    MemoryTracker * mem_tracker_ptr;
+
     ExecTaskStatus exec_status{ExecTaskStatus::INIT};
 };
 using TaskPtr = std::unique_ptr<Task>;
