@@ -34,6 +34,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfigura
 {
     TiFlashRaftConfig res;
     res.flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
+    res.advertise_addr = config.getString("flash.proxy.advertise-engine-addr", res.flash_server_addr);
 
     {
         // Check by `raft` prefix instead of check by `config.has("raft")`,

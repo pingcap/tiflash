@@ -238,6 +238,12 @@ bool Session::isValid() const
 
 bool Session::keepAliveOne()
 {
+    if (finished)
+    {
+        // The `writer` has been finished, can not be called again
+        return false;
+    }
+
     etcdserverpb::LeaseKeepAliveRequest req;
     req.set_id(lease_id);
     bool ok = writer->Write(req);
@@ -245,6 +251,7 @@ bool Session::keepAliveOne()
     {
         auto status = writer->Finish();
         LOG_INFO(log, "keep alive write fail, code={} msg={}", status.error_code(), status.error_message());
+        finished = true;
         return false;
     }
     etcdserverpb::LeaseKeepAliveResponse resp;
@@ -254,6 +261,7 @@ bool Session::keepAliveOne()
     {
         auto status = writer->Finish();
         LOG_INFO(log, "keep alive read fail, code={} msg={}", status.error_code(), status.error_message());
+        finished = true;
         return false;
     }
 
