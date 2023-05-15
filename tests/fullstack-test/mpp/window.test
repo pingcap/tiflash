@@ -70,7 +70,7 @@ mysql> alter table test.first1 set tiflash replica 1;
 func> wait_table test first
 func> wait_table test first1
 
-mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first;
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
@@ -89,7 +89,7 @@ mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partitio
 | 2 |  9 | 10   | 6    |
 +---+----+------+------+
 
-mysql> use test; set enforce_tidb_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first1;
+mysql> use test; set tidb_enforce_mpp=1; select *, first_value(v) over (partition by p order by o asc) as a from test.first1;
 +---+----+------+------+
 | p | o  | v    | a    |
 +---+----+------+------+
