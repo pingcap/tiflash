@@ -47,9 +47,7 @@ private:
 
     inline OperatorStatus awaitImpl();
 
-    OperatorStatus fetchBlock(
-        Block & block,
-        size_t & start_transform_op_index);
+    inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
 private:
     SourceOpPtr source_op;

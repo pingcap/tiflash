@@ -91,9 +91,8 @@ protected:
 class Awaitable
 {
 public:
-    Awaitable(PipelineExecutorStatus & exec_status_, Operator * op_)
-        : exec_status(exec_status_)
-        , op(op_)
+    explicit Awaitable(Operator * op_)
+        : op(op_)
     {}
 
     virtual ~Awaitable() = default;
@@ -105,7 +104,6 @@ public:
     Operator * getOp() const { return op; }
 
 protected:
-    PipelineExecutorStatus & exec_status;
     Operator * op;
 };
 

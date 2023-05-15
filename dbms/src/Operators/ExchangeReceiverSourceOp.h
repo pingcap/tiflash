@@ -31,7 +31,7 @@ public:
         const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
         size_t stream_id_)
         : SourceOp(exec_status_, req_id)
-        , Awaitable(exec_status_, this)
+        , Awaitable(this)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
     {

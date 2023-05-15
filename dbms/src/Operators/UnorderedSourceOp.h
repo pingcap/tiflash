@@ -37,7 +37,7 @@ public:
         const TableID physical_table_id,
         const String & req_id)
         : SourceOp(exec_status_, req_id)
-        , Awaitable(exec_status_, this)
+        , Awaitable(this)
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
         , ref_no(0)

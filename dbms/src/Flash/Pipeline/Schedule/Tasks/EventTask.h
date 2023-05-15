@@ -25,6 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_pipeline_model_task_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
 } // namespace FailPoints
 
 // The base class of event related task.
@@ -57,6 +58,7 @@ private:
     template <typename Action>
     ALWAYS_INLINE ExecTaskStatus doTaskAction(Action && action)
     {
+        fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel());
         if (unlikely(exec_status.isCancelled()))
             return ExecTaskStatus::CANCELLED;
 

@@ -29,7 +29,7 @@ public:
         const String & req_id,
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_status_, req_id)
-        , Awaitable(exec_status_, this)
+        , Awaitable(this)
         , writer(std::move(writer))
     {
     }

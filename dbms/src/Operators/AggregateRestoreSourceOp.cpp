@@ -23,7 +23,7 @@ AggregateRestoreSourceOp::AggregateRestoreSourceOp(
     SharedAggregateRestorerPtr && restorer_,
     const String & req_id)
     : SourceOp(exec_status_, req_id)
-    , Awaitable(exec_status_, this)
+    , Awaitable(this)
     , agg_context(agg_context_)
     , restorer(std::move(restorer_))
 {

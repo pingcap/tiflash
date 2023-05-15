@@ -27,7 +27,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     size_t max_block_size,
     const Block & input_header)
     : TransformOp(exec_status_, req_id)
-    , Awaitable(exec_status_, this)
+    , Awaitable(this)
     , join(join_)
     , probe_process_info(max_block_size)
     , scan_hash_map_after_probe_stream_index(scan_hash_map_after_probe_stream_index_)

@@ -134,9 +134,7 @@ OperatorStatus PipelineExec::executeImpl()
 }
 
 // try fetch block from transform_ops and source_op.
-OperatorStatus PipelineExec::fetchBlock(
-    Block & block,
-    size_t & start_transform_op_index)
+OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_op_index)
 {
     auto op_status = sink_op->prepare();
     HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);

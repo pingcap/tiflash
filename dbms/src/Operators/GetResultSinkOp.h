@@ -29,7 +29,7 @@ public:
         const String & req_id,
         const ResultQueuePtr & result_queue_)
         : SinkOp(exec_status_, req_id)
-        , Awaitable(exec_status_, this)
+        , Awaitable(this)
         , result_queue(result_queue_)
     {
         assert(result_queue);
