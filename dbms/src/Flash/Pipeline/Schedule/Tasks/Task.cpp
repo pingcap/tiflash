@@ -29,7 +29,7 @@ extern const char random_pipeline_model_task_construct_failpoint[];
 namespace
 {
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
-void addToStatusMetrics(ExecTaskStatus to)
+inline void addToStatusMetrics(ExecTaskStatus to)
 {
 #define M(expect_status, metric_name)                                                \
     case (expect_status):                                                            \

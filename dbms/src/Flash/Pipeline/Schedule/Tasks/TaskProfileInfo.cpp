@@ -17,41 +17,6 @@
 
 namespace DB
 {
-void TaskProfileInfo::startTimer() noexcept
-{
-    stopwatch.start();
-}
-
-UInt64 TaskProfileInfo::elapsedFromPrev() noexcept
-{
-    return stopwatch.elapsedFromLastTime();
-}
-
-void TaskProfileInfo::addCPUExecuteTime(UInt64 value) noexcept
-{
-    cpu_execute_time += value;
-}
-
-void TaskProfileInfo::elapsedCPUPendingTime() noexcept
-{
-    cpu_pending_time += elapsedFromPrev();
-}
-
-void TaskProfileInfo::addIOExecuteTime(UInt64 value) noexcept
-{
-    io_execute_time += value;
-}
-
-void TaskProfileInfo::elapsedIOPendingTime() noexcept
-{
-    io_pending_time += elapsedFromPrev();
-}
-
-void TaskProfileInfo::elapsedAwaitTime() noexcept
-{
-    await_time += elapsedFromPrev();
-}
-
 String TaskProfileInfo::toJson() const
 {
     return fmt::format(
@@ -61,15 +26,5 @@ String TaskProfileInfo::toJson() const
         io_execute_time,
         io_pending_time,
         await_time);
-}
-
-UInt64 TaskProfileInfo::getCPUExecuteTime() const
-{
-    return cpu_execute_time;
-}
-
-UInt64 TaskProfileInfo::getIOExecuteTime() const
-{
-    return io_execute_time;
 }
 } // namespace DB

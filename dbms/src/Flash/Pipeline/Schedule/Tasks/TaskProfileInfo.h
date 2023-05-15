@@ -23,24 +23,52 @@ namespace DB
 class TaskProfileInfo
 {
 public:
-    void startTimer() noexcept;
+    ALWAYS_INLINE void startTimer()
+    {
+        stopwatch.start();
+    }
 
-    UInt64 elapsedFromPrev() noexcept;
+    ALWAYS_INLINE UInt64 elapsedFromPrev()
+    {
+        return stopwatch.elapsedFromLastTime();
+    }
 
-    void addCPUExecuteTime(UInt64 value) noexcept;
+    ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
+    {
+        cpu_execute_time += value;
+    }
 
-    void elapsedCPUPendingTime() noexcept;
+    ALWAYS_INLINE void elapsedCPUPendingTime()
+    {
+        cpu_pending_time += elapsedFromPrev();
+    }
 
-    void addIOExecuteTime(UInt64 value) noexcept;
+    ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
+    {
+        io_execute_time += value;
+    }
 
-    void elapsedIOPendingTime() noexcept;
+    ALWAYS_INLINE void elapsedIOPendingTime()
+    {
+        io_pending_time += elapsedFromPrev();
+    }
 
-    void elapsedAwaitTime() noexcept;
+    ALWAYS_INLINE void elapsedAwaitTime()
+    {
+        await_time += elapsedFromPrev();
+    }
+
+    ALWAYS_INLINE UInt64 getCPUExecuteTime() const
+    {
+        return io_execute_time;
+    }
+
+    ALWAYS_INLINE UInt64 getIOExecuteTime() const
+    {
+        return cpu_execute_time;
+    }
 
     String toJson() const;
-
-    UInt64 getCPUExecuteTime() const;
-    UInt64 getIOExecuteTime() const;
 
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
