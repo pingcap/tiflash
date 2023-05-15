@@ -17,6 +17,7 @@
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -91,7 +92,7 @@ namespace ErrorCodes
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
-BlockInputStreams StorageDisaggregated::readFromWriteNode(
+BlockInputStreams StorageDisaggregated::readThroughS3(
     const Context & db_context,
     const SelectQueryInfo & query_info,
     unsigned num_streams)
@@ -147,8 +148,65 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
     buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    filterConditions(std::move(source_columns), pipeline);
+
+    NamesAndTypes source_columns;
+    source_columns.reserve(table_scan.getColumnSize());
+    const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
+    for (const auto & col : remote_segment_stream_header)
+    {
+        source_columns.emplace_back(col.name, col.type);
+    }
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // Handle duration type column
+    // If the column is not in the columns of pushed down filter, append a cast to the column.
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.getColumnSize());
+    std::unordered_set<ColumnID> col_id_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+    {
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+    }
+    bool has_need_cast_column = false;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col_id_set.contains(col.id))
+        {
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
+        else
+        {
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+                has_need_cast_column = true;
+            }
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+                has_need_cast_column = true;
+            }
+            else
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::None);
+            }
+        }
+    }
+    ExpressionActionsChain chain;
+    if (has_need_cast_column && analyzer->appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+        for (auto & stream : pipeline.streams)
+        {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream->setExtraInfo("cast after local tableScan");
+        }
+    }
+
+    filterConditions(*analyzer, pipeline);
     return pipeline.streams;
 }
 
