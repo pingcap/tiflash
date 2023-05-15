@@ -98,7 +98,7 @@ private:
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
+    std::tuple<Names, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
 
     std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
@@ -164,7 +164,6 @@ private:
     std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
-    NamesAndTypes source_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 

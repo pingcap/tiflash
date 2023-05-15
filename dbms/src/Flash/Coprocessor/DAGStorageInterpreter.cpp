@@ -354,7 +354,16 @@ void DAGStorageInterpreter::executeSuffix(PipelineExecutorStatus & exec_status, 
 {
     /// handle generated column if necessary.
     executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
-
+    NamesAndTypes source_columns;
+    source_columns.reserve(table_scan.getColumnSize());
+    const auto table_scan_output_header = group_builder.getCurrentHeader();
+    for (const auto & col : table_scan_output_header)
+        source_columns.emplace_back(col.name, col.type);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    /// If there is no local source, there is no need to execute cast and push down filter, return directly.
+    /// But we should make sure that the analyzer is initialized before return.
+    if (remote_read_sources_start_index == 0)
+        return;
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
 
@@ -432,9 +441,18 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
-
     /// handle generated column if necessary.
     executeGeneratedColumnPlaceholder(remote_read_streams_start_index, generated_column_infos, log, pipeline);
+    NamesAndTypes source_columns;
+    source_columns.reserve(table_scan.getColumnSize());
+    const auto table_scan_output_header = pipeline.firstStream()->getHeader();
+    for (const auto & col : table_scan_output_header)
+        source_columns.emplace_back(col.name, col.type);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    /// If there is no local stream, there is no need to execute cast and push down filter, return directly.
+    /// But we should make sure that the analyzer is initialized before return.
+    if (remote_read_streams_start_index == 0)
+        return;
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
@@ -479,9 +497,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
-
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    std::tie(required_columns, is_need_add_cast_column) = getColumnsForTableScan();
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
@@ -1223,12 +1239,10 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
+std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
 {
     Names required_columns_tmp;
     required_columns_tmp.reserve(table_scan.getColumnSize());
-    NamesAndTypes source_columns_tmp;
-    source_columns_tmp.reserve(table_scan.getColumnSize());
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
     String handle_column_name = MutableSupport::tidb_pk_column_name;
@@ -1246,7 +1260,6 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
             const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
             const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
             generated_column_infos.push_back(std::make_tuple(i, col_name, data_type));
-            source_columns_tmp.emplace_back(NameAndTypePair{col_name, data_type});
             continue;
         }
         // Column ID -1 return the handle column
@@ -1257,16 +1270,6 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
             name = MutableSupport::extra_table_id_column_name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
-        if (cid == ExtraTableIDColumnID)
-        {
-            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
-            source_columns_tmp.emplace_back(std::move(extra_table_id_column_pair));
-        }
-        else
-        {
-            auto pair = storage_for_logical_table->getColumns().getPhysical(name);
-            source_columns_tmp.emplace_back(std::move(pair));
-        }
         required_columns_tmp.emplace_back(std::move(name));
     }
 
@@ -1277,6 +1280,12 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     }
     for (const auto & col : table_scan.getColumns())
     {
+        if (col.hasGeneratedColumnFlag())
+        {
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+            continue;
+        }
+
         if (col_id_set.contains(col.id))
         {
             need_cast_column.push_back(ExtraCastAfterTSMode::None);
@@ -1292,7 +1301,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         }
     }
 
-    return {required_columns_tmp, source_columns_tmp, need_cast_column};
+    return {required_columns_tmp, need_cast_column};
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
