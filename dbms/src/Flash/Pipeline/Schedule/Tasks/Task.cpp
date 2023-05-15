@@ -91,7 +91,7 @@ Task::~Task()
 ExecTaskStatus Task::execute()
 {
     CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
+    assert(mem_tracker.get() == current_memory_tracker);
     assertNormalStatus(ExecTaskStatus::RUNNING);
     switchStatus(executeImpl());
     return exec_status;
@@ -100,7 +100,7 @@ ExecTaskStatus Task::execute()
 ExecTaskStatus Task::executeIO()
 {
     CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
+    assert(mem_tracker.get() == current_memory_tracker);
     assertNormalStatus(ExecTaskStatus::IO);
     switchStatus(executeIOImpl());
     return exec_status;
@@ -109,7 +109,7 @@ ExecTaskStatus Task::executeIO()
 ExecTaskStatus Task::await()
 {
     CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
+    assert(mem_tracker.get() == current_memory_tracker);
     assertNormalStatus(ExecTaskStatus::WAITING);
     switchStatus(awaitImpl());
     return exec_status;

@@ -33,22 +33,26 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
 bool WaitReactor::awaitAndCollectReadyTask(TaskPtr && task)
 {
     assert(task);
-    TRACE_MEMORY(task);
+    task->startTraceMemory();
     auto status = task->await();
     switch (status)
     {
     case ExecTaskStatus::WAITING:
+        task->endTraceMemory();
         return false;
     case ExecTaskStatus::RUNNING:
         task->profile_info.elapsedAwaitTime();
+        task->endTraceMemory();
         cpu_tasks.push_back(std::move(task));
         return true;
     case ExecTaskStatus::IO:
         task->profile_info.elapsedAwaitTime();
+        task->endTraceMemory();
         io_tasks.push_back(std::move(task));
         return true;
     case FINISH_STATUS:
         task->profile_info.elapsedAwaitTime();
+        task->endTraceMemory();
         FINALIZE_TASK(task);
         return true;
     default:
@@ -126,7 +130,6 @@ void WaitReactor::react(std::list<TaskPtr> & local_waiting_tasks)
             task_it = local_waiting_tasks.erase(task_it);
         else
             ++task_it;
-        ASSERT_MEMORY_TRACKER
     }
     GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
@@ -146,7 +149,6 @@ void WaitReactor::doLoop()
 {
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
-    ASSERT_MEMORY_TRACKER
 
     std::list<TaskPtr> local_waiting_tasks;
     while (takeFromWaitingTaskList(local_waiting_tasks))

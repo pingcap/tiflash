@@ -53,11 +53,6 @@ public:
 
     virtual ~Task();
 
-    MemoryTrackerPtr getMemTracker() const
-    {
-        return mem_tracker;
-    }
-
     ExecTaskStatus execute();
 
     ExecTaskStatus executeIO();
@@ -67,6 +62,18 @@ public:
     // `finalize` must be called before destructuring.
     // `TaskHelper::FINALIZE_TASK` can help this.
     void finalize();
+
+    ALWAYS_INLINE void startTraceMemory()
+    {
+        assert(nullptr == current_memory_tracker);
+        assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
+        current_memory_tracker = mem_tracker.get();
+    }
+    ALWAYS_INLINE void endTraceMemory()
+    {
+        CurrentMemoryTracker::submitLocalDeltaMemory();
+        current_memory_tracker = nullptr;
+    }
 
 public:
     LoggerPtr log;

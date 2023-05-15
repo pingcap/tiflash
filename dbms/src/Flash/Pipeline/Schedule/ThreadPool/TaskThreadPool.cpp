@@ -71,7 +71,6 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
     auto thread_logger = logger->getChild(thread_no_str);
     setThreadName(thread_no_str.c_str());
     LOG_INFO(thread_logger, "start loop");
-    ASSERT_MEMORY_TRACKER
 
     TaskPtr task;
     while (likely(task_queue->take(task)))
@@ -79,7 +78,6 @@ void TaskThreadPool<Impl>::doLoop(size_t thread_no)
         metrics.decPendingTask();
         handleTask(task);
         assert(!task);
-        ASSERT_MEMORY_TRACKER
     }
 
     LOG_INFO(thread_logger, "loop finished");
@@ -89,7 +87,7 @@ template <typename Impl>
 void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
-    TRACE_MEMORY(task);
+    task->startTraceMemory();
 
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
@@ -114,15 +112,19 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
+        task->endTraceMemory();
         scheduler.submitToCPUTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::IO:
+        task->endTraceMemory();
         scheduler.submitToIOTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::WAITING:
+        task->endTraceMemory();
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
+        task->endTraceMemory();
         FINALIZE_TASK(task);
         break;
     default:
