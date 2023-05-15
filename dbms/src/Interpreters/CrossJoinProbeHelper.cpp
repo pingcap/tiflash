@@ -322,7 +322,7 @@ Block crossProbeBlockDeepCopyRightBlockImpl(
     size_t current_row = probe_process_info.start_row;
     size_t block_rows = probe_process_info.block.rows();
     MutableColumns dst_columns(probe_process_info.result_block_schema.columns());
-    size_t reserved_rows = (block_rows - current_row) * probe_process_info.right_rows_to_be_added_when_matched;
+    size_t reserved_rows = std::min((block_rows - current_row) * probe_process_info.right_rows_to_be_added_when_matched, probe_process_info.max_block_size);
     for (size_t i = 0; i < probe_process_info.result_block_schema.columns(); ++i)
     {
         dst_columns[i] = probe_process_info.result_block_schema.getByPosition(i).column->cloneEmpty();

@@ -800,7 +800,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
-    bool matched_row_count_in_current_block = 0;
+    UInt64 matched_row_count_in_current_block = 0;
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         assert(probe_process_info.has_row_matched == false);
@@ -847,7 +847,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             for (size_t i = 0; i < block.columns(); ++i)
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, matched_row_count_in_current_block);
         }
-        else if (probe_process_info.next_right_block_index == probe_process_info.right_block_size)
+        else if (probe_process_info.isCurrentProbeRowFinished())
         {
             /// no more matched rows for current row, return the un-matched result
             for (size_t i = 0; i < block.columns(); ++i)
@@ -879,7 +879,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             /// has matched rows, return the first row, and set the current row probe done
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
-            probe_process_info.next_right_block_index = probe_process_info.right_block_size;
+            probe_process_info.finishCurrentProbeRow();
         }
         else
         {
@@ -894,9 +894,9 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         if (probe_process_info.has_row_matched)
         {
             block = block.cloneEmpty();
-            probe_process_info.next_right_block_index = probe_process_info.right_block_size;
+            probe_process_info.finishCurrentProbeRow();
         }
-        else if (probe_process_info.next_right_block_index == probe_process_info.right_block_size)
+        else if (probe_process_info.isCurrentProbeRowFinished())
         {
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
@@ -910,7 +910,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     /// case 5, left outer semi join
     if (isLeftOuterSemiFamily(kind))
     {
-        if (probe_process_info.has_row_matched || probe_process_info.next_right_block_index == probe_process_info.right_block_size)
+        if (probe_process_info.has_row_matched || probe_process_info.isCurrentProbeRowFinished())
         {
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
@@ -923,7 +923,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             else if (probe_process_info.has_row_null)
                 match_nullmap_vec[0] = 1;
             block.getByName(match_helper_name).column = ColumnNullable::create(std::move(match_col), std::move(match_nullmap));
-            probe_process_info.next_right_block_index = probe_process_info.right_block_size;
+            probe_process_info.finishCurrentProbeRow();
         }
         else
         {

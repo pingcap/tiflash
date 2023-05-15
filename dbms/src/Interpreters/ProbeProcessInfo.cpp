@@ -138,4 +138,17 @@ void ProbeProcessInfo::cutFilterAndOffsetVector(size_t start, size_t end)
     if (offsets_to_replicate != nullptr)
         offsets_to_replicate->assign(offsets_to_replicate->begin() + start, offsets_to_replicate->begin() + end);
 }
+
+bool ProbeProcessInfo::isCurrentProbeRowFinished() const
+{
+    /// only used in cross join of shallow copy cross probe mode
+    return next_right_block_index == right_block_size;
+}
+
+void ProbeProcessInfo::finishCurrentProbeRow()
+{
+    /// only used in cross join of shallow copy cross probe mode
+    next_right_block_index = right_block_size;
+}
+
 } // namespace DB

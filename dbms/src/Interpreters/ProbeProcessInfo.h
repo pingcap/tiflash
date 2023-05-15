@@ -128,5 +128,7 @@ struct ProbeProcessInfo
         size_t right_block_size);
 
     void cutFilterAndOffsetVector(size_t start, size_t end);
+    bool isCurrentProbeRowFinished() const;
+    void finishCurrentProbeRow();
 };
 } // namespace DB
