@@ -129,6 +129,7 @@ private:
         : lease_id(l)
         , lease_deadline(first_deadline)
         , writer(std::move(w))
+        , finished(false)
         , log(Logger::get(fmt::format("lease={:x}", lease_id)))
     {
     }
@@ -140,6 +141,7 @@ private:
     TimePoint lease_deadline;
 
     KeepAliveWriter writer;
+    bool finished;
 
     LoggerPtr log;
 };
