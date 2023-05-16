@@ -865,6 +865,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
+
     UseSSL ssl_holder;
 
     const auto log = Logger::get();
@@ -1224,9 +1227,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
-    /// Initialize the labels of tiflash compute node.
-    ComputeLabelHolder::instance().init(config());
-
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -1506,7 +1506,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // For test mode, TaskScheduler is controlled by test case.
-    bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
+    bool enable_pipeline = (settings.enable_pipeline || settings.force_enable_pipeline) && !global_context->isTest();
     if (enable_pipeline)
     {
         auto get_pool_size = [](const auto & setting) {
