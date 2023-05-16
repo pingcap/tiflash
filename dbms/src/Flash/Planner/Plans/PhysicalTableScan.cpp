@@ -78,9 +78,18 @@ void PhysicalTableScan::buildPipeline(
     PipelineExecutorStatus & exec_status)
 {
     // For building PipelineExec in compile time.
-    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
-    storage_interpreter.execute(exec_status, pipeline_exec_builder);
-    buildProjection(exec_status, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        disaggregated_tiflash_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        storage_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+    }
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }

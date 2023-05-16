@@ -75,6 +75,20 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    void read(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        const Names & /*column_names*/,
+        const SelectQueryInfo & /*query_info*/,
+        const Context & /*context*/,
+        size_t /*max_block_size*/,
+        unsigned /*num_streams*/) override
+    {
+        throw Exception(
+            fmt::format("Method read(push model) is not supported by storage {}", getName()),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
