@@ -23,7 +23,13 @@
 #endif
 
 #include <Common/Config/TOMLConfiguration.h>
+#include <Common/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
+<<<<<<< HEAD
+=======
+#include <boost_wrapper/string.h>
+#include <common/logger_useful.h>
+>>>>>>> 063ae0076d (Check CPU cores in CPUAffinityManagerTest (#7473))
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -85,6 +91,15 @@ TEST(CPUAffinityManager_test, CPUAffinityManager)
     cpu_set_t cpu_set;
     int ret = sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
     ASSERT_EQ(ret, 0) << strerror(errno);
+
+    auto n_cpu = std::thread::hardware_concurrency();
+    auto cpu_cores = cpu_affinity.cpuSetToVec(cpu_set);
+    if (n_cpu != cpu_cores.size())
+    {
+        LOG_INFO(Logger::get(), "n_cpu = {}, cpu_cores = {}, CPU number and CPU cores not match, don't not check CPUAffinityManager", n_cpu, cpu_cores);
+        return;
+    }
+    LOG_DEBUG(Logger::get(), "n_cpu = {}, cpu_cores = {}", n_cpu, cpu_cores);
 
     cpu_affinity.bindSelfQueryThread();
     cpu_set_t cpu_set0;
