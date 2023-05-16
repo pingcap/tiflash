@@ -63,12 +63,6 @@ public:
 
     void updateStreams(Context & context);
 
-    // generate sourceOps in compile time
-    void buildPipeline(
-        PipelineBuilder & builder,
-        Context & context,
-        PipelineExecutorStatus & exec_status) override;
-
     void buildPipelineExecGroup(
         PipelineExecutorStatus &,
         PipelineExecGroupBuilder & group_builder,
@@ -77,8 +71,6 @@ public:
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
-
-    void buildSourceOps(Context & context, PipelineExecutorStatus & exec_status);
 
 private:
     FilterConditions filter_conditions;

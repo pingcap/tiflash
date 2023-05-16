@@ -327,7 +327,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-    size_t remote_read_start_index = group_builder.concurrency;
+    size_t remote_read_start_index = group_builder.concurrency();
 
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
@@ -335,7 +335,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     for (const auto & lock : drop_locks)
         dagContext().addTableLock(lock);
 
-    if (group_builder.concurrency == 0)
+    if (group_builder.empty())
     {
         group_builder.addGroup(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
         // reset remote_read_start_index for null_source_if_empty.

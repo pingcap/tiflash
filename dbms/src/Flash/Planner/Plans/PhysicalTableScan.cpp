@@ -92,7 +92,7 @@ void PhysicalTableScan::buildPipelineExecGroup(
     Context &,
     size_t)
 {
-    assert(group_builder.concurrency == 0);
+    assert(group_builder.empty());
     group_builder = std::move(pipeline_exec_builder);
     buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }

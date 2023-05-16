@@ -1174,11 +1174,11 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream);
 
-    group_builder.addGroups(final_num_stream);
-    group_builder.transform([&](auto & builder) {
+    for (size_t i = 0; i < final_num_stream; ++i)
+    {
         if (enable_read_thread)
         {
-            builder.setSourceOp(
+            group_builder.addGroup(
                 std::make_unique<UnorderedSourceOp>(
                     exec_status,
                     read_task_pool,
@@ -1189,7 +1189,7 @@ void DeltaMergeStore::read(
         }
         else
         {
-            builder.setSourceOp(
+            group_builder.addGroup(
                 std::make_unique<DMSegmentThreadSourceOp>(
                     exec_status,
                     dm_context,
@@ -1204,10 +1204,8 @@ void DeltaMergeStore::read(
                     physical_table_id,
                     log_tracing_id));
         }
-    });
-    LOG_DEBUG(tracing_logger, "Read create Pi done");
-
-    return res;
+    }
+    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr

@@ -60,35 +60,24 @@ Block PipelineExecBuilder::getCurrentHeader() const
 
 void PipelineExecGroupBuilder::addGroup(SourceOpPtr && source)
 {
-    ++concurrency;
     group.emplace_back();
     group.back().setSourceOp(std::move(source));
 }
 
-void PipelineExecGroupBuilder::addGroups(size_t num)
-{
-    if unlikely (num == 0)
-        return;
-    concurrency += num;
-    group.resize(concurrency);
-}
-
 void PipelineExecGroupBuilder::reset()
 {
-    concurrency = 0;
     group.clear();
 }
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
 {
-    concurrency += other.concurrency;
     for (auto && g : other.group)
         group.push_back(std::move(g));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(concurrency > 0);
+    RUNTIME_CHECK(!group.empty());
     PipelineExecGroup pipeline_exec_group;
     for (auto & builder : group)
         pipeline_exec_group.push_back(builder.build());

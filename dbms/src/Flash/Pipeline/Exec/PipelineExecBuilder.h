@@ -39,10 +39,11 @@ struct PipelineExecGroupBuilder
     using BuilderGroup = std::vector<PipelineExecBuilder>;
     BuilderGroup group;
 
-    size_t concurrency = 0;
+    size_t concurrency() { return group.size(); }
+
+    bool empty() { return group.empty(); }
 
     void addGroup(SourceOpPtr && source);
-    void addGroups(size_t num);
 
     void reset();
 
@@ -52,7 +53,6 @@ struct PipelineExecGroupBuilder
     template <typename FF>
     void transform(FF && ff)
     {
-        assert(concurrency > 0);
         for (auto & builder : group)
         {
             ff(builder);

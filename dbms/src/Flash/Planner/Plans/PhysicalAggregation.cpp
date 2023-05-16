@@ -175,7 +175,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
-    size_t concurrency = group_builder.concurrency;
+    size_t concurrency = group_builder.concurrency();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),

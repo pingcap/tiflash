@@ -928,7 +928,7 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-SourceOps StorageDeltaMerge::read(
+void StorageDeltaMerge::read(
     PipelineExecutorStatus & exec_status_,
     PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
@@ -961,7 +961,7 @@ SourceOps StorageDeltaMerge::read(
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
-    auto source_ops = store->read(
+    store->read(
         exec_status_,
         group_builder,
         context,
@@ -982,9 +982,7 @@ SourceOps StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
 
-    LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
-
-    return source_ops;
+    LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
