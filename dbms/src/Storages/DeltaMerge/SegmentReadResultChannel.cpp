@@ -31,7 +31,24 @@ SegmentReadResultChannel::SegmentReadResultChannel(const Options & options)
 
 SegmentReadResultChannel::~SegmentReadResultChannel()
 {
-    LOG_DEBUG(log, "Destroy ResultChannel");
+    auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
+    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
+    auto total_count = blk_stat.totalCount();
+    auto total_bytes = blk_stat.totalBytes();
+    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
+    auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
+
+    LOG_DEBUG(
+        log,
+        "Destroy ResultChannel, pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB",
+        pop_times,
+        pop_empty_times,
+        pop_empty_ratio,
+        max_queue_size,
+        blk_avg_bytes,
+        approximate_max_pending_block_bytes / 1024.0 / 1024.0,
+        total_count,
+        total_bytes / 1024.0 / 1024.0);
 }
 
 void SegmentReadResultChannel::pushBlock(Block && block)

@@ -100,9 +100,6 @@ public:
     friend class tests::RNRemoteReadTaskTest;
     friend struct DB::FetchPagesRequest;
 
-public:
-    Int64 todo_physical_table_id = -1;
-
 private:
     void insertTask(const RNRemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
 

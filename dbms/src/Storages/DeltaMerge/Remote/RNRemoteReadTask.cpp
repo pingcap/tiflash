@@ -68,9 +68,6 @@ RNRemoteReadTask::RNRemoteReadTask(
         // Push all inited tasks to ready queue
         for (const auto & table_task : store_task->table_read_tasks)
         {
-            if (todo_physical_table_id == -1)
-                todo_physical_table_id = table_task->ks_table_id.second;
-
             for (const auto & seg_task : table_task->tasks)
             {
                 // TODO: If all pages are ready in local
