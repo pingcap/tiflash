@@ -445,11 +445,11 @@ void SyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size
 
 void AsyncMPPTunnelSetWriter::writeToTunnel(TrackedMppDataPacketPtr && data, size_t index)
 {
-    mpp_tunnel_set->nonBlockingWrite(std::move(data), index);
+    mpp_tunnel_set->forceWrite(std::move(data), index);
 }
 
 void AsyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size_t index)
 {
-    mpp_tunnel_set->nonBlockingWrite(response, index);
+    mpp_tunnel_set->forceWrite(response, index);
 }
 } // namespace DB

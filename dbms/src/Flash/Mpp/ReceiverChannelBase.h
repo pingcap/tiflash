@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/FailPoint.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
@@ -90,7 +90,7 @@ struct ReceivedMessage
 };
 
 using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
-using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>;
+using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
 class ReceiverChannelBase
 {

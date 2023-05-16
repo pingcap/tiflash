@@ -17,6 +17,8 @@
 #include <Debug/MockExecutor/FuncSigMap.h>
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Parsers/ASTFunction.h>
+#include <tipb/expression.pb.h>
+
 
 namespace DB::mock
 {
@@ -73,6 +75,7 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             ft->set_decimal(first_arg_type.decimal());
             break;
         }
+        case tipb::ExprType::FirstValue:
         case tipb::ExprType::LastValue:
         {
             assert(window_expr->children_size() == 1);
@@ -209,6 +212,7 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
                 }
                 break;
             }
+            case tipb::ExprType::FirstValue:
             case tipb::ExprType::LastValue:
             {
                 ci = children_ci[0];

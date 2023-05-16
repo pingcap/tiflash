@@ -145,13 +145,7 @@ void Event::scheduleTasks()
         unfinished_tasks);
     if (!tasks.empty())
     {
-        // If query has already been cancelled, we can skip scheduling tasks.
-        // Then tasks will be destroyed and call `onTaskFinish`.
-        if (likely(!exec_status.isCancelled()))
-        {
-            LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-            TaskScheduler::instance->submit(tasks);
-        }
+        TaskScheduler::instance->submit(tasks);
         tasks.clear();
     }
     else
@@ -161,9 +155,10 @@ void Event::scheduleTasks()
     }
 }
 
-void Event::onTaskFinish()
+void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 {
     assertStatus(EventStatus::SCHEDULED);
+    exec_status.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
         remaining_tasks >= 0,

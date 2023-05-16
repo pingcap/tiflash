@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
@@ -20,6 +23,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -125,6 +129,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
 }
 
+// Return store status of this tiflash node
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -140,11 +145,44 @@ HttpRequestRes HandleHttpRequestStoreStatus(
             .view = BaseBuffView{name->data(), name->size()}}};
 }
 
+HttpRequestRes HandleHttpRequestRemoteStoreSync(
+    EngineStoreServerWrap * server,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto * body = RawCppString::New(fmt::format(
+            R"json({{"message":"can not sync remote store on a node with disagg_mode={}"}})json",
+            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
+        return HttpRequestRes{
+            .status = HttpRequestStatus::ErrorParam,
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{body->data(), body->size()}},
+        };
+    }
+
+    bool flag_set = global_ctx.trySyncAllDataToRemoteStore();
+    auto * body = RawCppString::New(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
+    return HttpRequestRes{
+        .status = flag_set ? HttpRequestStatus::Ok : HttpRequestStatus::ErrorParam,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()}},
+    };
+}
+
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::string_view, const std::string &, std::string_view, std::string_view);
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
-    {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
+    {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    {"/tiflash/sync-remote-store", HandleHttpRequestRemoteStoreSync},
+};
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {

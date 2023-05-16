@@ -55,7 +55,7 @@ enum class DAGRequestType
 };
 
 /** Responsible for Hand write tipb::DAGRequest
-  * Use this class to mock DAGRequest, then feed the DAGRequest into 
+  * Use this class to mock DAGRequest, then feed the DAGRequest into
   * the Interpreter for test purpose.
   * The mockTable() method must called first in order to generate the table schema.
   * After construct all necessary operators in DAGRequest, call build() to generate DAGRequest。
@@ -295,6 +295,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Lag1(expr) makeASTFunction("Lag", (expr))
 #define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
 #define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
+#define FirstValue(expr) makeASTFunction("FirstValue", (expr))
 #define LastValue(expr) makeASTFunction("LastValue", (expr))
 } // namespace tests
 } // namespace DB
