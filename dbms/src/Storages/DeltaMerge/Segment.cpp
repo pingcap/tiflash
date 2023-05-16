@@ -57,7 +57,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-#include <memory>
 
 namespace ProfileEvents
 {
@@ -2780,6 +2779,13 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
+    // construct extra cast stream if needed
+    if (filter->extra_cast)
+    {
+        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->extra_cast, dm_context.tracing_id);
+        filter_column_stream->setExtraInfo("cast after tableScan");
+    }
+
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
@@ -2808,7 +2814,6 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->delta,
         rest_columns_to_read,
         this->rowkey_range);
-
     SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
         *rest_columns_to_read,
         rest_column_stable_stream,

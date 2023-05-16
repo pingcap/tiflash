@@ -833,6 +833,11 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         LOG_DEBUG(tracing_logger, "Extra cast for filter columns: {}", extra_cast->dumpActions());
     }
 
+    // build filter expression actions
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
+    LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
+
+    // record current column defines
     auto columns_after_cast = std::make_shared<ColumnDefines>();
     if (extra_cast != nullptr)
     {
@@ -849,9 +854,6 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         }
     }
 
-    // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
-    LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
     return std::make_shared<PushDownFilter>(rs_operator, before_where, project_after_where, filter_columns, filter_column_name, extra_cast, columns_after_cast);
 }
 

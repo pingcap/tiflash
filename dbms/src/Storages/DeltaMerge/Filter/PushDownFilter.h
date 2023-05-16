@@ -48,21 +48,21 @@ public:
     {}
 
     // Rough set operator
-    RSOperatorPtr rs_operator;
+    const RSOperatorPtr rs_operator;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
-    ExpressionActionsPtr before_where;
+    const ExpressionActionsPtr before_where;
     // The projection after the filter, used to remove the tmp filter column
     // Used to construct the ExpressionBlockInputStream
     // Note: ususally we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
-    ExpressionActionsPtr project_after_where;
-    String filter_column_name;
+    const ExpressionActionsPtr project_after_where;
+    const String filter_column_name;
     // The columns needed by the filter expression
-    ColumnDefinesPtr filter_columns;
+    const ColumnDefinesPtr filter_columns;
     // The expression actions used to cast the timestamp/datetime column
-    ExpressionActionsPtr extra_cast;
+    const ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed
-    ColumnDefinesPtr columns_after_cast;
+    const ColumnDefinesPtr columns_after_cast;
 };
 
 } // namespace DB::DM

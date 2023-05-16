@@ -126,7 +126,7 @@ try
     {
         // Equal between col and literal
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -140,13 +140,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Greater between col and literal
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 > 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -160,13 +160,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // GreaterEqual between col and literal
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 >= 667", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -180,13 +180,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Less between col and literal
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 < 777", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -200,13 +200,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // LessEqual between col and literal
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 <= 776", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -220,7 +220,7 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 }
 CATCH
@@ -240,7 +240,7 @@ try
     {
         // Equal between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 = col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -254,13 +254,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // NotEqual between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 != col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "not_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -274,13 +274,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Greater between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 < col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -294,13 +294,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // GreaterEqual between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 667 <= col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -314,13 +314,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Less between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 777 > col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -334,13 +334,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // LessEqual between literal and col (take care of direction)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where 777 >= col_2", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -354,7 +354,7 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 }
 CATCH
@@ -376,7 +376,7 @@ try
     {
         // Not
         auto filter = generatePushDownFilter(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "not");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -392,13 +392,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // And
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -415,13 +415,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // OR
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 or col_2 = 777", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -439,14 +439,14 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 0);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     // More complicated
     {
         // And with "not supported"
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -463,13 +463,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // And with not
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_3 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -487,13 +487,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 0);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // And with or
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 3);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -513,13 +513,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 1);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // Or with "not supported"
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' or col_2 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -536,13 +536,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 2);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // Or with not
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
@@ -559,13 +559,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 2);
+        EXPECT_EQ(filter->filter_columns->size(), 2);
     }
 
     {
         // And between col and literal (not supported since And only support when child is ColumnExpr)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 and 1", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical and is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
 
@@ -578,14 +578,14 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 6);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     std::cout << " do query select * from default.t_111 where col_2 or 1 " << std::endl;
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto filter = generatePushDownFilter(table_info_json, "select * from default.t_111 where col_2 or 1", default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 8 flag: 4097 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"unsupported\",\"reason\":\"child of logical operator is not function\",\"content\":\"tp: Uint64 val: \"\\000\\000\\000\\000\\000\\000\\000\\001\" field_type { tp: 1 flag: 4129 flen: 0 decimal: 0 collate: 0 }\",\"is_not\":\"0\"}]}");
 
@@ -597,7 +597,7 @@ try
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         EXPECT_TRUE(col->isColumnConst()); // always true, so filter column is const column
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     // TODO: add is null and is not null test case
@@ -637,7 +637,7 @@ try
         // converted_time: 0
 
         auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
@@ -654,7 +654,7 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 3);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
@@ -666,7 +666,7 @@ try
         // converted_time: 1802216518491045888
 
         auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
@@ -683,7 +683,7 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
@@ -695,7 +695,7 @@ try
         // converted_time: 0
 
         auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
@@ -712,13 +712,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 7);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Greater between Datetime col and Datetime literal
         auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"), default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_datetime");
@@ -734,13 +734,13 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 4);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 
     {
         // Greater between Date col and Datetime literal
         auto filter = generatePushDownFilter(table_info_json, String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"), default_timezone_info);
-        auto & rs_operator = filter->rs_operator;
+        const auto & rs_operator = filter->rs_operator;
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_date");
@@ -756,7 +756,7 @@ try
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
         const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&(*col));
         EXPECT_EQ(countBytesInFilter(concrete_column->getData()), 3);
-        EXPECT_EQ(filter->filter_columns.size(), 1);
+        EXPECT_EQ(filter->filter_columns->size(), 1);
     }
 }
 CATCH

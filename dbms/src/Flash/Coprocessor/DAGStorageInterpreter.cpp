@@ -1281,8 +1281,11 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
 
     std::unordered_set<ColumnID> col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
-    {
         getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    {
+        for (const auto & expr : filter_conditions.conditions)
+            getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
     }
     for (const auto & col : table_scan.getColumns())
     {
