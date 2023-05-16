@@ -27,7 +27,7 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
-#include <Operators/UnorderedSourceOp.h>
+#include <Operators/ResultChannelSourceOp.h>
 #include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
@@ -1193,7 +1193,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         if (enable_read_thread)
         {
             res.push_back(
-                std::make_unique<UnorderedSourceOp>(
+                std::make_unique<ResultChannelSourceOp>(
                     exec_status,
                     read_task_pool->getResultChannel(),
                     log_tracing_id));

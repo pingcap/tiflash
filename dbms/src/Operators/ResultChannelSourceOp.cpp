@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/UnorderedSourceOp.h>
+#include <Operators/ResultChannelSourceOp.h>
 
 namespace DB
 {
-OperatorStatus UnorderedSourceOp::readImpl(Block & block)
+OperatorStatus ResultChannelSourceOp::readImpl(Block & block)
 {
     auto await_status = awaitImpl();
     if (await_status == OperatorStatus::HAS_OUTPUT)
@@ -30,7 +30,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     return await_status;
 }
 
-OperatorStatus UnorderedSourceOp::awaitImpl()
+OperatorStatus ResultChannelSourceOp::awaitImpl()
 {
     if (t_block.has_value())
         return OperatorStatus::HAS_OUTPUT;

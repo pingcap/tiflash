@@ -38,7 +38,7 @@
 #include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
-#include <Operators/UnorderedSourceOp.h>
+#include <Operators/ResultChannelSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>

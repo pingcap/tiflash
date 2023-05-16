@@ -25,10 +25,10 @@ namespace DB
 
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
-class UnorderedSourceOp : public SourceOp
+class ResultChannelSourceOp : public SourceOp
 {
 public:
-    UnorderedSourceOp(
+    ResultChannelSourceOp(
         PipelineExecutorStatus & exec_status_,
         const DM::SegmentReadResultChannelPtr & result_channel_,
         const String & debug_tag)
@@ -42,7 +42,7 @@ public:
         LOG_DEBUG(log, "Created ResultChannelSourceOp, ref_no={}", ref_no);
     }
 
-    ~UnorderedSourceOp() override
+    ~ResultChannelSourceOp() override
     {
         auto remaining_refs = result_channel->derefConsumer();
         LOG_DEBUG(log, "Destroy ResultChannelSourceOp, ref_no={} remaining_refs={}", ref_no, remaining_refs);
@@ -50,7 +50,7 @@ public:
 
     String getName() const override
     {
-        return "UnorderedSourceOp";
+        return "ResultChannelSourceOp";
     }
 
     void operatePrefix() override
