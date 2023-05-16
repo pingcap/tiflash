@@ -12,22 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 
 namespace DB
 {
-bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks) noexcept
+bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks)
 {
     {
         std::unique_lock lock(mu);
         while (true)
         {
-            if (unlikely(is_closed))
-                return false;
             if (!waiting_tasks.empty())
                 break;
+            if (unlikely(is_finished))
+                return false;
             cv.wait(lock);
         }
 
@@ -37,36 +38,48 @@ bool WaitingTaskList::take(std::list<TaskPtr> & local_waiting_tasks) noexcept
     return true;
 }
 
-bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks) noexcept
+bool WaitingTaskList::tryTake(std::list<TaskPtr> & local_waiting_tasks)
 {
     std::lock_guard lock(mu);
-    if (unlikely(is_closed))
-        return false;
+    if (waiting_tasks.empty())
+        return !is_finished;
     local_waiting_tasks.splice(local_waiting_tasks.end(), waiting_tasks);
     return true;
 }
 
-void WaitingTaskList::close()
+void WaitingTaskList::finish()
 {
     {
         std::lock_guard lock(mu);
-        is_closed = true;
+        is_finished = true;
     }
     cv.notify_all();
 }
 
-void WaitingTaskList::submit(TaskPtr && task) noexcept
+void WaitingTaskList::submit(TaskPtr && task)
 {
-    assert(task);
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASK(task);
+        return;
+    }
+
     {
         std::lock_guard lock(mu);
+        assert(task);
         waiting_tasks.emplace_back(std::move(task));
     }
     cv.notify_one();
 }
 
-void WaitingTaskList::submit(std::list<TaskPtr> & tasks) noexcept
+void WaitingTaskList::submit(std::list<TaskPtr> & tasks)
 {
+    if unlikely (is_finished)
+    {
+        FINALIZE_TASKS(tasks);
+        return;
+    }
+
     if (tasks.empty())
         return;
     {

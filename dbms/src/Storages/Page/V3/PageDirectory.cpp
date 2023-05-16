@@ -305,9 +305,9 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
+        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
         auto & ori_entry = last_iter->second.entry;
-        RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
+        RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
@@ -536,12 +536,8 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 
     auto page_lock = acquireLock();
 
-    if (type != EditRecordType::VAR_ENTRY)
-    {
-        // For example, Put X -> Delete X -> dumpSnapshotToEdit -> Full GC -> Delete X -> copyCheckpointInfoFromEdit.
-        // In this case, we have X=VAR_ENTRY in the `edit`, but will get X=VAR_DELETE in the page directory.
-        return;
-    }
+    // This entry must be valid because it must be visible for the snap which is used to dump checkpoint, so it cannot be gced
+    RUNTIME_CHECK(type == EditRecordType::VAR_ENTRY);
 
     // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
     // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
@@ -563,7 +559,14 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     {
         // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
         RUNTIME_CHECK(iter->second.isEntry());
+
+        bool is_local_data_reclaimed = false;
+        if (iter->second.entry.checkpoint_info.has_value())
+            is_local_data_reclaimed = iter->second.entry.checkpoint_info.is_local_data_reclaimed;
+        // else it does not have checkpoint_info, local data must be not reclaimed
+
         iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
+        iter->second.entry.checkpoint_info.is_local_data_reclaimed = is_local_data_reclaimed; // keep this field value
 
         if (iter == entries.begin())
             break;
@@ -923,22 +926,14 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             }
             auto last_version = last_iter->first;
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
-            while (true)
+            if (prev_iter->second.isEntry())
             {
-                // if there is any entry prev to this delete entry,
-                //   1) the entry may be ref by another id.
-                //   2) the entry may be upsert into a newer wal file by the gc process.
-                // So we need to keep the entry item and its delete entry in the snapshot.
-                if (prev_iter->second.isEntry())
-                {
-                    const auto & entry = prev_iter->second;
-                    edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
-                    edit.varDel(page_id, last_version);
-                    break;
-                }
-                if (prev_iter == entries.begin())
-                    break;
-                prev_iter--;
+                if (prev_iter->second.being_ref_count == 1)
+                    return;
+                // It is being ref by another id, should persist the item and delete
+                const auto & entry = prev_iter->second;
+                edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
+                edit.varDel(page_id, last_version);
             }
         }
         return;
@@ -1872,23 +1867,24 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
+size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & edit)
 {
+    size_t num_copied = 0;
     const auto & records = edit.getRecords();
     if (records.empty())
-        return;
+        return num_copied;
 
     // Pre-check: All ENTRY edit record must contain checkpoint info.
     // We do the pre-check before copying any remote info to avoid partial completion.
     for (const auto & rec : records)
     {
         if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK(rec.entry.checkpoint_info.has_value());
+            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
     }
 
     for (const auto & rec : records)
     {
-        // Only VAR_ENTRY will contain checkpoint info.
+        // Only VAR_ENTRY need update checkpoint info.
         if (rec.type != EditRecordType::VAR_ENTRY)
             continue;
 
@@ -1907,7 +1903,9 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
         }
 
         entries->copyCheckpointInfoFromEdit(rec);
+        num_copied += 1;
     }
+    return num_copied;
 }
 
 template <typename Trait>

@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
 #include <Common/Exception.h>
 #include <Common/PoolBase.h>
 #include <Common/ProfileEvents.h>
 #include <Common/SipHash.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/config.h>
 #include <IO/HTTPCommon.h>
 #include <Poco/Net/HTTPClientSession.h>
@@ -45,6 +48,10 @@ namespace ProfileEvents
 {
 extern const Event CreatedHTTPConnections;
 }
+namespace CurrentMetrics
+{
+extern const Metric ConnectionPoolSize;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -79,6 +86,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 {
     HTTPSessionPtr session;
 
+    Stopwatch watch;
     if (https)
     {
 #if Poco_NetSSL_FOUND
@@ -89,7 +97,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 
         session = std::move(https_session);
 #else
-        throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "ClickHouse was built without HTTPS support");
+        throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "TiFlash was built without HTTPS support");
 #endif
     }
     else
@@ -97,6 +105,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
         session = std::make_shared<Poco::Net::HTTPClientSession>(resolved_host, port);
     }
+    GET_METRIC(tiflash_storage_s3_http_request_seconds, type_dns).Observe(watch.elapsedSeconds());
 
     ProfileEvents::increment(ProfileEvents::CreatedHTTPConnections);
 
@@ -110,12 +119,13 @@ class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSessi
 private:
     const std::string host;
     const UInt16 port;
-    bool https;
+    const bool https;
     const String proxy_host;
     const UInt16 proxy_port;
-    bool proxy_https;
-    bool resolve_host;
+    const bool proxy_https;
+    const bool resolve_host;
     using Base = PoolBase<Poco::Net::HTTPClientSession>;
+
     ObjectPtr allocObject() override
     {
         auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
@@ -199,6 +209,8 @@ private:
     };
 
     std::mutex mutex;
+    // TODO: one session pool for each endpoint seems not reasonable,
+    //       use a single pool for all endpoints maybe better.
     std::unordered_map<Key, PoolPtr, Hasher> endpoints_pool;
 
 protected:
@@ -218,11 +230,9 @@ public:
         size_t max_connections_per_endpoint,
         bool resolve_host = true)
     {
-        std::lock_guard lock(mutex);
         const std::string & host = uri.getHost();
         UInt16 port = uri.getPort();
         bool https = isHTTPS(uri);
-
 
         String proxy_host;
         UInt16 proxy_port = 0;
@@ -234,12 +244,16 @@ public:
             proxy_https = isHTTPS(proxy_uri);
         }
 
-        HTTPSessionPool::Key key{host, port, https, proxy_host, proxy_port, proxy_https};
+        const HTTPSessionPool::Key key{host, port, https, proxy_host, proxy_port, proxy_https};
+
+        std::lock_guard lock(mutex);
         auto pool_ptr = endpoints_pool.find(key);
         if (pool_ptr == endpoints_pool.end())
             std::tie(pool_ptr, std::ignore) = endpoints_pool.emplace(
                 key,
                 std::make_shared<SingleEndpointHTTPSessionPool>(host, port, https, proxy_host, proxy_port, proxy_https, max_connections_per_endpoint, resolve_host));
+
+        CurrentMetrics::set(CurrentMetrics::ConnectionPoolSize, pool_ptr->second->getPoolSize());
 
         auto retry_timeout = timeouts.connection_timeout.totalMicroseconds();
         auto session = pool_ptr->second->get(retry_timeout);
@@ -298,7 +312,6 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     setTimeouts(*session, timeouts);
     return session;
 }
-
 
 PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
 {

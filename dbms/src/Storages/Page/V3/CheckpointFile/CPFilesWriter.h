@@ -81,9 +81,22 @@ public:
      *
      * You must call `writeSuffix` finally, if you don't plan to write edits anymore.
      */
+    struct CompactOptions
+    {
+        bool compact_all_data;
+        std::unordered_set<String> file_ids;
+
+        explicit CompactOptions(bool full_compact = false)
+            : compact_all_data(full_compact)
+        {}
+        explicit CompactOptions(const std::unordered_set<String> & file_ids)
+            : compact_all_data(false)
+            , file_ids(file_ids)
+        {}
+    };
     CPDataDumpStats writeEditsAndApplyCheckpointInfo(
         universal::PageEntriesEdit & edit,
-        const std::unordered_set<String> & file_ids_to_compact = {});
+        const CompactOptions & options = CompactOptions(false));
 
     /**
      * This function must be called, and must be called last, after other `writeXxx`.

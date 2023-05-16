@@ -394,10 +394,17 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     }
 }
 
+void UniversalPageStorage::waitUntilInitedFromRemoteStore() const
+{
+    LOG_INFO(log, "Waiting for restore checkpoint info from S3");
+    assert(remote_locks_local_mgr != nullptr);
+    remote_locks_local_mgr->waitUntilInited();
+}
+
 void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client)
 {
     assert(remote_locks_local_mgr != nullptr);
-    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client, page_directory);
     if (last_mf_prefix_opt)
     {
         // First init, we need to restore the `last_checkpoint_sequence` from last checkpoint
@@ -427,7 +434,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
-    if (snap->sequence == last_checkpoint_sequence)
+    if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
@@ -439,12 +446,23 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     if (options.override_sequence)
         sequence = options.override_sequence.value();
 
+    {
+        // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
+        // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
+        // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
+        PS::V3::universal::PageDirectoryFactory factory;
+        auto temp_page_directory = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
+        edit_from_mem = temp_page_directory->dumpSnapshotToEdit();
+    }
+
     auto manifest_file_id = fmt::format(
         fmt::runtime(options.manifest_file_id_pattern),
         fmt::arg("seq", sequence));
     auto manifest_file_path = fmt::format(
         fmt::runtime(options.manifest_file_path_pattern),
         fmt::arg("seq", sequence));
+
+    // TODO: After FAP is enabled, we need the `data_source` can read data from a remote store.
 
     auto writer = PS::V3::CPFilesWriter::create({
         .data_file_path_pattern = options.data_file_path_pattern,
@@ -463,13 +481,17 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
-    std::unordered_set<String> file_ids_to_compact;
-    if (options.compact_getter != nullptr)
-    {
-        file_ids_to_compact = options.compact_getter();
-    }
+    PS::V3::CPFilesWriter::CompactOptions compact_opts = [&]() {
+        if (options.full_compact)
+            return PS::V3::CPFilesWriter::CompactOptions(true);
+        if (options.compact_getter == nullptr)
+            return PS::V3::CPFilesWriter::CompactOptions(false);
+        return PS::V3::CPFilesWriter::CompactOptions(options.compact_getter());
+    }();
     // get the remote file ids that need to be compacted
-    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
+    const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(
+        edit_from_mem,
+        compact_opts);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
