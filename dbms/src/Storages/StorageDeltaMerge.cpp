@@ -864,20 +864,26 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         }
     }
 
-    auto columns_after_cast = std::make_shared<DM::ColumnDefines>();
-    if (extra_cast_for_filter_columns != nullptr || extra_cast_for_rest_columns != nullptr)
-    {
-        columns_after_cast->reserve(columns_to_read.size());
-        const auto & source_columns = analyzer->getCurrentInputColumns();
-        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
+        // build filter expression actions
+        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
+        LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
+
+        auto columns_after_cast = std::make_shared<ColumnDefines>();
+        if (extra_cast != nullptr)
         {
-            if (table_scan_column_info[i].hasGeneratedColumnFlag())
-                continue;
-            auto it = columns_to_read_map.at(table_scan_column_info[i].id);
-            RUNTIME_CHECK(it.name == source_columns[i].name);
-            columns_after_cast->push_back(std::move(it));
-            columns_after_cast->back().type = source_columns[i].type;
+            columns_after_cast->reserve(columns_to_read.size());
+            const auto & current_names_and_types = analyzer->getCurrentInputColumns();
+            for (size_t i = 0; i < table_scan_column_info.size(); ++i)
+            {
+                if (table_scan_column_info[i].hasGeneratedColumnFlag())
+                    continue;
+                auto col = columns_to_read_map.at(table_scan_column_info[i].id);
+                RUNTIME_CHECK_MSG(col.name == current_names_and_types[i].name, "Column name mismatch, expect: {}, actual: {}", col.name, current_names_and_types[i].name);
+                columns_after_cast->push_back(col);
+                columns_after_cast->back().type = current_names_and_types[i].type;
+            }
         }
+        return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast, columns_after_cast);
     }
 
     // build filter expression actions

@@ -96,6 +96,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         scheduleEvents();
         wait();
     }
+    LOG_TRACE(log, "query finish with {}", status.getQueryProfileInfo().toJson());
     return status.toExecutionResult();
 }
 
@@ -119,8 +120,16 @@ int PipelineExecutor::estimateNewThreadCount()
 
 RU PipelineExecutor::collectRequestUnit()
 {
-    // TODO support collectRequestUnit
-    return 0;
+    // TODO Get cputime more accurately.
+    // Currently, it is assumed that
+    // - The size of the CPU task thread pool is equal to the number of CPU cores.
+    // - Most of the CPU computations are executed in the CPU task thread pool.
+    // Therefore, `query_profile_info.getCPUExecuteTimeNs()` is approximately equal to the actual CPU time of the query.
+    // However, once these two assumptions are broken, it will lead to inaccurate acquisition of CPU time.
+    // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
+    const auto & query_profile_info = status.getQueryProfileInfo();
+    auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
+    return toRU(ceil(cpu_time_ns));
 }
 
 Block PipelineExecutor::getSampleBlock() const

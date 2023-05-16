@@ -15,8 +15,9 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/Reactor/Spinner.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/WaitingTaskList.h>
 
 #include <list>
 #include <thread>
@@ -30,16 +31,25 @@ class WaitReactor
 public:
     explicit WaitReactor(TaskScheduler & scheduler_);
 
-    void close();
+    // After finish is called, the submitted task will be finalized directly.
+    // And the remaing tasks in waiting_task_list will be taken out and executed normally.
+    void finish();
 
     void waitForStop();
 
-    void submit(TaskPtr && task) noexcept;
+    void submit(TaskPtr && task);
 
-    void submit(std::list<TaskPtr> & tasks) noexcept;
+    void submit(std::list<TaskPtr> & tasks);
 
 private:
-    void loop() noexcept;
+    void loop();
+    void doLoop();
+
+    // Get the incremental tasks from waiting_task_list.
+    // return false if waiting_task_list is empty and has finished.
+    bool takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks);
+
+    void react(std::list<TaskPtr> & local_waiting_tasks);
 
 private:
     WaitingTaskList waiting_task_list;
@@ -47,6 +57,8 @@ private:
     LoggerPtr logger = Logger::get();
 
     TaskScheduler & scheduler;
+
+    Spinner spinner;
 
     std::thread thread;
 };

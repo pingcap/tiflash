@@ -14,7 +14,9 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
+
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
@@ -32,12 +34,7 @@ struct CPUImpl
         return task->execute();
     }
 
-    using QueueType = std::unique_ptr<FIFOTaskQueue>;
-
-    static QueueType newTaskQueue()
-    {
-        return std::make_unique<FIFOTaskQueue>();
-    }
+    static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };
 
 struct IOImpl
@@ -53,11 +50,6 @@ struct IOImpl
         return task->executeIO();
     }
 
-    using QueueType = std::unique_ptr<FIFOTaskQueue>;
-
-    static QueueType newTaskQueue()
-    {
-        return std::make_unique<FIFOTaskQueue>();
-    }
+    static TaskQueuePtr newTaskQueue(TaskQueueType type);
 };
 } // namespace DB

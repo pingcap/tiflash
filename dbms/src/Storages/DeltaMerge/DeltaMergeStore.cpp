@@ -1087,7 +1087,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                filter && (filter->extra_cast_for_filter_columns || filter->extra_cast_for_rest_columns) ? *filter->columns_after_cast : columns_to_read,
+                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
