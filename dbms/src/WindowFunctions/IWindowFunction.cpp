@@ -133,6 +133,44 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     }
 };
 
+struct WindowFunctionFirstValue final : public IWindowFunction
+{
+public:
+    static constexpr auto name = "first_value";
+
+    explicit WindowFunctionFirstValue(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
+    {
+        RUNTIME_CHECK(argument_types_.size() == 1);
+        return_type = argument_types_[0];
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    DataTypePtr getReturnType() const override
+    {
+        return return_type;
+    }
+
+    void windowInsertResultInto(
+        WindowTransformAction & action,
+        size_t function_index,
+        const ColumnNumbers & arguments) override
+    {
+        assert(action.frame_started);
+        IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
+        const auto & value_column = *action.inputAt(action.frame_start)[arguments[0]];
+        const auto & value_field = value_column[action.frame_start.row];
+        to.insert(value_field);
+    }
+
+private:
+    DataTypePtr return_type;
+};
+
 /**
 LEAD/LAG(<expression>[,offset[, default_value]]) OVER (
     PARTITION BY (expr)
@@ -319,5 +357,6 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
     factory.registerFunction<WindowFunctionRowNumber>();
     factory.registerFunction<WindowFunctionLeadLagBase<LeadImpl>>();
     factory.registerFunction<WindowFunctionLeadLagBase<LagImpl>>();
+    factory.registerFunction<WindowFunctionFirstValue>();
 }
 } // namespace DB

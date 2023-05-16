@@ -31,19 +31,18 @@ public:
                    const ExpressionActionsPtr & beofre_where_,
                    const ColumnDefines & filter_columns_,
                    const String filter_column_name_,
-                   const ExpressionActionsPtr & extra_cast_)
+                   const ExpressionActionsPtr & extra_cast_,
+                   const ColumnDefinesPtr & columns_after_cast_)
         : rs_operator(rs_operator_)
         , before_where(beofre_where_)
         , filter_column_name(std::move(filter_column_name_))
         , filter_columns(std::move(filter_columns_))
         , extra_cast(extra_cast_)
+        , columns_after_cast(columns_after_cast_)
     {}
 
     explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
         : rs_operator(rs_operator_)
-        , before_where(nullptr)
-        , filter_columns({})
-        , extra_cast(nullptr)
     {}
 
     // Rough set operator
@@ -56,6 +55,8 @@ public:
     ColumnDefines filter_columns;
     // The expression actions used to cast the timestamp/datetime column
     ExpressionActionsPtr extra_cast;
+    // If the extra_cast is not null, the types of the columns may be changed
+    ColumnDefinesPtr columns_after_cast;
 };
 
 } // namespace DB::DM

@@ -162,7 +162,7 @@ Aws::Auth::AWSCredentials STSAssumeRoleWebIdentityCredentialsProvider::GetAWSCre
 
 void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
 {
-    LOG_INFO(log, "Credentials have expired, attempting to renew from STS.");
+    LOG_INFO(log, "Credentials have expired, attempting to renew from STS, role_arn={} role_session_name={}.", m_role_arn, m_session_name);
 
     std::ifstream token_file(m_token_file.c_str());
     if (token_file)
@@ -177,7 +177,7 @@ void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
     }
     Aws::Internal::STSCredentialsClient::STSAssumeRoleWithWebIdentityRequest request{m_session_name, m_role_arn, m_token};
 
-    auto result = m_client->GetAssumeRoleWithWebIdentityCredentials(request);
+    const auto result = m_client->GetAssumeRoleWithWebIdentityCredentials(request);
     LOG_TRACE(log, "Successfully retrieved credentials with AWS_ACCESS_KEY: {}", result.creds.GetAWSAccessKeyId());
     m_credentials = result.creds;
 }
