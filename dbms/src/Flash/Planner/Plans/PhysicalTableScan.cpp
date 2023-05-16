@@ -77,24 +77,22 @@ void PhysicalTableScan::buildPipeline(
     Context & context,
     PipelineExecutorStatus & exec_status)
 {
-    storage_interpreter = std::make_unique<DAGStorageInterpreter>(
-        context,
-        tidb_table_scan,
-        filter_conditions,
-        context.getMaxStreams());
-    storage_interpreter->execute(exec_status, pipeline_exec_builder);
+    // For building PipelineExec in compile time.
+    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+    storage_interpreter.execute(exec_status, pipeline_exec_builder);
+    buildProjection(exec_status, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }
 
 void PhysicalTableScan::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorStatus & /*exec_status*/,
     PipelineExecGroupBuilder & group_builder,
-    Context &,
-    size_t)
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     assert(group_builder.empty());
     group_builder = std::move(pipeline_exec_builder);
-    buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
