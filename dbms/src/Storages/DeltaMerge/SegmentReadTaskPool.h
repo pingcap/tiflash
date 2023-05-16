@@ -153,16 +153,13 @@ public:
         return mem_tracker;
     }
 
-    SegmentReadResultChannelPtr & getResultChannel()
+    SegmentReadResultChannelPtr getResultChannel() const
     {
         RUNTIME_CHECK(result_channel != nullptr);
         return result_channel;
     }
 
-    bool isFinished() const
-    {
-        return all_finished;
-    }
+    bool valid() const;
 
 private:
     Int64 getFreeActiveSegmentsUnlock() const;

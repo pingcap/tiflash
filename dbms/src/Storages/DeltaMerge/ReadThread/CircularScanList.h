@@ -46,14 +46,12 @@ public:
         last_itr = nextItr(last_itr);
         while (!l.empty())
         {
-            if ((*last_itr)->isFinished() || !(*last_itr)->getResultChannel()->valid())
+            if (!(*last_itr)->valid())
             {
                 LOG_DEBUG(
                     Logger::get(),
-                    "Drop ReadTaskPool from future scheduling, pool_id={} all_segment_finished={} pool_valid={}",
-                    (*last_itr)->poolId(),
-                    (*last_itr)->isFinished(),
-                    (*last_itr)->getResultChannel()->valid());
+                    "Drop ReadTaskPool from future scheduling, pool_id={}",
+                    (*last_itr)->poolId());
 
                 m.erase((*last_itr)->poolId());
                 last_itr = l.erase(last_itr);

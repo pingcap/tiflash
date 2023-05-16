@@ -335,4 +335,9 @@ Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
     return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
 
+bool SegmentReadTaskPool::valid() const
+{
+    return !all_finished && getResultChannel()->valid();
+}
+
 } // namespace DB::DM

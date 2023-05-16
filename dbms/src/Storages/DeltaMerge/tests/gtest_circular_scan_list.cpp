@@ -18,6 +18,7 @@
 
 namespace DB::DM::tests
 {
+
 class Node
 {
 public:
