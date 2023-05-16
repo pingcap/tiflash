@@ -582,6 +582,7 @@ SegmentReadTaskPoolPtr RNRemoteSegmentReadTask::toReadTaskPool(const ToReadTaskP
         read_ranges));
 
     return std::make_shared<SegmentReadTaskPool>(
+        store_id,
         ks_table_id.second,
         options.extra_table_id_index,
         dm_context,

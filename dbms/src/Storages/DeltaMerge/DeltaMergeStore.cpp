@@ -964,6 +964,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
 
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        STORE_ID_I_DONT_CARE,
         physical_table_id,
         extra_table_id_index,
         dm_context,
@@ -1076,6 +1077,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        STORE_ID_I_DONT_CARE,
         physical_table_id,
         extra_table_id_index,
         dm_context,
@@ -1173,6 +1175,7 @@ SourceOps DeltaMergeStore::readSourceOps(
         : std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        STORE_ID_I_DONT_CARE,
         physical_table_id,
         extra_table_id_index,
         dm_context,

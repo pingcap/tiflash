@@ -24,6 +24,40 @@
 #include <memory>
 #include <optional>
 
+namespace DB::DM
+{
+constexpr inline UInt64 STORE_ID_I_DONT_CARE = 0;
+
+struct StoreAndTableId
+{
+    UInt64 store_id;
+    Int64 table_id;
+
+    bool operator==(const StoreAndTableId & other) const
+    {
+        return store_id == other.store_id && table_id == other.table_id;
+    }
+};
+} // namespace DB::DM
+
+namespace std
+{
+
+template <>
+struct hash<DB::DM::StoreAndTableId>
+{
+    std::size_t operator()(const DB::DM::StoreAndTableId & v) const
+    {
+        // See https://stackoverflow.com/a/17017281
+        size_t res = 17;
+        res = res * 31 + hash<UInt64>()(v.store_id);
+        res = res * 31 + hash<Int64>()(v.table_id);
+        return res;
+    }
+};
+
+} // namespace std
+
 namespace DB
 {
 namespace DM
@@ -105,15 +139,20 @@ private:
     std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
 };
 
-/// Note 1: the output of the SegmentReadTaskPool may contain extra TableID column.
-/// Note 2: you must ensure all segments in the pool comes from the same physical table.
+/// Note 1: The output of the SegmentReadTaskPool may contain extra TableID column.
+/// Note 2: You must ensure all segments in the pool comes from the same physical table.
+/// Note 3: In disaggregated mode, you must ensure all segments comes from the same Write Node.
 class SegmentReadTaskPool
     : private boost::noncopyable
     , public std::enable_shared_from_this<SegmentReadTaskPool>
 {
 public:
+    /// In disaggregated mode, store_id must be specified, in order to distinguish
+    /// segments from different stores.
+    /// In non-disaggregated mode, you may simply pass STORE_ID_I_DONT_CARE.
     SegmentReadTaskPool(
-        int64_t table_id_,
+        uint64_t store_id_,
+        int64_t physical_table_id_,
         size_t extra_table_id_index_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
@@ -134,10 +173,6 @@ public:
     const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
     SegmentReadTaskPtr getTask(UInt64 seg_id);
 
-    uint64_t poolId() const { return pool_id; }
-
-    int64_t tableId() const { return table_id; }
-
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
     bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
@@ -148,9 +183,12 @@ public:
 
     Int64 getFreeActiveSegments() const;
 
-    MemoryTrackerPtr & getMemoryTracker()
+    StoreAndTableId getStoreAndTableId() const
     {
-        return mem_tracker;
+        return StoreAndTableId{
+            .store_id = store_id,
+            .table_id = physical_table_id,
+        };
     }
 
     SegmentReadResultChannelPtr getResultChannel() const
@@ -161,13 +199,19 @@ public:
 
     bool valid() const;
 
+public:
+    const uint64_t pool_id;
+    const uint64_t store_id;
+    const int64_t physical_table_id;
+
+    // The memory tracker of MPPTask.
+    const MemoryTrackerPtr mem_tracker;
+
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     void finishSegment(const SegmentPtr & seg);
 
-    const uint64_t pool_id;
     const String debug_tag;
-    const int64_t table_id;
     const size_t extra_table_id_index;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
@@ -185,9 +229,6 @@ private:
     SegmentReadResultChannelPtr result_channel;
 
     LoggerPtr log;
-
-    // The memory tracker of MPPTask.
-    MemoryTrackerPtr mem_tracker;
 
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;

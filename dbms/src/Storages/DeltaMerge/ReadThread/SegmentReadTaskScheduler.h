@@ -73,7 +73,7 @@ private:
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools;
     // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
-    std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
+    std::unordered_map<StoreAndTableId, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
 
     MergedTaskPool merged_task_pool;
 

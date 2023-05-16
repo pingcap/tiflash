@@ -38,7 +38,7 @@ public:
     void add(const ElemPtr & ptr)
     {
         l.push_back(ptr);
-        m[ptr->poolId()] = --l.end();
+        m[ptr->pool_id] = --l.end();
     }
 
     ElemPtr next()
@@ -46,23 +46,19 @@ public:
         last_itr = nextItr(last_itr);
         while (!l.empty())
         {
-            if (!(*last_itr)->valid())
-            {
-                LOG_DEBUG(
-                    Logger::get(),
-                    "Drop ReadTaskPool from future scheduling, pool_id={}",
-                    (*last_itr)->poolId());
-
-                m.erase((*last_itr)->poolId());
-                last_itr = l.erase(last_itr);
-                if (last_itr == l.end())
-                {
-                    last_itr = l.begin();
-                }
-            }
-            else
-            {
+            if (needScheduled(last_itr))
                 return *last_itr;
+
+            LOG_DEBUG(
+                Logger::get(),
+                "Drop ReadTaskPool from future scheduling, pool_id={}",
+                (*last_itr)->pool_id);
+
+            m.erase((*last_itr)->pool_id);
+            last_itr = l.erase(last_itr);
+            if (last_itr == l.end())
+            {
+                last_itr = l.begin();
             }
         }
         return nullptr;
@@ -80,7 +76,7 @@ public:
         int64_t invalid = 0;
         for (const auto & p : l)
         {
-            if (table_id == 0 || p->tableId() == table_id)
+            if (table_id == 0 || p->physical_table_id == table_id)
             {
                 p->valid() ? valid++ : invalid++;
             }
@@ -106,6 +102,12 @@ private:
         {
             return std::next(itr);
         }
+    }
+
+    bool needScheduled(Iter itr)
+    {
+        // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
+        return itr->use_count() > 1;
     }
 
     std::list<ElemPtr> l;

@@ -43,14 +43,14 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     for (const auto & pa : tasks)
     {
         auto seg_id = pa.first;
-        merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
+        merging_segments[pool->getStoreAndTableId()][seg_id].push_back(pool->pool_id);
     }
 
     LOG_DEBUG(
         log,
         "Added ReadTaskPool to scheduler, pool_id={} table_id={} segments_in_this_pool={} total_pools={}",
-        pool->poolId(),
-        pool->tableId(),
+        pool->pool_id,
+        pool->physical_table_id,
         tasks.size(),
         read_pools.size());
 }
@@ -67,7 +67,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
 
     // If pool->valid(), read blocks.
     // If !pool->valid(), read path will clean it.
-    auto merged_task = merged_task_pool.pop(pool->poolId());
+    auto merged_task = merged_task_pool.pop(pool->pool_id);
     if (merged_task != nullptr)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_sche_from_cache).Increment();
@@ -122,7 +122,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 bool SegmentReadTaskScheduler::needScheduleToRead(const SegmentReadTaskPoolPtr & pool)
 {
     return !pool->getResultChannel()->isFull() && // Block queue is not full and
-        (merged_task_pool.has(pool->poolId()) || // can schedule a segment from MergedTaskPool or
+        (merged_task_pool.has(pool->pool_id) || // can schedule a segment from MergedTaskPool or
          pool->getFreeActiveSegments() > 0); // schedule a new segment.
 }
 
@@ -152,7 +152,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
 std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
 {
     auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
-    auto itr = merging_segments.find(pool->tableId());
+    auto itr = merging_segments.find(pool->getStoreAndTableId());
     if (itr == merging_segments.end())
     {
         // No segment of tableId left.
@@ -174,9 +174,9 @@ std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskSchedul
         }
         else
         {
-            result = std::pair{target->first, std::vector<uint64_t>(1, pool->poolId())};
+            result = std::pair{target->first, std::vector<uint64_t>(1, pool->pool_id)};
             auto mutable_target = segments.find(target->first);
-            auto itr = std::find(mutable_target->second.begin(), mutable_target->second.end(), pool->poolId());
+            auto itr = std::find(mutable_target->second.begin(), mutable_target->second.end(), pool->pool_id);
             *itr = mutable_target->second.back(); // SegmentReadTaskPool::scheduleSegment ensures `pool->poolId` must exists in `target`.
             mutable_target->second.resize(mutable_target->second.size() - 1);
         }
