@@ -452,7 +452,10 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// If there is no local stream, there is no need to execute cast and push down filter, return directly.
     /// But we should make sure that the analyzer is initialized before return.
     if (remote_read_streams_start_index == 0)
+    {
+        recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
         return;
+    }
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
