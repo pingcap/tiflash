@@ -28,6 +28,7 @@
 #include <Debug/MockTiDB.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -927,8 +928,9 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-SourceOps StorageDeltaMerge::readSourceOps(
+SourceOps StorageDeltaMerge::read(
     PipelineExecutorStatus & exec_status_,
+    PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -959,8 +961,9 @@ SourceOps StorageDeltaMerge::readSourceOps(
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
-    auto source_ops = store->readSourceOps(
+    auto source_ops = store->read(
         exec_status_,
+        group_builder,
         context,
         context.getSettingsRef(),
         columns_to_read,

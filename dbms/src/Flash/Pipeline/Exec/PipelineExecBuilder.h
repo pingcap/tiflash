@@ -41,8 +41,12 @@ struct PipelineExecGroupBuilder
 
     size_t concurrency = 0;
 
-    void addGroup();
+    void addGroup(SourceOpPtr && source);
     void addGroups(size_t num);
+
+    void reset();
+
+    void merge(PipelineExecGroupBuilder && other);
 
     /// ff: [](PipelineExecBuilder & builder) {}
     template <typename FF>

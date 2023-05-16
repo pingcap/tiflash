@@ -82,16 +82,19 @@ private:
         DAGPipeline & pipeline,
         size_t max_block_size);
 
-    SourceOps buildLocalSourceOpsForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    buildLocalExecForPhysicalTable(
         PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         size_t max_block_size);
 
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
-    SourceOps buildLocalSourceOps(
+    void buildLocalExec(
         PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
         size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
@@ -111,9 +114,9 @@ private:
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
-    void buildRemoteSourceOps(
-        SourceOps & source_ops,
+    void buildRemoteExec(
         PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
         const std::vector<RemoteRequest> & remote_requests);
 
     void executeCastAfterTableScan(
@@ -165,8 +168,6 @@ private:
     NamesAndTypes source_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
-
-    size_t remote_read_sources_start_index{};
 };
 
 } // namespace DB
