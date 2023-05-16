@@ -141,7 +141,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
-    TableID old_table_id = 0;
+    //TableID old_table_id = 0;
 
     switch (diff.type)
     {
@@ -214,7 +214,16 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::DropTable:
     case SchemaActionType::DropView:
     {
-        old_table_id = diff.table_id;
+        auto db_info = getter.getDatabase(diff.schema_id);
+        if (db_info == nullptr)
+        {
+            LOG_ERROR(log, "miss database: {}", diff.schema_id);
+            db_info = std::make_shared<TiDB::DBInfo>();
+            db_info->keyspace_id = keyspace_id;
+            db_info->id = diff.schema_id;
+            db_info->name = "db_" + std::to_string(diff.schema_id);
+        }
+        applyDropTable(db_info, diff.table_id);
         break;
     }
     case SchemaActionType::TruncateTable:
@@ -247,7 +256,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             }
         }
 
-        old_table_id = diff.old_table_id;
+        // old_table_id = diff.old_table_id;
+
+        auto db_info = getter.getDatabase(diff.schema_id);
+        if (db_info == nullptr)
+        {
+            LOG_ERROR(log, "miss database: {}", diff.schema_id);
+            db_info = std::make_shared<TiDB::DBInfo>();
+            db_info->keyspace_id = keyspace_id;
+            db_info->id = diff.schema_id;
+            db_info->name = "db_" + std::to_string(diff.schema_id);
+        }
+        applyDropTable(db_info, diff.old_table_id);
         break;
     }
     // case SchemaActionType::AddColumn: // 这种就完全不用处理
@@ -381,16 +401,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     }
     
-    if (old_table_id)
-    {
-        auto db_info = getter.getDatabase(diff.schema_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "miss database: {}", diff.schema_id);
-            return;
-        }
-        applyDropTable(db_info, old_table_id);
-    }
+    // if (old_table_id)
+    // {
+    //     auto db_info = getter.getDatabase(diff.schema_id);
+    //     if (db_info == nullptr)
+    //     {
+    //         LOG_ERROR(log, "miss database: {}", diff.schema_id);
+    //         db_info = std::make_shared<TiDB::DBInfo>(NullspaceID, "");
+    //         db_info->id = diff.schema_id;
+    //         db_info->name = "db_" + std::to_string(diff.schema_id);
+    //     }
+    //     applyDropTable(db_info, old_table_id);
+    // }
 }
 
 template <typename Getter, typename NameMapper>
@@ -1042,6 +1064,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id){
     // TODO:理论上 db_info 不需要，先放着后面删
+    LOG_INFO(log, "apply table: {}.{}, {}", database_id, table_id, partition_table_id);
     auto db_info = getter.getDatabase(database_id);
     if (db_info == nullptr){
         LOG_ERROR(log, "miss database: {}", database_id);

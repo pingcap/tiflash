@@ -1417,11 +1417,14 @@ void StorageDeltaMerge::alterSchemaChange(
     const String & table_name,
     const Context & context)
 {
+    LOG_INFO(log, "alterSchemaChange: {}", table_name);
     // 1. 更新 table_info ; 2. 更新 columns ; 3. 更新 create table statement ; 4. 更新 store 的 columns
     // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
     setColumns(std::move(new_columns));
+
+    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
 
     {
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
@@ -1429,13 +1432,8 @@ void StorageDeltaMerge::alterSchemaChange(
         {
             _store->applyAlters(table_info);
         } else {
-            // log_error?
+            updateTableColumnInfo();
         }
-        // else // TODO:理论上不应该走到这个分支是吧？
-        // {
-        //     // TODO: 这边逻辑 check 一下
-        //     updateTableColumnInfo();
-        // }
     }
     decoding_schema_changed = true;
 
@@ -1456,7 +1454,7 @@ void StorageDeltaMerge::alterSchemaChange(
         context);
 
     // TODO:这边应该有些字段要改？
-    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
+    
     if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
     {
         auto & tmt_context = context.getTMTContext();

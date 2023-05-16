@@ -20,6 +20,7 @@ namespace DB
 
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
+    LOG_INFO(log, "Start sync schema");
     auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
 
@@ -42,6 +43,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
         cur_version = SchemaGetter::SchemaVersionNotExist;
     } else {
         if (version <= cur_version) {
+            LOG_INFO(log, " version {} is the same as cur_version {}, so do nothing", version, cur_version);
             return false;
         }
 
@@ -89,6 +91,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
 
         if (used_version == latest_version && !diff){
             --used_version;
+            break;
         }
 
         if (diff->regenerate_schema_map)
@@ -153,6 +156,7 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID table_id_) {
+    LOG_INFO(log, "Start sync table schema, table_id: {}", table_id_);
     // 通过获取 table_id 对应的 database_id，获取到目前的 TableInfo 来更新表的 schema 
     auto getter = createSchemaGetter(keyspace_id);
     // TODO:怎么感觉 单表的 schema_version 没有什么用

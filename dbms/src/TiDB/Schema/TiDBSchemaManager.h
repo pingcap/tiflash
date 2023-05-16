@@ -49,7 +49,6 @@ public:
     }
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id){
-        std::cout << " begin syncSchemas " << std::endl;
         // 先暴力加 unique lock
         std::unique_lock<std::shared_mutex> lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
@@ -61,7 +60,6 @@ public:
 
     // TODO:是不是这一层也要加锁感觉，不然是不是会出问题？
     bool syncTableSchema(Context & context, KeyspaceID keyspace_id, TableID table_id){
-        std::cout << " begin syncTableSchema " << std::endl;
         std::unique_lock<std::shared_mutex> lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {

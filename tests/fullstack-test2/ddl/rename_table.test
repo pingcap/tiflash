@@ -39,6 +39,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 
 # rename table
 mysql> rename table test.t to test.t_new;
+# 因为 rename 不会因为 select 语句来触发强制更新，所以这边强制 refresh 一下
+=> DBGInvoke __refresh_schemas() 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 ERROR 1146 (42S02) at line 1: Table 'test.t' doesn't exist
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_new;

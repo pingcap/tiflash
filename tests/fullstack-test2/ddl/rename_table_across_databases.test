@@ -41,6 +41,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 # rename table across databases
 mysql> create database if not exists test_new;
 mysql> rename table test.t to test_new.t2;
+=> DBGInvoke __refresh_schemas() 
+
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 ERROR 1146 (42S02) at line 1: Table 'test.t' doesn't exist
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.t2;
