@@ -454,6 +454,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     if (remote_read_streams_start_index == 0)
     {
         recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
+        if (filter_conditions.hasValue())
+            recordProfileStreams(pipeline, filter_conditions.executor_id);
         return;
     }
     /// handle timezone/duration cast for local and remote table scan.
