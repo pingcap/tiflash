@@ -367,7 +367,9 @@ private:
         // Do not change the order of these two clauses.
         // We must ensure that status is set before pushing async handler into queue
         stage = AsyncRequestStage::WAIT_REWRITE;
-        async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+        bool res = async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+        if (!res)
+            closeConnection("AsyncRequestHandlerWaitQueue has been closed");
     }
 
     void closeGrpcConnection()

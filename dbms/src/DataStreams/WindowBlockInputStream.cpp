@@ -124,9 +124,14 @@ Block WindowBlockInputStream::readImpl()
 }
 
 // Judge whether current_partition_row is end row of partition in current block
+// How to judge?
+// Compare data in previous partition with the new scanned data.
 bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partition_row)
 {
+    // prev_frame_start refers to the data in previous partition
     const Columns & reference_columns = inputAt(prev_frame_start);
+
+    // partition_end refers to the new scanned data
     const Columns & compared_columns = inputAt(partition_end);
 
     for (size_t i = 0; i < partition_column_indices.size(); ++i)
@@ -406,9 +411,9 @@ void WindowTransformAction::advanceFrameStart()
     }
 }
 
-bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) const
+bool WindowTransformAction::arePeers(const RowNumber & peer_group_last_row, const RowNumber & current_row) const
 {
-    if (x == y)
+    if (peer_group_last_row == current_row)
     {
         // For convenience, a row is always its own peer.
         return true;
@@ -431,18 +436,18 @@ bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) c
 
         for (size_t i = 0; i < n; ++i)
         {
-            const auto * column_x = inputAt(x)[order_column_indices[i]].get();
-            const auto * column_y = inputAt(y)[order_column_indices[i]].get();
+            const auto * column_peer_last = inputAt(peer_group_last_row)[order_column_indices[i]].get();
+            const auto * column_current = inputAt(current_row)[order_column_indices[i]].get();
             if (window_description.order_by[i].collator)
             {
-                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
+                if (column_peer_last->compareAt(peer_group_last_row.row, current_row.row, *column_current, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
                 {
                     return false;
                 }
             }
             else
             {
-                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */) != 0)
+                if (column_peer_last->compareAt(peer_group_last_row.row, current_row.row, *column_current, 1 /* nan_direction_hint */) != 0)
                 {
                     return false;
                 }
