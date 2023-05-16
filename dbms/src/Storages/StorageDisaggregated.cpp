@@ -380,7 +380,7 @@ void StorageDisaggregated::filterConditions(
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_streams_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
     }
 }
 
