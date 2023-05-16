@@ -299,6 +299,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
+    local_request_handler.recordWaitingTaskTime();
     tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained, has_remote_conn);
 }
 
@@ -381,11 +382,11 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
+        return std::make_unique<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
     }
     else
     {
-        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+        auto reader = std::make_unique<GrpcExchangePacketReader>(request);
         reader->reader = cluster->rpc_client->sendStreamRequest(
             request.req->sender_meta().address(),
             &reader->client_context,
@@ -396,7 +397,7 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
 {
-    auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+    auto reader = std::make_unique<GrpcExchangePacketReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
         request.req->sender_meta().address(),
         &reader->client_context,
@@ -404,14 +405,14 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRe
     return reader;
 }
 
-void GRPCReceiverContext::makeAsyncReader(
+AsyncExchangePacketReaderPtr GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
-    AsyncExchangePacketReaderPtr & reader,
     grpc::CompletionQueue * cq,
     UnaryCallback<bool> * callback) const
 {
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
+    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
     reader->init(callback);
+    return reader;
 }
 
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const

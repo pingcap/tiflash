@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -120,9 +120,9 @@ public:
         return ret;
     }
 
-    bool nonBlockingPush(T && data)
+    bool forcePush(T && data)
     {
-        auto ret = send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+        auto ret = send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
         if (ret)
         {
             kickCompletionQueue();
@@ -237,7 +237,7 @@ private:
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
-    ConcurrentIOQueue<T> send_queue;
+    LooseBoundedMPMCQueue<T> send_queue;
 
     const LoggerPtr log;
 

@@ -239,7 +239,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
-        rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(*request, cq, thisAsUnaryCallback());
     }
 
     bool retryOrDone(String done_msg)
@@ -298,7 +298,7 @@ private:
     int retry_times = 0;
     AsyncRequestStagev1 stage = AsyncRequestStagev1::NEED_INIT;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
@@ -397,18 +397,27 @@ void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
-    std::unique_lock lock(mu);
-    auto pred = [&] {
-        return live_connections == 0;
-    };
-    cv.wait(lock, pred);
+    {
+        std::unique_lock lock(mu);
+        auto pred = [&] {
+            return live_connections == 0;
+        };
+        cv.wait(lock, pred);
 
-    // The meaning of calling of connectionDone by local tunnel is to tell the receiver
-    // to close channels and the local tunnel may still alive after it calls connectionDone.
+        // The meaning of calling of connectionDone by local tunnel is to tell the receiver
+        // to close channels and the local tunnel may still alive after it calls connectionDone.
+        //
+        // In order to ensure the destructions of local tunnels are
+        // after the ExchangeReceiver, we need to wait at here.
+        waitLocalConnectionDone(lock);
+    }
+
+    // `live_local_connections` needs to be protected, so the `waitLocalConnectionDone` should be protected by the lock.
     //
-    // In order to ensure the destructions of local tunnels are
-    // after the ExchangeReceiver, we need to wait at here.
-    waitLocalConnectionDone(lock);
+    // `wait` function in AsyncRequestHandler waits for the `is_close_conn_called` to be set. However,
+    // `is_close_conn_called` is set in `closeConnection` which also call the `connectionDone` function with
+    // the lock in ExchangeReceiver. So we shouldn't hold the lock in ExchangeReceiver when waiting for the
+    // `is_close_conn_called` to be set.
     waitAsyncConnectionDone();
 }
 
@@ -433,9 +442,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<RecvMsgPtr>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<RecvMsgPtr>>(max_buffer_size));
 }
 
 template <typename RPCContext>
@@ -675,20 +684,23 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     });
 
     CPUAffinityManager::getInstance().bindSelfQueryThread();
+    Stopwatch watch;
     bool meet_error = false;
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+    ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
+    UInt64 waiting_task_time = 0;
 
     LoggerPtr log = exc_log->getChild(req_info);
 
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
         ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
+            waiting_task_time = watch.elapsedMilliseconds();
             bool has_data = false;
             for (;;)
             {
@@ -753,6 +765,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         local_err_msg = getCurrentExceptionMessage(false);
     }
     connectionDone(meet_error, local_err_msg, log);
+    if (recv_mode == ReceiverMode::Local)
+        LOG_INFO(log, "connection for {} cost {} ms, including {} ms to waiting task.", req_info, watch.elapsedMilliseconds(), waiting_task_time);
 }
 
 template <typename RPCContext>

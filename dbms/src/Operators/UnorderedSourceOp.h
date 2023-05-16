@@ -51,11 +51,6 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
-    void operatePrefix() override
-    {
-        addReadTaskPoolToScheduler();
-    }
-
     ~UnorderedSourceOp() override
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
@@ -65,6 +60,11 @@ public:
     String getName() const override
     {
         return "UnorderedSourceOp";
+    }
+
+    void operatePrefix() override
+    {
+        addReadTaskPoolToScheduler();
     }
 
 protected:

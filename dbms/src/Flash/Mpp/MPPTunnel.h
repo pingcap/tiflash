@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
@@ -105,7 +105,7 @@ public:
     }
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
-    virtual bool nonBlockingPush(TrackedMppDataPacketPtr &&) = 0;
+    virtual bool forcePush(TrackedMppDataPacketPtr &&) = 0;
 
     virtual void cancelWith(const String &) = 0;
 
@@ -178,7 +178,7 @@ class SyncTunnelSender : public TunnelSender
 public:
     SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(ConcurrentIOQueue<TrackedMppDataPacketPtr>(queue_size))
+        , send_queue(LooseBoundedMPMCQueue<TrackedMppDataPacketPtr>(queue_size))
     {}
 
     ~SyncTunnelSender() override;
@@ -189,9 +189,9 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
-    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    bool forcePush(TrackedMppDataPacketPtr && data) override
     {
-        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+        return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     void cancelWith(const String & reason) override
@@ -213,7 +213,7 @@ private:
     friend class tests::TestMPPTunnel;
     void sendJob(PacketWriter * writer);
     std::shared_ptr<ThreadManager> thread_manager;
-    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
+    LooseBoundedMPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
@@ -236,9 +236,9 @@ public:
         return queue.push(std::move(data));
     }
 
-    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    bool forcePush(TrackedMppDataPacketPtr && data) override
     {
-        return queue.nonBlockingPush(std::move(data));
+        return queue.forcePush(std::move(data));
     }
 
     bool finish() override
@@ -310,7 +310,7 @@ public:
         return pushImpl<false>(std::move(data));
     }
 
-    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    bool forcePush(TrackedMppDataPacketPtr && data) override
     {
         return pushImpl<true>(std::move(data));
     }
@@ -340,7 +340,7 @@ public:
 private:
     friend class tests::TestMPPTunnel;
 
-    template <bool non_blocking>
+    template <bool is_force>
     bool pushImpl(TrackedMppDataPacketPtr && data)
     {
         if (unlikely(checkPacketErr(data)))
@@ -357,11 +357,11 @@ private:
         // Adding a lock ensures that there is only one other thread competing with async reactor,
         // so the probability of async reactor getting the lock is 1/2.
         if constexpr (local_only)
-            return local_request_handler.write<enable_fine_grained_shuffle, non_blocking>(source_index, data);
+            return local_request_handler.write<enable_fine_grained_shuffle, is_force>(source_index, data);
         else
         {
             std::lock_guard lock(mu);
-            return local_request_handler.write<enable_fine_grained_shuffle, non_blocking>(source_index, data);
+            return local_request_handler.write<enable_fine_grained_shuffle, is_force>(source_index, data);
         }
     }
 
@@ -384,6 +384,7 @@ private:
         {
             consumer_state.setMsg(local_err_msg);
             local_request_handler.writeDone(meet_error, local_err_msg);
+            LOG_INFO(log, "connection for {} cost {} ms, including {} ms to wait task.", tunnel_id, local_request_handler.getTotalElapsedTime(), local_request_handler.getWaitingTaskTime());
         }
     }
 
@@ -412,9 +413,9 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
-    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    bool forcePush(TrackedMppDataPacketPtr && data) override
     {
-        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+        return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     void cancelWith(const String & reason) override
@@ -434,7 +435,7 @@ public:
 
 private:
     bool cancel_reason_sent = false;
-    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
+    LooseBoundedMPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -500,13 +501,13 @@ public:
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
     void write(TrackedMppDataPacketPtr && data);
 
-    // nonBlockingWrite write a single packet to the tunnel's send queue without blocking,
+    // forceWrite write a single packet to the tunnel's send queue without blocking,
     // and need to call isReadForWrite first.
     // ```
     // while (!isReadyForWrite()) {}
-    // nonBlockingWrite(std::move(data));
+    // forceWrite(std::move(data));
     // ```
-    void nonBlockingWrite(TrackedMppDataPacketPtr && data);
+    void forceWrite(TrackedMppDataPacketPtr && data);
     bool isReadyForWrite() const;
 
     // finish the writing, and wait until the sender finishes.

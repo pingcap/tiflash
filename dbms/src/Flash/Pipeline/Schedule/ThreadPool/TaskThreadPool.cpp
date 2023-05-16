@@ -16,9 +16,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -27,20 +27,20 @@
 namespace DB
 {
 template <typename Impl>
-TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
-    : task_queue(Impl::newTaskQueue())
+TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config)
+    : task_queue(Impl::newTaskQueue(config.queue_type))
     , scheduler(scheduler_)
 {
-    RUNTIME_CHECK(thread_num > 0);
-    threads.reserve(thread_num);
-    for (size_t i = 0; i < thread_num; ++i)
+    RUNTIME_CHECK(config.pool_size > 0);
+    threads.reserve(config.pool_size);
+    for (size_t i = 0; i < config.pool_size; ++i)
         threads.emplace_back(&TaskThreadPool::loop, this, i);
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::close()
+void TaskThreadPool<Impl>::finish()
 {
-    task_queue->close();
+    task_queue->finish();
 }
 
 template <typename Impl>
@@ -52,7 +52,17 @@ void TaskThreadPool<Impl>::waitForStop()
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
+void TaskThreadPool<Impl>::loop(size_t thread_no)
+{
+    try
+    {
+        doLoop(thread_no);
+    }
+    CATCH_AND_TERMINATE(logger)
+}
+
+template <typename Impl>
+void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 {
     metrics.incThreadCnt();
     SCOPE_EXIT({ metrics.decThreadCnt(); });
@@ -67,7 +77,7 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
     while (likely(task_queue->take(task)))
     {
         metrics.decPendingTask();
-        handleTask(task, thread_logger);
+        handleTask(task);
         assert(!task);
         ASSERT_MEMORY_TRACKER
     }
@@ -76,27 +86,30 @@ void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     TRACE_MEMORY(task);
 
     metrics.incExecutingTask();
+    metrics.elapsedPendingTime(task);
 
-    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
+    UInt64 total_time_spent = 0;
     while (true)
     {
         status = Impl::exec(task);
-        auto execute_time_ns = stopwatch.elapsed();
+        auto inc_time_spent = task->profile_info.elapsedFromPrev();
+        task_queue->updateStatistics(task, inc_time_spent);
+        total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != Impl::TargetStatus || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
         {
-            metrics.updateTaskMaxtimeOnRound(execute_time_ns);
+            metrics.updateTaskMaxtimeOnRound(total_time_spent);
             break;
         }
     }
-
+    metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (status)
     {
@@ -110,23 +123,22 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
         scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
-        task->finalize();
-        task.reset();
+        FINALIZE_TASK(task);
         break;
     default:
-        UNEXPECTED_STATUS(log, status);
+        UNEXPECTED_STATUS(task->log, status);
     }
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
+void TaskThreadPool<Impl>::submit(TaskPtr && task)
 {
     metrics.incPendingTask(1);
     task_queue->submit(std::move(task));
 }
 
 template <typename Impl>
-void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
+void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks)
 {
     metrics.incPendingTask(tasks.size());
     task_queue->submit(tasks);
