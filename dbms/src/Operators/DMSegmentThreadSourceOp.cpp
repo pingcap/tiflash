@@ -46,7 +46,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , max_version(max_version_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
-    , action(header, extra_table_id_index, physical_table_id)
+    , action(columns_to_read_, extra_table_id_index, physical_table_id)
 {
     setHeader(action.getHeader());
 }

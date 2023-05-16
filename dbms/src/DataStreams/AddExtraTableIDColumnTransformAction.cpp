@@ -19,10 +19,11 @@ namespace DB
 {
 
 Block AddExtraTableIDColumnTransformAction::buildHeader(
-    const DM::ColumnDefines & columns_to_read_,
+    const Block & inner_header_,
     int extra_table_id_index)
 {
-    auto header = toEmptyBlock(columns_to_read_);
+    RUNTIME_CHECK(inner_header_.columns() > 0);
+    auto header = inner_header_.cloneEmpty();
     if (extra_table_id_index != InvalidColumnID)
     {
         const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
@@ -37,25 +38,33 @@ Block AddExtraTableIDColumnTransformAction::buildHeader(
     return header;
 }
 
+Block AddExtraTableIDColumnTransformAction::buildHeader(
+    const DM::ColumnDefines & columns_to_read_,
+    int extra_table_id_index)
+{
+    RUNTIME_CHECK(!columns_to_read_.empty());
+    auto inner_header = toEmptyBlock(columns_to_read_);
+    return buildHeader(inner_header, extra_table_id_index);
+}
+
 AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
     const Block & inner_header_,
     int extra_table_id_index_,
     TableID physical_table_id_)
-    : header(inner_header_)
+    : header(buildHeader(inner_header_, extra_table_id_index_))
     , extra_table_id_index(extra_table_id_index_)
     , physical_table_id(physical_table_id_)
 {
-    if (extra_table_id_index != InvalidColumnID)
-    {
-        const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
-        ColumnWithTypeAndName col{
-            extra_table_id_col_define.type->createColumn(),
-            extra_table_id_col_define.type,
-            extra_table_id_col_define.name,
-            extra_table_id_col_define.id,
-            extra_table_id_col_define.default_value};
-        header.insert(extra_table_id_index, col);
-    }
+}
+
+AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
+    const DM::ColumnDefines & columns_to_read_,
+    int extra_table_id_index_,
+    TableID physical_table_id_)
+    : header(buildHeader(columns_to_read_, extra_table_id_index_))
+    , extra_table_id_index(extra_table_id_index_)
+    , physical_table_id(physical_table_id_)
+{
 }
 
 Block AddExtraTableIDColumnTransformAction::getHeader() const
