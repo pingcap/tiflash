@@ -789,108 +789,70 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
     std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
 
     // Build the extra cast
-    ExpressionActionsPtr extra_cast_for_filter_columns = nullptr;
-    ExpressionActionsPtr extra_cast_for_rest_columns = nullptr;
+    ExpressionActionsPtr extra_cast = nullptr;
     // need_cast_column should be the same size as table_scan_column_info
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan_column_info.size());
 
+    // Build the extra cast for filter columns
+    for (const auto & col : table_scan_column_info)
     {
-        // Build the extra cast for filter columns
-        for (const auto & col : table_scan_column_info)
+        if (filter_col_id_set.contains(col.id))
         {
-            if (filter_col_id_set.contains(col.id))
-            {
-                if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                else
-                    need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
             else
-            {
                 need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
         }
-        ExpressionActionsChain chain;
-        auto & step = analyzer->initAndGetLastStep(chain);
-        auto & actions = step.actions;
-        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
+        else
         {
-            NamesWithAliases project_cols;
-            for (size_t i = 0; i < columns_to_read.size(); ++i)
-            {
-                if (filter_col_id_set.contains(columns_to_read[i].id))
-                    project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
-            }
-            actions->add(ExpressionAction::project(project_cols));
-
-            for (const auto & col : *filter_columns)
-                step.required_output.push_back(col.name);
-
-            extra_cast_for_filter_columns = chain.getLastActions();
-            chain.finalize();
-            chain.clear();
-            LOG_DEBUG(tracing_logger, "Extra cast for filter columns: {}", extra_cast_for_filter_columns->dumpActions());
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
         }
     }
+    ExpressionActionsChain chain;
+    auto & step = analyzer->initAndGetLastStep(chain);
+    auto & actions = step.actions;
+    if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
     {
-        // Build the extra cast for rest columns
-        need_cast_column.clear();
-        for (const auto & col : table_scan_column_info)
+        NamesWithAliases project_cols;
+        for (size_t i = 0; i < columns_to_read.size(); ++i)
         {
-            if (!filter_col_id_set.contains(col.id))
-            {
-                if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                else
-                    need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-            else
-            {
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
+            if (filter_col_id_set.contains(columns_to_read[i].id))
+                project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
         }
-        ExpressionActionsChain chain;
-        if (analyzer->appendExtraCastsAfterTS(chain, need_cast_column, table_scan_column_info))
-        {
-            extra_cast_for_rest_columns = chain.getLastActions();
-            chain.finalize();
-            chain.clear();
-            LOG_DEBUG(tracing_logger, "Extra cast for rest columns: {}", extra_cast_for_filter_columns->dumpActions());
-        }
+        actions->add(ExpressionAction::project(project_cols));
+
+        for (const auto & col : *filter_columns)
+            step.required_output.push_back(col.name);
+
+        extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+        LOG_DEBUG(tracing_logger, "Extra cast for filter columns: {}", extra_cast->dumpActions());
     }
 
-        // build filter expression actions
-        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
-        LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
-
-        auto columns_after_cast = std::make_shared<ColumnDefines>();
-        if (extra_cast != nullptr)
+    auto columns_after_cast = std::make_shared<ColumnDefines>();
+    if (extra_cast != nullptr)
+    {
+        columns_after_cast->reserve(columns_to_read.size());
+        const auto & current_names_and_types = analyzer->getCurrentInputColumns();
+        for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
-            columns_after_cast->reserve(columns_to_read.size());
-            const auto & current_names_and_types = analyzer->getCurrentInputColumns();
-            for (size_t i = 0; i < table_scan_column_info.size(); ++i)
-            {
-                if (table_scan_column_info[i].hasGeneratedColumnFlag())
-                    continue;
-                auto col = columns_to_read_map.at(table_scan_column_info[i].id);
-                RUNTIME_CHECK_MSG(col.name == current_names_and_types[i].name, "Column name mismatch, expect: {}, actual: {}", col.name, current_names_and_types[i].name);
-                columns_after_cast->push_back(col);
-                columns_after_cast->back().type = current_names_and_types[i].type;
-            }
+            if (table_scan_column_info[i].hasGeneratedColumnFlag())
+                continue;
+            auto col = columns_to_read_map.at(table_scan_column_info[i].id);
+            RUNTIME_CHECK_MSG(col.name == current_names_and_types[i].name, "Column name mismatch, expect: {}, actual: {}", col.name, current_names_and_types[i].name);
+            columns_after_cast->push_back(col);
+            columns_after_cast->back().type = current_names_and_types[i].type;
         }
-        return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name, extra_cast, columns_after_cast);
     }
 
     // build filter expression actions
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(pushed_down_filters, *analyzer);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
-
-    return std::make_shared<PushDownFilter>(rs_operator, before_where, project_after_where, filter_columns, filter_column_name, extra_cast_for_filter_columns, extra_cast_for_rest_columns, columns_after_cast);
+    return std::make_shared<PushDownFilter>(rs_operator, before_where, project_after_where, filter_columns, filter_column_name, extra_cast, columns_after_cast);
 }
 
 DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,

@@ -191,7 +191,7 @@ std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
 
     ExpressionActionsChain chain;
     // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan.getColumns()))
+    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         assert(extra_cast);
@@ -1297,7 +1297,14 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
             need_cast_column.push_back(ExtraCastAfterTSMode::None);
         }
         else
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        {
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+            else
+                need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
     }
 
     return {required_columns_tmp, need_cast_column};

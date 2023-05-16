@@ -149,7 +149,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ColumnInfos & table_scan_columns);
+        const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(

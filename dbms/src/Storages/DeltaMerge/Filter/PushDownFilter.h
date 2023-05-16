@@ -38,7 +38,7 @@ public:
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
-        , filter_columns(std::move(filter_columns_))
+        , filter_columns(filter_columns_)
         , extra_cast(extra_cast_)
         , columns_after_cast(columns_after_cast_)
     {}
@@ -58,7 +58,7 @@ public:
     ExpressionActionsPtr project_after_where;
     String filter_column_name;
     // The columns needed by the filter expression
-    ColumnDefines filter_columns;
+    ColumnDefinesPtr filter_columns;
     // The expression actions used to cast the timestamp/datetime column
     ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed

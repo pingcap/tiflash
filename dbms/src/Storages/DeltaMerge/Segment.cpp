@@ -2761,9 +2761,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
             segment_snap->stable->getDMFilesRows(),
             bitmap_filter,
             dm_context.tracing_id);
-        if (filter->extra_cast_for_filter_columns)
+        if (filter->extra_cast)
         {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast_for_filter_columns, dm_context.tracing_id);
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
             stream->setExtraInfo("cast after tableScan");
         }
         stream = std::make_shared<FilterBlockInputStream>(stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
@@ -2780,13 +2780,6 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
-    // construct extra cast stream if needed
-    if (filter->extra_cast_for_filter_columns)
-    {
-        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->extra_cast_for_filter_columns, dm_context.tracing_id);
-        filter_column_stream->setExtraInfo("extra cast for filter columns");
-    }
-
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
@@ -2795,10 +2788,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     // remove columns of pushed down filter
     for (const auto & col : *filter_columns)
     {
-        rest_columns_to_read->erase(std::remove_if(
-                                        rest_columns_to_read->begin(),
-                                        rest_columns_to_read->end(),
-                                        [&](const ColumnDefine & c) { return c.id == col.id; }),
+        rest_columns_to_read->erase(std::remove_if(rest_columns_to_read->begin(), rest_columns_to_read->end(), [&](const ColumnDefine & c) { return c.id == col.id; }),
                                     rest_columns_to_read->end());
     }
 
@@ -2827,21 +2817,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         dm_context.tracing_id);
 
     // construct late materialization stream
-    BlockInputStreamPtr stream = std::make_shared<LateMaterializationBlockInputStream>(
-        columns_to_read,
-        filter->filter_column_name,
-        filter_column_stream,
-        rest_column_stream,
-        bitmap_filter,
-        dm_context.tracing_id);
-
-    // construct extra cast stream if needed
-    if (filter->extra_cast_for_rest_columns)
-    {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast_for_rest_columns, dm_context.tracing_id);
-        rest_column_stream->setExtraInfo("extra cast for rest columns");
-    }
-    return stream;
+    return std::make_shared<LateMaterializationBlockInputStream>(columns_to_read, filter->filter_column_name, filter_column_stream, rest_column_stream, bitmap_filter, dm_context.tracing_id);
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)
