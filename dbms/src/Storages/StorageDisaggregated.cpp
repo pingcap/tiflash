@@ -56,7 +56,23 @@ BlockInputStreams StorageDisaggregated::read(
     return readThroughExchange(num_streams);
 }
 
-BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+void read(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const Names & /*column_names*/,
+    const SelectQueryInfo & /*query_info*/,
+    const Context & /*context*/,
+    size_t /*max_block_size*/,
+    unsigned num_streams) override
+{
+    // TODO support S3
+    RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
+
+    /// Fetch all data from write node through MPP exchange sender/receiver
+    readThroughExchange(exec_status, group_builder, num_streams);
+}
+
+std::vector<RequestAndRegionIDs> StorageDisaggregated::buildDispatchRequests()
 {
     auto remote_table_ranges = buildRemoteTableRanges();
 
@@ -68,6 +84,12 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
         dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
+    return dispatch_reqs;
+}
+
+BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+{
+    std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
@@ -75,8 +97,29 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
     // TODO: push down filter conditions to write node
     filterConditions(*analyzer, pipeline);
+
+    return pipeline.streams;
+}
+
+BlockInputStreams StorageDisaggregated::readThroughExchange(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    unsigned num_streams)
+{
+    std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
+
+    DAGPipeline pipeline;
+    buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // TODO: push down filter conditions to write node
+    filterConditions(exec_status, group_builder, *analyzer, pipeline);
 
     return pipeline.streams;
 }
@@ -231,7 +274,7 @@ tipb::Executor StorageDisaggregated::buildTableScanTiPB()
     return ts_exec;
 }
 
-void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
+void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams)
 {
     tipb::ExchangeReceiver receiver;
     for (const auto & dispatch_req : dispatch_reqs)
@@ -271,6 +314,11 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
+}
+
+void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
+{
+    buildExchangeReceiver(dispatch_reqs, num_streams);
 
     // We can use PhysicalExchange::transform() to build InputStream after
     // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
@@ -294,6 +342,25 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
+void StorageDisaggregated::buildReceiverSources(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+    unsigned num_streams)
+{
+    buildExchangeReceiver(dispatch_reqs, num_streams);
+
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        group_builder.addGroup(
+            std::make_unique<ExchangeReceiverSourceOp>(
+                exec_status,
+                log->identifier(),
+                exchange_receiver,
+                /*stream_id=*/0));
+    }
+}
+
 void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
     if (filter_conditions.hasValue())
@@ -303,6 +370,17 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
+}
+
+void StorageDisaggregated::filterConditions(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
+{
+    if (filter_conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_streams_start_index=*/group_builder.concurrency, filter_conditions, *analyzer, log);
     }
 }
 } // namespace DB
