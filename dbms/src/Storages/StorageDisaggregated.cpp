@@ -56,14 +56,14 @@ BlockInputStreams StorageDisaggregated::read(
     return readThroughExchange(num_streams);
 }
 
-void read(
+void StorageDisaggregated::read(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
     const Context & /*context*/,
     size_t /*max_block_size*/,
-    unsigned num_streams) override
+    unsigned num_streams)
 {
     // TODO support S3
     RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
