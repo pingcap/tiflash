@@ -48,13 +48,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , read_mode(read_mode_)
     , action(header, extra_table_id_index, physical_table_id)
 {
-    setHeader(toEmptyBlock(columns_to_read));
-    if (extra_table_id_index != InvalidColumnID)
-    {
-        DM::ColumnDefine extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
-        ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
-        header.insert(extra_table_id_index, col);
-    }
+    setHeader(action.getHeader());
 }
 
 String DMSegmentThreadSourceOp::getName() const
@@ -64,7 +58,7 @@ String DMSegmentThreadSourceOp::getName() const
 
 void DMSegmentThreadSourceOp::operateSuffix()
 {
-    LOG_DEBUG(log, "finish read {} rows from storage", action.totalRows());
+    LOG_DEBUG(log, "Finish read {} rows from storage", action.totalRows());
 }
 
 OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)

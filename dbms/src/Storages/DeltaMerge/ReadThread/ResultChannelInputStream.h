@@ -16,7 +16,6 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadResultChannel.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -28,43 +27,31 @@ extern const char pause_when_reading_from_dt_stream[];
 
 namespace DB::DM
 {
-class UnorderedInputStream : public IProfilingBlockInputStream
+class ResultChannelInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "UnorderedInputStream";
+    static constexpr auto NAME = "ResultChannelInputStream";
 
 public:
-    UnorderedInputStream(
+    ResultChannelInputStream(
         const SegmentReadResultChannelPtr & result_channel_,
-        const ColumnDefines & columns_to_read_,
-        const int extra_table_id_index,
-        const TableID physical_table_id,
         const String & debug_tag)
         : result_channel(result_channel_)
-        , header(toEmptyBlock(columns_to_read_))
-        , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(debug_tag))
         , ref_no(0)
-    // , task_pool_added(false)
     {
-        if (extra_table_id_index != InvalidColumnID)
-        {
-            const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
-            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
-            header.insert(extra_table_id_index, col);
-        }
         ref_no = result_channel->refConsumer();
-        LOG_DEBUG(log, "Created UnorderedInputStream, ref_no={}", ref_no);
+        LOG_DEBUG(log, "Created ResultChannelInputStream, ref_no={}", ref_no);
     }
 
-    ~UnorderedInputStream() override
+    ~ResultChannelInputStream() override
     {
         auto remaining_refs = result_channel->derefConsumer();
-        LOG_DEBUG(log, "Destroy UnorderedInputStream, ref_no={} remaining_refs={}", ref_no, remaining_refs);
+        LOG_DEBUG(log, "Destroy ResultChannelInputStream, ref_no={} remaining_refs={}", ref_no, remaining_refs);
     }
 
     String getName() const override { return NAME; }
 
-    Block getHeader() const override { return header; }
+    Block getHeader() const override { return result_channel->header; }
 
 protected:
     Block readImpl() override
@@ -86,14 +73,10 @@ protected:
             result_channel->popBlock(res);
             if (res)
             {
-                if (action.transform(res))
-                {
-                    return res;
-                }
-                else
-                {
+                if (unlikely(res.rows() == 0))
                     continue;
-                }
+                total_rows += res.rows();
+                return res;
             }
             else
             {
@@ -105,16 +88,17 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, ref_no={} rows={}", ref_no, action.totalRows());
+        LOG_DEBUG(log, "Finish read from storage, ref_no={} rows={}", ref_no, total_rows);
     }
 
 private:
     SegmentReadResultChannelPtr result_channel;
-    Block header;
-    SegmentReadTransformAction action;
 
     bool done = false;
     LoggerPtr log;
     int64_t ref_no;
+
+    size_t total_rows = 0;
 };
+
 } // namespace DB::DM

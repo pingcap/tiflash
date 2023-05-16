@@ -17,6 +17,7 @@
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -38,11 +39,10 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/ResultChannelInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -463,9 +463,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
-    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
-    // TODO: We can reduce max io_concurrency to numSegments.
+    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
 
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a RNPageReceiver to fetch the pages from all write nodes
@@ -492,7 +490,6 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         do_prepare);
 
     const UInt64 max_version = sender_target_mpp_task_id.query_id.start_ts;
-    // constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
     pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
@@ -505,42 +502,16 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log);
     auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
 
-    // auto sub_streams_size = io_concurrency / num_streams;
-    // for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
-    // {
-    //     // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
-    //     // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
-
-    //     auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
-    //         db_context,
-    //         remote_read_tasks,
-    //         page_preparer,
-    //         column_defines,
-    //         read_tso,
-    //         sub_streams_size,
-    //         extra_table_id_index,
-    //         push_down_filter,
-    //         extra_info,
-    //         /*tracing_id*/ log->identifier(),
-    //         read_mode);
-    //     RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
-
-    //     auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
-    //     pipeline.streams.emplace_back(std::move(union_stream));
-    // }
-
-    // TODO: Deal with PartitionTable.
-
     size_t final_num_stream = std::min(num_streams, remote_read_tasks->numSegments());
-    // String req_info;
-    // if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-    //     req_info = db_context.getDAGContext()->getMPPTaskId().toString();
 
-    LOG_INFO(Logger::get(), "Wenxuan: Building new channel, expected_sources={}", remote_read_tasks->numSegments());
-
-    // std::promise<void> wait_read;
-
-    auto start_pipe_fn = [log = this->log, remote_read_tasks, column_defines = column_defines, max_version, push_down_filter, read_mode, final_num_stream](DM::SegmentReadResultChannelPtr result_channel) {
+    auto start_pipe_fn = [log = this->log,
+                          remote_read_tasks,
+                          column_defines = column_defines,
+                          extra_table_id_index = extra_table_id_index,
+                          max_version,
+                          push_down_filter,
+                          read_mode,
+                          final_num_stream](DM::SegmentReadResultChannelPtr result_channel) {
         // This thread continuously takes ready RemoteReadTask and submits it to the ReadThread.
         auto pipe_fn = [=] {
             LOG_DEBUG(log, "Start piping RemoteReadTask to ReadThread");
@@ -559,6 +530,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
                 auto read_task_pool = cur_read_task->toReadTaskPool({
                     .columns_to_read = *column_defines,
+                    .extra_table_id_index = extra_table_id_index,
                     .read_tso = max_version,
                     .push_down_filter = push_down_filter,
                     .read_mode = read_mode,
@@ -579,6 +551,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     auto result_channel = DM::SegmentReadResultChannel::create({
         .expected_sources = remote_read_tasks->numSegments(),
+        .header = AddExtraTableIDColumnTransformAction::buildHeader(*column_defines, extra_table_id_index),
         .debug_tag = fmt::format("{}->result_channel", log->identifier()),
         .max_pending_blocks = std::max(num_streams, 3),
         .on_first_read = start_pipe_fn,
@@ -586,11 +559,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DM::UnorderedInputStream>(
+        BlockInputStreamPtr stream = std::make_shared<DM::ResultChannelInputStream>(
             result_channel,
-            *column_defines,
-            extra_table_id_index,
-            remote_read_tasks->todo_physical_table_id, // cur_read_task->ks_table_id.second
             fmt::format("{}->stream#{}", log->identifier(), i));
         pipeline.streams.emplace_back(stream);
     }

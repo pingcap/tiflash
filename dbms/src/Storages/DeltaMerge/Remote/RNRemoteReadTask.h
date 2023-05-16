@@ -208,17 +208,10 @@ public:
 
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
-    BlockInputStreamPtr getInputStream(
-        const ColumnDefines & columns_to_read,
-        const RowKeyRanges & key_ranges,
-        UInt64 read_tso,
-        const PushDownFilterPtr & push_down_filter,
-        size_t expected_block_size,
-        ReadMode read_mode);
-
     struct ToReadTaskPoolOptions
     {
         const ColumnDefines & columns_to_read;
+        Int64 extra_table_id_index;
         UInt64 read_tso;
         const PushDownFilterPtr & push_down_filter;
         ReadMode read_mode;

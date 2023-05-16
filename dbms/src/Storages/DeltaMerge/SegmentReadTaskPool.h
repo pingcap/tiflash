@@ -40,7 +40,6 @@ using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentP
 
 struct SegmentReadTask
 {
-    std::optional<uint64_t> segment_store_id = std::nullopt; // nullopt when not in disaggregated mode.
     SegmentPtr segment;
     SegmentSnapshotPtr read_snapshot;
     RowKeyRanges ranges;
@@ -48,8 +47,7 @@ struct SegmentReadTask
     SegmentReadTask(
         const SegmentPtr & segment_,
         const SegmentSnapshotPtr & read_snapshot_,
-        const RowKeyRanges & ranges_ = {},
-        std::optional<uint64_t> segment_store_id_ = std::nullopt);
+        const RowKeyRanges & ranges_ = {});
 
     ~SegmentReadTask();
 
@@ -107,6 +105,8 @@ private:
     std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
 };
 
+/// Note 1: the output of the SegmentReadTaskPool may contain extra TableID column.
+/// Note 2: you must ensure all segments in the pool comes from the same physical table.
 class SegmentReadTaskPool
     : private boost::noncopyable
     , public std::enable_shared_from_this<SegmentReadTaskPool>
@@ -114,6 +114,7 @@ class SegmentReadTaskPool
 public:
     SegmentReadTaskPool(
         int64_t table_id_,
+        size_t extra_table_id_index_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
@@ -161,24 +162,12 @@ public:
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
     bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
-    // void popBlock(Block & block);
-    // bool tryPopBlock(Block & block);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
 
-    // Int64 increaseUnorderedInputStreamRefCount();
-    // Int64 decreaseUnorderedInputStreamRefCount();
-    // Int64 getFreeBlockSlots() const;
     Int64 getFreeActiveSegments() const;
-    // bool valid() const;
-    // void setException(const DB::Exception & e);
-
-    // std::once_flag & addToSchedulerFlag()
-    // {
-    //     return add_to_scheduler;
-    // }
 
     MemoryTrackerPtr & getMemoryTracker()
     {
@@ -198,13 +187,12 @@ public:
 
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
-    // bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
-    // void pushBlock(Block && block);
 
     const uint64_t pool_id;
     const String debug_tag;
     const int64_t table_id;
+    const size_t extra_table_id_index;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
@@ -218,32 +206,17 @@ private:
 
     std::atomic<bool> all_finished = false;
 
-    // WorkQueue<Block> q;
-    // BlockStat blk_stat;
-
     SegmentReadResultChannelPtr result_channel;
 
     LoggerPtr log;
 
-    // std::atomic<Int64> unordered_input_stream_ref_count;
-
-    // std::atomic<bool> exception_happened;
-    // DB::Exception exception;
-
     // The memory tracker of MPPTask.
     MemoryTrackerPtr mem_tracker;
-
-    // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
-    // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.
-    // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
-    // std::once_flag and std::call_once to prevent duplicated add.
-    // std::once_flag add_to_scheduler;
 
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
-    // inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId()
     {
         return pool_id_gen.fetch_add(1, std::memory_order_relaxed);

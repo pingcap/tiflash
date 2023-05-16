@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -31,10 +32,8 @@ namespace DB::DM
 SegmentReadTask::SegmentReadTask(
     const SegmentPtr & segment_,
     const SegmentSnapshotPtr & read_snapshot_,
-    const RowKeyRanges & ranges_,
-    std::optional<uint64_t> segment_store_id_)
-    : segment_store_id(segment_store_id_)
-    , segment(segment_)
+    const RowKeyRanges & ranges_)
+    : segment(segment_)
     , read_snapshot(read_snapshot_)
     , ranges(ranges_)
 {
@@ -161,12 +160,14 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     BlockInputStreamPtr stream;
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
     stream = t->segment->getInputStream(read_mode, *dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
+    stream = std::make_shared<AddExtraTableIDColumnInputStream>(stream, extra_table_id_index, table_id);
     LOG_DEBUG(log, "getInputStream succ, read_mode={}, segment_id={}", magic_enum::enum_name(read_mode), t->segment->segmentId());
     return stream;
 }
 
 SegmentReadTaskPool::SegmentReadTaskPool(
     int64_t table_id_,
+    size_t extra_table_id_index_,
     const DMContextPtr & dm_context_,
     const ColumnDefines & columns_to_read_,
     const PushDownFilterPtr & filter_,
@@ -182,6 +183,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     : pool_id(nextPoolId())
     , debug_tag(fmt::format("{}#{}", debug_tag_, pool_id))
     , table_id(table_id_)
+    , extra_table_id_index(extra_table_id_index_)
     , dm_context(dm_context_)
     , columns_to_read(columns_to_read_)
     , filter(filter_)
@@ -192,8 +194,6 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , after_segment_read(after_segment_read_)
     , result_channel(result_channel_)
     , log(Logger::get(debug_tag))
-    // , unordered_input_stream_ref_count(0)
-    // , exception_happened(false)
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
     // to encounter empty queues frequently, resulting in too much waiting and thread context
@@ -224,6 +224,7 @@ void SegmentReadTaskPool::initDefaultResultChannel()
 
     result_channel = SegmentReadResultChannel::create({
         .expected_sources = tasks_wrapper.getTasks().size(),
+        .header = AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read, extra_table_id_index),
         .debug_tag = fmt::format("{}->result_channel", debug_tag),
         .max_pending_blocks = static_cast<UInt64>(block_slot_limit),
         .on_first_read = [this_ptr](SegmentReadResultChannelPtr) {
@@ -323,56 +324,6 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
     }
 }
 
-// void SegmentReadTaskPool::popBlock(Block & block)
-// {
-//     q.pop(block);
-//     blk_stat.pop(block);
-//     global_blk_stat.pop(block);
-//     if (exceptionHappened())
-//     {
-//         throw exception;
-//     }
-// }
-
-// bool SegmentReadTaskPool::tryPopBlock(Block & block)
-// {
-//     if (q.tryPop(block))
-//     {
-//         blk_stat.pop(block);
-//         global_blk_stat.pop(block);
-//         if (exceptionHappened())
-//             throw exception;
-//         return true;
-//     }
-//     else
-//     {
-//         return false;
-//     }
-// }
-
-// void SegmentReadTaskPool::pushBlock(Block && block)
-// {
-//     blk_stat.push(block);
-//     global_blk_stat.push(block);
-//     q.push(std::move(block), nullptr);
-// }
-
-// Int64 SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
-// {
-//     return unordered_input_stream_ref_count.fetch_add(1, std::memory_order_relaxed);
-// }
-// Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
-// {
-//     return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
-// }
-
-// Int64 SegmentReadTaskPool::getFreeBlockSlots() const
-// {
-//     // TODO
-//     return 1;
-//     // return block_slot_limit - blk_stat.pendingCount();
-// }
-
 Int64 SegmentReadTaskPool::getFreeActiveSegments() const
 {
     std::lock_guard lock(mutex);
@@ -383,25 +334,5 @@ Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
 {
     return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
-
-// bool SegmentReadTaskPool::exceptionHappened() const
-// {
-//     return exception_happened.load(std::memory_order_relaxed);
-// }
-
-// bool SegmentReadTaskPool::valid() const
-// {
-//     return !exceptionHappened() && unordered_input_stream_ref_count.load(std::memory_order_relaxed) > 0;
-// }
-// void SegmentReadTaskPool::setException(const DB::Exception & e)
-// {
-//     std::lock_guard lock(mutex);
-//     if (!exceptionHappened())
-//     {
-//         exception = e;
-//         exception_happened.store(true, std::memory_order_relaxed);
-//         q.finish();
-//     }
-// }
 
 } // namespace DB::DM

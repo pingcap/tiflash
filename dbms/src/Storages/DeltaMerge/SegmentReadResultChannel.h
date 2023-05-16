@@ -25,9 +25,9 @@ namespace DB::DM
 {
 
 /**
- * A channel of results to be read from the UnorderedInputStream.
+ * A channel of results to be read from the ResultChannelInputStream.
  * There could be multiple producers generating the result, and
- * multiple consumers (UnorderedInputStream) consuming the result.
+ * multiple consumers (ResultChannelInputStream) consuming the result.
  */
 class SegmentReadResultChannel
     : private boost::noncopyable
@@ -98,6 +98,10 @@ public:
         /// Conventionally, `source` is `{store_id}_{segment_id}`.
         const UInt64 expected_sources;
 
+        /// The structure of the block content. To avoid mistakes, we requires all
+        /// blocks to follow the same structure.
+        const Block header;
+
         const String & debug_tag;
 
         /// If we reaches this limit, we will consider this channel as full.
@@ -155,14 +159,15 @@ public:
     /// Note that this is a soft limit. You can still push more data to the queue.
     bool isFull() const;
 
-private:
     /// Thread-safe.
+    /// TODO: Move to private. Currently PipelineOperators calls this externally.
     void triggerFirstRead();
 
 public:
     const UInt64 expected_sources;
     const String debug_tag;
     const UInt64 max_pending_blocks;
+    const Block header;
 
 private:
     const std::function<void(SegmentReadResultChannelPtr)> on_first_read;

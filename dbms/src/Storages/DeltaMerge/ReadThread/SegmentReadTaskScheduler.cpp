@@ -213,10 +213,10 @@ bool SegmentReadTaskScheduler::schedule()
         if (merged_task != nullptr)
         {
             auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
-            // if (elapsed_ms >= 5)
-            // {
-            LOG_DEBUG(log, "Schedule MergedTask, segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
-            // }
+            if (elapsed_ms >= 5)
+            {
+                LOG_DEBUG(log, "Schedule MergedTask, segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
+            }
             SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
         if (!run_sche)

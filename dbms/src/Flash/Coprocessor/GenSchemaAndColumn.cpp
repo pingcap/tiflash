@@ -83,13 +83,13 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     return genNamesAndTypes(table_scan.getColumns(), column_prefix);
 }
 
-std::tuple<DM::ColumnDefinesPtr, size_t> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
+std::tuple<DM::ColumnDefinesPtr, Int64> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
 {
     // Now the upper level seems treat disagg read as an ExchangeReceiver output, so
     // use this as output column prefix.
     constexpr std::string_view column_prefix = "exchange_receiver";
     auto column_defines = std::make_shared<DM::ColumnDefines>();
-    size_t extra_table_id_index = InvalidColumnID;
+    Int64 extra_table_id_index = InvalidColumnID;
     column_defines->reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {

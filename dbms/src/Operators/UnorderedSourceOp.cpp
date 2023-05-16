@@ -25,7 +25,6 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
         {
             std::swap(block, t_block.value());
             t_block.reset();
-            action.transform(block);
         }
     }
     return await_status;
@@ -38,8 +37,8 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
     while (true)
     {
         Block res;
-        // if (!task_pool->tryPopBlock(res))
-        //     return OperatorStatus::WAITING;
+        if (!result_channel->tryPopBlock(res))
+            return OperatorStatus::WAITING;
         if (res)
         {
             if (unlikely(res.rows() == 0))

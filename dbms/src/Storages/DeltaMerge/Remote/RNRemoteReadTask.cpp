@@ -34,7 +34,6 @@
 #include <Storages/DeltaMerge/Remote/RNDataProvider.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -577,25 +576,6 @@ void RNRemoteSegmentReadTask::prepare()
     segment->placeDeltaIndex(*dm_context, segment_snap);
 }
 
-BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
-    const ColumnDefines & columns_to_read,
-    const RowKeyRanges & key_ranges,
-    UInt64 read_tso,
-    const PushDownFilterPtr & push_down_filter,
-    size_t expected_block_size,
-    ReadMode read_mode)
-{
-    return segment->getInputStream(
-        read_mode,
-        *dm_context,
-        columns_to_read,
-        segment_snap,
-        key_ranges,
-        push_down_filter,
-        read_tso,
-        expected_block_size);
-}
-
 SegmentReadTaskPoolPtr RNRemoteSegmentReadTask::toReadTaskPool(const ToReadTaskPoolOptions & options)
 {
     SegmentReadTasks tasks;
@@ -606,6 +586,7 @@ SegmentReadTaskPoolPtr RNRemoteSegmentReadTask::toReadTaskPool(const ToReadTaskP
 
     return std::make_shared<SegmentReadTaskPool>(
         ks_table_id.second,
+        options.extra_table_id_index,
         dm_context,
         options.columns_to_read,
         options.push_down_filter,

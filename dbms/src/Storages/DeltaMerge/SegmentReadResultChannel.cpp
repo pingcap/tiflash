@@ -22,6 +22,7 @@ SegmentReadResultChannel::SegmentReadResultChannel(const Options & options)
     : expected_sources(options.expected_sources)
     , debug_tag(options.debug_tag)
     , max_pending_blocks(options.max_pending_blocks)
+    , header(options.header)
     , on_first_read(options.on_first_read)
     , log(Logger::get(options.debug_tag))
 {
@@ -35,6 +36,12 @@ SegmentReadResultChannel::~SegmentReadResultChannel()
 
 void SegmentReadResultChannel::pushBlock(Block && block)
 {
+    // Just a simple check to verify the block structure.
+    RUNTIME_CHECK(
+        block.columns() == header.columns(),
+        block.columns(),
+        header.columns());
+
     blk_stat.push(block);
     global_blk_stat.push(block);
     q.push(std::move(block), nullptr);
