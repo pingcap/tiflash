@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -104,14 +105,13 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
     return pipeline.streams;
 }
 
-BlockInputStreams StorageDisaggregated::readThroughExchange(
+void StorageDisaggregated::readThroughExchange(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     unsigned num_streams)
 {
     std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
-    DAGPipeline pipeline;
     buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
@@ -119,9 +119,7 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // TODO: push down filter conditions to write node
-    filterConditions(exec_status, group_builder, *analyzer, pipeline);
-
-    return pipeline.streams;
+    filterConditions(exec_status, group_builder, *analyzer);
 }
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
@@ -323,6 +321,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     // We can use PhysicalExchange::transform() to build InputStream after
     // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
     const String extra_info = "disaggregated compute node exchange receiver";
+    const String & executor_id = table_scan.getTableScanExecutorID();
     for (size_t i = 0; i < num_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
@@ -380,7 +379,7 @@ void StorageDisaggregated::filterConditions(
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_streams_start_index=*/group_builder.concurrency, filter_conditions, *analyzer, log);
+        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_streams_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
     }
 }
 } // namespace DB
