@@ -281,15 +281,23 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
     LOG_DEBUG(log, "Aws::InitAPI start");
-    // Override the HTTP client, use PocoHTTPClient instead
-    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
-        // TODO: do we need the remote host filter?
-        PocoHTTPClientConfiguration poco_cfg(
-            std::make_shared<RemoteHostFilter>(),
-            config_.max_redirections,
-            /*enable_s3_requests_logging_*/ config_.verbose);
-        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
-    };
+    if (!config_.enable_poco_client)
+    {
+        LOG_DEBUG(log, "Using default curl client");
+    }
+    else
+    {
+        // Override the HTTP client, use PocoHTTPClient instead
+        aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+            // TODO: do we need the remote host filter?
+            PocoHTTPClientConfiguration poco_cfg(
+                std::make_shared<RemoteHostFilter>(),
+                config_.max_redirections,
+                /*enable_s3_requests_logging_*/ config_.verbose,
+                config_.enable_http_pool);
+            return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+        };
+    }
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
 
@@ -453,24 +461,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-        sts_cfg.verifySSL = false;
-        Aws::STS::STSClient sts_client(sts_cfg);
-        Aws::STS::Model::GetCallerIdentityRequest req;
-        LOG_DEBUG(log, "GetCallerIdentity start");
-        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
-        if (!get_identity_outcome.IsSuccess())
-        {
-            const auto & error = get_identity_outcome.GetError();
-            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
-        }
-        else
-        {
-            const auto & result = get_identity_outcome.GetResult();
-            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
-        }
-        LOG_DEBUG(log, "GetCallerIdentity end");
-
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
