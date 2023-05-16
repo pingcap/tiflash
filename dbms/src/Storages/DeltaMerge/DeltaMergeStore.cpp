@@ -978,7 +978,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         enable_read_thread,
         final_num_stream);
 
-    read_task_pool->initDefaultResultChannel();
+    if (enable_read_thread)
+        read_task_pool->initDefaultResultChannel();
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1089,7 +1090,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         enable_read_thread,
         final_num_stream);
 
-    read_task_pool->initDefaultResultChannel();
+    if (enable_read_thread)
+        read_task_pool->initDefaultResultChannel();
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1185,7 +1187,8 @@ SourceOps DeltaMergeStore::readSourceOps(
         enable_read_thread,
         final_num_stream);
 
-    read_task_pool->initDefaultResultChannel();
+    if (enable_read_thread)
+        read_task_pool->initDefaultResultChannel();
 
     SourceOps res;
     for (size_t i = 0; i < final_num_stream; ++i)
