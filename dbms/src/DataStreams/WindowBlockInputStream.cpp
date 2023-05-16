@@ -293,9 +293,10 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
     // The step happens between blocks
     n -= result_row.row + 1;
     --result_row.block;
+    result_row.row = blockAt(result_row).rows - 1;
     while (n > 0)
     {
-        auto block = blockAt(result_row);
+        auto & block = blockAt(result_row);
         if (static_cast<Int64>(block.rows) > n)
         {
             result_row.row = block.rows - n - 1; // index, so we need to -1
@@ -303,6 +304,7 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
         }
         n -= block.rows;
         --result_row.block;
+        result_row.row = blockAt(result_row).rows - 1;
     }
     return result_row;
 }
@@ -317,7 +319,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
 
     // Now, frame_end is impossible to reach to partition_end.
     RowNumber result_row = current_row;
-    auto block = blockAt(result_row);
+    auto & block = blockAt(result_row);
 
     // The step happens only in a block
     if (static_cast<Int64>(block.rows - result_row.row - 1) >= n)
@@ -365,7 +367,7 @@ Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
     Int64 dist = left.row;
     RowNumber tmp = left;
     --tmp.block;
-    while (tmp.block > right.row)
+    while (tmp.block > right.block)
     {
         dist += blockAt(tmp).rows;
         --tmp.block;
@@ -378,11 +380,6 @@ Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
 
 void WindowTransformAction::advanceFrameStart()
 {
-    if (frame_started)
-    {
-        return;
-    }
-
     switch (window_description.frame.begin_type)
     {
     case WindowFrame::BoundaryType::Unbounded:
@@ -392,6 +389,9 @@ void WindowTransformAction::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
+        if (frame_started)
+            return;
+
         RUNTIME_CHECK_MSG(
             only_have_pure_window,
             "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
