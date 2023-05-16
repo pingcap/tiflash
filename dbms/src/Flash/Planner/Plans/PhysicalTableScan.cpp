@@ -82,7 +82,7 @@ void PhysicalTableScan::buildPipeline(
         tidb_table_scan,
         filter_conditions,
         context.getMaxStreams());
-    source_ops = storage_interpreter->execute(exec_status);
+    storage_interpreter->execute(exec_status, pipeline_exec_builder);
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }
 
@@ -92,12 +92,8 @@ void PhysicalTableScan::buildPipelineExecGroup(
     Context &,
     size_t)
 {
-    group_builder.addGroups(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
-    storage_interpreter->executeSuffix(exec_status, group_builder);
+    assert(group_builder.concurrency == 0);
+    group_builder = std::move(pipeline_exec_builder);
     buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }
 

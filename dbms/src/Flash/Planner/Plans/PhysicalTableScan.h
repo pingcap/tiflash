@@ -79,6 +79,6 @@ private:
 
     Block sample_block;
 
-    SourceOps source_ops;
+    PipelineExecGroupBuilder pipeline_exec_builder;
 };
 } // namespace DB

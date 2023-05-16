@@ -53,9 +53,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    SourceOps execute(PipelineExecutorStatus & exec_status);
-
-    void executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+    void execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
@@ -131,7 +129,7 @@ private:
 
     void executeImpl(DAGPipeline & pipeline);
 
-    SourceOps executeImpl(PipelineExecutorStatus & exec_status);
+    void executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;

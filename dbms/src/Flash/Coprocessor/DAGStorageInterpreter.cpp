@@ -278,14 +278,14 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     executeImpl(pipeline);
 }
 
-SourceOps DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status)
+void DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
 {
     prepare(); // learner read
 
-    return executeImpl(exec_status);
+    return executeImpl(exec_status, group_builder);
 }
 
-SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status)
+void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
 {
     auto & dag_context = dagContext();
 
@@ -347,11 +347,12 @@ SourceOps DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_statu
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
-    return source_ops;
-}
+    group_builder.addGroups(source_ops.size());
+    size_t i = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::move(source_ops[i++]));
+    });
 
-void DAGStorageInterpreter::executeSuffix(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
-{
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
 
