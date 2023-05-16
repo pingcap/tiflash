@@ -14,30 +14,15 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
-
-#include <deque>
-#include <mutex>
+#include <Core/Block.h>
+#include <Interpreters/JoinUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-class FIFOTaskQueue : public TaskQueue
-{
-public:
-    void submit(TaskPtr && task) noexcept override;
-
-    void submit(std::vector<TaskPtr> & tasks) noexcept override;
-
-    bool take(TaskPtr & task) noexcept override;
-
-    bool empty() noexcept override;
-
-    void close() override;
-
-private:
-    std::mutex mu;
-    std::condition_variable cv;
-    bool is_closed = false;
-    std::deque<TaskPtr> task_queue;
-};
+Block crossProbeBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const BlocksList & right_blocks);
 } // namespace DB

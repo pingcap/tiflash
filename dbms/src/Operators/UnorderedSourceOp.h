@@ -40,7 +40,6 @@ public:
         setHeader(result_channel->header);
         ref_no = result_channel->refConsumer();
         LOG_DEBUG(log, "Created ResultChannelSourceOp, ref_no={}", ref_no);
-        result_channel->triggerFirstRead();
     }
 
     ~UnorderedSourceOp() override
@@ -52,6 +51,11 @@ public:
     String getName() const override
     {
         return "UnorderedSourceOp";
+    }
+
+    void operatePrefix() override
+    {
+        result_channel->triggerFirstRead();
     }
 
 protected:

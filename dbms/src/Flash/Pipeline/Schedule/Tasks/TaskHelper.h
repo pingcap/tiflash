@@ -40,6 +40,27 @@ namespace DB
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
 
+#define FINALIZE_TASK(task) \
+    (task)->finalize();     \
+    (task).reset();
+
+#define FINALIZE_TASKS(tasks)   \
+    for (auto & task : (tasks)) \
+    {                           \
+        task->finalize();       \
+        task.reset();           \
+    }
+
+#define CATCH_AND_TERMINATE(log)                      \
+    catch (...)                                       \
+    {                                                 \
+        RUNTIME_ASSERT(                               \
+            false,                                    \
+            (log),                                    \
+            "Unexpected error reported, detail:\n{}", \
+            getCurrentExceptionMessage(true, true));  \
+    }
+
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 
 } // namespace DB

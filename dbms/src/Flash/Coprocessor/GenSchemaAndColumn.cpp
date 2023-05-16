@@ -54,7 +54,7 @@ NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_sc
 
 String genNameForExchangeReceiver(Int32 col_index)
 {
-    return "exchange_receiver_" + std::to_string(col_index);
+    return fmt::format("exchange_receiver_{}", col_index);
 }
 
 NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef & column_prefix)
@@ -85,18 +85,17 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
 
 std::tuple<DM::ColumnDefinesPtr, Int64> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
 {
-    // Now the upper level seems treat disagg read as an ExchangeReceiver output, so
-    // use this as output column prefix.
-    constexpr std::string_view column_prefix = "exchange_receiver";
     auto column_defines = std::make_shared<DM::ColumnDefines>();
     Int64 extra_table_id_index = InvalidColumnID;
     column_defines->reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         const auto & column_info = table_scan.getColumns()[i];
+        // Now the upper level seems treat disagg read as an ExchangeReceiver output, so
+        // use this as output column prefix.
         // Even if the id is pk_column or extra_table_id, we still output it as
         // a exchange receiver output column
-        const auto output_name = fmt::format("{}_{}", column_prefix, i);
+        const auto output_name = genNameForExchangeReceiver(i);
         switch (column_info.id)
         {
         case TiDBPkColumnID:
@@ -119,7 +118,7 @@ std::tuple<DM::ColumnDefinesPtr, Int64> genColumnDefinesForDisaggregatedRead(con
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
                 output_name,
-                getDataTypeByColumnInfoForComputingLayer(column_info),
+                getDataTypeByColumnInfoForDisaggregatedStorageLayer(column_info),
                 column_info.defaultValueToField()});
             break;
         }
