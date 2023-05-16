@@ -25,11 +25,7 @@
 #include <Common/Config/TOMLConfiguration.h>
 #include <Common/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
-<<<<<<< HEAD
-=======
-#include <boost_wrapper/string.h>
 #include <common/logger_useful.h>
->>>>>>> 063ae0076d (Check CPU cores in CPUAffinityManagerTest (#7473))
 #include <gtest/gtest.h>
 #include <unistd.h>
 
