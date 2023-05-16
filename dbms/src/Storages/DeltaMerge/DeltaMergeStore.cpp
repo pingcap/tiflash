@@ -1086,11 +1086,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-<<<<<<< HEAD
-                filter && filter->before_where ? filter->columns_after_cast : columns_to_read,
-=======
                 filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
->>>>>>> 698fdde3ff (Fix query fail when there are timestamp or time columns after generated column (#7469))
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
