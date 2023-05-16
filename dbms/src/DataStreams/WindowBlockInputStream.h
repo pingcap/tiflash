@@ -71,6 +71,15 @@ struct RowNumber
 /* Implementation details.*/
 struct WindowTransformAction
 {
+private:
+    // Used for calculating the frame start
+    RowNumber stepForward(const RowNumber & current_row, Int64 n);
+    // Used for calculating the frame end
+    std::tuple<RowNumber, bool> stepBackward(const RowNumber & current_row, Int64 n);
+
+    // distance is left - right.
+    Int64 distance(RowNumber left, RowNumber right);
+public:
     WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
 
     void cleanUp();

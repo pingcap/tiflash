@@ -16,6 +16,8 @@
 #include <Interpreters/WindowDescription.h>
 
 #include <magic_enum.hpp>
+#include <tuple>
+#include <type_traits>
 
 namespace DB
 {
@@ -267,6 +269,108 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
+RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int64 n)
+{
+    auto dist = distance(current_row, partition_start);
+    assert(dist >= 0);
+    if (dist <= n)
+        return partition_start;
+
+    RowNumber result_row = current_row;
+
+    // The step happens only in a block
+    if (static_cast<Int64>(result_row.row) >= n)
+    {
+        result_row.row -= n;
+        return result_row;
+    }
+
+    // The step happens between blocks
+    n -= result_row.row + 1;
+    --result_row.block;
+    while (n > 0)
+    {
+        auto block = blockAt(result_row);
+        if (static_cast<Int64>(block.rows) > n)
+        {
+            result_row.row = block.rows - n - 1; // index, so we need to -1
+            break;
+        }
+        n -= block.rows;
+        --result_row.block;
+    }
+    return result_row;
+}
+
+std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, Int64 n)
+{
+    // Distance is too long and partition_end is the longest distance.
+    auto dist = distance(partition_end, current_row);
+    assert(dist - 1 >= 0);
+    if (dist - 1 <= n)
+        return std::make_tuple(partition_end, partition_ended);
+
+    // Now, frame_end is impossible to reach to partition_end.
+    RowNumber result_row = current_row;
+    auto block = blockAt(result_row);
+
+    // The step happens only in a block
+    if (static_cast<Int64>(block.rows - result_row.row - 1) >= n)
+    {
+        result_row.row += n;
+        return std::make_tuple(result_row, partition_ended);
+    }
+
+    // The step happens between blocks
+    ++result_row.block;
+    result_row.row = 0;
+    n -= block.rows - result_row.row;
+    while (n > 0)
+    {
+        auto block_rows = static_cast<Int64>(blockAt(result_row).rows);
+        if (n >= block_rows)
+        {
+            result_row.row = 0;
+            ++result_row.block;
+            n -= block_rows;
+            continue;
+        }
+
+        result_row.row += n;
+        n = 0;
+    }
+
+    return std::make_tuple(result_row, partition_ended);
+}
+
+Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
+{
+    if (left.block == right.block)
+        return left.row - right.row;
+
+    Int64 negative_sign = 1;
+
+    // Ensure that left is larger than right
+    if (left.block < right.block)
+    {
+        negative_sign = -1;
+        std::swap(left, right);
+    }
+
+    Int64 dist = left.row;
+    RowNumber tmp = left;
+    --tmp.block;
+    while (tmp.block > right.row)
+    {
+        dist += blockAt(tmp).rows;
+        --tmp.block;
+    }
+
+    dist += blockAt(right).rows - right.row;
+
+    return dist * negative_sign;
+}
+
 void WindowTransformAction::advanceFrameStart()
 {
     if (frame_started)
@@ -291,6 +395,9 @@ void WindowTransformAction::advanceFrameStart()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+        frame_start = stepForward(current_row, window_description.frame.begin_offset);
+        frame_started = true;
+        break;
     default:
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
@@ -391,6 +498,15 @@ void WindowTransformAction::advanceFrameEnd()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+    {
+        constexpr size_t frame_end_pos = 0;
+        constexpr size_t is_frame_end_pos = 1;
+        auto res = stepBackward(current_row, window_description.frame.end_offset);
+        frame_ended = std::get<is_frame_end_pos>(res);
+        if (frame_ended)
+            frame_end = std::get<frame_end_pos>(res);
+        break;
+    }
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
@@ -607,8 +723,7 @@ void WindowTransformAction::tryCalculate()
         partition_start = partition_end;
         advanceRowNumber(partition_end);
         partition_ended = false;
-        // We have to reset the frame and other pointers when the new partition
-        // starts.
+        // We have to reset the frame and other pointers when the new partition starts.
         frame_start = partition_start;
         frame_end = partition_start;
         prev_frame_start = partition_start;
