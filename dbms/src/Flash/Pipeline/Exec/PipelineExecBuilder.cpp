@@ -58,10 +58,17 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addGroup()
 {
-    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
-    concurrency = init_concurrency;
+    ++concurrency;
+    group.emplace_back();
+}
+
+void PipelineExecGroupBuilder::addGroups(size_t num)
+{
+    if unlikely (num == 0)
+        return;
+    concurrency += num;
     group.resize(concurrency);
 }
 

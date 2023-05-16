@@ -41,7 +41,8 @@ struct PipelineExecGroupBuilder
 
     size_t concurrency = 0;
 
-    void init(size_t init_concurrency);
+    void addGroup();
+    void addGroups(size_t num);
 
     /// ff: [](PipelineExecBuilder & builder) {}
     template <typename FF>

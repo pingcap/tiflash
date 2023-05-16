@@ -92,7 +92,7 @@ void PhysicalTableScan::buildPipelineExecGroup(
     Context &,
     size_t)
 {
-    group_builder.init(source_ops.size());
+    group_builder.addGroups(source_ops.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::move(source_ops[i++]));

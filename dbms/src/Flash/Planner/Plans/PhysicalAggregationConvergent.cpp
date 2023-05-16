@@ -32,7 +32,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     if (aggregate_context->hasSpilledData())
     {
         auto restorers = aggregate_context->buildSharedRestorer(exec_status);
-        group_builder.init(restorers.size());
+        group_builder.addGroups(restorers.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<AggregateRestoreSourceOp>(
@@ -45,7 +45,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     else
     {
         aggregate_context->initConvergent();
-        group_builder.init(aggregate_context->getConvergentConcurrency());
+        group_builder.addGroups(aggregate_context->getConvergentConcurrency());
         size_t index = 0;
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(

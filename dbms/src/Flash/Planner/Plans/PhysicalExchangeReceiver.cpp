@@ -102,7 +102,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    group_builder.init(concurrency);
+    group_builder.addGroups(concurrency);
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(

@@ -71,7 +71,7 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    group_builder.init(mock_streams.size());
+    group_builder.addGroups(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
