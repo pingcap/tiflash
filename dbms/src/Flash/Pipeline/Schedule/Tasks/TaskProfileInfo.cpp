@@ -12,64 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 namespace DB
 {
-void TaskProfileInfo::startTimer() noexcept
+void TaskProfileInfo::startTimer()
 {
     stopwatch.start();
 }
 
-UInt64 TaskProfileInfo::elapsedFromPrev() noexcept
+UInt64 TaskProfileInfo::elapsedFromPrev()
 {
     return stopwatch.elapsedFromLastTime();
 }
 
-void TaskProfileInfo::addCPUExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addCPUExecuteTime(UInt64 value)
 {
-    cpu_execute_time += value;
+    cpu_execute_time_ns += value;
 }
 
-void TaskProfileInfo::elapsedCPUPendingTime() noexcept
+void TaskProfileInfo::elapsedCPUPendingTime()
 {
-    cpu_pending_time += elapsedFromPrev();
+    cpu_pending_time_ns += elapsedFromPrev();
 }
 
-void TaskProfileInfo::addIOExecuteTime(UInt64 value) noexcept
+void TaskProfileInfo::addIOExecuteTime(UInt64 value)
 {
-    io_execute_time += value;
+    io_execute_time_ns += value;
 }
 
-void TaskProfileInfo::elapsedIOPendingTime() noexcept
+void TaskProfileInfo::elapsedIOPendingTime()
 {
-    io_pending_time += elapsedFromPrev();
+    io_pending_time_ns += elapsedFromPrev();
 }
 
-void TaskProfileInfo::elapsedAwaitTime() noexcept
+void TaskProfileInfo::elapsedAwaitTime()
 {
-    await_time += elapsedFromPrev();
+    await_time_ns += elapsedFromPrev();
 }
 
-String TaskProfileInfo::toJson() const
+void QueryProfileInfo::merge(const TaskProfileInfo & task_profile_info)
 {
-    return fmt::format(
-        R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
-        cpu_execute_time,
-        cpu_pending_time,
-        io_execute_time,
-        io_pending_time,
-        await_time);
-}
-
-UInt64 TaskProfileInfo::getCPUExecuteTime() const
-{
-    return cpu_execute_time;
-}
-
-UInt64 TaskProfileInfo::getIOExecuteTime() const
-{
-    return io_execute_time;
+    cpu_execute_time_ns += task_profile_info.getCPUExecuteTimeNs();
+    cpu_pending_time_ns += task_profile_info.getCPUPendingTimeNs();
+    io_execute_time_ns += task_profile_info.getIOExecuteTimeNs();
+    io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
+    await_time_ns += task_profile_info.getAwaitTimeNs();
 }
 } // namespace DB
