@@ -566,6 +566,8 @@ void StorageS3Config::parse(const String & content)
     RUNTIME_CHECK(request_timeout_ms > 0);
     readConfig(table, "root", root);
     root = getNormalizedS3Root(root); // ensure ends with '/'
+    readConfig(table, "enable_http_pool", enable_http_pool);
+    readConfig(table, "enable_poco_client", enable_poco_client);
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -592,7 +594,8 @@ String StorageS3Config::toString() const
         "endpoint={} bucket={} root={} "
         "max_connections={} max_redirections={} "
         "connection_timeout_ms={} request_timeout_ms={} "
-        "access_key_id_size={} secret_access_key_size={}"
+        "access_key_id_size={} secret_access_key_size={} "
+        "enable_http_pool={} enable_poco_client={}"
         "}}",
         endpoint,
         bucket,
@@ -602,7 +605,9 @@ String StorageS3Config::toString() const
         connection_timeout_ms,
         request_timeout_ms,
         access_key_id.size(),
-        secret_access_key.size());
+        secret_access_key.size(),
+        enable_http_pool,
+        enable_poco_client);
 }
 
 void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)

@@ -54,7 +54,7 @@ public:
 
     void schedule();
 
-    void onTaskFinish();
+    void onTaskFinish(const TaskProfileInfo & task_profile_info);
 
     // return true for source event.
     bool prepare();

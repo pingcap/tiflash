@@ -162,6 +162,15 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
+    if (context.getSettingsRef().force_enable_pipeline)
+    {
+        RUNTIME_CHECK_MSG(
+            context.getSharedContextDisagg()->notDisaggregatedMode(),
+            "The pipeline model does not support storage-computing separation mode, and an error is reported because the setting force_enable_pipeline is true.");
+        auto res = executeAsPipeline(context, internal);
+        RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting force_enable_pipeline is true.");
+        return std::move(*res);
+    }
     if (context.getSettingsRef().enable_planner
         && context.getSettingsRef().enable_pipeline
         && context.getSharedContextDisagg()->notDisaggregatedMode())
