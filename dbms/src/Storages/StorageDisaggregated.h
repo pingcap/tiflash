@@ -84,10 +84,12 @@ public:
 
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
-    BlockInputStreams readFromWriteNode(
+    BlockInputStreams readThroughS3(
         const Context & db_context,
         const SelectQueryInfo & query_info,
         unsigned num_streams);
+    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
+    BlockInputStreams readThroughExchange(unsigned num_streams);
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
@@ -119,7 +121,8 @@ private:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline);
+    void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

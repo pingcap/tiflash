@@ -47,7 +47,7 @@ void EventTask::finalizeImpl()
     {
         exec_status.onErrorOccurred(std::current_exception());
     }
-    event->onTaskFinish();
+    event->onTaskFinish(profile_info);
     event.reset();
 }
 

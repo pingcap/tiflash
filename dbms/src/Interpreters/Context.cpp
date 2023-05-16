@@ -1763,6 +1763,17 @@ UniversalPageStoragePtr Context::tryGetWriteNodePageStorage() const
     return nullptr;
 }
 
+bool Context::trySyncAllDataToRemoteStore() const
+{
+    auto lock = getLock();
+    if (shared->ctx_disagg->isDisaggregatedStorageMode() && shared->ps_write)
+    {
+        shared->ps_write->setSyncAllData();
+        return true;
+    }
+    return false;
+}
+
 // In some unit tests, we may want to reinitialize WriteNodePageStorage multiple times to mock restart.
 // And we need to release old one before creating new one.
 // And we must do it explicitly. Because if we do it implicitly in `initializeWriteNodePageStorageIfNeed`, there is a potential deadlock here.
