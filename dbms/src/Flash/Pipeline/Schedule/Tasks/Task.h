@@ -102,7 +102,7 @@ private:
     // To reduce the overheads of `mem_tracker.get()`
     MemoryTracker * mem_tracker_ptr;
 
-    ExecTaskStatus exec_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status{ExecTaskStatus::INIT};
 };
 using TaskPtr = std::unique_ptr<Task>;
 

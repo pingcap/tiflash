@@ -78,51 +78,51 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
 Task::~Task()
 {
     RUNTIME_ASSERT(
-        exec_status == ExecTaskStatus::FINALIZE,
+        task_status == ExecTaskStatus::FINALIZE,
         log,
         "The state of the Task must be {} before it is destructed, but it is actually {}",
         magic_enum::enum_name(ExecTaskStatus::FINALIZE),
-        magic_enum::enum_name(exec_status));
+        magic_enum::enum_name(task_status));
 }
 
 #define CHECK_FINISHED                                        \
-    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
-                 || exec_status == ExecTaskStatus::ERROR      \
-                 || exec_status == ExecTaskStatus::CANCELLED) \
-        return exec_status;
+    if unlikely (task_status == ExecTaskStatus::FINISHED      \
+                 || task_status == ExecTaskStatus::ERROR      \
+                 || task_status == ExecTaskStatus::CANCELLED) \
+        return task_status;
 
 ExecTaskStatus Task::execute()
 {
     CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::RUNNING || exec_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
     switchStatus(executeImpl());
-    return exec_status;
+    return task_status;
 }
 
 ExecTaskStatus Task::executeIO()
 {
     CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::IO || exec_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
-    return exec_status;
+    return task_status;
 }
 
 ExecTaskStatus Task::await()
 {
     CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(exec_status == ExecTaskStatus::WAITING || exec_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
-    return exec_status;
+    return task_status;
 }
 
 void Task::finalize()
 {
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(
-        exec_status != ExecTaskStatus::FINALIZE,
+        task_status != ExecTaskStatus::FINALIZE,
         log,
         "finalize can only be called once.");
     switchStatus(ExecTaskStatus::FINALIZE);
@@ -137,13 +137,13 @@ void Task::finalize()
 
 void Task::switchStatus(ExecTaskStatus to)
 {
-    if (exec_status != to)
+    if (task_status != to)
     {
 #ifndef NDEBUG
-        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(task_status), magic_enum::enum_name(to));
 #endif // !NDEBUG
         addToStatusMetrics(to);
-        exec_status = to;
+        task_status = to;
     }
 }
 } // namespace DB

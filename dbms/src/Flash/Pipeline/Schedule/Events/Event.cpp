@@ -155,9 +155,10 @@ void Event::scheduleTasks()
     }
 }
 
-void Event::onTaskFinish()
+void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 {
     assertStatus(EventStatus::SCHEDULED);
+    exec_status.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
         remaining_tasks >= 0,

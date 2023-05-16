@@ -15,12 +15,42 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <fmt/format.h>
 
 #include <atomic>
 
 namespace DB
 {
-class TaskProfileInfo
+template <typename UnitType>
+class ProfileInfo
+{
+public:
+    ALWAYS_INLINE UInt64 getCPUExecuteTimeNs() const { return cpu_execute_time_ns; }
+    ALWAYS_INLINE UInt64 getCPUPendingTimeNs() const { return cpu_pending_time_ns; }
+    ALWAYS_INLINE UInt64 getIOExecuteTimeNs() const { return io_execute_time_ns; }
+    ALWAYS_INLINE UInt64 getIOPendingTimeNs() const { return io_pending_time_ns; }
+    ALWAYS_INLINE UInt64 getAwaitTimeNs() const { return await_time_ns; }
+
+    String toJson() const
+    {
+        return fmt::format(
+            R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
+            cpu_execute_time_ns,
+            cpu_pending_time_ns,
+            io_execute_time_ns,
+            io_pending_time_ns,
+            await_time_ns);
+    }
+
+protected:
+    UnitType cpu_execute_time_ns = 0;
+    UnitType cpu_pending_time_ns = 0;
+    UnitType io_execute_time_ns = 0;
+    UnitType io_pending_time_ns = 0;
+    UnitType await_time_ns = 0;
+};
+
+class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
     ALWAYS_INLINE void startTimer()
@@ -35,49 +65,43 @@ public:
 
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
-        cpu_execute_time += value;
+        cpu_execute_time_ns += value;
     }
 
     ALWAYS_INLINE void elapsedCPUPendingTime()
     {
-        cpu_pending_time += elapsedFromPrev();
+        cpu_pending_time_ns += elapsedFromPrev();
     }
 
     ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
     {
-        io_execute_time += value;
+        io_execute_time_ns += value;
     }
 
     ALWAYS_INLINE void elapsedIOPendingTime()
     {
-        io_pending_time += elapsedFromPrev();
+        io_pending_time_ns += elapsedFromPrev();
     }
 
     ALWAYS_INLINE void elapsedAwaitTime()
     {
-        await_time += elapsedFromPrev();
+        await_time_ns += elapsedFromPrev();
     }
-
-    ALWAYS_INLINE UInt64 getCPUExecuteTime() const
-    {
-        return io_execute_time;
-    }
-
-    ALWAYS_INLINE UInt64 getIOExecuteTime() const
-    {
-        return cpu_execute_time;
-    }
-
-    String toJson() const;
 
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
-
-    UInt64 cpu_execute_time = 0;
-    UInt64 cpu_pending_time = 0;
-    UInt64 io_execute_time = 0;
-    UInt64 io_pending_time = 0;
-    UInt64 await_time = 0;
 };
 
+class QueryProfileInfo : public ProfileInfo<std::atomic_uint64_t>
+{
+public:
+    ALWAYS_INLINE void merge(const TaskProfileInfo & task_profile_info)
+    {
+        cpu_execute_time_ns += task_profile_info.getCPUExecuteTimeNs();
+        cpu_pending_time_ns += task_profile_info.getCPUPendingTimeNs();
+        io_execute_time_ns += task_profile_info.getIOExecuteTimeNs();
+        io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
+        await_time_ns += task_profile_info.getAwaitTimeNs();
+    }
+};
 } // namespace DB
