@@ -126,7 +126,7 @@ private:
     void executeCastAfterTableScan(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
-        size_t remote_read_sources_start_index);
+        size_t remote_read_start_index);
 
     void prepare();
 
