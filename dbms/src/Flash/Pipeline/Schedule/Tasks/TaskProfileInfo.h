@@ -31,7 +31,7 @@ public:
     ALWAYS_INLINE UInt64 getIOPendingTimeNs() const { return io_pending_time_ns; }
     ALWAYS_INLINE UInt64 getAwaitTimeNs() const { return await_time_ns; }
 
-    String toJson() const
+    ALWAYS_INLINE String toJson() const
     {
         return fmt::format(
             R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
