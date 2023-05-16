@@ -92,10 +92,10 @@ TEST(CPUAffinityManager_test, CPUAffinityManager)
     auto cpu_cores = cpu_affinity.cpuSetToVec(cpu_set);
     if (n_cpu != cpu_cores.size())
     {
-        LOG_FMT_INFO(Logger::get(), "n_cpu = {}, cpu_cores = {}, CPU number and CPU cores not match, don't not check CPUAffinityManager", n_cpu, cpu_cores);
+        LOG_FMT_INFO(Logger::get("CPUAffinityManager_test"), "n_cpu = {}, cpu_cores = {}, CPU number and CPU cores not match, don't not check CPUAffinityManager", n_cpu, cpu_cores);
         return;
     }
-    LOG_FMT_DEBUG(Logger::get(), "n_cpu = {}, cpu_cores = {}", n_cpu, cpu_cores);
+    LOG_FMT_DEBUG(Logger::get("CPUAffinityManager_test"), "n_cpu = {}, cpu_cores = {}", n_cpu, cpu_cores);
 
     cpu_affinity.bindSelfQueryThread();
     cpu_set_t cpu_set0;
