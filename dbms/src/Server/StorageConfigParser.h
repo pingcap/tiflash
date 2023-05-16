@@ -109,6 +109,7 @@ struct StorageS3Config
     UInt64 request_timeout_ms = 30000;
     UInt64 max_redirections = 10;
     String root;
+    bool lazy_init_s3_file = true;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";

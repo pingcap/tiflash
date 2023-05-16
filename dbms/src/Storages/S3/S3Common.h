@@ -128,6 +128,11 @@ public:
 
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
+    const StorageS3Config & getConfig() const
+    {
+        RUNTIME_CHECK(client_is_inited);
+        return config;
+    }
 private:
     ClientFactory() = default;
     DISALLOW_COPY_AND_MOVE(ClientFactory);
@@ -167,7 +172,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
-void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname);
+void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname, bool lazy_init_s3_file);
 
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
 
