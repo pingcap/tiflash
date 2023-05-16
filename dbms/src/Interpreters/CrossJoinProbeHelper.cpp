@@ -483,11 +483,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
         assert(block.getByPosition(i).column != nullptr);
         Field value;
         probe_process_info.block.getByPosition(i).column->get(probe_process_info.start_row, value);
-        //if (block.getByPosition(i).column->isColumnConst())
         block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value);
-        //else
-        //    /// todo use constant column?
-        //    block.getByPosition(i).column = block.getByPosition(i).type->createColumnConst(right_row, value)->convertToFullColumnIfConst();
     }
     for (size_t i = 0; i < right_block.columns(); i++)
     {
@@ -498,8 +494,6 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     {
         /// extra match_helper column for LeftOuterSemi join
         auto helper_index = block.columns() - 1;
-        /// todo use constant column?
-        //block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1)->convertToFullColumnIfConst();
         block.getByPosition(helper_index).column = block.getByPosition(helper_index).type->createColumnConst(right_row, FIELD_INT8_1);
     }
     /// construct filter and offset column

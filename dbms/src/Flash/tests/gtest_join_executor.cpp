@@ -1431,6 +1431,7 @@ TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
 {
     using tipb::JoinType;
+    std::vector<UInt64> cross_join_shallow_copy_thresholds{1, DEFAULT_BLOCK_SIZE * 100};
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
@@ -1472,6 +1473,8 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
+            /// nullaware hash join
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1483,7 +1486,24 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            /// nullaware cross join
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {eq(col("t.a"), col("s.a"))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -1528,6 +1548,7 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1539,7 +1560,23 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {lt(col("t.c"), col("s.c"))},
+                                    {eq(col("t.a"), col("s.a"))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -1585,6 +1622,7 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1596,7 +1634,23 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -1659,6 +1713,7 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1670,7 +1725,23 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {lt(col("t.c"), col("s.c"))},
+                                    {eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b"))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -1699,6 +1770,7 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1710,7 +1782,23 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
+                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -1742,6 +1830,7 @@ try
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
+            auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("null_aware_semi", "t")
                                .join(context.scan("null_aware_semi", "s"),
                                      type,
@@ -1753,7 +1842,23 @@ try
                                      0,
                                      true)
                                .build(context);
-            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+            executeAndAssertColumnsEqual(request, reference);
+            for (const auto shallow_copy_threshold : cross_join_shallow_copy_thresholds)
+            {
+                context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(shallow_copy_threshold)));
+                request = context.scan("null_aware_semi", "t")
+                              .join(context.scan("null_aware_semi", "s"),
+                                    type,
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {And(eq(col("t.a"), col("s.a")), eq(col("t.b"), col("s.b")))},
+                                    0,
+                                    false)
+                              .build(context);
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 }

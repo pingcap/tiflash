@@ -92,7 +92,7 @@ size_t getRestoreJoinBuildConcurrency(size_t total_partitions, size_t spilled_pa
         return std::max(2, restore_build_concurrency);
     }
 }
-std::pair<const ColumnUInt8::Container *, const ColumnUInt8::Container *> getDataAndNullMapVectorFromFilterColumn(ColumnPtr filter_column)
+std::tuple<const ColumnUInt8::Container *, const ColumnUInt8::Container *, ColumnPtr> getDataAndNullMapVectorFromFilterColumn(ColumnPtr filter_column)
 {
     if (filter_column->isColumnConst())
         filter_column = filter_column->convertToFullColumnIfConst();
@@ -100,11 +100,11 @@ std::pair<const ColumnUInt8::Container *, const ColumnUInt8::Container *> getDat
     {
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(filter_column.get());
         const auto & data_column = nullable_column->getNestedColumnPtr();
-        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData()};
+        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData(), filter_column};
     }
     else
     {
-        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr};
+        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr, filter_column};
     }
 }
 } // namespace
@@ -582,7 +582,7 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
 {
     if (filter_column_name.empty())
         return;
-    auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(block.getByName(filter_column_name).column);
+    auto [filter_vec, nullmap_vec, vec_holder] = getDataAndNullMapVectorFromFilterColumn(block.getByName(filter_column_name).column);
     if (nullmap_vec != nullptr)
     {
         for (size_t i = 0; i < nullmap_vec->size(); ++i)
@@ -653,8 +653,8 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
         {
             auto data_and_null_map_vec = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
-            eq_in_vec = data_and_null_map_vec.first;
-            eq_in_nullmap = data_and_null_map_vec.second;
+            eq_in_vec = std::get<0>(data_and_null_map_vec);
+            eq_in_nullmap = std::get<1>(data_and_null_map_vec);
         }
 
         /// for (anti)leftOuterSemi join, we should keep only one row for each original row of left table.
@@ -804,7 +804,7 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         assert(probe_process_info.has_row_matched == false);
-        auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
+        auto [eq_in_vec, eq_in_nullmap, vec_holder] = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
         for (size_t i = 0; i < block.rows(); ++i)
         {
             if (!filter[i])
@@ -1086,6 +1086,17 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     return block;
 }
 
+Block Join::removeUselessColumn(Block & block) const
+{
+    Block projected_block;
+    for (const auto & name : tidb_output_column_names)
+    {
+        auto & column = block.getByName(name);
+        projected_block.insert(std::move(column));
+    }
+    return projected_block;
+}
+
 Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 {
     std::vector<Block> result_blocks;
@@ -1095,6 +1106,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     {
         auto block = doJoinBlockHash(probe_process_info);
         assert(block);
+        block = removeUselessColumn(block);
         result_rows += block.rows();
         result_blocks.push_back(std::move(block));
         /// exit the while loop if
@@ -1129,34 +1141,32 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
     {
         auto [block, is_matched_rows] = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
-        if (non_equal_conditions.other_cond_expr != nullptr)
+        if (is_matched_rows)
         {
-            size_t left_rows = is_matched_rows ? 1 : block.rows();
-            probe_process_info.cutFilterAndOffsetVector(0, left_rows);
-            if (!is_matched_rows)
+            if (non_equal_conditions.other_cond_expr != nullptr)
             {
-                /// for not matched rows, use handleOtherConditions is enough
-                handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
-                return block;
-            }
-            else
-            {
+                probe_process_info.cutFilterAndOffsetVector(0, 1);
                 /// for matched rows, each call to `doJoinBlockCross` only handle part of the probed data for one left row, the internal
                 /// state is saved in `probe_process_info`
-                probe_process_info.cutFilterAndOffsetVector(0, 1);
                 handleOtherConditionsForOneProbeRow(block, probe_process_info);
-                return block;
             }
-        }
-        for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
-        {
-            if (!probe_process_info.block.getByPosition(i).column->isColumnConst())
+            for (size_t i = 0; i < probe_process_info.block.columns(); ++i)
             {
-                block.getByPosition(i).column = block.getByPosition(i).column->convertToFullColumnIfConst();
+                if (block.getByPosition(i).column->isColumnConst())
+                    block.getByPosition(i).column = block.getByPosition(i).column->convertToFullColumnIfConst();
+            }
+            if (isLeftOuterSemiFamily(kind))
+            {
+                auto helper_index = probe_process_info.block.columns() + probe_process_info.right_column_index.size() - 1;
+                if (block.getByPosition(helper_index).column->isColumnConst())
+                    block.getByPosition(helper_index).column = block.getByPosition(helper_index).column->convertToFullColumnIfConst();
             }
         }
-        if (isLeftOuterSemiFamily(kind))
-            block.getByPosition(block.columns() - 1).column = block.getByPosition(block.columns() - 1).column->convertToFullColumnIfConst();
+        else if (non_equal_conditions.other_cond_expr != nullptr)
+        {
+            probe_process_info.cutFilterAndOffsetVector(0, block.rows());
+            handleOtherConditions(block, probe_process_info.filter, probe_process_info.offsets_to_replicate, probe_process_info.right_column_index);
+        }
         return block;
     }
     else
@@ -1183,6 +1193,7 @@ Block Join::joinBlockCross(ProbeProcessInfo & probe_process_info) const
     {
         Block block = doJoinBlockCross(probe_process_info);
         assert(block);
+        block = removeUselessColumn(block);
         result_rows += block.rows();
         result_blocks.push_back(std::move(block));
         if (probe_process_info.all_rows_joined_finish || (may_probe_side_expanded_after_join && result_rows >= probe_process_info.min_result_block_size))
@@ -1255,7 +1266,7 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
     /// Null aware join never expand the left block, just handle the whole block at one time is enough
     probe_process_info.all_rows_joined_finish = true;
 
-    return block;
+    return removeUselessColumn(block);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
@@ -1610,14 +1621,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 
-    /// remove useless columns
-    Block projected_block;
-    for (const auto & name : tidb_output_column_names)
-    {
-        auto & column = block.getByName(name);
-        projected_block.insert(std::move(column));
-    }
-    return projected_block;
+    return block;
 }
 
 BlockInputStreamPtr Join::createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const

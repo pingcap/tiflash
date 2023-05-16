@@ -399,6 +399,8 @@ private:
 
     Block joinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
+    Block removeUselessColumn(Block & block) const;
+
     /** Handle non-equal join conditions
       *
       * @param block
