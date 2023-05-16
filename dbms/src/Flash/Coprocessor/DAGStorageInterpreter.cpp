@@ -332,9 +332,6 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
-    for (const auto & lock : drop_locks)
-        dagContext().addTableLock(lock);
-
     if (group_builder.empty())
     {
         group_builder.addGroup(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
@@ -342,11 +339,14 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
         remote_read_start_index = 1;
     }
 
+    for (const auto & lock : drop_locks)
+        dagContext().addTableLock(lock);
+
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle generated column if necessary.
-    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_sources_start_index, generated_column_infos, log);
+    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_start_index, generated_column_infos, log);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
     const auto table_scan_output_header = group_builder.getCurrentHeader();
@@ -355,10 +355,10 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
     /// If there is no local source, there is no need to execute cast and push down filter, return directly.
     /// But we should make sure that the analyzer is initialized before return.
-    if (remote_read_sources_start_index == 0)
+    if (remote_read_start_index == 0)
         return;
     /// handle timezone/duration cast for local table scan.
-    executeCastAfterTableScan(exec_status, group_builder, remote_read_sources_start_index);
+    executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
@@ -1078,8 +1078,9 @@ void DAGStorageInterpreter::buildLocalExec(
     if (total_local_region_num == 0)
         return;
     const auto table_query_infos = generateSelectQueryInfos();
-
     /// TODO: support multiple partitions
+    RUNTIME_CHECK(table_query_infos.size() == 1);
+
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
     for (const auto & table_query_info : table_query_infos)
     {
