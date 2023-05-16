@@ -295,5 +295,6 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Lag1(expr) makeASTFunction("Lag", (expr))
 #define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
 #define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
+#define FirstValue(expr) makeASTFunction("FirstValue", (expr))
 } // namespace tests
 } // namespace DB

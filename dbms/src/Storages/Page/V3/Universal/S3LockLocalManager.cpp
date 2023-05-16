@@ -77,9 +77,11 @@ S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientP
                 auto edit = reader->readEdits(strings_map);
                 if (!edit)
                     break;
-                num_s3_entries += edit->size();
-                num_copied_entries += directory->copyCheckpointInfoFromEdit(*edit);
-                LOG_INFO(log, "restore from S3, num_entries={}", num_s3_entries);
+                size_t cur_s3_entries = edit->size();
+                size_t cur_copied_entries = directory->copyCheckpointInfoFromEdit(*edit);
+                num_s3_entries += cur_s3_entries;
+                num_copied_entries += cur_copied_entries;
+                LOG_INFO(log, "restore from S3, key={} cur_entries={} cur_copied_entries={}", manifests.latestManifestKey(), cur_s3_entries, cur_copied_entries);
             }
         }
         else

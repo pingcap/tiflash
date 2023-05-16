@@ -18,6 +18,7 @@
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 #include <atomic>
 #include <exception>
@@ -114,6 +115,16 @@ public:
 
     ResultQueuePtr toConsumeMode(size_t queue_size) noexcept;
 
+    void update(const TaskProfileInfo & task_profile_info)
+    {
+        query_profile_info.merge(task_profile_info);
+    }
+
+    const QueryProfileInfo & getQueryProfileInfo() const
+    {
+        return query_profile_info;
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
 
@@ -136,5 +147,7 @@ private:
 
     // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
     std::optional<ResultQueuePtr> result_queue;
+
+    QueryProfileInfo query_profile_info;
 };
 } // namespace DB
