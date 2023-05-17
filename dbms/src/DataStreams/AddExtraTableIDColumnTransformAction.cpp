@@ -22,7 +22,6 @@ Block AddExtraTableIDColumnTransformAction::buildHeader(
     const Block & inner_header_,
     int extra_table_id_index)
 {
-    RUNTIME_CHECK(inner_header_.columns() > 0);
     auto header = inner_header_.cloneEmpty();
     if (extra_table_id_index != InvalidColumnID)
     {
@@ -42,7 +41,6 @@ Block AddExtraTableIDColumnTransformAction::buildHeader(
     const DM::ColumnDefines & columns_to_read_,
     int extra_table_id_index)
 {
-    RUNTIME_CHECK(!columns_to_read_.empty());
     auto inner_header = toEmptyBlock(columns_to_read_);
     return buildHeader(inner_header, extra_table_id_index);
 }
