@@ -164,7 +164,7 @@ public:
     bool has(UInt64 pool_id);
 
 private:
-    std::mutex mtx;
+    mutable std::mutex mtx;
     std::list<MergedTaskPtr> merged_task_pool;
     LoggerPtr log;
 };

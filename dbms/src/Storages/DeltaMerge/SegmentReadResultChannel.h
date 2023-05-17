@@ -170,7 +170,8 @@ public:
     const Block header;
 
 private:
-    const std::function<void(SegmentReadResultChannelPtr)> on_first_read;
+    std::function<void(SegmentReadResultChannelPtr)> on_first_read;
+
     const LoggerPtr log;
 
     mutable std::mutex mu;

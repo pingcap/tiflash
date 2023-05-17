@@ -233,6 +233,13 @@ void SegmentReadTaskPool::initDefaultResultChannel()
         .debug_tag = fmt::format("{}->result_channel", debug_tag),
         .max_pending_blocks = static_cast<UInt64>(block_slot_limit),
         .on_first_read = [this_ptr](SegmentReadResultChannelPtr) {
+            // Note: We created a circular reference here:
+            // ReadTaskPool stores a ResultChannel, and ResultChannel also stores the ReadTaskPool
+            // due to lambda capture.
+            // In order to break the circular reference, ResultChannel will clean up the lambda capture
+            // after first read, and also after all consumers are detached.
+            // We cannot stores a weak reference inside the ResultChannel, because we want ResultChannel
+            // to keep ReadTaskPool valid, until it submits to the scheduler.
             SegmentReadTaskScheduler::instance().add(this_ptr);
         },
     });
@@ -247,7 +254,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         std::lock_guard lock(mutex);
         auto erased = active_segment_ids.erase(seg->segmentId());
         RUNTIME_CHECK(erased == 1, seg->segmentId(), active_segment_ids);
-        result_channel->finish(fmt::format("seg_{}", seg->segmentId())); // TODO: Add store id
+        result_channel->finish(fmt::format("seg_{}_{}", store_id, seg->segmentId()));
         pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
     }
     if (pool_finished)
@@ -271,10 +278,44 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(UInt64 seg_id)
     return t;
 }
 
-const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const std::unordered_map<UInt64, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks() const
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
+}
+
+String SegmentReadTaskPool::info() const
+{
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("<pool_id={} table_id={}", pool_id, physical_table_id);
+    if (store_id != STORE_ID_I_DONT_CARE)
+        fmt_buf.fmtAppend(" store_id={}", store_id);
+    fmt_buf.append(" segments=");
+
+    std::lock_guard lock(mutex);
+    {
+        const auto & tasks = tasks_wrapper.getTasks();
+        if (tasks.size() >= 10)
+            fmt_buf.fmtAppend("({} segments)", tasks.size());
+        else
+        {
+            fmt_buf.append("{");
+            fmt_buf.joinStr(
+                tasks.begin(),
+                tasks.end(),
+                [&](
+                    const std::unordered_map<UInt64, SegmentReadTaskPtr>::const_iterator::value_type & value,
+                    FmtBuffer & fb) {
+                    fb.fmtAppend("{}", value.second->segment->segmentId());
+                },
+                ",");
+            fmt_buf.append("}");
+        }
+    }
+
+    fmt_buf.append(">");
+
+    return fmt_buf.toString();
 }
 
 // Choose a segment to read.

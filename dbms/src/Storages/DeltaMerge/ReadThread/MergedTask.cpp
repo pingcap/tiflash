@@ -138,4 +138,5 @@ bool MergedTaskPool::has(UInt64 pool_id)
     }
     return false;
 }
+
 } // namespace DB::DM

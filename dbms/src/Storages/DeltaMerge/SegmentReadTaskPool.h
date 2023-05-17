@@ -170,7 +170,7 @@ public:
     void initDefaultResultChannel();
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
+    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
     SegmentReadTaskPtr getTask(UInt64 seg_id);
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
@@ -198,6 +198,8 @@ public:
     }
 
     bool valid() const;
+
+    String info() const;
 
 public:
     const uint64_t pool_id;

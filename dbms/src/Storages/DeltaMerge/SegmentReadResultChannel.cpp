@@ -149,6 +149,20 @@ UInt64 SegmentReadResultChannel::derefConsumer()
 {
     auto c = alive_consumers.fetch_sub(1);
     RUNTIME_CHECK(c >= 0, alive_consumers);
+    // ReadTaskPool stores a ResultChannel, and ResultChannel also stores the ReadTaskPool
+    // due to lambda capture.
+    // In order to break the circular reference, ResultChannel will clean up the lambda capture
+    // after first read, and also after all consumers are detached.
+    // We cannot stores a weak reference inside the ResultChannel, because we want ResultChannel
+    // to keep ReadTaskPool valid, until it submits to the scheduler.
+    if (c == 0)
+    {
+        if (on_first_read != nullptr)
+        {
+            LOG_WARNING(log, "Discarded on_first_read");
+            on_first_read = nullptr;
+        }
+    }
     return static_cast<UInt64>(c);
 }
 
@@ -178,6 +192,13 @@ void SegmentReadResultChannel::triggerFirstRead()
             RUNTIME_CHECK_MSG(false, "Must be called from SegmentReadResultChannelPtr");
         }
         on_first_read(this_ptr);
+        // ReadTaskPool stores a ResultChannel, and ResultChannel also stores the ReadTaskPool
+        // due to lambda capture.
+        // In order to break the circular reference, ResultChannel will clean up the lambda capture
+        // after first read, and also after all consumers are detached.
+        // We cannot stores a weak reference inside the ResultChannel, because we want ResultChannel
+        // to keep ReadTaskPool valid, until it submits to the scheduler.
+        on_first_read = nullptr;
     });
 }
 

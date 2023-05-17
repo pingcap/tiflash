@@ -572,9 +572,11 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
                           final_num_stream](DM::SegmentReadResultChannelPtr result_channel) {
         // This thread continuously takes ready RemoteReadTask and submits it to the ReadThread.
         auto pipe_fn = [=] {
+            size_t piped_tasks = 0;
+
             LOG_DEBUG(log, "Start piping RemoteReadTask to ReadThread");
             SCOPE_EXIT({
-                LOG_DEBUG(log, "Stop piping RemoteReadTask to ReadThread");
+                LOG_DEBUG(log, "Stop piping RemoteReadTask to ReadThread, piped_tasks={}", piped_tasks);
             });
 
             while (true)
@@ -597,6 +599,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
                     .result_channel = result_channel,
                 });
                 DM::SegmentReadTaskScheduler::instance().add(read_task_pool);
+                piped_tasks++;
             }
 
             // If there are errors when we preparing the RemoteReadTask, let's finish the result channel immediately.

@@ -19,6 +19,15 @@
 namespace DB::DM::tests
 {
 
+class NodeResultChannel
+{
+public:
+    bool valid() const // NOLINT(readability-convert-member-functions-to-static)
+    {
+        return false;
+    }
+};
+
 class Node
 {
 public:
@@ -35,6 +44,11 @@ public:
     void setInvalid()
     {
         v = false;
+    }
+
+    std::shared_ptr<NodeResultChannel> getResultChannel() const // NOLINT(readability-convert-member-functions-to-static)
+    {
+        return std::make_shared<NodeResultChannel>();
     }
 
 public:

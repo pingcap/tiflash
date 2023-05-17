@@ -107,7 +107,8 @@ private:
     bool needScheduled(Iter itr)
     {
         // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
-        return itr->use_count() > 1;
+        // Only returns false when the SegmentReadTaskPool is completely useless.
+        return itr->use_count() > 1 || ((*itr)->getResultChannel()->valid());
     }
 
     std::list<ElemPtr> l;

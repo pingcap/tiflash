@@ -48,10 +48,8 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 
     LOG_DEBUG(
         log,
-        "Added ReadTaskPool to scheduler, pool_id={} table_id={} segments_in_this_pool={} total_pools={}",
-        pool->pool_id,
-        pool->physical_table_id,
-        tasks.size(),
+        "Added ReadTaskPool to scheduler, pool={} total_pools={}",
+        pool->info(),
         read_pools.size());
 }
 
