@@ -1148,9 +1148,7 @@ void NO_INLINE probeBlockImplTypeCase(
         }
     }
 
-    probe_process_info.end_row = i;
-    // if end_row == rows, it means that all probe rows have been joined finish.
-    probe_process_info.all_rows_joined_finish = (probe_process_info.end_row == rows);
+    probe_process_info.updateEndRow<false>(i);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool row_flagged_map>

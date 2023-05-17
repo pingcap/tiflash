@@ -76,19 +76,16 @@ struct ProbeProcessInfo
         , all_rows_joined_finish(true){};
 
     void resetBlock(Block && block_, size_t partition_index_ = 0);
-    template <bool cross_join>
+    template <bool is_shallow_cross_probe_mode>
     void updateStartRow()
     {
-        if constexpr (cross_join)
+        if constexpr (is_shallow_cross_probe_mode)
         {
-            if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
-            {
-                if (next_right_block_index < right_block_size)
-                    return;
-                next_right_block_index = 0;
-                has_row_matched = false;
-                has_row_null = false;
-            }
+            if (next_right_block_index < right_block_size)
+                return;
+            next_right_block_index = 0;
+            has_row_matched = false;
+            has_row_null = false;
         }
         assert(start_row <= end_row);
         start_row = end_row;
@@ -98,13 +95,13 @@ struct ProbeProcessInfo
             offsets_to_replicate->resize(block.rows());
     }
 
-    template <bool cross_join>
+    template <bool is_shallow_cross_probe_mode>
     void updateEndRow(size_t next_row_to_probe)
     {
         end_row = next_row_to_probe;
-        if constexpr (cross_join)
+        if constexpr (is_shallow_cross_probe_mode)
         {
-            if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && next_right_block_index < right_block_size)
+            if (next_right_block_index < right_block_size)
             {
                 /// current probe is not finished, just return
                 return;

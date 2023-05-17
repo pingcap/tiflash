@@ -1127,9 +1127,9 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
 {
     /// Add new columns to the block.
     assert(probe_process_info.prepare_for_probe_done);
-    probe_process_info.updateStartRow<true>();
     if (cross_probe_mode == CrossProbeMode::DEEP_COPY_RIGHT_BLOCK)
     {
+        probe_process_info.updateStartRow<false>();
         auto block = crossProbeBlockDeepCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
         if (non_equal_conditions.other_cond_expr != nullptr)
         {
@@ -1144,6 +1144,7 @@ Block Join::doJoinBlockCross(ProbeProcessInfo & probe_process_info) const
     }
     else if (cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK)
     {
+        probe_process_info.updateStartRow<true>();
         auto [block, is_matched_rows] = crossProbeBlockShallowCopyRightBlock(kind, strictness, probe_process_info, original_blocks);
         if (is_matched_rows)
         {
@@ -1485,7 +1486,7 @@ void Join::workAfterBuildFinish()
             blocks.push_back(merged_block);
             original_blocks.push_back(merged_block);
         }
-        /// since shallow_copy_probe_threshold is at least 1, any join will never use SHALLOW_COPY_RIGHT_BLOCK
+        /// since shallow_copy_probe_threshold is at least 1, if strictness is any, it will never use SHALLOW_COPY_RIGHT_BLOCK
         cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
             ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
             : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;

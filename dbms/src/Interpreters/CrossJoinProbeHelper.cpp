@@ -389,7 +389,7 @@ Block crossProbeBlockDeepCopyRightBlockImpl(
         if (block_full)
             break;
     }
-    probe_process_info.updateEndRow<true>(current_row);
+    probe_process_info.updateEndRow<false>(current_row);
     return probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns));
 }
 
