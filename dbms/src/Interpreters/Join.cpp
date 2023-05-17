@@ -590,16 +590,16 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
         {
             if (filter_column[i] == 0)
                 continue;
-            if (nullmap_vec->operator[](i))
+            if ((*nullmap_vec)[i])
                 filter_column[i] = null_as_true;
             else
-                filter_column[i] = filter_column[i] && filter_vec->operator[](i);
+                filter_column[i] = filter_column[i] && (*filter_vec)[i];
         }
     }
     else
     {
         for (size_t i = 0; i < filter_vec->size(); ++i)
-            filter_column[i] = filter_column[i] && filter_vec->operator[](i);
+            filter_column[i] = filter_column[i] && (*filter_vec)[i];
     }
 }
 
@@ -813,9 +813,9 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
         {
             if (!filter[i])
                 continue;
-            if (eq_in_nullmap && eq_in_nullmap->operator[](i))
+            if (eq_in_nullmap && (*eq_in_nullmap)[i])
                 probe_process_info.has_row_null = true;
-            else if (eq_in_vec->operator[](i))
+            else if ((*eq_in_vec)[i])
             {
                 probe_process_info.has_row_matched = true;
                 break;
@@ -1490,6 +1490,7 @@ void Join::workAfterBuildFinish()
         cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
             ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
             : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+        LOG_DEBUG(log, "Cross join will use {} probe mode", magic_enum::enum_name(cross_probe_mode));
     }
 
     if (isEnableSpill())

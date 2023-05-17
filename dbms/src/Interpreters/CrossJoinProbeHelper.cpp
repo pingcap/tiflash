@@ -394,6 +394,68 @@ Block crossProbeBlockDeepCopyRightBlockImpl(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockAddNotMatchedRows(ProbeProcessInfo & probe_process_info)
+{
+    size_t num_existing_columns = probe_process_info.block.columns();
+    MutableColumns dst_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
+    if (probe_process_info.row_num_filtered_by_left_condition > 0)
+    {
+        for (auto & dst_column : dst_columns)
+            dst_column->reserve(probe_process_info.row_num_filtered_by_left_condition);
+    }
+    auto * filter_ptr = probe_process_info.filter.get();
+    auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
+    IColumn::Offset current_offset = 0;
+    size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - probe_process_info.block.columns();
+    ColumnRawPtrs src_left_columns(num_existing_columns);
+    for (size_t i = 0; i < num_existing_columns; ++i)
+    {
+        src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
+    }
+    IColumn::Filter::value_type filter_column_value{};
+    if constexpr (has_null_map)
+    {
+        // todo use column->filter(null_map) to construct the result block in batch
+        for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
+        {
+            if ((*probe_process_info.null_map)[i])
+            {
+                CrossJoinAdder<KIND, STRICTNESS>::addNotFound(
+                    dst_columns,
+                    num_existing_columns,
+                    src_left_columns,
+                    num_columns_to_add,
+                    i,
+                    filter_ptr,
+                    current_offset,
+                    offset_ptr,
+                    probe_process_info.max_block_size);
+                if (filter_ptr != nullptr)
+                    filter_column_value = (*filter_ptr)[i];
+            }
+        }
+    }
+    /// construct fill filter and offset column
+    if (!dst_columns[0]->empty())
+    {
+        assert(dst_columns[0]->size() == probe_process_info.row_num_filtered_by_left_condition);
+        if (filter_ptr != nullptr)
+        {
+            for (size_t i = 0; i < probe_process_info.row_num_filtered_by_left_condition; ++i)
+            {
+                (*filter_ptr)[i] = filter_column_value;
+            }
+        }
+        for (size_t i = 0; i < probe_process_info.row_num_filtered_by_left_condition; ++i)
+        {
+            (*offset_ptr)[i] = i + 1;
+        }
+    }
+    probe_process_info.all_rows_joined_finish = true;
+    return {probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns)), false};
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
 std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     ProbeProcessInfo & probe_process_info,
     const Blocks & right_blocks)
@@ -414,62 +476,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     if (probe_process_info.start_row == probe_process_info.block.rows())
     {
         /// current probe block is done, collect un-matched rows
-        MutableColumns dst_columns = probe_process_info.result_block_schema.cloneEmptyColumns();
-        if (probe_process_info.row_num_filtered_by_left_condition > 0)
-        {
-            for (auto & dst_column : dst_columns)
-                dst_column->reserve(probe_process_info.row_num_filtered_by_left_condition);
-        }
-        auto * filter_ptr = probe_process_info.filter.get();
-        auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
-        IColumn::Offset current_offset = 0;
-        size_t num_columns_to_add = probe_process_info.result_block_schema.columns() - probe_process_info.block.columns();
-        ColumnRawPtrs src_left_columns(num_existing_columns);
-        for (size_t i = 0; i < num_existing_columns; ++i)
-        {
-            src_left_columns[i] = probe_process_info.block.getByPosition(i).column.get();
-        }
-        IColumn::Filter::value_type filter_column_value{};
-        if constexpr (has_null_map)
-        {
-            // todo use column->filter(null_map) to construct the result block in batch
-            for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
-            {
-                if ((*probe_process_info.null_map)[i])
-                {
-                    CrossJoinAdder<KIND, STRICTNESS>::addNotFound(
-                        dst_columns,
-                        num_existing_columns,
-                        src_left_columns,
-                        num_columns_to_add,
-                        i,
-                        filter_ptr,
-                        current_offset,
-                        offset_ptr,
-                        probe_process_info.max_block_size);
-                    if (filter_ptr != nullptr)
-                        filter_column_value = (*filter_ptr)[i];
-                }
-            }
-        }
-        /// construct fill filter and offset column
-        if (!dst_columns[0]->empty())
-        {
-            assert(dst_columns[0]->size() == probe_process_info.row_num_filtered_by_left_condition);
-            if (filter_ptr != nullptr)
-            {
-                for (size_t i = 0; i < probe_process_info.row_num_filtered_by_left_condition; ++i)
-                {
-                    (*filter_ptr)[i] = filter_column_value;
-                }
-            }
-            for (size_t i = 0; i < probe_process_info.row_num_filtered_by_left_condition; ++i)
-            {
-                (*offset_ptr)[i] = i + 1;
-            }
-        }
-        probe_process_info.all_rows_joined_finish = true;
-        return {probe_process_info.result_block_schema.cloneWithColumns(std::move(dst_columns)), false};
+        return crossProbeBlockShallowCopyRightBlockAddNotMatchedRows<KIND, STRICTNESS, has_null_map>(probe_process_info);
     }
     assert(probe_process_info.next_right_block_index < right_blocks.size());
 
