@@ -1073,8 +1073,7 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
         const SelectQueryInfo & query_info = table_query_info.second;
 
         auto table_source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
-        for (auto & source : table_source_ops)
-            source_ops.push_back(std::move(source));
+        source_ops.insert(source_ops.end(), std::make_move_iterator(table_source_ops.begin()), std::make_move_iterator(table_source_ops.end()));
     }
 
     LOG_DEBUG(
