@@ -170,15 +170,6 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
-    for (const auto & plan_node : plan_nodes)
-    {
-        if (!plan_node->getFineGrainedShuffle().enable() && (plan_node->tp() == PlanType::Window || plan_node->tp() == PlanType::WindowSort))
-        {
-            concurrency = std::min(concurrency, 1);
-            LOG_WARNING(log, "Currently tiflash does not support non-fine-grained-parallel-window-function, so concurrency is set to 1");
-            break;
-        }
-    }
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
     {
@@ -272,14 +263,9 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
-                return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
-                if (settings.enforce_enable_pipeline)
-                    return true;
-                // TODO support parallel non fine grained shuffle in non-enforce-mode.
-                is_supported = FineGrainedShuffle(&executor).enable();
-                return is_supported;
+                return true;
             case tipb::ExecType::TypeJoin:
                 // TODO support spill.
                 // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
