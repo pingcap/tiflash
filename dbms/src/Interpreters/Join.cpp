@@ -851,9 +851,9 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
             for (size_t i = 0; i < block.columns(); ++i)
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, matched_row_count_in_current_block);
         }
-        else if (probe_process_info.isCurrentProbeRowFinished())
+        else if (probe_process_info.isCurrentProbeRowFinished() && !probe_process_info.has_row_matched)
         {
-            /// no more matched rows for current row, return the un-matched result
+            /// no matched rows for current row, return the un-matched result
             for (size_t i = 0; i < block.columns(); ++i)
                 block.getByPosition(i).column = block.getByPosition(i).column->cut(0, 1);
             filter.resize(1);
