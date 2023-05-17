@@ -21,6 +21,7 @@ template <typename T>
 using Limits = std::numeric_limits<T>;
 
 // TODO Support more convenient testing framework for Window Function.
+// TODO Tests with frame should be added
 class LeadLag : public DB::tests::ExecutorTest
 {
     static const size_t max_concurrency_level = 10;
@@ -60,9 +61,9 @@ public:
         actual_input[2].name = value_col_name;
         context.addMockTable(
             {"test_db", "test_table_for_lead_lag"},
-            {{"partition", TiDB::TP::TypeLongLong},
-             {"order", TiDB::TP::TypeLongLong},
-             {value_col_name, value_tp}},
+            {{"partition", TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
+             {"order", TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
+             {value_col_name, value_tp, actual_input[2].type->isNullable()}},
             actual_input);
 
         auto request = context
