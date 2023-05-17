@@ -238,7 +238,7 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
             expanded_row_size_after_join,
             max_block_size);
         if (!ret)
-            (*is_row_matched)[i] = 1;
+            (*is_row_matched)[i] = 1; // NOLINT
         return ret;
     }
 };

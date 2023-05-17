@@ -92,7 +92,7 @@ size_t getRestoreJoinBuildConcurrency(size_t total_partitions, size_t spilled_pa
         return std::max(2, restore_build_concurrency);
     }
 }
-std::tuple<const ColumnUInt8::Container *, const ColumnUInt8::Container *, ColumnPtr> getDataAndNullMapVectorFromFilterColumn(ColumnPtr filter_column)
+std::pair<const ColumnUInt8::Container *, const ColumnUInt8::Container *> getDataAndNullMapVectorFromFilterColumn(ColumnPtr & filter_column)
 {
     if (filter_column->isColumnConst())
         filter_column = filter_column->convertToFullColumnIfConst();
@@ -100,11 +100,11 @@ std::tuple<const ColumnUInt8::Container *, const ColumnUInt8::Container *, Colum
     {
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(filter_column.get());
         const auto & data_column = nullable_column->getNestedColumnPtr();
-        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData(), filter_column};
+        return {&checkAndGetColumn<ColumnUInt8>(data_column.get())->getData(), &nullable_column->getNullMapData()};
     }
     else
     {
-        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr, filter_column};
+        return {&checkAndGetColumn<ColumnUInt8>(filter_column.get())->getData(), nullptr};
     }
 }
 } // namespace
@@ -582,7 +582,8 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
 {
     if (filter_column_name.empty())
         return;
-    auto [filter_vec, nullmap_vec, vec_holder] = getDataAndNullMapVectorFromFilterColumn(block.getByName(filter_column_name).column);
+    ColumnPtr current_filter_column = block.getByName(filter_column_name).column;
+    auto [filter_vec, nullmap_vec] = getDataAndNullMapVectorFromFilterColumn(current_filter_column);
     if (nullmap_vec != nullptr)
     {
         for (size_t i = 0; i < nullmap_vec->size(); ++i)
@@ -650,11 +651,13 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
         const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
+        ColumnPtr eq_in_column = nullptr;
         if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
         {
-            auto data_and_null_map_vec = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
-            eq_in_vec = std::get<0>(data_and_null_map_vec);
-            eq_in_nullmap = std::get<1>(data_and_null_map_vec);
+            eq_in_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+            auto data_and_null_map_vec = getDataAndNullMapVectorFromFilterColumn(eq_in_column);
+            eq_in_vec = data_and_null_map_vec.first;
+            eq_in_nullmap = data_and_null_map_vec.second;
         }
 
         /// for (anti)leftOuterSemi join, we should keep only one row for each original row of left table.
@@ -804,7 +807,8 @@ void Join::handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo &
     if (isLeftOuterSemiFamily(kind) && !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         assert(probe_process_info.has_row_matched == false);
-        auto [eq_in_vec, eq_in_nullmap, vec_holder] = getDataAndNullMapVectorFromFilterColumn(block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column);
+        ColumnPtr eq_in_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+        auto [eq_in_vec, eq_in_nullmap] = getDataAndNullMapVectorFromFilterColumn(eq_in_column);
         for (size_t i = 0; i < block.rows(); ++i)
         {
             if (!filter[i])

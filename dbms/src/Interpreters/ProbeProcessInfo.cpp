@@ -131,7 +131,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
     prepare_for_probe_done = true;
 }
 
-void ProbeProcessInfo::cutFilterAndOffsetVector(size_t start, size_t end)
+void ProbeProcessInfo::cutFilterAndOffsetVector(size_t start, size_t end) const
 {
     if (filter != nullptr)
         filter->assign(filter->begin() + start, filter->begin() + end);

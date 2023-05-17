@@ -127,7 +127,7 @@ struct ProbeProcessInfo
         CrossProbeMode cross_probe_mode,
         size_t right_block_size);
 
-    void cutFilterAndOffsetVector(size_t start, size_t end);
+    void cutFilterAndOffsetVector(size_t start, size_t end) const;
     bool isCurrentProbeRowFinished() const;
     void finishCurrentProbeRow();
 };
