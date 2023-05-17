@@ -254,7 +254,8 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         std::lock_guard lock(mutex);
         auto erased = active_segment_ids.erase(seg->segmentId());
         RUNTIME_CHECK(erased == 1, seg->segmentId(), active_segment_ids);
-        result_channel->finish(fmt::format("seg_{}_{}", store_id, seg->segmentId()));
+        // In disaggregated mode, we use the same result_channel for different partitions, so we must include table_id.
+        result_channel->finish(fmt::format("store_{}.table_{}.seg_{}", store_id, physical_table_id, seg->segmentId()));
         pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
     }
     if (pool_finished)

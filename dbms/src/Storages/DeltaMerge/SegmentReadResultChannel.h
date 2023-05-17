@@ -129,7 +129,7 @@ public:
     /// Thread-safe. Called by produers.
     /// Mark one "source" as finished.
     /// When all "sources" are finished, this channel is finished.
-    /// Conventionally, `source` is `{store_id}_{segment_id}`.
+    /// Conventionally, `source` is `{store_id}.{table_id}.{segment_id}`.
     void finish(String debug_source_tag);
 
     /// Thread-safe. Called by produers.
