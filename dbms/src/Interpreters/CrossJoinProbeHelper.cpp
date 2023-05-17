@@ -432,6 +432,7 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
         IColumn::Filter::value_type filter_column_value{};
         if constexpr (has_null_map)
         {
+            // todo use column->filter(null_map) to construct the result block in batch
             for (size_t i = 0; i < probe_process_info.block.rows(); ++i)
             {
                 if ((*probe_process_info.null_map)[i])
