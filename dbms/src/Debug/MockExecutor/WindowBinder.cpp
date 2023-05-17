@@ -76,6 +76,7 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             break;
         }
         case tipb::ExprType::FirstValue:
+        case tipb::ExprType::LastValue:
         {
             assert(window_expr->children_size() == 1);
             const auto arg_type = window_expr->children(0).field_type();
@@ -212,6 +213,7 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
                 break;
             }
             case tipb::ExprType::FirstValue:
+            case tipb::ExprType::LastValue:
             {
                 ci = children_ci[0];
                 break;
