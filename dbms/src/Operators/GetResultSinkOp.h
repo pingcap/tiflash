@@ -45,6 +45,8 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
+    bool isAwaitable() const override { return true; }
+
 private:
     ResultQueuePtr result_queue;
     std::optional<Block> t_block;
