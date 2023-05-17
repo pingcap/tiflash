@@ -47,6 +47,16 @@ enum class AbortType
     ONERROR,
 };
 
+// This struct only print logs when MPPTask is destructed
+struct MPPTaskDestructedHinter
+{
+    explicit MPPTaskDestructedHinter(const LoggerPtr log_)
+        : log(log_)
+    {}
+    ~MPPTaskDestructedHinter() { LOG_INFO(log, "MPPTask is completely destructed"); }
+    const LoggerPtr log;
+};
+
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
@@ -117,6 +127,10 @@ private:
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
+    const LoggerPtr log;
+
+    // We must ensure this member variable is put at this place to be destructed at proper time
+    MPPTaskDestructedHinter destructed_hinter;
 
     ContextPtr context;
 
@@ -145,8 +159,6 @@ private:
     MPPReceiverSetPtr receiver_set;
 
     int new_thread_count_of_mpp_receiver = 0;
-
-    const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
