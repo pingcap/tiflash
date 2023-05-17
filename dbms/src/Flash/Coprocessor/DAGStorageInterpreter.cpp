@@ -1064,6 +1064,8 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
         return {};
     const auto table_query_infos = generateSelectQueryInfos();
 
+    // TODO Improve the performance of partition table in extreme case.
+    // ref https://github.com/pingcap/tiflash/issues/4474
     SourceOps source_ops;
     for (const auto & table_query_info : table_query_infos)
     {
