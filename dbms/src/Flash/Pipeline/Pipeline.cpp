@@ -268,13 +268,16 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
                 return is_supported;
             case tipb::ExecType::TypeJoin:
                 // TODO support spill.
-                is_supported = (settings.max_bytes_before_external_join == 0);
+                // If force_enable_pipeline is true, it will return true, even if the join does not actually support spill.
+                is_supported = (settings.max_bytes_before_external_join == 0 || settings.force_enable_pipeline);
                 return is_supported;
             default:
                 is_supported = false;
                 return false;
             }
         });
+    if (settings.force_enable_pipeline && !is_supported)
+        throw Exception("There is an unsupported operator, and an error is reported because the setting force_enable_pipeline is true.");
     return is_supported;
 }
 } // namespace DB

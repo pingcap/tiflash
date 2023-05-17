@@ -79,6 +79,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
@@ -864,6 +865,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
+
     UseSSL ssl_holder;
 
     const auto log = Logger::get();
@@ -1223,9 +1227,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
-    /// Initialize the labels of tiflash compute node.
-    ComputeLabelHolder::instance().init(config());
-
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -1505,7 +1506,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // For test mode, TaskScheduler is controlled by test case.
-    bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
+    bool enable_pipeline = (settings.enable_pipeline || settings.force_enable_pipeline) && !global_context->isTest();
     if (enable_pipeline)
     {
         auto get_pool_size = [](const auto & setting) {
@@ -1541,6 +1542,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // before this instance can accept requests.
         // Else it just do nothing.
         bg_init_stores.waitUntilFinish();
+    }
+
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && /*has_been_bootstrap*/ store_ident.has_value())
+    {
+        // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
+        // store id is allocated later.
+        // Wait until all CheckpointInfo are restored from S3
+        auto wn_ps = global_context->getWriteNodePageStorage();
+        wn_ps->waitUntilInitedFromRemoteStore();
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.

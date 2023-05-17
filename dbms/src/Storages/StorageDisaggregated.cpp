@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -47,14 +48,17 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    /// S3 config is enabled on the TiFlash compute node, let's read
-    /// data from S3.
+    /// S3 config is enabled on the TiFlash compute node, let's read data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readFromWriteNode(db_context, query_info, num_streams);
+        return readThroughS3(db_context, query_info, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
+    return readThroughExchange(num_streams);
+}
 
+BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+{
     auto remote_table_ranges = buildRemoteTableRanges();
 
     // only send to tiflash node with label {"engine": "tiflash"}
@@ -71,7 +75,9 @@ BlockInputStreams StorageDisaggregated::read(
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
-    filterConditions(std::move(source_columns), pipeline);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    // TODO: push down filter conditions to write node
+    filterConditions(*analyzer, pipeline);
 
     return pipeline.streams;
 }
@@ -289,17 +295,64 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, *analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
+}
+
+void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+{
+    // If the column is not in the columns of pushed down filter, append a cast to the column.
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.getColumnSize());
+    std::unordered_set<ColumnID> col_id_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+    {
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+    }
+    bool has_need_cast_column = false;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col_id_set.contains(col.id))
+        {
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
+        else
+        {
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+                has_need_cast_column = true;
+            }
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+                has_need_cast_column = true;
+            }
+            else
+            {
+                need_cast_column.push_back(ExtraCastAfterTSMode::None);
+            }
+        }
+    }
+    ExpressionActionsChain chain;
+    if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+        for (auto & stream : pipeline.streams)
+        {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream->setExtraInfo("cast after local tableScan");
+        }
     }
 }
 } // namespace DB
