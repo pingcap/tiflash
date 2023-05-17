@@ -40,6 +40,7 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Lead, "lead"},
     {tipb::ExprType::Lag, "lag"},
     {tipb::ExprType::FirstValue, "first_value"},
+    {tipb::ExprType::LastValue, "last_value"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -1032,10 +1033,10 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::Lead:
     case tipb::ExprType::Lag:
     case tipb::ExprType::FirstValue:
+    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::CumeDist:
         //    case tipb::ExprType::PercentRank:
         //    case tipb::ExprType::Ntile:
-        //    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::NthValue:
         return true;
     default:
