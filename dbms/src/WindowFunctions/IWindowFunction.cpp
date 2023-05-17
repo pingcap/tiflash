@@ -171,6 +171,48 @@ private:
     DataTypePtr return_type;
 };
 
+struct WindowFunctionLastValue final : public IWindowFunction
+{
+public:
+    static constexpr auto name = "last_value";
+
+    explicit WindowFunctionLastValue(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
+    {
+        RUNTIME_CHECK(argument_types_.size() == 1);
+        return_type = argument_types_[0];
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    DataTypePtr getReturnType() const override
+    {
+        return return_type;
+    }
+
+    void windowInsertResultInto(
+        WindowTransformAction & action,
+        size_t function_index,
+        const ColumnNumbers & arguments) override
+    {
+        assert(action.frame_ended);
+        IColumn & to = *action.blockAt(action.current_row).output_columns[function_index];
+
+        // Because [frame_start, frame_end), so we need to get the previous row of the frame_end.
+        RowNumber last_row = action.getPreviousRowNumber(action.frame_end);
+
+        const auto & value_column = *action.inputAt(last_row)[arguments[0]];
+        const auto & value_field = value_column[last_row.row];
+        to.insert(value_field);
+    }
+
+private:
+    DataTypePtr return_type;
+};
+
 /**
 LEAD/LAG(<expression>[,offset[, default_value]]) OVER (
     PARTITION BY (expr)
@@ -358,5 +400,6 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
     factory.registerFunction<WindowFunctionLeadLagBase<LeadImpl>>();
     factory.registerFunction<WindowFunctionLeadLagBase<LagImpl>>();
     factory.registerFunction<WindowFunctionFirstValue>();
+    factory.registerFunction<WindowFunctionLastValue>();
 }
 } // namespace DB

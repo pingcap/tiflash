@@ -71,8 +71,7 @@ void PipelineExecGroupBuilder::reset()
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
 {
-    for (auto && g : other.group)
-        group.push_back(std::move(g));
+    group.insert(group.end(), std::make_move_iterator(other.group.begin()), std::make_move_iterator(other.group.end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()

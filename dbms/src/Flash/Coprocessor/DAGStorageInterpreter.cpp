@@ -1078,10 +1078,10 @@ void DAGStorageInterpreter::buildLocalExec(
     if (total_local_region_num == 0)
         return;
     const auto table_query_infos = generateSelectQueryInfos();
-    /// TODO: support multiple partitions
-    RUNTIME_CHECK(table_query_infos.size() == 1);
 
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
+    // TODO Improve the performance of partition table in extreme case.
+    // ref https://github.com/pingcap/tiflash/issues/4474
     for (const auto & table_query_info : table_query_infos)
     {
         PipelineExecGroupBuilder builder;
