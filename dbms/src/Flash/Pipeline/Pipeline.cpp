@@ -268,25 +268,25 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeSort:
                 // TODO support non fine grained shuffle.
                 is_supported = FineGrainedShuffle(&executor).enable();
-                if (settings.force_enable_pipeline)
-                    throw Exception("Pipeline mode does not support non-fine-grained window function, and an error is reported because the setting force_enable_pipeline is true.");
+                if (settings.enforce_enable_pipeline)
+                    throw Exception("Pipeline mode does not support non-fine-grained window function, and an error is reported because the setting enforce_enable_pipeline is true.");
                 return is_supported;
             case tipb::ExecType::TypeJoin:
                 // TODO support spill.
-                // If force_enable_pipeline is true, it will return true, even if the join does not actually support spill.
-                is_supported = (settings.max_bytes_before_external_join == 0 || settings.force_enable_pipeline);
+                // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
+                is_supported = (settings.max_bytes_before_external_join == 0 || settings.enforce_enable_pipeline);
                 return is_supported;
             default:
-                if (settings.force_enable_pipeline)
+                if (settings.enforce_enable_pipeline)
                     throw Exception(fmt::format(
-                        "Pipeline mode does not support {}, and an error is reported because the setting force_enable_pipeline is true.",
+                        "Pipeline mode does not support {}, and an error is reported because the setting enforce_enable_pipeline is true.",
                         magic_enum::enum_name(executor.tp())));
                 is_supported = false;
                 return false;
             }
         });
-    if (settings.force_enable_pipeline && !is_supported)
-        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the setting force_enable_pipeline is true.");
+    if (settings.enforce_enable_pipeline && !is_supported)
+        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
     return is_supported;
 }
 } // namespace DB
