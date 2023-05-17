@@ -97,5 +97,6 @@ std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
     {"Lead", tipb::ExprType::Lead},
     {"Lag", tipb::ExprType::Lag},
     {"FirstValue", tipb::ExprType::FirstValue},
+    {"LastValue", tipb::ExprType::LastValue},
 });
 } // namespace DB::tests
