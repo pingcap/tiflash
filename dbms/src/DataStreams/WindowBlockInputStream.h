@@ -147,7 +147,9 @@ public:
         return window_blocks[x.block - first_block_number].output_columns;
     }
 
-    void advanceRowNumber(RowNumber & x) const;
+    void advanceRowNumber(RowNumber & row_num) const;
+
+    RowNumber getPreviousRowNumber(const RowNumber & row_num) const;
 
     bool lead(RowNumber & x, size_t offset) const;
 
