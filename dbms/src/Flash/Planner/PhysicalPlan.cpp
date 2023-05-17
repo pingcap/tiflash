@@ -76,6 +76,9 @@ void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Executor * executor)
 {
     TiDBTableScan table_scan(executor, executor_id, dagContext());
+    if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_read_thread))
+        throw Exception("Enable late materialization but disable read thread pool, please set the config `dt_enable_read_thread` of TiFlash to true,"
+                        "or disable late materialization by set tidb variable `tidb_opt_enable_late_materialization` to false.");
     if (unlikely(context.isTest()))
         pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
     else

@@ -647,22 +647,41 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
     action.appendInfo(buffer);
 }
 
-void WindowTransformAction::advanceRowNumber(RowNumber & x) const
+void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 {
-    assert(x.block >= first_block_number);
-    assert(x.block - first_block_number < window_blocks.size());
+    assert(row_num.block >= first_block_number);
+    assert(row_num.block - first_block_number < window_blocks.size());
 
-    const auto block_rows = blockAt(x).rows;
-    assert(x.row < block_rows);
+    const auto block_rows = blockAt(row_num).rows;
+    assert(row_num.row < block_rows);
 
-    ++x.row;
-    if (x.row < block_rows)
+    ++row_num.row;
+    if (row_num.row < block_rows)
     {
         return;
     }
 
-    x.row = 0;
-    ++x.block;
+    row_num.row = 0;
+    ++row_num.block;
+}
+
+RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num) const
+{
+    assert(row_num.block >= first_block_number);
+    assert(!(row_num.block == 0 && row_num.row == 0));
+
+    RowNumber prev_row_num = row_num;
+    if (row_num.row > 0)
+    {
+        --prev_row_num.row;
+        return prev_row_num;
+    }
+
+    --prev_row_num.block;
+    assert(prev_row_num.block - first_block_number < window_blocks.size());
+    const auto new_block_rows = blockAt(prev_row_num).rows;
+    prev_row_num.row = new_block_rows - 1;
+    return prev_row_num;
 }
 
 bool WindowTransformAction::lead(RowNumber & x, size_t offset) const
