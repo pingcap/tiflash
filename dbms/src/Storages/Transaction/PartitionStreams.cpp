@@ -32,6 +32,7 @@
 #include <Storages/Transaction/Utils.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
+#include "Common/Stopwatch.h"
 
 namespace DB
 {
@@ -186,9 +187,11 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
+        Stopwatch watch;
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
-
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(log, "[hyy] in writeRegionDataToStorage Sync table schema {} cost {} ms", table_id, schema_sync_cost);
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
@@ -428,8 +431,11 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     if (!atomic_get(false))
     {
+        Stopwatch watch;
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(Logger::get("hyy"), "[hyy] in AtomicGetStorageSchema Sync table schema {} cost {} ms", table_id, schema_sync_cost);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
