@@ -262,6 +262,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
+            case tipb::ExecType::TypeStreamAgg:
                 return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
