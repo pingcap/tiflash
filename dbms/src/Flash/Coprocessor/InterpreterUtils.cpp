@@ -31,7 +31,7 @@
 #include <Operators/FilterTransformOp.h>
 #include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
 #include <Operators/LimitTransformOp.h>
-#include <Operators/LocalSortTransformOp.h>
+#include <Operators/MergeSortBaseTransformOp.h>
 
 namespace DB
 {

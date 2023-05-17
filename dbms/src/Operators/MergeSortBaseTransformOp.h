@@ -22,10 +22,11 @@
 namespace DB
 {
 /// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
-class LocalSortTransformOp : public TransformOp
+template<bool do_partial_sort>
+class MergeSortBaseTransformOp : public TransformOp
 {
 public:
-    LocalSortTransformOp(
+    MergeSortBaseTransformOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id_,
         const SortDescription & order_desc_,
@@ -43,7 +44,7 @@ public:
 
     String getName() const override
     {
-        return "LocalSortTransformOp";
+        return "MergeSortBaseTransformOp";
     }
 
     void operatePrefix() override;
@@ -135,4 +136,8 @@ private:
     };
     RestoredResult restored_result;
 };
+
+using LocalSortTransformOp = MergeSortBaseTransformOp<true>;
+using MergeSortTransformOp = MergeSortBaseTransformOp<false>;
+
 } // namespace DB

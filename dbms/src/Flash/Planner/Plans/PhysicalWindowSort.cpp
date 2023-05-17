@@ -22,7 +22,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Interpreters/Context.h>
-#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {

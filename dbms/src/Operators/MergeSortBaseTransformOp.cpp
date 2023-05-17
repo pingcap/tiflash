@@ -19,13 +19,14 @@
 #include <DataStreams/SortHelper.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Interpreters/sortBlock.h>
-#include <Operators/LocalSortTransformOp.h>
+#include <Operators/MergeSortBaseTransformOp.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
-void LocalSortTransformOp::operatePrefix()
+template<bool do_partial_sort>
+void MergeSortBaseTransformOp<do_partial_sort>::operatePrefix()
 {
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
@@ -36,13 +37,15 @@ void LocalSortTransformOp::operatePrefix()
     spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
-void LocalSortTransformOp::operateSuffix()
+template<bool do_partial_sort>
+void MergeSortBaseTransformOp<do_partial_sort>::operateSuffix()
 {
     if likely (merge_impl)
         merge_impl->readSuffix();
 }
 
-Block LocalSortTransformOp::getMergeOutput()
+template<bool do_partial_sort>
+Block MergeSortBaseTransformOp<do_partial_sort>::getMergeOutput()
 {
     assert(merge_impl);
     Block block = merge_impl->read();
@@ -51,7 +54,8 @@ Block LocalSortTransformOp::getMergeOutput()
     return block;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToMerge(Block & block)
 {
     assert(status == LocalSortStatus::PARTIAL);
     // convert to merge phase.
@@ -72,7 +76,8 @@ OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToRestore()
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToRestore()
 {
     assert(status == LocalSortStatus::PARTIAL);
     // convert to restore phase.
@@ -99,7 +104,8 @@ OperatorStatus LocalSortTransformOp::fromPartialToRestore()
     return OperatorStatus::IO;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToSpill()
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToSpill()
 {
     assert(status == LocalSortStatus::PARTIAL);
     // convert to restore phase.
@@ -117,7 +123,8 @@ OperatorStatus LocalSortTransformOp::fromPartialToSpill()
     return OperatorStatus::IO;
 }
 
-OperatorStatus LocalSortTransformOp::fromSpillToPartial()
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromSpillToPartial()
 {
     assert(status == LocalSortStatus::SPILL);
     assert(cached_handler);
@@ -128,7 +135,8 @@ OperatorStatus LocalSortTransformOp::fromSpillToPartial()
     return OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::transformImpl(Block & block)
 {
     switch (status)
     {
@@ -143,7 +151,10 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
 
         // execute partial sort and store the sorted block in `sorted_blocks`.
         SortHelper::removeConstantsFromBlock(block);
-        sortBlock(block, order_desc, limit);
+        if constexpr (do_partial_sort)
+        {
+            sortBlock(block, order_desc, limit);
+        }
         sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 
@@ -157,7 +168,8 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
     }
 }
 
-OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::tryOutputImpl(Block & block)
 {
     switch (status)
     {
@@ -190,7 +202,8 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
     }
 }
 
-OperatorStatus LocalSortTransformOp::executeIOImpl()
+template<bool do_partial_sort>
+OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::executeIOImpl()
 {
     switch (status)
     {
@@ -210,16 +223,19 @@ OperatorStatus LocalSortTransformOp::executeIOImpl()
     }
 }
 
-void LocalSortTransformOp::transformHeaderImpl(Block &)
+template<bool do_partial_sort>
+void MergeSortBaseTransformOp<do_partial_sort>::transformHeaderImpl(Block &)
 {
 }
 
-bool LocalSortTransformOp::RestoredResult::hasData() const
+template<bool do_partial_sort>
+bool MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::hasData() const
 {
     return finished || block.has_value();
 }
 
-void LocalSortTransformOp::RestoredResult::put(Block && ret)
+template<bool do_partial_sort>
+void MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::put(Block && ret)
 {
     assert(!hasData());
     if unlikely (!ret)
@@ -227,7 +243,8 @@ void LocalSortTransformOp::RestoredResult::put(Block && ret)
     block.emplace(std::move(ret));
 }
 
-Block LocalSortTransformOp::RestoredResult::output()
+template<bool do_partial_sort>
+Block MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::output()
 {
     if unlikely (finished)
         return {};
@@ -235,5 +252,8 @@ Block LocalSortTransformOp::RestoredResult::output()
     block.reset();
     return ret;
 }
+
+template class MergeSortBaseTransformOp<true>;
+template class MergeSortBaseTransformOp<false>;
 
 } // namespace DB
