@@ -49,6 +49,16 @@ private:
 
     inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
+    // Put the operator that has implemented the Awaitable interface into the awaitables.
+    // In order to avoid calling the virtual function Operator::await too much in await, here is an Awaitable interface,
+    // only the operator that needs await will implement this interface, and then it will be called in PipelineExec::await.
+    template <typename OperatorPtr>
+    inline void addOperatorIfAwaitable(const OperatorPtr & op)
+    {
+        if (auto * awaitable = dynamic_cast<Awaitable *>(op.get()); awaitable)
+            awaitables.push_back(awaitable);
+    }
+
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;

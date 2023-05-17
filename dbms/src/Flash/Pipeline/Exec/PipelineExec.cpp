@@ -69,16 +69,10 @@ PipelineExec::PipelineExec(
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
 {
-#define FILL_AWAITABLE(op)                                                   \
-    if (auto * awaitable = dynamic_cast<Awaitable *>((op).get()); awaitable) \
-        awaitables.push_back(awaitable);
-    FILL_AWAITABLE(sink_op);
+    addOperatorIfAwaitable(sink_op);
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
-    {
-        FILL_AWAITABLE(*it);
-    }
-    FILL_AWAITABLE(source_op);
-#undef FILL_AWAITABLE
+        addOperatorIfAwaitable(*it);
+    addOperatorIfAwaitable(source_op);
 }
 
 void PipelineExec::executePrefix()

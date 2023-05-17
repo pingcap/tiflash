@@ -124,7 +124,6 @@ MPPTunnel::~MPPTunnel()
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 {
-    bool need_close_tunnel = false;
     {
         std::lock_guard lk(mu);
         switch (status)
@@ -135,20 +134,22 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
             return;
         case TunnelStatus::Connected:
         case TunnelStatus::WaitingForSenderFinish:
-            need_close_tunnel = true;
+        {
+            if (!reason.empty())
+            {
+                tunnel_sender->cancelWith(reason);
+            }
+            else
+            {
+                tunnel_sender->finish();
+            }
             break;
+        }
         case TunnelStatus::Finished:
             return;
         default:
             RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", static_cast<Int32>(status));
         }
-    }
-    if (need_close_tunnel)
-    {
-        if (!reason.empty())
-            tunnel_sender->cancelWith(reason);
-        else
-            tunnel_sender->finish();
     }
 
     if (wait_sender_finish)
