@@ -91,4 +91,7 @@ ExecTaskStatus EventTask::awaitImpl()
 {
     EXECUTE(doAwaitImpl);
 }
+
+#undef EXECUTE
+
 } // namespace DB

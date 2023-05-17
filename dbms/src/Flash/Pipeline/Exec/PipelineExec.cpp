@@ -46,21 +46,6 @@ namespace DB
         return (op_status);                                                                       \
     }
 
-#define HANDLE_AWAITABLE_OP_STATUS(op, op_status)                                                 \
-    switch (op_status)                                                                            \
-    {                                                                                             \
-    case OperatorStatus::NEED_INPUT:                                                              \
-        break;                                                                                    \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
-    case OperatorStatus::IO:                                                                      \
-        assert(!io_op);                                                                           \
-        assert(op);                                                                               \
-        io_op.emplace((op)->getOp());                                                             \
-    /* For unexpected status, an immediate return is required. */                                 \
-    default:                                                                                      \
-        return (op_status);                                                                       \
-    }
-
 PipelineExec::PipelineExec(
     SourceOpPtr && source_op_,
     TransformOps && transform_ops_,
@@ -178,7 +163,20 @@ OperatorStatus PipelineExec::awaitImpl()
     for (auto & awaitable : awaitables)
     {
         auto op_status = awaitable->await();
-        HANDLE_AWAITABLE_OP_STATUS(awaitable, op_status);
+        switch (op_status)
+        {
+        // If NEED_INPUT is returned, continue checking the next operator.
+        case OperatorStatus::NEED_INPUT:
+            break;
+        // For the io status, the operator needs to be filled in io_op for later use in executeIO.
+        case OperatorStatus::IO:
+            assert(!io_op);
+            assert(awaitable);
+            io_op.emplace(awaitable);
+        // For unexpected status, an immediate return is required.
+        default:
+            return op_status;
+        }
     }
     // await must eventually return HAS_OUTPUT.
     return OperatorStatus::HAS_OUTPUT;
@@ -186,6 +184,5 @@ OperatorStatus PipelineExec::awaitImpl()
 
 #undef HANDLE_OP_STATUS
 #undef HANDLE_LAST_OP_STATUS
-#undef HANDLE_AWAITABLE_OP_STATUS
 
 } // namespace DB

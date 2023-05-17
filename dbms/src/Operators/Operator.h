@@ -62,6 +62,11 @@ public:
     OperatorStatus executeIO();
     virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
 
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
+    OperatorStatus await();
+    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+    virtual bool isAwaitable() const { return false; }
+
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     virtual void operatePrefix() {}
     virtual void operateSuffix() {}
@@ -86,25 +91,6 @@ protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;
     Block header;
-};
-
-class Awaitable
-{
-public:
-    explicit Awaitable(Operator * op_)
-        : op(op_)
-    {}
-
-    virtual ~Awaitable() = default;
-
-    // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus await();
-    virtual OperatorStatus awaitImpl() = 0;
-
-    Operator * getOp() const { return op; }
-
-protected:
-    Operator * op;
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.

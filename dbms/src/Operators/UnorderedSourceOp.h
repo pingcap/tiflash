@@ -26,7 +26,6 @@ namespace DB
 /// Read blocks asyncly from Storage Layer by using read thread,
 /// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
-    , public Awaitable
 {
 public:
     UnorderedSourceOp(
@@ -37,7 +36,6 @@ public:
         const TableID physical_table_id,
         const String & req_id)
         : SourceOp(exec_status_, req_id)
-        , Awaitable(this)
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
         , ref_no(0)
@@ -72,6 +70,7 @@ public:
 protected:
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
+    bool isAwaitable() const override { return true; }
 
 private:
     void addReadTaskPoolToScheduler()

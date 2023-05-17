@@ -20,7 +20,6 @@
 namespace DB
 {
 class HashJoinProbeTransformOp : public TransformOp
-    , public Awaitable
 {
 public:
     HashJoinProbeTransformOp(
@@ -42,6 +41,8 @@ protected:
     OperatorStatus tryOutputImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
+
+    bool isAwaitable() const override { return true; }
 
     void transformHeaderImpl(Block & header_) override;
 

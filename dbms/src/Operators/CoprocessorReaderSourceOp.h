@@ -24,7 +24,6 @@ namespace DB
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class CoprocessorReaderSourceOp : public SourceOp
-    , public Awaitable
 {
 public:
     CoprocessorReaderSourceOp(
@@ -40,6 +39,7 @@ public:
 protected:
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
+    bool isAwaitable() const override { return true; }
 
 private:
     Block popFromBlockQueue();

@@ -21,7 +21,6 @@
 namespace DB
 {
 class ExchangeSenderSinkOp : public SinkOp
-    , public Awaitable
 {
 public:
     ExchangeSenderSinkOp(
@@ -29,7 +28,6 @@ public:
         const String & req_id,
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_status_, req_id)
-        , Awaitable(this)
         , writer(std::move(writer))
     {
     }
@@ -48,6 +46,8 @@ protected:
     OperatorStatus prepareImpl() override;
 
     OperatorStatus awaitImpl() override;
+
+    bool isAwaitable() const override { return true; }
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;

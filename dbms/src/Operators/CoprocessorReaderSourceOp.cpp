@@ -23,7 +23,6 @@ CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
     const String & req_id,
     CoprocessorReaderPtr coprocessor_reader_)
     : SourceOp(exec_status_, req_id)
-    , Awaitable(this)
     , coprocessor_reader(coprocessor_reader_)
 {
     assert(coprocessor_reader);

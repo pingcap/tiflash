@@ -49,14 +49,15 @@ private:
 
     inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
-    // Put the operator that has implemented the Awaitable interface into the awaitables.
-    // In order to avoid calling the virtual function Operator::await too much in await, here is an Awaitable interface,
-    // only the operator that needs await will implement this interface, and then it will be called in PipelineExec::await.
+    // Put the operator that has implemented the `awaitImpl` into the awaitables.
+    // In order to avoid calling the virtual function Operator::await too much in await,
+    // only the operator that needs await will implement `awaitImpl` and `isAwaitable`,
+    // and then it will be called in PipelineExec::await.
     template <typename OperatorPtr>
     inline void addOperatorIfAwaitable(const OperatorPtr & op)
     {
-        if (auto * awaitable = dynamic_cast<Awaitable *>(op.get()); awaitable)
-            awaitables.push_back(awaitable);
+        if (op->isAwaitable())
+            awaitables.push_back(op.get());
     }
 
 private:
@@ -65,7 +66,7 @@ private:
     SinkOpPtr sink_op;
 
     // hold the operators that awaitable.
-    std::vector<Awaitable *> awaitables;
+    std::vector<Operator *> awaitables;
 
     // hold the operator which is ready for executing io.
     std::optional<Operator *> io_op;

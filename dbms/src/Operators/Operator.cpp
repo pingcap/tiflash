@@ -31,7 +31,7 @@ extern const char random_pipeline_model_cancel_failpoint[];
     if (unlikely(exec_status.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
-OperatorStatus Awaitable::await()
+OperatorStatus Operator::await()
 {
     // `exec_status.is_cancelled` has been checked by `EventTask`.
     // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
