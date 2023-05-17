@@ -14,30 +14,33 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
-#include <deque>
+#include <list>
 #include <mutex>
 
 namespace DB
 {
-class FIFOTaskQueue : public TaskQueue
+class WaitingTaskList
 {
 public:
-    void submit(TaskPtr && task) noexcept override;
+    /// return false if the waiting task list had been closed.
+    // this function will wait until `!waiting_tasks.empty()`
+    bool take(std::list<TaskPtr> & local_waiting_tasks);
+    // this function will return immediately.
+    bool tryTake(std::list<TaskPtr> & local_waiting_tasks);
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept override;
+    void submit(TaskPtr && task);
+    void submit(std::list<TaskPtr> & tasks);
 
-    bool take(TaskPtr & task) noexcept override;
-
-    bool empty() noexcept override;
-
-    void close() override;
+    // After finish is called, the submitted task will be finalized directly and will not be taken.
+    // And the tasks in the queue can still be taken normally.
+    void finish();
 
 private:
     std::mutex mu;
     std::condition_variable cv;
-    bool is_closed = false;
-    std::deque<TaskPtr> task_queue;
+    std::list<TaskPtr> waiting_tasks;
+    std::atomic_bool is_finished = false;
 };
 } // namespace DB

@@ -102,6 +102,13 @@ bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & ch
     return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
 }
 
+void UniversalPageStorageService::setSyncAllData()
+{
+    sync_all_at_next_upload = true;
+    gc_handle->wake();
+    LOG_INFO(log, "sync_all flag is set, next checkpoint will upload all existing data");
+}
+
 bool UniversalPageStorageService::uploadCheckpoint()
 {
     // If another thread is running, just skip
@@ -141,7 +148,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
         return false;
     }
     auto s3lock_client = tmt.getS3LockClient();
-    return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    const bool force_sync = sync_all_at_next_upload.load();
+    bool upload_done = uploadCheckpointImpl(store_info, s3lock_client, remote_store, force_sync);
+    if (force_sync && upload_done)
+        sync_all_at_next_upload = false;
+    // always return false to run at fixed rate
+    return false;
 }
 
 struct FileIdsToCompactGetter
@@ -165,7 +177,8 @@ struct FileIdsToCompactGetter
 bool UniversalPageStorageService::uploadCheckpointImpl(
     const metapb::Store & store_info,
     const S3::S3LockClientPtr & s3lock_client,
-    const DM::Remote::IDataStorePtr & remote_store)
+    const DM::Remote::IDataStorePtr & remote_store,
+    bool force_sync_data)
 {
     // `initLocksLocalManager` enable writes to remote store.
     // if it is the first time after restart, it will load the last_upload_sequence
@@ -176,7 +189,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // actually skip
     // TODO: we can do it in a better way by splitting `dumpIncrementalCheckpoint`
     //       into smaller parts to avoid this.
-    if (uni_page_storage->canSkipCheckpoint())
+    if (!force_sync_data && uni_page_storage->canSkipCheckpoint())
     {
         return false;
     }
@@ -227,6 +240,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
 
+    if (force_sync_data)
+    {
+        LOG_INFO(log, "Upload checkpoint with all existing data");
+    }
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -242,6 +259,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
+        .full_compact = force_sync_data,
         .compact_getter = FileIdsToCompactGetter{
             .uni_page_storage = uni_page_storage,
             .gc_threshold = gc_threshold,
@@ -256,7 +274,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
 
     LOG_INFO(
         log,
-        "Upload checkpoint success, upload_sequence={} incremental_bytes={} compact_bytes={}",
+        "Upload checkpoint success,{} upload_sequence={} incremental_bytes={} compact_bytes={}",
+        force_sync_data ? " sync_all=true" : "",
         upload_info.upload_sequence,
         write_stats.incremental_data_bytes,
         write_stats.compact_data_bytes);
@@ -264,8 +283,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);
 
-    // always return false to run at fixed rate
-    return false;
+    return true;
 }
 
 bool UniversalPageStorageService::gc()

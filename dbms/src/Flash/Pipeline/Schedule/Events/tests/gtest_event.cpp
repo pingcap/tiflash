@@ -314,6 +314,85 @@ protected:
         throw Exception("create task fail");
     }
 };
+
+class TestPorfileTask : public EventTask
+{
+public:
+    static constexpr size_t min_time = 500'000'000L; // 500ms
+
+    static constexpr size_t per_execute_time = 10'000'000L; // 10ms
+
+    TestPorfileTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(exec_status_, event_)
+    {}
+
+protected:
+    // doAwaitImpl ==> doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
+    ExecTaskStatus doExecuteImpl() override
+    {
+        assert(task_status == ExecTaskStatus::RUNNING);
+        if (cpu_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            cpu_execute_time += per_execute_time;
+            return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::IO;
+    }
+
+    ExecTaskStatus doExecuteIOImpl() override
+    {
+        assert(task_status == ExecTaskStatus::IO);
+        if (io_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            io_execute_time += per_execute_time;
+            return ExecTaskStatus::IO;
+        }
+        return ExecTaskStatus::WAITING;
+    }
+
+    ExecTaskStatus doAwaitImpl() override
+    {
+        if (task_status == ExecTaskStatus::WAITING)
+        {
+            if unlikely (!wait_stopwatch)
+                wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+            return wait_stopwatch->elapsed() < min_time
+                ? ExecTaskStatus::WAITING
+                : ExecTaskStatus::FINISHED;
+        }
+        else
+        {
+            return ExecTaskStatus::RUNNING;
+        }
+    }
+
+private:
+    size_t cpu_execute_time = 0;
+    size_t io_execute_time = 0;
+    std::optional<Stopwatch> wait_stopwatch;
+};
+
+class TestPorfileEvent : public Event
+{
+public:
+    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_, size_t task_num_)
+        : Event(exec_status_, nullptr)
+        , task_num(task_num_)
+    {}
+
+    const size_t task_num;
+
+protected:
+    void scheduleImpl() override
+    {
+        for (size_t i = 0; i < task_num; ++i)
+            addTask(std::make_unique<TestPorfileTask>(exec_status, shared_from_this()));
+    }
+};
 } // namespace
 
 class EventTestRunner : public ::testing::Test
@@ -577,6 +656,42 @@ try
     wait(exec_status);
     auto exception_ptr = exec_status.getExceptionPtr();
     ASSERT_TRUE(exception_ptr);
+}
+CATCH
+
+TEST_F(EventTestRunner, profile)
+try
+{
+    for (size_t task_num = 0; task_num < 2 * thread_num; task_num += 2)
+    {
+        PipelineExecutorStatus exec_status;
+        auto event = std::make_shared<TestPorfileEvent>(exec_status, task_num);
+        if (event->prepare())
+            event->schedule();
+        wait(exec_status);
+        assertNoErr(exec_status);
+
+        /// for executing
+        size_t exec_lower_limit = task_num * TestPorfileTask::min_time;
+        // Use `exec_lower_limit * 5` to avoid failure caused by unstable test environment.
+        size_t exec_upper_limit = exec_lower_limit * 5;
+        auto do_assert_for_exec = [&](UInt64 value) {
+            ASSERT_GE(value, exec_lower_limit);
+            ASSERT_LE(value, exec_upper_limit);
+        };
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getCPUExecuteTimeNs());
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getIOExecuteTimeNs());
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getAwaitTimeNs());
+
+        /// for pending
+        if (task_num > thread_num)
+        {
+            // If the number of tasks is greater than the number of threads, there must be tasks in a pending state.
+            // To avoid unstable unit tests, we do not check the upper limit.
+            ASSERT_GT(exec_status.getQueryProfileInfo().getCPUPendingTimeNs(), 0);
+            ASSERT_GT(exec_status.getQueryProfileInfo().getIOPendingTimeNs(), 0);
+        }
+    }
 }
 CATCH
 

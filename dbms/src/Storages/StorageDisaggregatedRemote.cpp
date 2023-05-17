@@ -91,7 +91,7 @@ namespace ErrorCodes
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
-BlockInputStreams StorageDisaggregated::readFromWriteNode(
+BlockInputStreams StorageDisaggregated::readThroughS3(
     const Context & db_context,
     const SelectQueryInfo & query_info,
     unsigned num_streams)
@@ -147,8 +147,20 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
     buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    filterConditions(std::move(source_columns), pipeline);
+
+    NamesAndTypes source_columns;
+    source_columns.reserve(table_scan.getColumnSize());
+    const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
+    for (const auto & col : remote_segment_stream_header)
+    {
+        source_columns.emplace_back(col.name, col.type);
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // Handle duration type column
+    extraCast(*analyzer, pipeline);
+    // Handle filter
+    filterConditions(*analyzer, pipeline);
     return pipeline.streams;
 }
 
