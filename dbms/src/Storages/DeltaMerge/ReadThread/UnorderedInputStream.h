@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/FailPoint.h>
+#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -35,23 +35,15 @@ public:
     UnorderedInputStream(
         const SegmentReadTaskPoolPtr & task_pool_,
         const ColumnDefines & columns_to_read_,
-        const int extra_table_id_index,
-        const TableID physical_table_id,
+        int extra_table_id_index_,
         const String & req_id)
         : task_pool(task_pool_)
-        , header(toEmptyBlock(columns_to_read_))
-        , action(header, extra_table_id_index, physical_table_id)
+        , header(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_))
         , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
 
     {
-        if (extra_table_id_index != InvalidColumnID)
-        {
-            const auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
-            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
-            header.insert(extra_table_id_index, col);
-        }
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
@@ -88,8 +80,9 @@ protected:
             task_pool->popBlock(res);
             if (res)
             {
-                if (action.transform(res))
+                if (res.rows() > 0)
                 {
+                    total_rows += res.rows();
                     return res;
                 }
                 else
@@ -107,7 +100,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, action.totalRows());
+        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
     }
 
     void addReadTaskPoolToScheduler()
@@ -123,11 +116,12 @@ protected:
 private:
     SegmentReadTaskPoolPtr task_pool;
     Block header;
-    SegmentReadTransformAction action;
 
     bool done = false;
     LoggerPtr log;
     int64_t ref_no;
     bool task_pool_added;
+
+    size_t total_rows = 0;
 };
 } // namespace DB::DM
