@@ -824,29 +824,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
-{
-    return receive(
-        stream_id,
-        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
-            return grpc_recv_queue[stream_id].pop(recv_msg);
-        });
-}
-
-template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream_id)
-{
-    return receive(
-        stream_id,
-        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
-            return grpc_recv_queue[stream_id].tryPop(recv_msg);
-        });
-}
-
-template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
-    size_t stream_id,
-    std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func)
+void ExchangeReceiverBase<RPCContext>::verifyStreamId(size_t stream_id) const
 {
     if (unlikely(stream_id >= grpc_recv_queue.size()))
     {
@@ -854,9 +832,12 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
         LOG_ERROR(exc_log, err_msg);
         throw Exception(err_msg);
     }
+}
 
-    RecvMsgPtr recv_msg;
-    switch (recv_func(stream_id, recv_msg))
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg)
+{
+    switch (result)
     {
     case MPMCQueueResult::OK:
         assert(recv_msg);
@@ -866,6 +847,24 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
     default:
         return {ReceiveStatus::eof, nullptr};
     }
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
+{
+    verifyStreamId(stream_id);
+    RecvMsgPtr recv_msg;
+    auto res = grpc_recv_queue[stream_id].pop(recv_msg);
+    return toReceiveResult(res, std::move(recv_msg));
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
+{
+    // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
+    RecvMsgPtr recv_msg;
+    auto res = grpc_recv_queue[stream_id].tryPop(recv_msg);
+    return toReceiveResult(res, std::move(recv_msg));
 }
 
 template <typename RPCContext>

@@ -41,6 +41,8 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
+    bool isAwaitable() const override { return true; }
+
 private:
     AggregateContextPtr agg_context;
     SharedAggregateRestorerPtr restorer;
