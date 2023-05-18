@@ -771,7 +771,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             }
             if (cid == EXTRA_TABLE_ID_COLUMN_ID)
             {
-                source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, MutableSupport::extra_table_id_column_type);
+                source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE);
                 continue;
             }
             RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
