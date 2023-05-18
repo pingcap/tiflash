@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <DataStreams/SegmentReadTransformAction.h>
+#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -69,7 +69,10 @@ private:
     BlockInputStreamPtr cur_stream;
 
     DM::SegmentPtr cur_segment;
-    SegmentReadTransformAction action;
+
+    // TODO: Remove this action from this operator.
+    //       Instead use AddExtraTableIDColumnTransformOp in the outside.
+    AddExtraTableIDColumnTransformAction action;
 
     FilterPtr filter_ignored = nullptr;
     std::optional<Block> t_block;
