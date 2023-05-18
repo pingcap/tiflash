@@ -161,6 +161,7 @@ class SegmentReadTaskPool : private boost::noncopyable
 public:
     SegmentReadTaskPool(
         int64_t table_id_,
+        int extra_table_id_index_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
@@ -171,29 +172,7 @@ public:
         AfterSegmentRead after_segment_read_,
         const String & tracing_id,
         bool enable_read_thread_,
-        Int64 num_streams_)
-        : pool_id(nextPoolId())
-        , table_id(table_id_)
-        , dm_context(dm_context_)
-        , columns_to_read(columns_to_read_)
-        , filter(filter_)
-        , max_version(max_version_)
-        , expected_block_size(expected_block_size_)
-        , read_mode(read_mode_)
-        , tasks_wrapper(enable_read_thread_, std::move(tasks_))
-        , after_segment_read(after_segment_read_)
-        , log(Logger::get(tracing_id))
-        , unordered_input_stream_ref_count(0)
-        , exception_happened(false)
-        , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
-        // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-        // to encounter empty queues frequently, resulting in too much waiting and thread context
-        // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
-        , block_slot_limit(std::max(num_streams_, 3))
-        // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
-        // situations where the computation may be faster and the storage layer may not be able to keep up.
-        , active_segment_limit(std::max(num_streams_, 2))
-    {}
+        Int64 num_streams_);
 
     ~SegmentReadTaskPool()
     {
@@ -259,6 +238,7 @@ private:
 
     const uint64_t pool_id;
     const int64_t table_id;
+    const int extra_table_id_index;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;

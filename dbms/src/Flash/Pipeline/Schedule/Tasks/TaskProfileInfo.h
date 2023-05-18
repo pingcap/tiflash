@@ -25,13 +25,13 @@ template <typename UnitType>
 class ProfileInfo
 {
 public:
-    UInt64 getCPUExecuteTimeNs() const { return cpu_execute_time_ns; }
-    UInt64 getCPUPendingTimeNs() const { return cpu_pending_time_ns; }
-    UInt64 getIOExecuteTimeNs() const { return io_execute_time_ns; }
-    UInt64 getIOPendingTimeNs() const { return io_pending_time_ns; }
-    UInt64 getAwaitTimeNs() const { return await_time_ns; }
+    ALWAYS_INLINE UInt64 getCPUExecuteTimeNs() const { return cpu_execute_time_ns; }
+    ALWAYS_INLINE UInt64 getCPUPendingTimeNs() const { return cpu_pending_time_ns; }
+    ALWAYS_INLINE UInt64 getIOExecuteTimeNs() const { return io_execute_time_ns; }
+    ALWAYS_INLINE UInt64 getIOPendingTimeNs() const { return io_pending_time_ns; }
+    ALWAYS_INLINE UInt64 getAwaitTimeNs() const { return await_time_ns; }
 
-    String toJson() const
+    ALWAYS_INLINE String toJson() const
     {
         return fmt::format(
             R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{}}})",
@@ -53,19 +53,40 @@ protected:
 class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
-    void startTimer();
+    ALWAYS_INLINE void startTimer()
+    {
+        stopwatch.start();
+    }
 
-    UInt64 elapsedFromPrev();
+    ALWAYS_INLINE UInt64 elapsedFromPrev()
+    {
+        return stopwatch.elapsedFromLastTime();
+    }
 
-    void addCPUExecuteTime(UInt64 value);
+    ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
+    {
+        cpu_execute_time_ns += value;
+    }
 
-    void elapsedCPUPendingTime();
+    ALWAYS_INLINE void elapsedCPUPendingTime()
+    {
+        cpu_pending_time_ns += elapsedFromPrev();
+    }
 
-    void addIOExecuteTime(UInt64 value);
+    ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
+    {
+        io_execute_time_ns += value;
+    }
 
-    void elapsedIOPendingTime();
+    ALWAYS_INLINE void elapsedIOPendingTime()
+    {
+        io_pending_time_ns += elapsedFromPrev();
+    }
 
-    void elapsedAwaitTime();
+    ALWAYS_INLINE void elapsedAwaitTime()
+    {
+        await_time_ns += elapsedFromPrev();
+    }
 
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
@@ -74,6 +95,13 @@ private:
 class QueryProfileInfo : public ProfileInfo<std::atomic_uint64_t>
 {
 public:
-    void merge(const TaskProfileInfo & task_profile_info);
+    ALWAYS_INLINE void merge(const TaskProfileInfo & task_profile_info)
+    {
+        cpu_execute_time_ns += task_profile_info.getCPUExecuteTimeNs();
+        cpu_pending_time_ns += task_profile_info.getCPUPendingTimeNs();
+        io_execute_time_ns += task_profile_info.getIOExecuteTimeNs();
+        io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
+        await_time_ns += task_profile_info.getAwaitTimeNs();
+    }
 };
 } // namespace DB

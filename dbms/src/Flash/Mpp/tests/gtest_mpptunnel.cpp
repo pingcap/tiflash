@@ -797,7 +797,7 @@ TEST_F(TestMPPTunnel, SyncTunnelForceWrite)
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
     mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
@@ -814,7 +814,7 @@ TEST_F(TestMPPTunnel, AsyncTunnelForceWrite)
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockAsyncCallData::run, call_data.get());
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
     mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
@@ -831,7 +831,7 @@ TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
     mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
@@ -841,7 +841,7 @@ TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
 }
 
-TEST_F(TestMPPTunnel, isReadyForWriteTimeout)
+TEST_F(TestMPPTunnel, isWritableTimeout)
 try
 {
     timeout = std::chrono::seconds(1);
@@ -849,7 +849,7 @@ try
     Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     while (stop_watch.elapsedSeconds() < 3 * timeout.count())
     {
-        ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
+        ASSERT_FALSE(mpp_tunnel_ptr->isWritable());
     }
     GTEST_FAIL();
 }

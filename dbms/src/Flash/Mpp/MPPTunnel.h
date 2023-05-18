@@ -111,7 +111,7 @@ public:
 
     virtual bool finish() = 0;
 
-    virtual bool isReadyForWrite() const = 0;
+    virtual bool isWritable() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -204,7 +204,7 @@ public:
         return send_queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !send_queue.isFull();
     }
@@ -246,7 +246,7 @@ public:
         return queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !queue.isFull();
     }
@@ -326,14 +326,14 @@ public:
         return true;
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         if constexpr (local_only)
-            return local_request_handler.isReadyForWrite();
+            return local_request_handler.isWritable();
         else
         {
             std::lock_guard lock(mu);
-            return local_request_handler.isReadyForWrite();
+            return local_request_handler.isWritable();
         }
     }
 
@@ -428,7 +428,7 @@ public:
         return send_queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !send_queue.isFull();
     }
@@ -504,11 +504,11 @@ public:
     // forceWrite write a single packet to the tunnel's send queue without blocking,
     // and need to call isReadForWrite first.
     // ```
-    // while (!isReadyForWrite()) {}
+    // while (!isWritable()) {}
     // forceWrite(std::move(data));
     // ```
     void forceWrite(TrackedMppDataPacketPtr && data);
-    bool isReadyForWrite() const;
+    bool isWritable() const;
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

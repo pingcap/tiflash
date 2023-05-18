@@ -1002,10 +1002,17 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
     auto o = client.DeleteObject(req);
     if (!o.IsSuccess())
     {
-        throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        const auto & e = o.GetError();
+        if (e.GetErrorType() != Aws::S3::S3Errors::NO_SUCH_KEY)
+        {
+            throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        }
     }
-    const auto & res = o.GetResult();
-    UNUSED(res);
+    else
+    {
+        const auto & res = o.GetResult();
+        UNUSED(res);
+    }
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
 }
 

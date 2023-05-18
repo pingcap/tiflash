@@ -122,9 +122,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
-    if (settings.force_enable_pipeline && max_bytes_before_external_join > 0)
+    if (settings.enforce_enable_pipeline && max_bytes_before_external_join > 0)
     {
-        // Currently, the pipeline model does not support disk-based join, so when force_enable_pipeline is true, the disk-based join will be disabled.
+        // Currently, the pipeline model does not support disk-based join, so when enforce_enable_pipeline is true, the disk-based join will be disabled.
         max_bytes_before_external_join = 0;
         LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
     }
@@ -153,6 +153,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
+        settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
