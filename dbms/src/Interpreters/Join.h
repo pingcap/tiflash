@@ -25,6 +25,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
+#include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
 #include <shared_mutex>
@@ -33,7 +34,6 @@ namespace DB
 {
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
 
 struct RestoreInfo
 {
@@ -147,6 +147,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
+         size_t shallow_copy_cross_probe_threshold_ = 0,
          const String & match_helper_name_ = "",
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
@@ -337,6 +338,10 @@ private:
 
     bool has_build_data_in_memory = false;
 
+    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+    size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
+    size_t shallow_copy_cross_probe_threshold;
+
 private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
@@ -394,11 +399,15 @@ private:
 
     Block joinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
+    Block removeUselessColumn(Block & block) const;
+
     /** Handle non-equal join conditions
       *
       * @param block
       */
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+
+    void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
     Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
