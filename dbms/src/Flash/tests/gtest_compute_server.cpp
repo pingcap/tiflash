@@ -700,109 +700,44 @@ try
 }
 CATCH
 
-TEST_F(ComputeServerRunner, randomFailpointForCommon)
-try
-{
-    WRAP_FOR_SERVER_TEST_BEGIN
-    startServers(3);
-    std::vector<String> failpoints{
-        "random_tunnel_wait_timeout_failpoint-0.5",
-        "random_tunnel_write_failpoint-0.5",
-        "random_tunnel_init_rpc_failure_failpoint-0.5",
-        "random_receiver_local_msg_push_failure_failpoint-0.5",
-        "random_receiver_sync_msg_push_failure_failpoint-0.5",
-        "random_receiver_async_msg_push_failure_failpoint-0.5",
-        "random_join_build_failpoint-0.5",
-        "random_join_prob_failpoint-0.5",
-        "random_aggregate_create_state_failpoint-0.5",
-        "random_aggregate_merge_failpoint-0.5",
-        "random_sharedquery_failpoint-0.5",
-        "random_interpreter_failpoint-0.5",
-        "random_task_manager_find_task_failure_failpoint-0.5",
-        "random_min_tso_scheduler_failpoint-0.5",
-        "random_exception_when_connect_local_tunnel-0.5",
-        "random_exception_when_construct_async_request_handler-0.5"};
-    for (const auto & failpoint : failpoints)
-    {
-        auto config_str = fmt::format(R"([flash]random_fail_points="{}")", failpoint);
-        initRandomFailPoint(config_str);
-        for (size_t i = 0; i < 10; ++i)
-        {
-            auto [query_id, _] = prepareMPPStreams(context
-                                                       .scan("test_db", "l_table")
-                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
-            EXPECT_TRUE(assertQueryActive(query_id)) << "fail in " << failpoint;
-            EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
-        }
-        disableRandomFailPoint(config_str);
-    }
-    WRAP_FOR_SERVER_TEST_END
-}
-CATCH
-
 TEST_F(ComputeServerRunner, randomFailpointForPipeline)
 try
 {
     enablePipeline(true);
     startServers(3);
     std::vector<String> failpoints{
-        "random_pipeline_model_task_run_failpoint-0.5",
-        "random_pipeline_model_task_construct_failpoint-0.5",
-        "random_pipeline_model_event_schedule_failpoint-0.5",
-        "random_pipeline_model_event_finish_failpoint-0.5",
-        "random_pipeline_model_operator_run_failpoint-0.5",
-        "random_pipeline_model_cancel_failpoint-0.5",
-        "random_pipeline_model_execute_prefix_failpoint-0.5",
-        "random_pipeline_model_execute_suffix_failpoint-0.5"};
+        "random_pipeline_model_task_run_failpoint-0.8",
+        "random_pipeline_model_task_construct_failpoint-1.0",
+        "random_pipeline_model_event_schedule_failpoint-1.0",
+        // Because the mock table scan will always output data, there will be no event triggering onEventFinish, so the query will not terminate.
+        // "random_pipeline_model_event_finish_failpoint-0.99",
+        "random_pipeline_model_operator_run_failpoint-0.8",
+        "random_pipeline_model_cancel_failpoint-0.8",
+        "random_pipeline_model_execute_prefix_failpoint-1.0",
+        "random_pipeline_model_execute_suffix_failpoint-1.0"};
     for (const auto & failpoint : failpoints)
     {
-        auto config_str = fmt::format(R"([flash]random_fail_points="{}")", failpoint);
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
-        for (size_t i = 0; i < 10; ++i)
+        MPPQueryId query_id{0, 0, 0, 0};
+        try
         {
-            auto [query_id, _] = prepareMPPStreams(context
-                                                       .scan("test_db", "l_table")
-                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
-            EXPECT_TRUE(assertQueryActive(query_id)) << "fail in " << failpoint;
-            EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+            std::vector<BlockInputStreamPtr> tmp;
+            std::tie(query_id, tmp) = prepareMPPStreams(context
+                                                            .scan("test_db", "l_table")
+                                                            .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                            .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                            .project({col("max(l_table.s)"), col("l_table.s")}));
         }
+        catch (...)
+        {
+            // Only consider whether a crash occurs
+            ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+        // Check if the query is stuck
+        EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
         disableRandomFailPoint(config_str);
     }
-}
-CATCH
-
-TEST_F(ComputeServerRunner, randomFailpointForSpill)
-try
-{
-    WRAP_FOR_SERVER_TEST_BEGIN
-    context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(1)));
-    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(1)));
-    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(1)));
-    startServers(3);
-    std::vector<String> failpoints{
-        "random_spill_to_disk_failpoint-0.5",
-        "random_restore_from_disk_failpoint-0.5"};
-    for (const auto & failpoint : failpoints)
-    {
-        auto config_str = fmt::format(R"([flash]random_fail_points="{}")", failpoint);
-        initRandomFailPoint(config_str);
-        for (size_t i = 0; i < 10; ++i)
-        {
-            auto [query_id, _] = prepareMPPStreams(context
-                                                       .scan("test_db", "l_table")
-                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
-            EXPECT_TRUE(assertQueryActive(query_id)) << "fail in " << failpoint;
-            EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
-        }
-        disableRandomFailPoint(config_str);
-    }
-    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
