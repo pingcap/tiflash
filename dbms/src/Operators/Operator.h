@@ -57,13 +57,15 @@ public:
     {}
 
     virtual ~Operator() = default;
-    // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus await();
-    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus executeIO();
     virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
+
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
+    OperatorStatus await();
+    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+    virtual bool isAwaitable() const { return false; }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     virtual void operatePrefix() {}
@@ -103,8 +105,6 @@ public:
     // because there are many operators that need an empty block as input, such as JoinProbe and WindowFunction.
     OperatorStatus read(Block & block);
     virtual OperatorStatus readImpl(Block & block) = 0;
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::HAS_OUTPUT; }
 };
 using SourceOpPtr = std::unique_ptr<SourceOp>;
 using SourceOps = std::vector<SourceOpPtr>;
@@ -133,8 +133,6 @@ public:
         transformHeaderImpl(header_);
         setHeader(header_);
     }
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using TransformOpPtr = std::unique_ptr<TransformOp>;
 using TransformOps = std::vector<TransformOpPtr>;
@@ -151,8 +149,6 @@ public:
 
     OperatorStatus write(Block && block);
     virtual OperatorStatus writeImpl(Block && block) = 0;
-
-    OperatorStatus awaitImpl() override { return OperatorStatus::NEED_INPUT; }
 };
 using SinkOpPtr = std::unique_ptr<SinkOp>;
 } // namespace DB

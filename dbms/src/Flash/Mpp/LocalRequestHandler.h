@@ -40,9 +40,9 @@ struct LocalRequestHandler
         return channel_writer.write<enable_fine_grained_shuffle, is_force>(source_index, tracked_packet);
     }
 
-    bool isReadyForWrite() const
+    bool isWritable() const
     {
-        return channel_writer.isReadyForWrite();
+        return channel_writer.isWritable();
     }
 
     void writeDone(bool meet_error, const String & local_err_msg) const
