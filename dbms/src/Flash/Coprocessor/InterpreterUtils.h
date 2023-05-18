@@ -27,7 +27,7 @@ namespace DB
 class Context;
 
 class PipelineExecutorStatus;
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 void restoreConcurrency(
     DAGPipeline & pipeline,

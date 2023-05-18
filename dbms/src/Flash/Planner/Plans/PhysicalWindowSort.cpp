@@ -66,9 +66,9 @@ void PhysicalWindowSort::buildPipelineExecGroup(
 {
     // TODO support non fine grained shuffle parallel window function.
     RUNTIME_CHECK_MSG(
-        fine_grained_shuffle.enable() || group_builder.concurrency <= 1,
+        fine_grained_shuffle.enable() || group_builder.concurrency() <= 1,
         "Currently tiflash does not support non-fine-grained-parallel-window-function, and the concurrency required is {}",
-        group_builder.concurrency);
+        group_builder.concurrency());
 
     executeLocalSort(exec_status, group_builder, order_descr, {}, context, log);
 }

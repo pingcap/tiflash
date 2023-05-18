@@ -92,11 +92,8 @@ void PhysicalTableScan::buildPipelineExecGroup(
     Context &,
     size_t)
 {
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
+    for (auto & source : source_ops)
+        group_builder.addConcurrency(std::move(source));
     storage_interpreter->executeSuffix(exec_status, group_builder);
     buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
 }

@@ -158,11 +158,8 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
     {
         buildSourceOps(context, exec_status);
     }
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
+    for (auto & source : source_ops)
+        group_builder.addConcurrency(std::move(source));
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)

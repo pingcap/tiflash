@@ -192,7 +192,7 @@ void executeLocalSort(
     else
     {
         const Settings & settings = context.getSettingsRef();
-        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency);
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
@@ -298,13 +298,13 @@ void executePushedDownFilter(
 {
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
-    assert(remote_read_sources_start_index <= group_builder.group.size());
+    assert(remote_read_sources_start_index <= group_builder.concurrency());
     auto input_header = group_builder.getCurrentHeader();
 
     // for remote read, filter had been pushed down, don't need to execute again.
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
-        auto & group = group_builder.group[i];
+        auto & group = group_builder.getCurGroup()[i];
         group.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
         group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
@@ -359,11 +359,11 @@ void executeGeneratedColumnPlaceholder(
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_sources_start_index <= group_builder.group.size());
+    assert(remote_read_sources_start_index <= group_builder.concurrency());
 
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
-        auto & group = group_builder.group[i];
+        auto & group = group_builder.getCurGroup()[i];
         group.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
     }
 }

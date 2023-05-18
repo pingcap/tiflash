@@ -58,25 +58,34 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
-    concurrency = init_concurrency;
-    group.resize(concurrency);
+    getCurGroup().emplace_back();
+    getCurGroup().back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::reset()
+{
+    getCurGroup().clear();
+}
+
+void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
+{
+    getCurGroup().insert(getCurGroup().end(), std::make_move_iterator(other.getCurGroup().begin()), std::make_move_iterator(other.getCurGroup().end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(concurrency > 0);
+    RUNTIME_CHECK(!getCurGroup().empty());
     PipelineExecGroup pipeline_exec_group;
-    for (auto & builder : group)
+    for (auto & builder : getCurGroup())
         pipeline_exec_group.push_back(builder.build());
     return pipeline_exec_group;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    RUNTIME_CHECK(!group.empty());
-    return group.back().getCurrentHeader();
+    RUNTIME_CHECK(!getCurGroup().empty());
+    return getCurGroup().back().getCurrentHeader();
 }
 } // namespace DB
