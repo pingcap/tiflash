@@ -2691,7 +2691,36 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
-    // TODO: use bitmap_filter to filter stable packs when bitmap_filter->count() / segment_snap->stable->getDMFilesRows() < x
+    // TODO: optimize this
+    // const auto & dmfiles = segment_snap->stable->getDMFiles();
+    // std::vector<IdSetPtr> read_packs_sets;
+    // read_packs_sets.reserve(dmfiles.size());
+    // UInt32 preceded_rows = 0;
+    // UInt32 skipped_packs = 0;
+    // for (const auto & dmfile : dmfiles)
+    // {
+    //     auto read_packs_set = std::make_shared<IdSet>();
+    //     const auto & pack_stats = dmfile->getPackStats();
+    //     const auto & filter = bitmap_filter->getFilter();
+    //     for (size_t i = 0; i < pack_stats.size(); ++i)
+    //     {
+    //         const auto & stat = pack_stats[i];
+    //         const auto begin = filter.cbegin() + preceded_rows;
+    //         const auto end = filter.cbegin() + preceded_rows + stat.rows;
+    //         if (std::find(begin, end, true) != end)
+    //         {
+    //             read_packs_set->insert(i);
+    //         }
+    //         else
+    //         {
+    //             ++skipped_packs;
+    //         }
+    //         preceded_rows += stat.rows;
+    //     }
+    //     read_packs_sets.push_back(read_packs_set);
+    // }
+    // LOG_DEBUG(log, "Segment::getBitmapFilterInputStream skip {} packs", skipped_packs);
+
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,
@@ -2819,7 +2848,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         bitmap_filter,
         segment_snap->stable->getDMFilesRows(),
         filter->before_where->dumpActions(),
-        filter_expression_cache,
+        segment_snap->stable->getFilterExpressionCache(),
         dm_context.tracing_id);
 }
 
@@ -2864,6 +2893,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         // and add the filter expression to the cache
         // Otherwise, we can directly use the cached bitmap filter to build a bitmap filter stream
         const auto filter_expression = filter->before_where->dumpActions();
+        const auto & filter_expression_cache = segment_snap->stable->getFilterExpressionCache();
         const auto & cache_result = filter_expression_cache.get(filter_expression);
         if (!cache_result.has_value())
         {
@@ -2878,7 +2908,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                 max_version,
                 expected_block_size);
         }
-        LOG_DEBUG(log, "Cache hit for filter expression: {}", filter_expression);
+        LOG_DEBUG(log, "Cache hit for filter expression: {}, stable rows: {}, skipped rows: {}, cache size: {}", filter_expression, cache_result->get()->size(), cache_result->get()->size() - cache_result->get()->count(), filter_expression_cache.size());
         // The size of the cache should be equal to the number of rows in the stable layer of the segment
         RUNTIME_CHECK(cache_result->get()->size() == segment_snap->stable->getDMFilesRows());
         // cache_result & bitmap_filter[0:stable_rows] = bitmap_filter[0:stable_rows]

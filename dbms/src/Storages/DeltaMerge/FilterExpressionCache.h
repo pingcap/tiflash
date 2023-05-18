@@ -30,6 +30,7 @@ namespace DB::DM
 // FilterExpressionCache is used to cache the result of filter expression in stable layer.
 // LRU is used to evict the least recently used item when the cache is full.
 // The cache is thread-safe.
+// TODO: support ttl
 class FilterExpressionCache
 {
 public:
@@ -40,7 +41,7 @@ public:
     ~FilterExpressionCache() = default;
 
     // Get the result of filter expression from cache.
-    std::optional<BitmapFilterPtr> get(const std::string & filter_expression);
+    std::optional<BitmapFilterPtr> get(const std::string & filter_expression) const;
 
     // Set the result of filter expression to cache.
     void set(const std::string & filter_expression, const BitmapFilterPtr & result);
@@ -59,7 +60,7 @@ private:
 
     // The list to store the filter expression.
     // The most recently used item is at the front of the list.
-    std::list<std::pair<std::string, BitmapFilterPtr>> list;
+    mutable std::list<std::pair<std::string, BitmapFilterPtr>> list;
 
     // The map to store the filter expression and its result.
     std::unordered_map<std::string, std::list<std::pair<std::string, BitmapFilterPtr>>::iterator> map;

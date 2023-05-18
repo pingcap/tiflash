@@ -39,7 +39,7 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     , bitmap_filter(bitmap_filter_)
     , stable_rows(stable_rows_)
     , filter_expression(std::move(filter_expression_))
-    , cache_bitmap(std::make_shared<BitmapFilter>(stable_rows, false))
+    , cache_bitmap(std::make_shared<BitmapFilter>(stable_rows, true))
     , filter_expression_cache(filter_expression_cache_)
     , log(Logger::get(NAME, req_id_))
 {}
@@ -175,7 +175,7 @@ void LateMaterializationBlockInputStream::readSuffixImpl()
     // Update filter_expression_cache
     cache_bitmap->runOptimize();
     filter_expression_cache.set(filter_expression, cache_bitmap);
-    // LOG_DEBUG(log, "Late materialization readSuffix, filter_expression: {}, cache_bitmap: {}/{}", filter_expression, cache_bitmap->count(), cache_bitmap->size());
+    LOG_DEBUG(log, "Late materialization readSuffix, filter_expression: {}, cache_bitmap: {}/{}", filter_expression, cache_bitmap->count(), cache_bitmap->size());
 }
 
 } // namespace DB::DM

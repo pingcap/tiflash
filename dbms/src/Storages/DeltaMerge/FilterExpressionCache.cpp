@@ -20,7 +20,7 @@
 namespace DB::DM
 {
 
-std::optional<BitmapFilterPtr> FilterExpressionCache::get(const std::string & filter_expression)
+std::optional<BitmapFilterPtr> FilterExpressionCache::get(const std::string & filter_expression) const
 {
     std::shared_lock lock(rw_mutex);
 

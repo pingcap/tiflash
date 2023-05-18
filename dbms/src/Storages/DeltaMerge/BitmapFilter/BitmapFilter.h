@@ -45,6 +45,8 @@ public:
     size_t count() const;
     size_t size() const { return filter.size(); }
 
+    const std::vector<bool> & getFilter() const { return filter; }
+
 private:
     std::vector<bool> filter;
     bool all_match;

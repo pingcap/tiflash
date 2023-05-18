@@ -177,7 +177,7 @@ private:
         {
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (static_cast<bool>(read_packs->count(i)));
+                use_packs[i] = (static_cast<bool>(use_packs[i])) && (static_cast<bool>(read_packs->contains(i)));
             }
         }
 
