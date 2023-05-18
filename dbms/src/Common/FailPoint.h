@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #pragma once
+
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <fiu-control.h>
 #include <fiu-local.h>
@@ -65,6 +67,8 @@ public:
      * 3. Call enableRandomFailPoint method with parsed FailPointName and Rate
      */
     static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+
+    static void disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
 
