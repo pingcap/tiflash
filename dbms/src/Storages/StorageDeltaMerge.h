@@ -70,8 +70,9 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    SourceOps readSourceOps(
+    void read(
         PipelineExecutorStatus & exec_status_,
+        PipelineExecGroupBuilder & group_builder,
         const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,

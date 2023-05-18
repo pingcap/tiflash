@@ -194,8 +194,9 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
 }
 
 
-SourceOps MockStorage::getSourceOpsFromDeltaMerge(
+void MockStorage::buildExecFromDeltaMerge(
     PipelineExecutorStatus & exec_status_,
+    PipelineExecGroupBuilder & group_builder,
     Context & context,
     Int64 table_id,
     size_t concurrency,
@@ -203,8 +204,9 @@ SourceOps MockStorage::getSourceOpsFromDeltaMerge(
 {
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     // Currently don't support test for late materialization
-    return storage->readSourceOps(
+    storage->read(
         exec_status_,
+        group_builder,
         column_names,
         query_info,
         context,

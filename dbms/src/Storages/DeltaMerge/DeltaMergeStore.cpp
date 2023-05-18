@@ -22,6 +22,7 @@
 #include <Core/SortDescription.h>
 #include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -1119,8 +1120,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     return res;
 }
 
-SourceOps DeltaMergeStore::readSourceOps(
+void DeltaMergeStore::read(
     PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
@@ -1178,12 +1180,11 @@ SourceOps DeltaMergeStore::readSourceOps(
         enable_read_thread,
         final_num_stream);
 
-    SourceOps res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         if (enable_read_thread)
         {
-            res.push_back(
+            group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
                     exec_status,
                     read_task_pool,
@@ -1193,24 +1194,23 @@ SourceOps DeltaMergeStore::readSourceOps(
         }
         else
         {
-            res.push_back(std::make_unique<DMSegmentThreadSourceOp>(
-                exec_status,
-                dm_context,
-                read_task_pool,
-                after_segment_read,
-                columns_to_read,
-                filter,
-                max_version,
-                expected_block_size,
-                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
-                log_tracing_id));
+            group_builder.addConcurrency(
+                std::make_unique<DMSegmentThreadSourceOp>(
+                    exec_status,
+                    dm_context,
+                    read_task_pool,
+                    after_segment_read,
+                    columns_to_read,
+                    filter,
+                    max_version,
+                    expected_block_size,
+                    /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                    extra_table_id_index,
+                    physical_table_id,
+                    log_tracing_id));
         }
     }
-    LOG_DEBUG(tracing_logger, "Read create SourceOp done");
-
-    return res;
+    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
