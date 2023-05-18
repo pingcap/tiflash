@@ -77,12 +77,14 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
 
 Task::~Task()
 {
-    RUNTIME_ASSERT(
-        task_status == ExecTaskStatus::FINALIZE,
-        log,
-        "The state of the Task must be {} before it is destructed, but it is actually {}",
-        magic_enum::enum_name(ExecTaskStatus::FINALIZE),
-        magic_enum::enum_name(task_status));
+    if unlikely (task_status != ExecTaskStatus::FINALIZE)
+    {
+        LOG_WARNING(
+            log,
+            "The state of the Task should be {} before it is destructed, but it is actually {}",
+            magic_enum::enum_name(ExecTaskStatus::FINALIZE),
+            magic_enum::enum_name(task_status));
+    }
 }
 
 #define CHECK_FINISHED                                        \
