@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include <TestUtils/FailPointUtils.h>
 
 namespace DB
 {
@@ -696,6 +697,39 @@ try
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
     WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
+TEST_F(ComputeServerRunner, randomFailpointForPipeline)
+try
+{
+    enablePipeline(true);
+    startServers(3);
+    std::vector<String> failpoints{
+        "random_pipeline_model_task_run_failpoint-0.5",
+        "random_pipeline_model_task_construct_failpoint-0.5",
+        "random_pipeline_model_event_schedule_failpoint-0.5",
+        "random_pipeline_model_event_finish_failpoint-0.5",
+        "random_pipeline_model_operator_run_failpoint-0.5",
+        "random_pipeline_model_cancel_failpoint-0.5",
+        "random_pipeline_model_execute_prefix_failpoint-0.5",
+        "random_pipeline_model_execute_suffix_failpoint-0.5"};
+    for (const auto & failpoint : failpoints)
+    {
+        auto config_str = fmt::format(R"([flash]random_fail_points="{}")", failpoint);
+        initRandomFailPoint(config_str);
+        for (size_t i = 0; i < 10; ++i)
+        {
+            auto [query_id, _] = prepareMPPStreams(context
+                                                       .scan("test_db", "l_table")
+                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
+            EXPECT_TRUE(assertQueryActive(query_id)) << "fail in " << failpoint;
+            EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+        }
+        disableRandomFailPoint(config_str);
+    }
 }
 CATCH
 
