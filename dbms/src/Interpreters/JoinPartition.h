@@ -26,6 +26,7 @@
 namespace DB
 {
 class Arena;
+struct ProbeProcessInfo;
 using ArenaPtr = std::shared_ptr<Arena>;
 using Sizes = std::vector<size_t>;
 

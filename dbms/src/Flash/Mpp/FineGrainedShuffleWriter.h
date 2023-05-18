@@ -45,7 +45,7 @@ public:
         tipb::CompressionMode compression_mode_);
     void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
-    bool isReadyForWrite() const override;
+    bool isWritable() const override;
     void flush() override;
 
 private:

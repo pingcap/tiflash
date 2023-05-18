@@ -92,9 +92,9 @@ void HashPartitionWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
-bool HashPartitionWriter<ExchangeWriterPtr>::isReadyForWrite() const
+bool HashPartitionWriter<ExchangeWriterPtr>::isWritable() const
 {
-    return writer->isReadyForWrite();
+    return writer->isWritable();
 }
 
 template <class ExchangeWriterPtr>

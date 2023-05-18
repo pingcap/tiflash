@@ -44,12 +44,19 @@ ColumnName splitQualifiedName(const String & s)
 DAGSchema::const_iterator checkSchema(const DAGSchema & input, const String & checked_column)
 {
     auto ft = std::find_if(input.begin(), input.end(), [&checked_column](const auto & field) {
-        auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
-        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
-        if (checked_table_name.empty())
-            return column_name == checked_column_name;
-        else
-            return table_name == checked_table_name && column_name == checked_column_name;
+        try
+        {
+            auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
+            auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+            if (checked_table_name.empty())
+                return column_name == checked_column_name;
+            else
+                return table_name == checked_table_name && column_name == checked_column_name;
+        }
+        catch (...)
+        {
+            return false;
+        }
     });
     return ft;
 }

@@ -96,9 +96,9 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
-bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isReadyForWrite() const
+bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isWritable() const
 {
-    return writer->isReadyForWrite();
+    return writer->isWritable();
 }
 
 template <class ExchangeWriterPtr>

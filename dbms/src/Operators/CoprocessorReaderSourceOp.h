@@ -39,6 +39,7 @@ public:
 protected:
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
+    bool isAwaitable() const override { return true; }
 
 private:
     Block popFromBlockQueue();

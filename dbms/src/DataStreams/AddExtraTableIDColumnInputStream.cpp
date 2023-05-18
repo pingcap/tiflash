@@ -12,24 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Block.h>
-#include <Interpreters/JoinUtils.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 
 namespace DB
 {
-struct ProbeProcessInfo;
-Block crossProbeBlockDeepCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
-/// return <probed_block, is_matched_rows>
-std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
+
+AddExtraTableIDColumnInputStream::AddExtraTableIDColumnInputStream(
+    BlockInputStreamPtr input,
+    int extra_table_id_index,
+    TableID physical_table_id)
+    : action(input->getHeader(), extra_table_id_index, physical_table_id)
+{
+    children.push_back(input);
+}
+
+Block AddExtraTableIDColumnInputStream::readImpl()
+{
+    Block res = children.back()->read();
+    if (!res)
+        return res;
+
+    auto ok = action.transform(res);
+    if (!ok)
+        return {};
+
+    return res;
+}
+
 } // namespace DB

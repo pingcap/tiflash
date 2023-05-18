@@ -1065,13 +1065,16 @@ SourceOps DAGStorageInterpreter::buildLocalSourceOps(
         return {};
     const auto table_query_infos = generateSelectQueryInfos();
 
-    /// TODO: support multiple partitions
+    // TODO Improve the performance of partition table in extreme case.
+    // ref https://github.com/pingcap/tiflash/issues/4474
     SourceOps source_ops;
     for (const auto & table_query_info : table_query_infos)
     {
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
+
+        auto table_source_ops = buildLocalSourceOpsForPhysicalTable(exec_status, table_id, query_info, max_block_size);
+        source_ops.insert(source_ops.end(), std::make_move_iterator(table_source_ops.begin()), std::make_move_iterator(table_source_ops.end()));
     }
 
     LOG_DEBUG(

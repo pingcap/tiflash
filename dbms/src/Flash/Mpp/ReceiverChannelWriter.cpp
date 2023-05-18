@@ -106,7 +106,7 @@ bool ReceiverChannelWriter::writeNonFineGrain(
     return success;
 }
 
-bool ReceiverChannelWriter::isReadyForWrite() const
+bool ReceiverChannelWriter::isWritable() const
 {
     for (const auto & msg_channel : *msg_channels)
     {
