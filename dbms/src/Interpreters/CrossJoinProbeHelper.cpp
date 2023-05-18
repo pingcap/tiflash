@@ -481,8 +481,8 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     assert(probe_process_info.next_right_block_index < right_blocks.size());
 
     Block right_block = right_blocks[probe_process_info.next_right_block_index];
-    size_t right_rows = right_block.rows();
-    assert(right_rows > 0);
+    size_t right_row = right_block.rows();
+    assert(right_row > 0);
 
     Block block = probe_process_info.result_block_schema.cloneEmpty();
     for (size_t i = 0; i < num_existing_columns; ++i)
