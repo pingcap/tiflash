@@ -281,16 +281,17 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     const std::string reserved = "?#:;+@&=%"; /// Poco::URI::RESERVED_QUERY_PARAM without '/' plus percent sign.
     Poco::URI::encode(target_uri.getPath(), reserved, path_and_query);
 
+    /// `target_uri.getPath()` could return an empty string, but a proper HTTP request must
+    /// always contain a non-empty URI in its first line (e.g. "POST / HTTP/1.1" or "POST /?list-type=2 HTTP/1.1").
+    if (path_and_query.empty())
+        path_and_query = "/";
+
+    /// Append the query param to URI
     if (!query.empty())
     {
         path_and_query += '?';
         path_and_query += query;
     }
-
-    /// `target_uri.getPath()` could return an empty string, but a proper HTTP request must
-    /// always contain a non-empty URI in its first line (e.g. "POST / HTTP/1.1").
-    if (path_and_query.empty())
-        path_and_query = "/";
 
     poco_request.setURI(path_and_query);
 
