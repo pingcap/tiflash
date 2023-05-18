@@ -29,8 +29,10 @@
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/FilterTransformOp.h>
+#include <Operators/PartialSortTransformOp.h>
 #include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
 #include <Operators/LimitTransformOp.h>
+#include <Operators/SharedQueue.h>
 #include <Operators/MergeSortBaseTransformOp.h>
 
 namespace DB
@@ -73,6 +75,43 @@ void executeUnion(
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
+    }
+}
+
+void restoreConcurrency(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t concurrency,
+    const LoggerPtr & log)
+{
+    if (concurrency > 1 && group_builder.concurrency() == 1)
+    {
+        auto shared_queue = SharedQueue::build(1, concurrency);
+        // sink op of builder must be empty.
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+        });
+        auto cur_header = group_builder.getCurrentHeader();
+        group_builder.addGroup();
+        for (size_t i = 0; i < concurrency; ++i)
+            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
+    }
+}
+
+void executeUnion(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const LoggerPtr & log)
+{
+    if (group_builder.concurrency() > 1)
+    {
+        auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+        });
+        auto cur_header = group_builder.getCurrentHeader();
+        group_builder.addGroup();
+        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
     }
 }
 
@@ -206,6 +245,61 @@ void executeLocalSort(
                 log->identifier(),
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
+                settings.max_block_size,
+                max_bytes_before_external_sort,
+                spill_config));
+        });
+    }
+}
+
+void executeFinalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    if (SortHelper::isSortByConstants(input_header, order_descr))
+    {
+        // For order by const col and has limit, we will generate LimitOperator directly.
+        if (limit)
+        {
+            auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_status, log->identifier(), global_limit));
+            });
+        }
+        // For order by const and doesn't has limit, do nothing here.
+    }
+    else
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
+        });
+
+        executeUnion(exec_status, group_builder, log);
+
+        const Settings & settings = context.getSettingsRef();
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
+        SpillConfig spill_config{
+            context.getTemporaryPath(),
+            fmt::format("{}_sort", log->identifier()),
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
+            context.getFileProvider()};
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
                 max_bytes_before_external_sort,
                 spill_config));

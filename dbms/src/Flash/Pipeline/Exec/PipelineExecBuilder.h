@@ -68,7 +68,7 @@ public:
         }
     }
 
-    std::vector<PipelineExecGroup> build();
+    PipelineExecGroup build();
 
     Block getCurrentHeader();
 

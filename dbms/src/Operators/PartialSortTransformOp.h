@@ -42,6 +42,8 @@ public:
 protected:
     OperatorStatus transformImpl(Block & block) override;
 
+    void transformHeaderImpl(Block & /*header_*/) override {}
+
 private:
     SortDescription order_desc;
     // 0 means no limit.

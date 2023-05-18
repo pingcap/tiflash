@@ -167,7 +167,7 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     addPlanNode(get_result_sink);
 }
 
-std::vector<PipelineExecGroup> Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
@@ -223,9 +223,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
     if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
-        // For fine grained mode, there should be only one group in the builder.
-        RUNTIME_CHECK(fine_grained_exec_group.size() == 1);
-        for (auto & pipeline_exec : fine_grained_exec_group.back())
+        for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }

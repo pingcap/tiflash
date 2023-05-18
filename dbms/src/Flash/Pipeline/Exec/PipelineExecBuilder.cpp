@@ -77,19 +77,17 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
         groups[i].insert(getCurGroup().end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
 }
 
-std::vector<PipelineExecGroup> PipelineExecGroupBuilder::build()
+PipelineExecGroup PipelineExecGroupBuilder::build()
 {
     RUNTIME_CHECK(groups.empty());
-    std::vector<PipelineExecGroup> ret;
+    PipelineExecGroup pipeline_exec_group;
     for (auto & group : groups)
     {
         RUNTIME_CHECK(!group.empty());
-        PipelineExecGroup pipeline_exec_group;
         for (auto & builder : group)
             pipeline_exec_group.push_back(builder.build());
-        ret.push_back(std::move(pipeline_exec_group));
     }
-    return ret;
+    return pipeline_exec_group;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()

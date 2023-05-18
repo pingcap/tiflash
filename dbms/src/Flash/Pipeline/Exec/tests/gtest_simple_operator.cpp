@@ -107,8 +107,8 @@ public:
             builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_status, "", result_handler));
         });
         auto result = group_builder.build();
-        assert(result.size() == 1 && result.back().size() == 1);
-        return std::move(result.back().back());
+        assert(result.size() == 1);
+        return std::move(result.back());
     }
 
     void executeAndAssert(

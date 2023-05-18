@@ -21,13 +21,10 @@ namespace DB
 void PlainPipelineEvent::scheduleImpl()
 {
     RUNTIME_CHECK(pipeline);
-    auto groups = pipeline->buildExecGroup(exec_status, context, concurrency);
-    for (auto & pipeline_exec_group : groups)
-    {
-        RUNTIME_CHECK(!pipeline_exec_group.empty());
-        for (auto & pipeline_exec : pipeline_exec_group)
-            addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
-    }
+    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
+    RUNTIME_CHECK(!pipeline_exec_group.empty());
+    for (auto & pipeline_exec : pipeline_exec_group)
+        addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
 }
 
 void PlainPipelineEvent::finishImpl()

@@ -41,6 +41,17 @@ void executeUnion(
     bool ignore_block = false,
     const String & extra_info = "");
 
+void restoreConcurrency(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t concurrency,
+    const LoggerPtr & log);
+
+void executeUnion(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const LoggerPtr & log);
+
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
     const NamesWithAliases & project_cols);
@@ -67,6 +78,14 @@ void orderStreams(
     const LoggerPtr & log);
 
 void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeFinalSort(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
