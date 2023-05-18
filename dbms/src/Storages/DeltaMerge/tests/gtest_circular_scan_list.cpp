@@ -22,8 +22,8 @@ class Node
 {
 public:
     explicit Node(uint64_t id_)
-        : id(id_)
-        , table_id(1)
+        : pool_id(id_)
+        , physical_table_id(1)
         , v(true)
     {}
 
@@ -31,22 +31,16 @@ public:
     {
         return v;
     }
-    uint64_t poolId() const
-    {
-        return id;
-    }
-    int64_t tableId() const
-    {
-        return table_id;
-    }
     void setInvalid()
     {
         v = false;
     }
 
+public:
+    uint64_t pool_id;
+    int64_t physical_table_id;
+
 private:
-    uint64_t id;
-    int64_t table_id;
     bool v;
 };
 
