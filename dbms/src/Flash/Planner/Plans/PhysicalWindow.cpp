@@ -106,7 +106,7 @@ void PhysicalWindow::buildPipelineExecGroup(
         builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
 
-    if (is_restore_concurrency)
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
         restoreConcurrency(exec_status, group_builder, concurrency, log);
 
     executeExpression(exec_status, group_builder, window_description.after_window, log);
