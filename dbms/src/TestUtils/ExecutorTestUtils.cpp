@@ -284,6 +284,7 @@ void ExecutorTest::enablePlanner(bool is_enable) const
 void ExecutorTest::enablePipeline(bool is_enable) const
 {
     context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
+    context.context->setSetting("enforce_enable_pipeline", is_enable ? "true" : "false");
 }
 
 // ywq todo rename

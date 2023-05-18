@@ -25,7 +25,7 @@
 
 namespace DB
 {
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 void MergeSortBaseTransformOp<do_partial_sort>::operatePrefix()
 {
     header_without_constants = getHeader();
@@ -37,14 +37,14 @@ void MergeSortBaseTransformOp<do_partial_sort>::operatePrefix()
     spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 void MergeSortBaseTransformOp<do_partial_sort>::operateSuffix()
 {
     if likely (merge_impl)
         merge_impl->readSuffix();
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 Block MergeSortBaseTransformOp<do_partial_sort>::getMergeOutput()
 {
     assert(merge_impl);
@@ -54,7 +54,7 @@ Block MergeSortBaseTransformOp<do_partial_sort>::getMergeOutput()
     return block;
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToMerge(Block & block)
 {
     assert(status == LocalSortStatus::PARTIAL);
@@ -76,7 +76,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToMerge(Blo
     return OperatorStatus::HAS_OUTPUT;
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToRestore()
 {
     assert(status == LocalSortStatus::PARTIAL);
@@ -104,7 +104,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToRestore()
     return OperatorStatus::IO;
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToSpill()
 {
     assert(status == LocalSortStatus::PARTIAL);
@@ -123,7 +123,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromPartialToSpill()
     return OperatorStatus::IO;
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromSpillToPartial()
 {
     assert(status == LocalSortStatus::SPILL);
@@ -135,7 +135,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::fromSpillToPartial()
     return OperatorStatus::NEED_INPUT;
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::transformImpl(Block & block)
 {
     switch (status)
@@ -168,7 +168,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::transformImpl(Block & 
     }
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::tryOutputImpl(Block & block)
 {
     switch (status)
@@ -202,7 +202,7 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::tryOutputImpl(Block & 
     }
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::executeIOImpl()
 {
     switch (status)
@@ -223,18 +223,18 @@ OperatorStatus MergeSortBaseTransformOp<do_partial_sort>::executeIOImpl()
     }
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 void MergeSortBaseTransformOp<do_partial_sort>::transformHeaderImpl(Block &)
 {
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 bool MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::hasData() const
 {
     return finished || block.has_value();
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 void MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::put(Block && ret)
 {
     assert(!hasData());
@@ -243,7 +243,7 @@ void MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::put(Block && ret
     block.emplace(std::move(ret));
 }
 
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 Block MergeSortBaseTransformOp<do_partial_sort>::RestoredResult::output()
 {
     if unlikely (finished)

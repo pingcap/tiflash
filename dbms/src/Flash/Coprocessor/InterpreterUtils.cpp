@@ -29,11 +29,11 @@
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/FilterTransformOp.h>
-#include <Operators/PartialSortTransformOp.h>
 #include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
 #include <Operators/LimitTransformOp.h>
-#include <Operators/SharedQueue.h>
 #include <Operators/MergeSortBaseTransformOp.h>
+#include <Operators/PartialSortTransformOp.h>
+#include <Operators/SharedQueue.h>
 
 namespace DB
 {

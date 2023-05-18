@@ -22,7 +22,7 @@
 namespace DB
 {
 /// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
-template<bool do_partial_sort>
+template <bool do_partial_sort>
 class MergeSortBaseTransformOp : public TransformOp
 {
 public:
