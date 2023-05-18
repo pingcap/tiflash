@@ -16,7 +16,6 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SegmentReadTransformAction.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -49,8 +48,6 @@ public:
         UInt64 max_version_,
         size_t expected_block_size_,
         ReadMode read_mode_,
-        const int extra_table_id_index,
-        const TableID physical_table_id,
         const String & req_id)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
@@ -61,15 +58,8 @@ public:
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
         , read_mode(read_mode_)
-        , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
     {
-        if (extra_table_id_index != InvalidColumnID)
-        {
-            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
-            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
-            header.insert(extra_table_id_index, col);
-        }
     }
 
     String getName() const override { return NAME; }
@@ -110,14 +100,8 @@ protected:
 
             if (res)
             {
-                if (action.transform(res))
-                {
-                    return res;
-                }
-                else
-                {
-                    continue;
-                }
+                total_rows += res.rows();
+                return res;
             }
             else
             {
@@ -131,7 +115,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "finish read {} rows from storage", action.totalRows());
+        LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
     }
 
 private:
@@ -144,13 +128,13 @@ private:
     const UInt64 max_version;
     const size_t expected_block_size;
     const ReadMode read_mode;
+    size_t total_rows = 0;
 
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
 
     SegmentPtr cur_segment;
-    SegmentReadTransformAction action;
 
     LoggerPtr log;
 };

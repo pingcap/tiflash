@@ -267,7 +267,7 @@ MetricsPrometheus::MetricsPrometheus(
             addr = "[" + listen_host + "]:" + metrics_port;
         else
             addr = listen_host + ":" + metrics_port;
-        if (context.getSecurityConfig()->hasTlsConfig())
+        if (context.getSecurityConfig()->hasTlsConfig() && !conf.getBool(status_disable_metrics_tls, false))
         {
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
             if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)

@@ -87,52 +87,6 @@ inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_conditi
 
 bool mayProbeSideExpandedAfterJoin(ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
 
-struct ProbeProcessInfo
-{
-    Block block;
-    size_t partition_index;
-    UInt64 max_block_size;
-    UInt64 min_result_block_size;
-    size_t start_row;
-    size_t end_row;
-    bool all_rows_joined_finish;
-
-    /// these should be inited before probe each block
-    bool prepare_for_probe_done = false;
-    ColumnPtr null_map_holder = nullptr;
-    ConstNullMapPtr null_map = nullptr;
-    /// Used with ANY INNER JOIN
-    std::unique_ptr<IColumn::Filter> filter = nullptr;
-    /// Used with ALL ... JOIN
-    std::unique_ptr<IColumn::Offsets> offsets_to_replicate = nullptr;
-
-    /// for hash probe
-    Columns materialized_columns;
-    ColumnRawPtrs key_columns;
-
-    /// for cross probe
-    Block result_block_schema;
-    std::vector<size_t> right_column_index;
-    size_t right_rows_to_be_added_when_matched = 0;
-
-    explicit ProbeProcessInfo(UInt64 max_block_size_)
-        : partition_index(0)
-        , max_block_size(max_block_size_)
-        , min_result_block_size((max_block_size + 1) / 2)
-        , start_row(0)
-        , end_row(0)
-        , all_rows_joined_finish(true){};
-
-    void resetBlock(Block && block_, size_t partition_index_ = 0);
-    void updateStartRow();
-    void prepareForHashProbe(const Names & key_names, const String & filter_column, ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness);
-    void prepareForCrossProbe(
-        const String & filter_column,
-        ASTTableJoin::Kind kind,
-        ASTTableJoin::Strictness strictness,
-        const Block & sample_block_with_columns_to_add,
-        const BlocksList & right_blocks);
-};
 struct JoinBuildInfo
 {
     bool enable_fine_grained_shuffle;
