@@ -21,6 +21,11 @@
 
 namespace DB
 {
+/**
+ * SharedQueueSourceOp <────┐                    ┌───── SharedQueueSinkOp
+ * SharedQueueSourceOp <────┼─── SharedQueue <───┼───── SharedQueueSinkOp
+ * SharedQueueSourceOp <────┘                    └───── SharedQueueSinkOp
+*/
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 class SharedQueue
