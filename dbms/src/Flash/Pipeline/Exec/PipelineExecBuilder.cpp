@@ -79,7 +79,7 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(groups.empty());
+    RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
     for (auto & group : groups)
     {

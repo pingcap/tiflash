@@ -41,7 +41,6 @@ public:
         groups.emplace_back();
     }
 
-    // A Group generates a set of pipeline_execs running in parallel.
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
     BuilderGroup & getCurGroup() { return groups.back(); }
@@ -73,6 +72,7 @@ public:
     Block getCurrentHeader();
 
 private:
+    // groups generates a set of pipeline_execs running in parallel.
     std::vector<BuilderGroup> groups;
 };
 } // namespace DB
