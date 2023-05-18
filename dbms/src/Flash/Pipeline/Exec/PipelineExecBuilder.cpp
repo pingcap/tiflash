@@ -74,7 +74,7 @@ void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
     RUNTIME_CHECK(groups.size() == other.groups.size());
     size_t group_num = groups.size();
     for (size_t i = 0; i < group_num; ++i)
-        groups[i].insert(getCurGroup().end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
+        groups[i].insert(groups[i].end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
