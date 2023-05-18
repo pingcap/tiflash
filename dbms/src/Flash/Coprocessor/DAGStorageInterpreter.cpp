@@ -334,7 +334,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
 
     if (group_builder.empty())
     {
-        group_builder.addGroup(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
+        group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
         // reset remote_read_start_index for null_source_if_empty.
         remote_read_start_index = 1;
     }
@@ -637,7 +637,7 @@ void DAGStorageInterpreter::buildRemoteExec(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
-        group_builder.addGroup(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
+        group_builder.addConcurrency(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
         task_start = task_end;
     }
 

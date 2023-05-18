@@ -43,7 +43,7 @@ struct PipelineExecGroupBuilder
 
     bool empty() { return group.empty(); }
 
-    void addGroup(SourceOpPtr && source);
+    void addConcurrency(SourceOpPtr && source);
 
     void reset();
 

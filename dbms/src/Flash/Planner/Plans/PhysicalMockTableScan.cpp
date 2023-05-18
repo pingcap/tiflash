@@ -133,7 +133,7 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
     {
         for (const auto & stream : mock_streams)
         {
-            group_builder.addGroup(
+            group_builder.addConcurrency(
                 std::make_unique<BlockInputStreamSourceOp>(
                     exec_status,
                     log->identifier(),

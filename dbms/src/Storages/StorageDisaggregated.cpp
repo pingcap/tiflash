@@ -352,7 +352,7 @@ void StorageDisaggregated::buildReceiverSources(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        group_builder.addGroup(
+        group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
                 exec_status,
                 log->identifier(),

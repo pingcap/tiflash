@@ -1184,7 +1184,7 @@ void DeltaMergeStore::read(
     {
         if (enable_read_thread)
         {
-            group_builder.addGroup(
+            group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
                     exec_status,
                     read_task_pool,
@@ -1194,7 +1194,7 @@ void DeltaMergeStore::read(
         }
         else
         {
-            group_builder.addGroup(
+            group_builder.addConcurrency(
                 std::make_unique<DMSegmentThreadSourceOp>(
                     exec_status,
                     dm_context,

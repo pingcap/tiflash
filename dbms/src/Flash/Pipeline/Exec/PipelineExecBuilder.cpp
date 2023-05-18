@@ -58,7 +58,7 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::addGroup(SourceOpPtr && source)
+void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
     group.emplace_back();
     group.back().setSourceOp(std::move(source));

@@ -72,7 +72,7 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     for (auto & mock_stream : mock_streams)
-        group_builder.addGroup(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_stream));
+        group_builder.addConcurrency(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_stream));
 }
 
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)

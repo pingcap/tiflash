@@ -34,7 +34,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
         auto restorers = aggregate_context->buildSharedRestorer(exec_status);
         for (auto & restorer : restorers)
         {
-            group_builder.addGroup(
+            group_builder.addConcurrency(
                 std::make_unique<AggregateRestoreSourceOp>(
                     exec_status,
                     aggregate_context,
@@ -47,7 +47,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
         aggregate_context->initConvergent();
         for (size_t index = 0; index < aggregate_context->getConvergentConcurrency(); ++index)
         {
-            group_builder.addGroup(
+            group_builder.addConcurrency(
                 std::make_unique<AggregateConvergentSourceOp>(
                     exec_status,
                     aggregate_context,

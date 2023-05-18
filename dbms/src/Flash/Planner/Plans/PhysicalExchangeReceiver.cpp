@@ -104,7 +104,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
 
     for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
     {
-        group_builder.addGroup(
+        group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
                 exec_status,
                 log->identifier(),
