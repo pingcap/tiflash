@@ -70,7 +70,7 @@ public:
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
 
-    PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
+    std::vector<PipelineExecGroup> buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 

@@ -66,21 +66,30 @@ void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 
 void PipelineExecGroupBuilder::reset()
 {
-    getCurGroup().clear();
+    groups.clear();
 }
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
 {
-    getCurGroup().insert(getCurGroup().end(), std::make_move_iterator(other.getCurGroup().begin()), std::make_move_iterator(other.getCurGroup().end()));
+    RUNTIME_CHECK(groups.size() == other.groups.size());
+    size_t group_num = groups.size();
+    for (size_t i = 0; i < group_num; ++i)
+        groups[i].insert(getCurGroup().end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
 }
 
-PipelineExecGroup PipelineExecGroupBuilder::build()
+std::vector<PipelineExecGroup> PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(!getCurGroup().empty());
-    PipelineExecGroup pipeline_exec_group;
-    for (auto & builder : getCurGroup())
-        pipeline_exec_group.push_back(builder.build());
-    return pipeline_exec_group;
+    RUNTIME_CHECK(groups.empty());
+    std::vector<PipelineExecGroup> ret;
+    for (auto & group : groups)
+    {
+        RUNTIME_CHECK(!group.empty());
+        PipelineExecGroup pipeline_exec_group;
+        for (auto & builder : group)
+            pipeline_exec_group.push_back(builder.build());
+        ret.push_back(std::move(pipeline_exec_group));
+    }
+    return ret;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()

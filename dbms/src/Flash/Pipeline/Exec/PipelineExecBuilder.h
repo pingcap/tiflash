@@ -36,10 +36,17 @@ struct PipelineExecBuilder
 class PipelineExecGroupBuilder
 {
 public:
+    PipelineExecGroupBuilder()
+    {
+        groups.emplace_back();
+    }
+
     // A Group generates a set of pipeline_execs running in parallel.
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
-    BuilderGroup & getCurGroup() { return group; }
+    BuilderGroup & getCurGroup() { return groups.back(); }
+
+    void addGroup() { groups.emplace_back(); }
 
     size_t concurrency() { return getCurGroup().size(); }
 
@@ -61,11 +68,11 @@ public:
         }
     }
 
-    PipelineExecGroup build();
+    std::vector<PipelineExecGroup> build();
 
     Block getCurrentHeader();
 
 private:
-    BuilderGroup group;
+    std::vector<BuilderGroup> groups;
 };
 } // namespace DB
