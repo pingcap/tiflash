@@ -570,7 +570,17 @@ Block vstackBlocks(Blocks && blocks)
     for (size_t i = 0; i < first_block.columns(); ++i)
     {
         dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
-        dst_columns[i]->reserve(result_rows);
+        if (first_block.getByPosition(i).type->haveMaximumSizeOfValue())
+            dst_columns[i]->reserve(result_rows);
+        else
+        {
+            size_t total_memory = 0;
+            for (const auto & block : blocks)
+            {
+                total_memory += block.getByPosition(i).column->byteSize();
+            }
+            dst_columns[i]->reserveWithTotalMemoryHint(result_rows, total_memory);
+        }
     }
 
     for (size_t i = 1; i < blocks.size(); ++i)

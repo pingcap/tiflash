@@ -324,6 +324,10 @@ public:
     /// It affects performance only (not correctness).
     virtual void reserve(size_t /*n*/){};
 
+    /// Reserve memory for specified amount of elements with a total memory hint, used for
+    /// columns with non-fixed size elements
+    virtual void reserveWithTotalMemoryHint(size_t n, Int64 /*total_memory_hint*/) { reserve(n); };
+
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
 
