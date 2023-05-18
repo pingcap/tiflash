@@ -42,6 +42,8 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
+    bool isAwaitable() const override { return true; }
+
     void transformHeaderImpl(Block & header_) override;
 
     void operateSuffix() override;
