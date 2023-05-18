@@ -70,7 +70,6 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-
     void read(
         PipelineExecutorStatus & exec_status_,
         PipelineExecGroupBuilder & group_builder,

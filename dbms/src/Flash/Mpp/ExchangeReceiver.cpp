@@ -590,12 +590,13 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
         else
         {
             LOG_DEBUG(exc_log, "refined local tunnel is enabled");
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            String req_info = fmt::format("local tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            LoggerPtr local_log = Logger::get(fmt::format("{} {}", exc_log->identifier(), req_info));
 
             LocalRequestHandler local_request_handler(
                 getMemoryTracker(),
-                [this](bool meet_error, const String & local_err_msg) {
-                    this->connectionDone(meet_error, local_err_msg, exc_log);
+                [this, log = local_log](bool meet_error, const String & local_err_msg) {
+                    this->connectionDone(meet_error, local_err_msg, log);
                 },
                 [this]() {
                     this->connectionLocalDone();
@@ -603,7 +604,7 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                 [this]() {
                     this->addLocalConnectionNum();
                 },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+                ReceiverChannelWriter(&(getMsgChannels()), req_info, local_log, getDataSizeInQueue(), ReceiverMode::Local));
 
             rpc_context->establishMPPConnectionLocalV2(
                 req,
