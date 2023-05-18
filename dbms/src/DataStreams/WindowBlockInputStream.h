@@ -79,6 +79,7 @@ private:
 
     // distance is left - right.
     Int64 distance(RowNumber left, RowNumber right);
+
 public:
     WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
 

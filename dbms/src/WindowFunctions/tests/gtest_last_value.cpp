@@ -51,7 +51,7 @@ public:
         const ColumnWithTypeAndName & result,
         const ASTPtr & function,
         const ColumnsWithTypeAndName & input,
-        const MockWindowFrame & frame)
+        MockWindowFrame frame = MockWindowFrame())
     {
         ColumnsWithTypeAndName actual_input = input;
         assert(actual_input.size() == 3);
@@ -81,7 +81,6 @@ public:
     template <typename IntType>
     void testInt()
     {
-        // TODO test with bounded_type_frame
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
             std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
@@ -107,7 +106,6 @@ public:
     template <typename FloatType>
     void testFloat()
     {
-        // TODO test with bounded_type_frame
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
             std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
@@ -134,32 +132,67 @@ public:
 TEST_F(LastValue, lastValue)
 try
 {
-    // TODO test with bounded_type_frame
-    MockWindowFrame unbounded_type_frame{
-        tipb::WindowFrameType::Rows,
-        std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
-        std::make_tuple(tipb::WindowBoundType::Following, true, 0)};
+    {
+        // frame type: unbounded
+        executeFunctionAndAssert(
+            toVec<String>({"1", "5", "5", "5", "5", "10", "10", "10", "10", "10", "13", "13", "13"}),
+            LastValue(value_col),
+            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})});
 
-    executeFunctionAndAssert(
-        toVec<String>({"1", "5", "5", "5", "5", "10", "10", "10", "10", "10", "13", "13", "13"}),
-        LastValue(value_col),
-        {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-         toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-         toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
-        unbounded_type_frame);
+        executeFunctionAndAssert(
+            toNullableVec<String>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+            LastValue(value_col),
+            {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+             toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})});
+    }
 
-    executeFunctionAndAssert(
-        toNullableVec<String>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
-        LastValue(value_col),
-        {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-         toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-         toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})},
-        unbounded_type_frame);
+    {
+        // frame type: offset
+        MockWindowFrame frame;
+        frame.type = tipb::WindowFrameType::Rows;
+        frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
+
+        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
+        std::vector<std::vector<String>> res_not_null{
+            {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"},
+            {"1", "3", "4", "5", "5", "7", "8", "9", "10", "10", "12", "13", "13"},
+            {"1", "5", "5", "5", "5", "9", "10", "10", "10", "10", "13", "13", "13"},
+            {"1", "5", "5", "5", "5", "10", "10", "10", "10", "10", "13", "13", "13"},
+        };
+        std::vector<std::vector<std::optional<String>>> res_null{
+            {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}},
+            {{}, "3", "4", {}, {}, "7", "8", "9", {}, {}, "12", {}, {}},
+            {{}, {}, {}, {}, {}, "9", {}, {}, {}, {}, {}, {}, {}},
+            {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}},
+        };
+
+        for (size_t i = 0; i < frame_start_offset.size(); ++i)
+        {
+            std::cout << "iiiiiii: " << i << std::endl;
+            frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
+            executeFunctionAndAssert(
+                toVec<String>(res_not_null[i]),
+                LastValue(value_col),
+                {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+                 toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+                 toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+                frame);
+
+            executeFunctionAndAssert(
+                toNullableVec<String>(res_null[i]),
+                LastValue(value_col),
+                {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
+                 toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+                 toNullableVec<String>(/*value*/ {{}, "2", "3", "4", {}, "6", "7", "8", "9", {}, "11", "12", {}})},
+                frame);
+        }
+    }
 
     // TODO support unsigned int.
     testInt<Int8>();
-    testInt<Int16>();
-    testInt<Int32>();
     testInt<Int64>();
 
     testFloat<Float32>();

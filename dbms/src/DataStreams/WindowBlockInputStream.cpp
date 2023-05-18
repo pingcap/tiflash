@@ -311,6 +311,11 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, Int64 n)
 {
+    // Range of rows is [frame_start, frame_end),
+    // and frame_end position is behind the position of the last frame row.
+    // So we need the ++n.
+    ++n;
+
     // Distance is too long and partition_end is the longest distance.
     auto dist = distance(partition_end, current_row);
     assert(dist - 1 >= 0);
@@ -793,7 +798,7 @@ RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num)
     }
 
     --prev_row_num.block;
-    assert(prev_row_num.block - first_block_number < window_blocks.size());
+    assert(static_cast<Int64>(prev_row_num.block - first_block_number) < static_cast<Int64>(window_blocks.size()));
     const auto new_block_rows = blockAt(prev_row_num).rows;
     prev_row_num.row = new_block_rows - 1;
     return prev_row_num;

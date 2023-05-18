@@ -14,9 +14,10 @@
 
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <optional>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
+#include <optional>
 
 namespace DB::tests
 {
@@ -122,15 +123,15 @@ try
             toVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
             FirstValue(value_col),
             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-            toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-            toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})});
+             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})});
 
         executeFunctionAndAssert(
             toNullableVec<String>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
             FirstValue(value_col),
             {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-            toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-            toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})});
+             toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+             toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})});
     }
 
     {
@@ -144,14 +145,12 @@ try
             {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"},
             {"1", "2", "2", "3", "4", "6", "6", "7", "8", "9", "11", "11", "12"},
             {"1", "2", "2", "2", "2", "6", "6", "6", "6", "7", "11", "11", "11"},
-            {"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}
-        };
+            {"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}};
         std::vector<std::vector<std::optional<String>>> res_null{
             {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"},
             {{}, {}, {}, "3", "4", {}, {}, "7", "8", "9", {}, {}, "12"},
             {{}, {}, {}, {}, {}, {}, {}, {}, {}, "7", {}, {}, {}},
-            {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}
-        };
+            {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}};
 
         for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
@@ -161,16 +160,16 @@ try
                 toVec<String>(res_not_null[i]),
                 FirstValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-                toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-                toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
+                 toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+                 toVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"})},
                 frame);
 
             executeFunctionAndAssert(
                 toNullableVec<String>(res_null[i]),
                 FirstValue(value_col),
                 {toNullableVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-                toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-                toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})},
+                 toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+                 toNullableVec<String>(/*value*/ {{}, {}, "3", "4", "5", {}, "7", "8", "9", "10", {}, "12", "13"})},
                 frame);
         }
     }
