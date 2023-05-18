@@ -279,6 +279,8 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 void ExecutorTest::enablePlanner(bool is_enable) const
 {
     context.context->setSetting("enable_planner", is_enable ? "true" : "false");
+    if (!is_enable)
+        enablePipeline(false);
 }
 
 void ExecutorTest::enablePipeline(bool is_enable) const
