@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/FailPointUtils.h>
 
 namespace DB
 {
 namespace tests
 {
-void initRandomFailPoint(const String & config_str)
+void initRandomFailPoint(const std::string & config_str)
 {
     fiu_init(0); // init failpoint
     auto config = loadConfigFromString(config_str);
     FailPointHelper::initRandomFailPoints(*config, Logger::get("test"));
 }
 
-void disableRandomFailPoint(const String & config_str)
+void disableRandomFailPoint(const std::string & config_str)
 {
     auto config = loadConfigFromString(config_str);
     FailPointHelper::disableRandomFailPoints(*config, Logger::get("test"));

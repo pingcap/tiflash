@@ -20,7 +20,7 @@ namespace DB
 {
 namespace tests
 {
-void initRandomFailPoint(const String & config_str);
-void disableRandomFailPoint(const String & config_str);
+void initRandomFailPoint(const std::string & config_str);
+void disableRandomFailPoint(const std::string & config_str);
 } // namespace tests
 } // namespace DB
