@@ -73,6 +73,16 @@ public:
 
 private:
     // groups generates a set of pipeline_execs running in parallel.
+    //
+    // group1  -->   group2  -->   cur_group
+    // exec1         exec1         exec1
+    // exec2         exec2         exec2
+    // exec3                       exec3
+    //                             exec4
+    //
+    // Only `cur_group` will be modified, other groups are already stable.
+    // The concurrency level of different groups can be different. Usually, a shared_queue is used to connect different groups.
+    // This way, different operators with different levels of concurrency can be executed together in a pipeline.
     std::vector<BuilderGroup> groups;
 };
 } // namespace DB

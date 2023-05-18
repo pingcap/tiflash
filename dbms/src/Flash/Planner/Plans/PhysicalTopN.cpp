@@ -75,7 +75,12 @@ void PhysicalTopN::buildPipelineExecGroup(
 {
     executeExpression(exec_status, group_builder, before_sort_actions, log);
 
-    executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
+    // If the `limit` is very large, using a `final sort` can avoid outputting excessively large amounts of data.
+    // TODO find a suitable threshold is necessary; 10000 is just a value picked without much consideration.
+    if (group_builder.concurrency() * limit <= 10000)
+        executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
+    else
+        executeFinalSort(exec_status, group_builder, order_descr, limit, context, log);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)
