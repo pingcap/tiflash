@@ -313,46 +313,47 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
 {
     // Range of rows is [frame_start, frame_end),
     // and frame_end position is behind the position of the last frame row.
-    // So we need the ++n.
+    // So we need to ++n.
     ++n;
 
-    // Distance is too long and partition_end is the longest distance.
     auto dist = distance(partition_end, current_row);
-    assert(dist - 1 >= 0);
-    if (dist - 1 <= n)
+    assert(dist >= 1);
+
+    // Distance is too long and partition_end is the longest distance.
+    if (dist <= n)
         return std::make_tuple(partition_end, partition_ended);
 
     // Now, frame_end is impossible to reach to partition_end.
-    RowNumber result_row = current_row;
-    auto & block = blockAt(result_row);
+    RowNumber frame_end_row = current_row;
+    auto & block = blockAt(frame_end_row);
 
     // The step happens only in a block
-    if (static_cast<Int64>(block.rows - result_row.row - 1) >= n)
+    if (static_cast<Int64>(block.rows - frame_end_row.row - 1) >= n)
     {
-        result_row.row += n;
-        return std::make_tuple(result_row, partition_ended);
+        frame_end_row.row += n;
+        return std::make_tuple(frame_end_row, partition_ended);
     }
 
     // The step happens between blocks
-    ++result_row.block;
-    result_row.row = 0;
-    n -= block.rows - result_row.row;
+    n -= block.rows - frame_end_row.row;
+    ++frame_end_row.block;
+    frame_end_row.row = 0;
     while (n > 0)
     {
-        auto block_rows = static_cast<Int64>(blockAt(result_row).rows);
+        auto block_rows = static_cast<Int64>(blockAt(frame_end_row).rows);
         if (n >= block_rows)
         {
-            result_row.row = 0;
-            ++result_row.block;
+            frame_end_row.row = 0;
+            ++frame_end_row.block;
             n -= block_rows;
             continue;
         }
 
-        result_row.row += n;
+        frame_end_row.row += n;
         n = 0;
     }
 
-    return std::make_tuple(result_row, partition_ended);
+    return std::make_tuple(frame_end_row, partition_ended);
 }
 
 Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
