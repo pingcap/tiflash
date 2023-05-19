@@ -432,6 +432,13 @@ void ColumnNullable::reserve(size_t n)
     getNullMapData().reserve(n);
 }
 
+void ColumnNullable::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
+{
+    getNullMapColumn().reserve(n);
+    total_memory_hint -= n * sizeof(UInt8);
+    getNestedColumn().reserveWithTotalMemoryHint(n, total_memory_hint);
+}
+
 size_t ColumnNullable::byteSize() const
 {
     return getNestedColumn().byteSize() + getNullMapColumn().byteSize();

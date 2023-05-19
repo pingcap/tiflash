@@ -546,6 +546,7 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
 }
 
 /// join blocks by rows
+template <bool check_reserve>
 Block vstackBlocks(Blocks && blocks)
 {
     if (blocks.empty())
@@ -570,7 +571,23 @@ Block vstackBlocks(Blocks && blocks)
     for (size_t i = 0; i < first_block.columns(); ++i)
     {
         dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
-        dst_columns[i]->reserve(result_rows);
+        if (first_block.getByPosition(i).type->haveMaximumSizeOfValue())
+            dst_columns[i]->reserve(result_rows);
+        else
+        {
+            size_t total_memory = 0;
+            for (const auto & block : blocks)
+            {
+                total_memory += block.getByPosition(i).column->byteSize();
+            }
+            dst_columns[i]->reserveWithTotalMemoryHint(result_rows, total_memory);
+        }
+    }
+    size_t total_allocated_bytes [[maybe_unused]] = 0;
+    if constexpr (check_reserve)
+    {
+        for (const auto & column : dst_columns)
+            total_allocated_bytes += column->allocatedBytes();
     }
 
     for (size_t i = 1; i < blocks.size(); ++i)
@@ -583,6 +600,14 @@ Block vstackBlocks(Blocks && blocks)
                 dst_columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
             }
         }
+    }
+
+    if constexpr (check_reserve)
+    {
+        size_t updated_total_allocated_bytes = 0;
+        for (const auto & column : dst_columns)
+            updated_total_allocated_bytes += column->allocatedBytes();
+        RUNTIME_CHECK_MSG(total_allocated_bytes == updated_total_allocated_bytes, "vstackBlock's reserve does not reserve enough bytes");
     }
     return first_block.cloneWithColumns(std::move(dst_columns));
 }
@@ -697,5 +722,8 @@ void Block::updateHash(SipHash & hash) const
         for (const auto & col : data)
             col.column->updateHashWithValue(row_no, hash);
 }
+
+template Block vstackBlocks<false>(Blocks && blocks);
+template Block vstackBlocks<true>(Blocks && blocks);
 
 } // namespace DB
