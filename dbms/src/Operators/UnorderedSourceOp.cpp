@@ -25,7 +25,6 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
         {
             std::swap(block, t_block.value());
             t_block.reset();
-            action.transform(block);
         }
     }
     return await_status;
