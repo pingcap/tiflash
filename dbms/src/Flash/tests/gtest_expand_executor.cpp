@@ -124,7 +124,6 @@ try
     /// data flow: TiFlash isn't aware of the operation sequence, this filter here will be run before expand does just like the second test case above.
     /// this case is only succeed under planner-disabled mode.
     enablePlanner(false);
-    enablePipeline(false);
     ColumnsWithTypeAndName expect{toNullableVec<String>({"banana", {}}),
                                   toNullableVec<String>({{}, "banana"}),
                                   toVec<UInt64>({1, 2})};
