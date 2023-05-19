@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 struct SpilledFileInfo
 {
     String path;
@@ -35,12 +34,13 @@ struct SpilledFileInfo
 class SpilledFilesInputStream : public IProfilingBlockInputStream
 {
 public:
-    SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version);
+    SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos, const Block & header, const std::vector<size_t> & const_column_indexes, const FileProviderPtr & file_provider, Int64 max_supported_spill_version);
     Block getHeader() const override;
     String getName() const override;
 
 protected:
     Block readImpl() override;
+    Block readInternal();
 
 private:
     struct SpilledFileStream
@@ -68,6 +68,7 @@ private:
     std::vector<SpilledFileInfo> spilled_file_infos;
     size_t current_reading_file_index;
     Block header;
+    std::vector<size_t> const_column_indexes;
     FileProviderPtr file_provider;
     Int64 max_supported_spill_version;
     std::unique_ptr<SpilledFileStream> current_file_stream;

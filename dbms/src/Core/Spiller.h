@@ -117,6 +117,7 @@ private:
     const UInt64 partition_num;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     const Block input_schema;
+    std::vector<size_t> const_column_indexes;
     const LoggerPtr logger;
     std::mutex spill_finished_mutex;
     bool spill_finished = false;
