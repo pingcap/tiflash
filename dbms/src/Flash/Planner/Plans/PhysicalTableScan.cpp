@@ -77,28 +77,31 @@ void PhysicalTableScan::buildPipeline(
     Context & context,
     PipelineExecutorStatus & exec_status)
 {
-    storage_interpreter = std::make_unique<DAGStorageInterpreter>(
-        context,
-        tidb_table_scan,
-        filter_conditions,
-        context.getMaxStreams());
-    source_ops = storage_interpreter->execute(exec_status);
+    // For building PipelineExec in compile time.
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        disaggregated_tiflash_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        storage_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+    }
+
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }
 
 void PhysicalTableScan::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorStatus & /*exec_status*/,
     PipelineExecGroupBuilder & group_builder,
-    Context &,
-    size_t)
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
-    storage_interpreter->executeSuffix(exec_status, group_builder);
-    buildProjection(exec_status, group_builder, storage_interpreter->analyzer->getCurrentInputColumns());
+    assert(group_builder.empty());
+    group_builder = std::move(pipeline_exec_builder);
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)

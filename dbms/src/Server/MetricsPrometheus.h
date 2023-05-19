@@ -43,6 +43,7 @@ private:
     static constexpr auto status_metrics_interval = "status.metrics_interval";
     static constexpr auto status_metrics_addr = "status.metrics_addr";
     static constexpr auto status_metrics_port = "status.metrics_port";
+    static constexpr auto status_disable_metrics_tls = "status.disable_metrics_tls";
 
     void run();
 
