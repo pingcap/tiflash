@@ -31,7 +31,7 @@
 #include <Operators/FilterTransformOp.h>
 #include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
 #include <Operators/LimitTransformOp.h>
-#include <Operators/MergeSortBaseTransformOp.h>
+#include <Operators/MergeSortTransformOp.h>
 #include <Operators/PartialSortTransformOp.h>
 #include <Operators/SharedQueue.h>
 
@@ -230,6 +230,13 @@ void executeLocalSort(
     }
     else
     {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
+        });
         const Settings & settings = context.getSettingsRef();
         size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
         SpillConfig spill_config{
@@ -240,11 +247,11 @@ void executeLocalSort(
             settings.max_spilled_bytes_per_file,
             context.getFileProvider()};
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(
+            builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
                 exec_status,
                 log->identifier(),
                 order_descr,
-                limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
+                limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
                 settings.max_block_size,
                 max_bytes_before_external_sort,
                 spill_config));
