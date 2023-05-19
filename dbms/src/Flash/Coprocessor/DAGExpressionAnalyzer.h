@@ -142,7 +142,7 @@ public:
     // may_need_add_cast_column is used to avoid adding extra cast to columns which don't need it, like virtual columns.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
-        const std::vector<bool> & may_need_add_cast_column,
+        const std::vector<UInt8> & may_need_add_cast_column,
         const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
@@ -200,7 +200,7 @@ public:
 
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
-        const std::vector<bool> & may_need_add_cast_column,
+        const std::vector<UInt8> & may_need_add_cast_column,
         const ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST

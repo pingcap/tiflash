@@ -40,6 +40,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -900,7 +901,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 
 std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
-    const std::vector<bool> & may_need_add_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
@@ -947,7 +948,7 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
 
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
-    const std::vector<bool> & may_need_add_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const TiDBTableScan & table_scan)
 {
     auto & step = initAndGetLastStep(chain);

@@ -180,7 +180,7 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
 // <has_cast, extra_cast, project_for_remote_read>
 std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const std::vector<bool> & may_need_add_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const TiDBTableScan & table_scan)
 {
     // if no column need to add cast, return directly
@@ -1274,7 +1274,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, std::vector<bool>> DAGStorageInterpreter::getColumnsForTableScan()
+std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableScan()
 {
     // Get handle column name.
     String handle_column_name = MutableSupport::tidb_pk_column_name;
@@ -1312,7 +1312,7 @@ std::tuple<Names, std::vector<bool>> DAGStorageInterpreter::getColumnsForTableSc
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
         getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
-    std::vector<bool> may_need_add_cast_column_tmp;
+    std::vector<UInt8> may_need_add_cast_column_tmp;
     may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
     // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
     for (const auto & col : table_scan.getColumns())

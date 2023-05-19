@@ -24,7 +24,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/kvrpcpb.pb.h>
 
-#include <algorithm>
 
 namespace DB
 {
@@ -389,7 +388,7 @@ void StorageDisaggregated::filterConditions(
 void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
     // If the column is not in the columns of pushed down filter, append a cast to the column.
-    std::vector<bool> may_need_add_cast_column;
+    std::vector<UInt8> may_need_add_cast_column;
     may_need_add_cast_column.reserve(table_scan.getColumnSize());
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
