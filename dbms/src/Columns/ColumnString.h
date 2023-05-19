@@ -340,6 +340,8 @@ public:
 
     void reserve(size_t n) override;
 
+    void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
+
     void getExtremes(Field & min, Field & max) const override;
 
 
