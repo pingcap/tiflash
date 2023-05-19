@@ -99,7 +99,7 @@ private:
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::tuple<Names, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
+    std::tuple<Names, std::vector<bool>> getColumnsForTableScan();
 
     std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
@@ -135,7 +135,9 @@ private:
     void executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
 private:
-    std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
+    /// Normally, time and timestamp(when timezone is not UTC) type columns need to be casted after table scan.
+    /// But handle column and virtual column needn't to be casted, we use may_need_add_cast_column to record them.
+    std::vector<bool> may_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
 
