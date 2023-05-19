@@ -86,7 +86,7 @@ public:
         {
             if (unit.pool != nullptr)
             {
-                ids.push_back(unit.pool->poolId());
+                ids.push_back(unit.pool->pool_id);
             }
         }
         return ids;
@@ -96,7 +96,7 @@ public:
     {
         for (const auto & unit : units)
         {
-            if (unit.pool != nullptr && unit.pool->poolId() == pool_id)
+            if (unit.pool != nullptr && unit.pool->pool_id == pool_id)
             {
                 return true;
             }
@@ -121,7 +121,7 @@ private:
             // `MergedUnit.stream` must be released explicitly for updating memory statistics of `MemoryTracker`.
             auto & [pool, task, stream] = units[i];
             {
-                MemoryTrackerSetter setter(true, pool->getMemoryTracker().get());
+                MemoryTrackerSetter setter(true, pool->mem_tracker.get());
                 task = nullptr;
                 stream = nullptr;
             }

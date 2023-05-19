@@ -22,8 +22,8 @@ class Node
 {
 public:
     explicit Node(uint64_t id_)
-        : id(id_)
-        , table_id(1)
+        : pool_id(id_)
+        , physical_table_id(1)
         , v(true)
     {}
 
@@ -31,22 +31,16 @@ public:
     {
         return v;
     }
-    uint64_t poolId() const
-    {
-        return id;
-    }
-    int64_t tableId() const
-    {
-        return table_id;
-    }
     void setInvalid()
     {
         v = false;
     }
 
+public:
+    uint64_t pool_id;
+    int64_t physical_table_id;
+
 private:
-    uint64_t id;
-    int64_t table_id;
     bool v;
 };
 
@@ -79,7 +73,7 @@ TEST(CircularScanListTest, Normal)
     for (uint64_t i = 0; i < 20; i++)
     {
         auto sp = lst.next();
-        ASSERT_EQ(sp->poolId(), i % 10);
+        ASSERT_EQ(sp->pool_id, i % 10);
     }
 
     lst.get(1)->setInvalid();
@@ -96,7 +90,7 @@ TEST(CircularScanListTest, Normal)
     for (uint64_t i = 0; i < 20; i++)
     {
         auto sp = lst.next();
-        ASSERT_EQ(sp->poolId(), i % 10);
+        ASSERT_EQ(sp->pool_id, i % 10);
     }
 
     nodes.erase(1);
@@ -107,7 +101,7 @@ TEST(CircularScanListTest, Normal)
     for (uint64_t i = 0; i < 20; i++)
     {
         auto sp = lst.next();
-        ASSERT_EQ(sp->poolId(), valid_ids[i % valid_ids.size()]);
+        ASSERT_EQ(sp->pool_id, valid_ids[i % valid_ids.size()]);
     }
 
     {
@@ -137,8 +131,8 @@ TEST(CircularScanListTest, Valid)
     auto p1 = std::make_shared<Node>(1);
     l.add(p1);
 
-    ASSERT_EQ(l.next()->poolId(), 1);
-    ASSERT_EQ(l.next()->poolId(), 1);
+    ASSERT_EQ(l.next()->pool_id, 1);
+    ASSERT_EQ(l.next()->pool_id, 1);
 
     l.next()->setInvalid();
     p1.reset();
@@ -148,8 +142,8 @@ TEST(CircularScanListTest, Valid)
     auto p2 = std::make_shared<Node>(2);
     l.add(p2);
 
-    ASSERT_EQ(l.next()->poolId(), 2);
-    ASSERT_EQ(l.next()->poolId(), 2);
+    ASSERT_EQ(l.next()->pool_id, 2);
+    ASSERT_EQ(l.next()->pool_id, 2);
 }
 
 TEST(CircularScanListTest, ScheduleInvalid)
@@ -189,17 +183,17 @@ TEST(CircularScanListTest, ScheduleInvalid)
         // Tasks can be scheduled.
         auto n1_1 = l.next();
         ASSERT_NE(n1_1, nullptr);
-        ASSERT_EQ(n1_1->poolId(), 1);
+        ASSERT_EQ(n1_1->pool_id, 1);
         ASSERT_FALSE(n1_1->valid());
 
         auto n2_1 = l.next();
         ASSERT_NE(n2_1, nullptr);
-        ASSERT_EQ(n2_1->poolId(), 2);
+        ASSERT_EQ(n2_1->pool_id, 2);
         ASSERT_FALSE(n2_1->valid());
 
         auto n3_1 = l.next();
         ASSERT_NE(n3_1, nullptr);
-        ASSERT_EQ(n3_1->poolId(), 3);
+        ASSERT_EQ(n3_1->pool_id, 3);
         ASSERT_FALSE(n3_1->valid());
     }
 
