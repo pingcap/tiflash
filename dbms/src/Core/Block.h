@@ -187,6 +187,7 @@ Block hstackBlocks(Blocks && blocks, const Block & header);
 /// block1: (a UInt32, b UInt32, c UInt32), rows: 2
 /// block2: (a UInt32, b UInt32, c UInt32), rows: 3
 /// result: (a UInt32, b UInt32, c UInt32), rows: 5
+template <bool check_reserve = false>
 Block vstackBlocks(Blocks && blocks);
 
 Block popBlocksListFront(BlocksList & blocks);

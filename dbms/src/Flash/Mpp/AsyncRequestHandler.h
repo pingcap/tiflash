@@ -79,7 +79,7 @@ public:
         : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , rpc_context(context)
         , request(std::move(req))
-        , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
+        , req_info(fmt::format("async tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , has_data(false)
         , retry_times(0)
         , stage(AsyncRequestStage::NEED_INIT)
