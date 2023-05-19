@@ -102,7 +102,7 @@ public:
             assert(plan);
             plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
         });
-        assert(group_builder.concurrency == 1);
+        assert(group_builder.concurrency() == 1);
         group_builder.transform([&](auto & builder) {
             builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_status, "", result_handler));
         });
