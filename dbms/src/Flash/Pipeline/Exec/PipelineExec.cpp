@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_execute_prefix_failpoint[];
+extern const char random_pipeline_model_execute_suffix_failpoint[];
+} // namespace FailPoints
+
 #define HANDLE_OP_STATUS(op, op_status, expect_status)                                            \
     switch (op_status)                                                                            \
     {                                                                                             \
@@ -58,6 +65,7 @@ PipelineExec::PipelineExec(
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         addOperatorIfAwaitable(*it);
     addOperatorIfAwaitable(source_op);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
 
 void PipelineExec::executePrefix()
@@ -66,6 +74,7 @@ void PipelineExec::executePrefix()
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operatePrefix();
     source_op->operatePrefix();
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_suffix_failpoint);
 }
 
 void PipelineExec::executeSuffix()
