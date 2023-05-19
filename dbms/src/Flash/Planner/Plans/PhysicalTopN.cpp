@@ -71,7 +71,7 @@ void PhysicalTopN::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
     executeExpression(exec_status, group_builder, before_sort_actions, log);
 
