@@ -84,7 +84,8 @@ void PhysicalTopN::buildPipelineExecGroup(
     else
     {
         executeFinalSort(exec_status, group_builder, order_descr, limit, context, log);
-        restoreConcurrency(exec_status, group_builder, concurrency, log);
+        if (is_restore_concurrency)
+            restoreConcurrency(exec_status, group_builder, concurrency, log);
     }
 }
 
