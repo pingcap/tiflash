@@ -32,28 +32,28 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     if (aggregate_context->hasSpilledData())
     {
         auto restorers = aggregate_context->buildSharedRestorer(exec_status);
-        group_builder.init(restorers.size());
-        size_t i = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<AggregateRestoreSourceOp>(
-                exec_status,
-                aggregate_context,
-                std::move(restorers[i++]),
-                log->identifier()));
-        });
+        for (auto & restorer : restorers)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<AggregateRestoreSourceOp>(
+                    exec_status,
+                    aggregate_context,
+                    std::move(restorer),
+                    log->identifier()));
+        }
     }
     else
     {
         aggregate_context->initConvergent();
-        group_builder.init(aggregate_context->getConvergentConcurrency());
-        size_t index = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-                exec_status,
-                aggregate_context,
-                index++,
-                log->identifier()));
-        });
+        for (size_t index = 0; index < aggregate_context->getConvergentConcurrency(); ++index)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<AggregateConvergentSourceOp>(
+                    exec_status,
+                    aggregate_context,
+                    index,
+                    log->identifier()));
+        }
     }
 
     executeExpression(exec_status, group_builder, expr_after_agg, log);

@@ -28,6 +28,7 @@
 #include <Debug/MockTiDB.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -755,7 +756,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             columns_to_read_map.emplace(column.id, column);
 
         // The source_columns_of_analyzer should be the same as the size of table_scan_column_info
-        // The columns_to_read is a subset of table_scan_column_info, when there are generated columns.
+        // The columns_to_read is a subset of table_scan_column_info, when there are generated columns and extra table id column.
         NamesAndTypes source_columns_of_analyzer;
         source_columns_of_analyzer.reserve(table_scan_column_info.size());
         for (size_t i = 0; i < table_scan_column_info.size(); ++i)
@@ -767,6 +768,11 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
                 const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
                 const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
                 source_columns_of_analyzer.emplace_back(col_name, data_type);
+                continue;
+            }
+            if (cid == EXTRA_TABLE_ID_COLUMN_ID)
+            {
+                source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE);
                 continue;
             }
             RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
@@ -846,7 +852,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
             const auto & current_names_and_types = analyzer->getCurrentInputColumns();
             for (size_t i = 0; i < table_scan_column_info.size(); ++i)
             {
-                if (table_scan_column_info[i].hasGeneratedColumnFlag())
+                if (table_scan_column_info[i].hasGeneratedColumnFlag() || table_scan_column_info[i].id == EXTRA_TABLE_ID_COLUMN_ID)
                     continue;
                 auto col = columns_to_read_map.at(table_scan_column_info[i].id);
                 RUNTIME_CHECK_MSG(col.name == current_names_and_types[i].name, "Column name mismatch, expect: {}, actual: {}", col.name, current_names_and_types[i].name);
@@ -942,8 +948,9 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-SourceOps StorageDeltaMerge::readSourceOps(
+void StorageDeltaMerge::read(
     PipelineExecutorStatus & exec_status_,
+    PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -974,8 +981,9 @@ SourceOps StorageDeltaMerge::readSourceOps(
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
-    auto source_ops = store->readSourceOps(
+    store->read(
         exec_status_,
+        group_builder,
         context,
         context.getSettingsRef(),
         columns_to_read,
@@ -994,9 +1002,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
     /// Ensure read_tso info after read.
     checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
 
-    LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
-
-    return source_ops;
+    LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
