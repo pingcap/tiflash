@@ -171,7 +171,6 @@ try
 
         for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
-            std::cout << "iiiiiii: " << i << std::endl;
             frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
             executeFunctionAndAssert(
                 toVec<String>(res_not_null[i]),
