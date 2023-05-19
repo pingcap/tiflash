@@ -28,6 +28,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 
+#include "Storages/S3/S3Common.h"
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfDeltaMerge;
@@ -275,11 +277,14 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
-    // Generate place delta index tasks
-    for (auto & [end, segment] : segments)
+    if (!S3::ClientFactory::instance().isEnabled())
     {
-        (void)end;
-        checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        // Generate place delta index tasks
+        for (auto & [end, segment] : segments)
+        {
+            (void)end;
+            checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        }
     }
 
     // Wake up to do place delta index tasks.
