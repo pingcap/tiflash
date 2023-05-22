@@ -47,7 +47,6 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
         M(ExecTaskStatus::FINISHED, type_to_finished)
         M(ExecTaskStatus::ERROR, type_to_error)
         M(ExecTaskStatus::CANCELLED, type_to_cancelled)
-        M(ExecTaskStatus::FINALIZE, type_to_finalize)
     default:
         RUNTIME_ASSERT(false, "unexpected task status: {}.", magic_enum::enum_name(to));
     }
@@ -77,12 +76,11 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
 
 Task::~Task()
 {
-    if unlikely (task_status != ExecTaskStatus::FINALIZE)
+    if unlikely (!is_finalized)
     {
         LOG_WARNING(
             log,
-            "The state of the Task should be {} before it is destructed, but it is actually {}",
-            magic_enum::enum_name(ExecTaskStatus::FINALIZE),
+            "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason is that an error was reported during task creation",
             magic_enum::enum_name(task_status));
     }
 }
@@ -124,10 +122,10 @@ void Task::finalize()
 {
     // To make sure that `finalize` only called once.
     RUNTIME_ASSERT(
-        task_status != ExecTaskStatus::FINALIZE,
+        !is_finalized,
         log,
         "finalize can only be called once.");
-    switchStatus(ExecTaskStatus::FINALIZE);
+    is_finalized = true;
 
     finalizeImpl();
 #ifndef NDEBUG
