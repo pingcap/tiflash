@@ -108,8 +108,18 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     }
     RUNTIME_CHECK_MSG(const_column_indexes.size() < input_schema.columns(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
     header_without_constants = input_schema;
-    for (auto iter = const_column_indexes.rbegin(); iter != const_column_indexes.rend(); ++iter) // NOLINT
-        header_without_constants.erase(*iter);
+    removeConstantColumns(header_without_constants);
+}
+
+void Spiller::removeConstantColumns(Block & block) const
+{
+    /// note must erase the constant column in reverse order because the index stored in const_column_indexes is based on
+    /// the original Block, if the column before the index is removed, the index has to be updated or it becomes invalid index
+    for (auto it = const_column_indexes.rbegin(); it != const_column_indexes.rend(); ++it) // NOLINT
+    {
+        RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
+        block.erase(*it);
+    }
 }
 
 CachedSpillHandlerPtr Spiller::createCachedSpillHandler(

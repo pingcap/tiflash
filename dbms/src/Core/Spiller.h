@@ -101,6 +101,7 @@ public:
     bool hasSpilledData() const { return has_spilled_data; };
     /// only for test now
     bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
+    void removeConstantColumns(Block & block) const;
 
 private:
     friend class SpillHandler;

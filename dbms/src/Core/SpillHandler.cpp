@@ -97,11 +97,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
             if (unlikely(!block || block.rows() == 0))
                 continue;
             /// erase constant column
-            for (auto it = spiller->const_column_indexes.rbegin(); it != spiller->const_column_indexes.rend(); ++it) // NOLINT
-            {
-                RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
-                block.erase(*it);
-            }
+            spiller->removeConstantColumns(block);
             if (unlikely(writer == nullptr))
             {
                 std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
