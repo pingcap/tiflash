@@ -1020,7 +1020,10 @@ static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, b
 ReadMode DeltaMergeStore::getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+                      "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
+                      filter == nullptr || filter->before_where == nullptr,
+                      magic_enum::enum_name(read_mode));
     return read_mode;
 }
 
@@ -1050,11 +1053,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(tracing_logger,
-              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
-              keep_order,
-              db_context.getSettingsRef().dt_enable_read_thread,
-              enable_read_thread);
+    LOG_INFO(tracing_logger,
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}, is_fast_scan={}, is_push_down_filter_empty={}",
+             keep_order,
+             db_context.getSettingsRef().dt_enable_read_thread,
+             enable_read_thread,
+             is_fast_scan,
+             filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
