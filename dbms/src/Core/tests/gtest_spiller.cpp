@@ -510,6 +510,48 @@ catch (Exception & e)
     GTEST_ASSERT_EQ(e.message(), "Check const_column_indexes.size() < input_schema.columns() failed: Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
 }
 
+TEST_F(SpillerTest, SpillWithConstantSchemaAndNonConstantData)
+try
+{
+    NamesAndTypes names_and_types;
+    names_and_types.emplace_back("col0", DataTypeFactory::instance().get("Int64"));
+    names_and_types.emplace_back("col1", DataTypeFactory::instance().get("UInt64"));
+
+    std::vector<bool> const_columns_flag = {
+        true,
+        false,
+    };
+
+
+    ColumnsWithTypeAndName columns;
+    for (size_t i = 0; i < names_and_types.size(); i++)
+    {
+        if (const_columns_flag[i])
+        {
+            /// const column
+            columns.emplace_back(names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
+                                 names_and_types[i].type,
+                                 names_and_types[i].name);
+        }
+        else
+        {
+            /// normal column
+            columns.emplace_back(names_and_types[i].type->createColumn(),
+                                 names_and_types[i].type,
+                                 names_and_types[i].name);
+        }
+    }
+    Block header(columns);
+    Spiller spiller(*spill_config_ptr, false, 1, header, logger);
+    auto all_blocks = generateBlocks(20, header);
+    spiller.spillBlocks(std::move(all_blocks), 0);
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message().find("Check block.getByPosition(*it).column->isColumnConst() failed: The 0-th column in block must be constant column") != std::string::npos, true);
+}
+
 TEST_F(SpillerTest, SpillAndRestoreConstantData)
 try
 {
