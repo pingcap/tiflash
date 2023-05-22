@@ -1006,7 +1006,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 
 static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, bool keep_order)
 {
-    LOG_DEBUG(Logger::get(), "dt_enable_bitmap_filter: {}", db_context.getSettingsRef().dt_enable_bitmap_filter);
+    LOG_DEBUG(Logger::get(), "dt_enable_bitmap_filter: {}, is_fast_scan: {}, keep_order: {}", db_context.getSettingsRef().dt_enable_bitmap_filter, is_fast_scan, keep_order);
     if (is_fast_scan)
     {
         return ReadMode::Fast;
