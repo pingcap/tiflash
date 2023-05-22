@@ -1312,11 +1312,11 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
     // Get the columns that may need to add extra cast.
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
     {
         for (const auto & expr : filter_conditions.conditions)
-            getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+            getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
     }
     std::vector<UInt8> may_need_add_cast_column_tmp;
     may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
