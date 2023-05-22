@@ -85,7 +85,7 @@ clean_data_log
 
 # run force_enable_lm tests
 rand=`expr $RANDOM`
-rand=`expr $rand % 10`
+rand=`expr $rand % 1`
 if (( rand == 0 ))
 then
     docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml up -d
