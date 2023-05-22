@@ -39,19 +39,19 @@ public:
         : log(Logger::get(req_id))
     {}
 
-    ExecutionResult toExecutionResult() noexcept;
+    ExecutionResult toExecutionResult();
 
-    std::exception_ptr getExceptionPtr() noexcept;
-    String getExceptionMsg() noexcept;
+    std::exception_ptr getExceptionPtr();
+    String getExceptionMsg();
 
-    void onEventSchedule() noexcept;
+    void onEventSchedule();
 
-    void onEventFinish() noexcept;
+    void onEventFinish();
 
-    void onErrorOccurred(const String & err_msg) noexcept;
-    void onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept;
+    void onErrorOccurred(const String & err_msg);
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_);
 
-    void wait() noexcept;
+    void wait();
 
     template <typename Duration>
     void waitFor(const Duration & timeout_duration)
@@ -71,7 +71,7 @@ public:
         LOG_DEBUG(log, "query finished and wait done");
     }
 
-    void consume(ResultHandler & result_handler) noexcept;
+    void consume(ResultHandler & result_handler);
 
     template <typename Duration>
     void consumeFor(ResultHandler & result_handler, const Duration & timeout_duration)
@@ -106,14 +106,14 @@ public:
         LOG_DEBUG(log, "query finished and consume done");
     }
 
-    void cancel() noexcept;
+    void cancel();
 
-    ALWAYS_INLINE bool isCancelled() noexcept
+    ALWAYS_INLINE bool isCancelled()
     {
         return is_cancelled.load(std::memory_order_acquire);
     }
 
-    ResultQueuePtr toConsumeMode(size_t queue_size) noexcept;
+    ResultQueuePtr toConsumeMode(size_t queue_size);
 
     void update(const TaskProfileInfo & task_profile_info)
     {
@@ -126,12 +126,12 @@ public:
     }
 
 private:
-    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
     // Need to be called under lock.
-    bool isWaitMode() noexcept;
+    bool isWaitMode();
 
-    ResultQueuePtr getConsumedResultQueue() noexcept;
+    ResultQueuePtr getConsumedResultQueue();
 
 private:
     LoggerPtr log;
