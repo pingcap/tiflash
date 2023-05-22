@@ -1036,7 +1036,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (auto & table : tables)
         {
-            LOG_DEBUG(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
+            LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
 
             /// Ignore view and sequence.
             if (table->is_view || table->is_sequence)
@@ -1064,8 +1064,8 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id){
     // TODO:理论上 db_info 不需要，先放着后面删
-    LOG_INFO(log, "apply table: {}.{}, {}", database_id, table_id, partition_table_id);
-    auto db_info = getter.getDatabase(database_id);
+    LOG_INFO(log, "apply table: {}, {}, {}", database_id, table_id, partition_table_id);
+    auto db_info = getter.getDatabase(database_id); // TODO:是不是可以加一个 cache，这样就不用每次都去拉了
     if (db_info == nullptr){
         LOG_ERROR(log, "miss database: {}", database_id);
         return;

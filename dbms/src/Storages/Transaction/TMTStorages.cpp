@@ -15,6 +15,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/TiDB.h>
+#include <shared_mutex>
 
 namespace DB
 {
@@ -25,7 +26,9 @@ extern const int TIDB_TABLE_ALREADY_EXISTS;
 
 void ManagedStorages::put(ManageableStoragePtr storage)
 {
+    // 用 unique_lock 的话重启的时候性能会有明显裂化
     std::lock_guard lock(mutex);
+    //std::unique_lock<std::shared_mutex> lock(shared_mutex);
 
     KeyspaceID keyspace_id = storage->getTableInfo().keyspace_id;
     TableID table_id = storage->getTableInfo().id;
@@ -43,7 +46,11 @@ void ManagedStorages::put(ManageableStoragePtr storage)
 
 ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_id) const
 {
+    // std::lock_guard lock(mutex);
+    //LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get");
     std::lock_guard lock(mutex);
+    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
+    //LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get get lock");
 
     if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end())
         return it->second;
@@ -53,18 +60,21 @@ ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_
 StorageMap ManagedStorages::getAllStorage() const
 {
     std::lock_guard lock(mutex);
+    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     return storages;
 }
 
 KeyspaceSet ManagedStorages::getAllKeyspaces() const
 {
     std::lock_guard lock(mutex);
+    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     return keyspaces;
 }
 
 ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table, bool include_tombstone) const
 {
     std::lock_guard lock(mutex);
+    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     // std::cout << " into ManagedStorages::getByName " << std::endl;
     // for (const auto & storage: storages) {
     //     std::cout << "storage: db and table name " << storage.second->getDatabaseName() << " " << storage.second->getTableInfo().name << std::endl;
@@ -82,6 +92,7 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
 void ManagedStorages::remove(KeyspaceID keyspace_id, TableID table_id)
 {
     std::lock_guard lock(mutex);
+    //std::unique_lock<std::shared_mutex> lock(shared_mutex);
 
     auto it = storages.find(KeyspaceTableID{keyspace_id, table_id});
     if (it == storages.end())

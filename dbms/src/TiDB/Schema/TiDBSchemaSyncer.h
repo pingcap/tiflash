@@ -99,7 +99,7 @@ public:
     // 不过 syncSchemas 可以跟 syncTableSchema 一起跑么？
     // syncSchema 主要是更新两个 map，特定 ddl 会更新表本身。syncTableSchema 主要是更新表本身。
     // 因为 map 和 表本身都各自上锁，应该能保证两个并行跑也不会出问题。不过都要在改 map 和 改表前做确定，do only once，不要多次重复
-    // TODO:目前拍脑袋觉得是可以一起跑的，但是后面还是要看看有没有什么 corner case
+    // 多个 syncTableSchema 会调用这个，不能一起跑，要加锁保证
     bool syncSchemas(Context & context) override;
 
     // just use when cur_version = 0

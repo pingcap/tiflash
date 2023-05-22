@@ -17,7 +17,7 @@
 #include <Storages/Transaction/Types.h>
 
 #include <memory>
-#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 
 namespace DB
@@ -49,6 +49,8 @@ private:
     StorageMap storages;
     KeyspaceSet keyspaces;
     mutable std::mutex mutex;
+    //mutable std::shared_mutex shared_mutex;
+
 };
 
 } // namespace DB

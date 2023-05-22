@@ -1208,8 +1208,9 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     };
 
     auto sync_schema = [&](TableID table_id) {
-        auto start_time = Clock::now();
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
+        //LOG_INFO(log, "DAGStorageInterpreter begin sync table schema ");
+        auto start_time = Clock::now();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, dagContext().getKeyspaceID(), table_id);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_INFO(log, "[hyy] Table {} schema sync cost {} ms.", logical_table_id, schema_sync_cost);
@@ -1219,12 +1220,12 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     auto [storages, locks, need_sync_table_ids, ok] = get_and_lock_storages(false);
     if (ok)
     {
-        LOG_DEBUG(log, "OK, no syncing required.");
+        LOG_INFO(log, "OK, no syncing required.");
     }
     else
     /// If first try failed, sync schema and try again.
     {
-        LOG_DEBUG(log, "not OK, syncing schemas.");
+        LOG_INFO(log, "not OK, syncing schemas.");
 
         for (auto & table_id : need_sync_table_ids)
         {
@@ -1235,7 +1236,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         std::tie(storages, locks, need_sync_table_ids, ok) = get_and_lock_storages(true);
         if (ok)
         {
-            LOG_DEBUG(log, "OK after syncing.");
+            LOG_INFO(log, "OK after syncing.");
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
