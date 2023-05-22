@@ -22,16 +22,23 @@ namespace FailPoints
 extern const char random_restore_from_disk_failpoint[];
 } // namespace FailPoints
 
-SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos_, const Block & header_, const std::vector<size_t> & const_column_indexes_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
+SpilledFilesInputStream::SpilledFilesInputStream(
+    std::vector<SpilledFileInfo> && spilled_file_infos_,
+    const Block & header_,
+    const Block & header_without_constants_,
+    const std::vector<size_t> & const_column_indexes_,
+    const FileProviderPtr & file_provider_,
+    Int64 max_supported_spill_version_)
     : spilled_file_infos(std::move(spilled_file_infos_))
     , header(header_)
+    , header_without_constants(header_without_constants_)
     , const_column_indexes(const_column_indexes_)
     , file_provider(file_provider_)
     , max_supported_spill_version(max_supported_spill_version_)
 {
     RUNTIME_CHECK_MSG(!spilled_file_infos.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
+    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header_without_constants, file_provider, max_supported_spill_version);
 }
 
 Block SpilledFilesInputStream::readImpl()

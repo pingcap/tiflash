@@ -53,13 +53,13 @@ protected:
         if (spiller_dir.exists())
             spiller_dir.remove(true);
     }
-    Blocks generateBlocks(size_t block_num)
+    Blocks generateBlocks(size_t block_num, const Block & schema)
     {
         Blocks ret;
         for (size_t i = 0; i < block_num; ++i)
         {
             ColumnsWithTypeAndName data;
-            for (const auto & type_and_name : spiller_test_header)
+            for (const auto & type_and_name : schema)
             {
                 auto column = type_and_name.type->createColumn();
                 for (size_t k = 0; k < 100; ++k)
@@ -69,6 +69,10 @@ protected:
             ret.emplace_back(data);
         }
         return ret;
+    }
+    Blocks generateBlocks(size_t block_num)
+    {
+        return generateBlocks(block_num, spiller_test_header);
     }
     Blocks generateSortedBlocks(size_t block_num)
     {
@@ -503,7 +507,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+    GTEST_ASSERT_EQ(e.message(), "Check const_column_indexes.size() < input_schema.columns() failed: Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
 }
 
 TEST_F(SpillerTest, SpillAndRestoreConstantData)
@@ -512,8 +516,8 @@ try
     NamesAndTypes names_and_types;
     names_and_types.emplace_back("col0", DataTypeFactory::instance().get("Int64"));
     names_and_types.emplace_back("col1", DataTypeFactory::instance().get("UInt64"));
-    names_and_types.emplace_back("col2", DataTypeFactory::instance().get("Int64"));
-    names_and_types.emplace_back("col3", DataTypeFactory::instance().get("UInt64"));
+    names_and_types.emplace_back("col2", DataTypeFactory::instance().get("Nullable(Int64)"));
+    names_and_types.emplace_back("col3", DataTypeFactory::instance().get("Nullable(UInt64)"));
     names_and_types.emplace_back("col4", DataTypeFactory::instance().get("Int64"));
     names_and_types.emplace_back("col5", DataTypeFactory::instance().get("UInt64"));
 
@@ -550,13 +554,17 @@ try
         }
         Block header(columns);
         Spiller spiller(*spill_config_ptr, false, 1, header, logger);
-        auto all_blocks = generateBlocks(20);
+        auto all_blocks = generateBlocks(20, header);
         for (auto & block : all_blocks)
         {
             for (size_t i = 0; i < const_columns_flag.size(); i++)
             {
                 if (header.getByPosition(i).column->isColumnConst())
-                    block.getByPosition(i).column = header.getByPosition(i).column;
+                {
+                    Field constant_field;
+                    header.getByPosition(i).column->get(0, constant_field);
+                    block.getByPosition(i).column = header.getByPosition(i).type->createColumnConst(block.rows(), constant_field);
+                }
             }
         }
         auto reference = all_blocks;

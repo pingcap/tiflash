@@ -118,6 +118,7 @@ private:
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     const Block input_schema;
     std::vector<size_t> const_column_indexes;
+    Block header_without_constants;
     const LoggerPtr logger;
     std::mutex spill_finished_mutex;
     bool spill_finished = false;
