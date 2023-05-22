@@ -101,7 +101,7 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     {
         RUNTIME_CHECK_MSG(spill_dir.isDirectory(), "Spill dir {} is a file", spill_dir.path());
     }
-    for (size_t i = 0; i < input_schema.columns(); i++)
+    for (size_t i = 0; i < input_schema.columns(); ++i)
     {
         if (input_schema.getByPosition(i).column != nullptr && input_schema.getByPosition(i).column->isColumnConst())
             const_column_indexes.push_back(i);
