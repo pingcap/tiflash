@@ -160,7 +160,7 @@ class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
     SegmentReadTaskPool(
-        int64_t table_id_,
+        int64_t physical_table_id_,
         int extra_table_id_index_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
@@ -184,7 +184,7 @@ public:
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         LOG_DEBUG(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
                   pool_id,
-                  table_id,
+                  physical_table_id,
                   pop_times,
                   pop_empty_times,
                   pop_empty_ratio,
@@ -198,10 +198,6 @@ public:
     SegmentReadTaskPtr nextTask();
     const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
     SegmentReadTaskPtr getTask(UInt64 seg_id);
-
-    uint64_t poolId() const { return pool_id; }
-
-    int64_t tableId() const { return table_id; }
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
@@ -225,10 +221,12 @@ public:
         return add_to_scheduler;
     }
 
-    MemoryTrackerPtr & getMemoryTracker()
-    {
-        return mem_tracker;
-    }
+public:
+    const uint64_t pool_id;
+    const int64_t physical_table_id;
+
+    // The memory tracker of MPPTask.
+    const MemoryTrackerPtr mem_tracker;
 
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
@@ -236,8 +234,6 @@ private:
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
 
-    const uint64_t pool_id;
-    const int64_t table_id;
     const int extra_table_id_index;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
@@ -257,9 +253,6 @@ private:
 
     std::atomic<bool> exception_happened;
     DB::Exception exception;
-
-    // The memory tracker of MPPTask.
-    MemoryTrackerPtr mem_tracker;
 
     // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
     // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.

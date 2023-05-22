@@ -285,6 +285,16 @@ void ColumnString::reserve(size_t n)
     chars.reserve(n * APPROX_STRING_SIZE);
 }
 
+void ColumnString::reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint)
+{
+    offsets.reserve(n);
+    total_memory_hint -= n * sizeof(offsets[0]);
+    if (total_memory_hint >= 0)
+        chars.reserve(total_memory_hint);
+    else
+        chars.reserve(n * APPROX_STRING_SIZE);
+}
+
 
 void ColumnString::getExtremes(Field & min, Field & max) const
 {

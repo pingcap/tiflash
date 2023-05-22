@@ -28,6 +28,7 @@
 #include <Debug/MockTiDB.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -795,31 +796,16 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
 
     // Build the extra cast
     ExpressionActionsPtr extra_cast = nullptr;
-    // need_cast_column should be the same size as table_scan_column_info
-    std::vector<ExtraCastAfterTSMode> need_cast_column;
-    need_cast_column.reserve(table_scan_column_info.size());
-
-    // Build the extra cast for filter columns
+    // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
+    std::vector<UInt8> may_need_add_cast_column;
+    may_need_add_cast_column.reserve(table_scan_column_info.size());
     for (const auto & col : table_scan_column_info)
-    {
-        if (filter_col_id_set.contains(col.id))
-        {
-            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-            else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-            else
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-        }
-        else
-        {
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
-        }
-    }
+        may_need_add_cast_column.push_back(!col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
     ExpressionActionsChain chain;
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
     auto & step = analyzer->initAndGetLastStep(chain);
     auto & actions = step.actions;
-    if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
+    if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info); has_cast)
     {
         NamesWithAliases project_cols;
         for (size_t i = 0; i < columns_to_read.size(); ++i)
@@ -951,8 +937,9 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-SourceOps StorageDeltaMerge::readSourceOps(
+void StorageDeltaMerge::read(
     PipelineExecutorStatus & exec_status_,
+    PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -983,8 +970,9 @@ SourceOps StorageDeltaMerge::readSourceOps(
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
-    auto source_ops = store->readSourceOps(
+    store->read(
         exec_status_,
+        group_builder,
         context,
         context.getSettingsRef(),
         columns_to_read,
@@ -1003,9 +991,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
     /// Ensure read_tso info after read.
     checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
 
-    LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
-
-    return source_ops;
+    LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr

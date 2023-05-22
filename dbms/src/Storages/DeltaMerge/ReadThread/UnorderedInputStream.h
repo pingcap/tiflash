@@ -45,13 +45,13 @@ public:
 
     {
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
     }
 
     ~UnorderedInputStream() override
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
+        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
     }
 
     String getName() const override { return NAME; }
@@ -100,7 +100,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
+        LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->pool_id, ref_no, total_rows);
     }
 
     void addReadTaskPoolToScheduler()

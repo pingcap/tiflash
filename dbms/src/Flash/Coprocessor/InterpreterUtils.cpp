@@ -192,7 +192,7 @@ void executeLocalSort(
     else
     {
         const Settings & settings = context.getSettingsRef();
-        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency);
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
         SpillConfig spill_config{
             context.getTemporaryPath(),
             fmt::format("{}_sort", log->identifier()),
