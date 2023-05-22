@@ -44,7 +44,7 @@ SpilledFilesInputStream::SpilledFilesInputStream(
 Block SpilledFilesInputStream::readImpl()
 {
     auto ret = readInternal();
-    if (ret)
+    if likely (ret)
     {
         assert(ret.columns() != 0);
         size_t rows = ret.rows();
