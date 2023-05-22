@@ -16,7 +16,7 @@
 
 namespace DB
 {
-ExecutionResult PipelineExecutorStatus::toExecutionResult() noexcept
+ExecutionResult PipelineExecutorStatus::toExecutionResult()
 {
     std::lock_guard lock(mu);
     return exception_ptr
@@ -24,13 +24,13 @@ ExecutionResult PipelineExecutorStatus::toExecutionResult() noexcept
         : ExecutionResult::success();
 }
 
-std::exception_ptr PipelineExecutorStatus::getExceptionPtr() noexcept
+std::exception_ptr PipelineExecutorStatus::getExceptionPtr()
 {
     std::lock_guard lock(mu);
     return exception_ptr;
 }
 
-String PipelineExecutorStatus::getExceptionMsg() noexcept
+String PipelineExecutorStatus::getExceptionMsg()
 {
     try
     {
@@ -49,13 +49,13 @@ String PipelineExecutorStatus::getExceptionMsg() noexcept
     }
 }
 
-void PipelineExecutorStatus::onErrorOccurred(const String & err_msg) noexcept
+void PipelineExecutorStatus::onErrorOccurred(const String & err_msg)
 {
     DB::Exception e(err_msg);
     onErrorOccurred(std::make_exception_ptr(e));
 }
 
-bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept
+bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_)
 {
     RUNTIME_ASSERT(exception_ptr_ != nullptr);
     std::lock_guard lock(mu);
@@ -65,12 +65,12 @@ bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exceptio
     return true;
 }
 
-bool PipelineExecutorStatus::isWaitMode() noexcept
+bool PipelineExecutorStatus::isWaitMode()
 {
     return !result_queue.has_value();
 }
 
-void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept
+void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_)
 {
     if (setExceptionPtr(exception_ptr_))
     {
@@ -79,7 +79,7 @@ void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exceptio
     }
 }
 
-void PipelineExecutorStatus::wait() noexcept
+void PipelineExecutorStatus::wait()
 {
     {
         std::unique_lock lock(mu);
@@ -89,7 +89,7 @@ void PipelineExecutorStatus::wait() noexcept
     LOG_DEBUG(log, "query finished and wait done");
 }
 
-ResultQueuePtr PipelineExecutorStatus::getConsumedResultQueue() noexcept
+ResultQueuePtr PipelineExecutorStatus::getConsumedResultQueue()
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(!isWaitMode());
@@ -98,7 +98,7 @@ ResultQueuePtr PipelineExecutorStatus::getConsumedResultQueue() noexcept
     return consumed_result_queue;
 }
 
-void PipelineExecutorStatus::consume(ResultHandler & result_handler) noexcept
+void PipelineExecutorStatus::consume(ResultHandler & result_handler)
 {
     RUNTIME_ASSERT(result_handler);
     auto consumed_result_queue = getConsumedResultQueue();
@@ -114,13 +114,13 @@ void PipelineExecutorStatus::consume(ResultHandler & result_handler) noexcept
     LOG_DEBUG(log, "query finished and consume done");
 }
 
-void PipelineExecutorStatus::onEventSchedule() noexcept
+void PipelineExecutorStatus::onEventSchedule()
 {
     std::lock_guard lock(mu);
     ++active_event_count;
 }
 
-void PipelineExecutorStatus::onEventFinish() noexcept
+void PipelineExecutorStatus::onEventFinish()
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(active_event_count > 0);
@@ -143,12 +143,12 @@ void PipelineExecutorStatus::onEventFinish() noexcept
     }
 }
 
-void PipelineExecutorStatus::cancel() noexcept
+void PipelineExecutorStatus::cancel()
 {
     is_cancelled.store(true, std::memory_order_release);
 }
 
-ResultQueuePtr PipelineExecutorStatus::toConsumeMode(size_t queue_size) noexcept
+ResultQueuePtr PipelineExecutorStatus::toConsumeMode(size_t queue_size)
 {
     std::lock_guard lock(mu);
     RUNTIME_ASSERT(!result_queue.has_value());
