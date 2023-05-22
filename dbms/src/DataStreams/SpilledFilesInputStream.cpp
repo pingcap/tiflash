@@ -51,6 +51,7 @@ Block SpilledFilesInputStream::readImpl()
         for (const auto index : const_column_indexes)
         {
             const auto & col_type_name = header.getByPosition(index);
+            assert(col_type_name.column->isColumnConst());
             ret.insert(index, {col_type_name.column->cloneResized(rows), col_type_name.type, col_type_name.name});
         }
     }
