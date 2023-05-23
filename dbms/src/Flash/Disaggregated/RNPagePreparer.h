@@ -38,7 +38,10 @@ public:
     RNPagePreparer(
         DM::RNRemoteReadTaskPtr remote_read_tasks_,
         std::shared_ptr<RNPageReceiver> receiver_,
-        const DM::ColumnDefinesPtr & columns_to_read,
+        const DM::ColumnDefinesPtr & columns_to_read_,
+        UInt64 read_tso_,
+        const DM::PushDownFilterPtr & push_down_filter_,
+        DM::ReadMode read_mode_,
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
@@ -58,6 +61,12 @@ private:
     const bool do_prepare;
     DM::RNRemoteReadTaskPtr remote_read_tasks;
     std::shared_ptr<RNPageReceiver> receiver;
+
+    const DM::ColumnDefinesPtr columns_to_read;
+    UInt64 read_tso;
+    const DM::PushDownFilterPtr push_down_filter;
+    DM::ReadMode read_mode;
+
     std::vector<std::future<void>> persist_threads;
 
     std::unique_ptr<CHBlockChunkCodec> decoder_ptr;

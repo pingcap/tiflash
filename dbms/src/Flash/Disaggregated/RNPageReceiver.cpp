@@ -158,7 +158,12 @@ void RNPageReceiverBase<RPCContext>::setUpConnection()
 }
 
 template <typename RPCContext>
-PageReceiverResult RNPageReceiverBase<RPCContext>::nextResult(std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
+PageReceiverResult RNPageReceiverBase<RPCContext>::nextResult(
+    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr,
+    const DM::ColumnDefines & columns_to_read,
+    UInt64 read_tso,
+    const DM::PushDownFilterPtr & push_down_filter,
+    DM::ReadMode read_mode)
 {
     // Note that decode_ptr can not squash blocks, the blocks could comes
     // from different stores, tables, segments
@@ -183,13 +188,23 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::nextResult(std::unique_ptr<CH
         return PageReceiverResult::newError(recv_msg->req_info, recv_msg->error_ptr->msg());
 
     // Decode the pages or blocks into recv_msg->seg_task
-    return toDecodeResult(recv_msg, decoder_ptr);
+    return toDecodeResult(
+        recv_msg,
+        decoder_ptr,
+        columns_to_read,
+        read_tso,
+        push_down_filter,
+        read_mode);
 }
 
 template <typename RPCContext>
 PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
-    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkCodec> & decoder_ptr,
+    const DM::ColumnDefines & columns_to_read,
+    UInt64 read_tso,
+    const DM::PushDownFilterPtr & push_down_filter,
+    DM::ReadMode read_mode)
 {
     assert(recv_msg != nullptr);
     /// the data packets (now we ignore execution summary)
@@ -207,6 +222,13 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
     {
         // All pending message of current segment task are received,
         // mark the segment task is ready for reading.
+        LOG_DEBUG(Logger::get(), "Wenxuan: Segment {} finished receiving, start prepare", recv_msg->seg_task->segment_id);
+        recv_msg->seg_task->prepareInputStream(
+            columns_to_read,
+            read_tso,
+            push_down_filter,
+            read_mode);
+        LOG_DEBUG(Logger::get(), "Wenxuan: Segment {} finished prepare input stream", recv_msg->seg_task->segment_id);
         rpc_context->finishTaskReceive(recv_msg->seg_task);
     }
     return result;

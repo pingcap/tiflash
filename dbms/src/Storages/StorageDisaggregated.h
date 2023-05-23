@@ -101,7 +101,7 @@ private:
         std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
         std::mutex & store_read_tasks_lock);
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    buildDisaggTaskForNode(
+    buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(

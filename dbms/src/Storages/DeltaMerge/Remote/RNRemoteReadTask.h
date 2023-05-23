@@ -202,13 +202,27 @@ public:
 
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
-    BlockInputStreamPtr getInputStream(
+    // BlockInputStreamPtr getInputStream(
+    //     const ColumnDefines & columns_to_read,
+    //     const RowKeyRanges & key_ranges,
+    //     UInt64 read_tso,
+    //     const PushDownFilterPtr & push_down_filter,
+    //     size_t expected_block_size,
+    //     ReadMode read_mode);
+
+    void prepareInputStream(
         const ColumnDefines & columns_to_read,
-        const RowKeyRanges & key_ranges,
         UInt64 read_tso,
         const PushDownFilterPtr & push_down_filter,
-        size_t expected_block_size,
         ReadMode read_mode);
+
+    BlockInputStreamPtr takeInputStream()
+    {
+        RUNTIME_CHECK(input_stream != nullptr);
+        auto is = input_stream;
+        input_stream = nullptr;
+        return is;
+    }
 
     void addPendingMsg() { num_msg_to_consume += 1; }
 
@@ -258,6 +272,8 @@ private:
     SegmentPtr segment;
     RowKeyRanges read_ranges;
     SegmentSnapshotPtr segment_snap;
+
+    BlockInputStreamPtr input_stream;
 
 public:
     std::atomic<size_t> num_msg_to_consume{0};

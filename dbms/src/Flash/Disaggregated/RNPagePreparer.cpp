@@ -29,7 +29,10 @@ namespace DB
 RNPagePreparer::RNPagePreparer(
     DM::RNRemoteReadTaskPtr remote_read_tasks_,
     std::shared_ptr<RNPageReceiver> receiver_,
-    const DM::ColumnDefinesPtr & columns_to_read,
+    const DM::ColumnDefinesPtr & columns_to_read_,
+    UInt64 read_tso_,
+    const DM::PushDownFilterPtr & push_down_filter_,
+    DM::ReadMode read_mode_,
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
@@ -38,6 +41,10 @@ RNPagePreparer::RNPagePreparer(
     , do_prepare(do_prepare_)
     , remote_read_tasks(std::move(remote_read_tasks_))
     , receiver(std::move(receiver_))
+    , columns_to_read(columns_to_read_)
+    , read_tso(read_tso_)
+    , push_down_filter(push_down_filter_)
+    , read_mode(read_mode_)
     , live_persisters(threads_num)
     , state(PageReceiverState::NORMAL)
     , total_rows(0)
@@ -180,7 +187,13 @@ void RNPagePreparer::downloadDone(bool meet_error, const String & local_err_msg,
 
 bool RNPagePreparer::consumeOneResult(const LoggerPtr & log)
 {
-    auto result = receiver->nextResult(decoder_ptr);
+    auto result = receiver->nextResult(
+        decoder_ptr,
+        *columns_to_read,
+        read_tso,
+        push_down_filter,
+        read_mode);
+
     if (result.eof())
     {
         LOG_DEBUG(log, "fetch reader meets eof");

@@ -30,32 +30,6 @@
 #include <cassert>
 #include <tuple>
 
-namespace pingcap::kv
-{
-template <>
-struct RpcTypeTraits<disaggregated::FetchDisaggPagesRequest>
-{
-    using RequestType = disaggregated::FetchDisaggPagesRequest;
-    using ResultType = disaggregated::PagesPacket;
-    static std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req)
-    {
-        return client->stub->FetchDisaggPages(context, req);
-    }
-    static std::unique_ptr<grpc::ClientAsyncReader<disaggregated::PagesPacket>> doAsyncRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        grpc::CompletionQueue & cq,
-        void * call)
-    {
-        return client->stub->AsyncFetchDisaggPages(context, req, &cq, call);
-    }
-};
-
-} // namespace pingcap::kv
 
 namespace DB
 {

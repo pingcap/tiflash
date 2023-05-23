@@ -85,8 +85,6 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     , extra_table_id_index(extra_table_id_index_)
     , keyspace_id(NullspaceID)
     , physical_table_id(-1)
-    , seconds_next_task(0.0)
-    , seconds_build_stream(0.0)
     , cur_segment_id(0)
     , log(Logger::get(String(req_id)))
 {
@@ -103,6 +101,7 @@ RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
     LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, total_next_task={:.3f}sec, total_build_stream={:.3f}sec", seconds_next_task, seconds_build_stream);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_next_task).Observe(seconds_next_task);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_build_stream).Observe(seconds_build_stream);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_read_prefix).Observe(seconds_read_prefix);
 }
 
 Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
@@ -129,18 +128,30 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
                 return {};
             }
 
+            UNUSED(max_version);
+            UNUSED(read_mode);
+
             // Note that the segment task could come from different physical tables
             cur_segment_id = cur_read_task->segment_id;
             keyspace_id = cur_read_task->ks_table_id.first;
             physical_table_id = cur_read_task->ks_table_id.second;
-            cur_stream = cur_read_task->getInputStream(
-                columns_to_read,
-                cur_read_task->getReadRanges(),
-                max_version,
-                push_down_filter,
-                expected_block_size,
-                read_mode);
+            LOG_DEBUG(log, "Wenxuan: Begin getInputStream");
+            // cur_stream = cur_read_task->getInputStream(
+            //     columns_to_read,
+            //     cur_read_task->getReadRanges(),
+            //     max_version,
+            //     push_down_filter,
+            //     expected_block_size,
+            //     read_mode);
+            cur_stream = cur_read_task->takeInputStream();
+            LOG_DEBUG(log, "Wenxuan: Finish getInputStream");
             seconds_build_stream += watch.elapsedSeconds();
+            watch.restart();
+
+            // LOG_DEBUG(log, "Wenxuan: Begin read prefix");
+            // cur_stream->readPrefix();
+            // LOG_DEBUG(log, "Wenxuan: Finish read prefix");
+            seconds_read_prefix += watch.elapsedSeconds();
             LOG_TRACE(log, "Read blocks from remote segment begin, segment_id={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
         }
 

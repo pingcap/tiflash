@@ -49,6 +49,8 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+
+#include "Core/Defines.h"
 namespace DB::DM
 {
 
@@ -568,23 +570,41 @@ void RNRemoteSegmentReadTask::prepare()
     segment->placeDeltaIndex(*dm_context, segment_snap);
 }
 
-BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
+void RNRemoteSegmentReadTask::prepareInputStream(
     const ColumnDefines & columns_to_read,
-    const RowKeyRanges & key_ranges,
     UInt64 read_tso,
     const PushDownFilterPtr & push_down_filter,
-    size_t expected_block_size,
     ReadMode read_mode)
 {
-    return segment->getInputStream(
+    RUNTIME_CHECK(input_stream == nullptr);
+    input_stream = segment->getInputStream(
         read_mode,
         *dm_context,
         columns_to_read,
         segment_snap,
-        key_ranges,
+        getReadRanges(),
         push_down_filter,
         read_tso,
-        expected_block_size);
+        DEFAULT_BLOCK_SIZE);
 }
+
+// BlockInputStreamPtr RNRemoteSegmentReadTask::getInputStream(
+//     const ColumnDefines & columns_to_read,
+//     const RowKeyRanges & key_ranges,
+//     UInt64 read_tso,
+//     const PushDownFilterPtr & push_down_filter,
+//     size_t expected_block_size,
+//     ReadMode read_mode)
+// {
+//     return segment->getInputStream(
+//         read_mode,
+//         *dm_context,
+//         columns_to_read,
+//         segment_snap,
+//         key_ranges,
+//         push_down_filter,
+//         read_tso,
+//         expected_block_size);
+// }
 
 } // namespace DB::DM

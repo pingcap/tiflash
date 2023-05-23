@@ -60,6 +60,7 @@ DMFileReader::Stream::Stream(
     const ReadLimiterPtr & read_limiter)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
+    LOG_DEBUG(log, "Wenxuan: Begin DMFileReader loadMarkData");
     // load mark data
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
         auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
@@ -142,6 +143,8 @@ DMFileReader::Stream::Stream(
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
+    LOG_DEBUG(log, "Wenxuan: Begin DMFileReader loadDataBuf");
+
     LOG_TRACE(log,
               "file size: {}, estimated read size: {}, buffer_size: {} (aio_threshold: {}, max_read_buffer_size: {})",
               data_file_size,
@@ -215,6 +218,12 @@ DMFileReader::DMFileReader(
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
 {
+    LOG_DEBUG(log, "Wenxuan: Begin DMFileReader::init");
+
+    Stopwatch watch;
+    SCOPE_EXIT(
+        scan_context->total_dmfile_read_time_ns += watch.elapsed(););
+
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
@@ -245,6 +254,8 @@ DMFileReader::DMFileReader(
             last_read_from_cache[cd.id] = false;
         }
     }
+
+    LOG_DEBUG(log, "Wenxuan: Finish DMFileReader::init");
 }
 
 bool DMFileReader::shouldSeek(size_t pack_id) const

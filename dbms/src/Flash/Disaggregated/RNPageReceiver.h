@@ -150,7 +150,12 @@ public:
 
     void close();
 
-    PageReceiverResult nextResult(std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
+    PageReceiverResult nextResult(
+        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr,
+        const DM::ColumnDefines & columns_to_read,
+        UInt64 read_tso,
+        const DM::PushDownFilterPtr & push_down_filter,
+        DM::ReadMode read_mode);
 
 private:
     void setUpConnection();
@@ -170,7 +175,11 @@ private:
 
     PageReceiverResult toDecodeResult(
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
-        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
+        std::unique_ptr<CHBlockChunkCodec> & decoder_ptr,
+        const DM::ColumnDefines & columns_to_read,
+        UInt64 read_tso,
+        const DM::PushDownFilterPtr & push_down_filter,
+        DM::ReadMode read_mode);
 
     PageDecodeDetail decodeChunksAndPersistPages(
         const std::shared_ptr<PageReceivedMessage> & recv_msg,

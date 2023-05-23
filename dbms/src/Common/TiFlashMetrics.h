@@ -232,7 +232,8 @@ namespace DB
         F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
         F(type_build_read_task, {{"type", "build_read_task"}}, ExpBuckets{0.01, 2, 20}),                                                            \
         F(type_seg_next_task, {{"type", "seg_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                                \
-        F(type_seg_build_stream, {{"type", "seg_build_stream"}}, ExpBuckets{0.01, 2, 20}))                                                          \
+        F(type_seg_build_stream, {{"type", "seg_build_stream"}}, ExpBuckets{0.01, 2, 20}), \
+        F(type_seg_read_prefix, {{"type", "seg_read_prefix"}}, ExpBuckets{0.01, 2, 20}))                                                          \
     M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
         F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
         F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \
