@@ -330,6 +330,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
+    /// record profiles of local and remote io source
     dag_context.addInboundIOOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
 
     if (group_builder.empty())
