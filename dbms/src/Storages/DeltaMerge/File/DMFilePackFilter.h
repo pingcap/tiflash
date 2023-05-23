@@ -189,6 +189,7 @@ private:
         /// Check packs by filter in where clause
         if (filter)
         {
+            LOG_DEBUG(log, "filter is not empty: {}", filter->toDebugString());
             // Load index based on filter.
             Attrs attrs = filter->getAttrs();
             for (auto & attr : attrs)

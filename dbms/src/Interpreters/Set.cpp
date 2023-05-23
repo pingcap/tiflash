@@ -78,7 +78,12 @@ void NO_INLINE Set::insertFromBlockImplCase(
         if (has_null_map && (*null_map)[i])
             continue;
 
-        state.emplaceKey(method.data, i, variants.string_pool, sort_key_containers);
+        auto emplace_result = state.emplaceKey(method.data, i, variants.string_pool, sort_key_containers);
+
+        if (emplace_result.isInserted() && keys_size == 1)
+        {
+            unique_set_elements->emplace((*key_columns[0])[i]);
+        }
     }
 }
 

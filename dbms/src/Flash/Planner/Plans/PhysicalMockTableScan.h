@@ -44,7 +44,8 @@ public:
         const Block & sample_block_,
         const BlockInputStreams & mock_streams_,
         Int64 table_id_,
-        bool keep_order_);
+        bool keep_order_,
+        const std::vector<Int32> & runtime_filter_ids_);
 
     void finalize(const Names & parent_require) override;
 
@@ -70,7 +71,9 @@ public:
         size_t) override;
 
 private:
-    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/ context, size_t /*max_streams*/) override;
+
+    void buildRuntimeFilterInLocalStream(Context & context);
 
 private:
     FilterConditions filter_conditions;
@@ -80,8 +83,13 @@ private:
 
 
     const Int64 table_id;
+
     const bool keep_order;
 
     SourceOps source_ops;
+
+    std::vector<Int32> runtime_filter_ids;
+
+    const int rf_max_wait_time_ms = 10000;
 };
 } // namespace DB

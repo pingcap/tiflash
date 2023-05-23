@@ -56,7 +56,11 @@ else
   ENABLE_FAILPOINTS="ON"
   JEMALLOC_NARENAS="40"
 fi
-rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+#rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+if [ ! -d ${BUILD_DIR} ]; then
+  mkdir -p ${BUILD_DIR}
+fi
+cd ${BUILD_DIR}
 
 cmake -S "${SRCPATH}" \
   ${DEFINE_CMAKE_PREFIX_PATH} \
