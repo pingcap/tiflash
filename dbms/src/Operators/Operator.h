@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Operators/OperatorProfile.h>
 
 #include <memory>
 
@@ -43,8 +44,6 @@ enum class OperatorStatus
     // means that SourceOp/TransformOp outputs a block as input to the subsequent operators.
     HAS_OUTPUT,
 };
-
-// TODO support operator profile info like `BlockStreamProfileInfo`.
 
 class PipelineExecutorStatus;
 
@@ -91,6 +90,8 @@ protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;
     Block header;
+
+    OperatorProfilePtr profile = std::make_shared<OperatorProfile>();
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.
