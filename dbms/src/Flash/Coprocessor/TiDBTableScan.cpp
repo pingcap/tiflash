@@ -31,6 +31,8 @@ TiDBTableScan::TiDBTableScan(
     , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
     , is_fast_scan(is_partition_table_scan ? table_scan->partition_table_scan().is_fast_scan() : table_scan->tbl_scan().is_fast_scan())
 {
+    RUNTIME_CHECK_MSG(!keep_order || pushed_down_filters.empty(), "Bad TiDB table scan executor: push down filter is not empty when keep order is true");
+
     if (is_partition_table_scan)
     {
         if (table_scan->partition_table_scan().has_table_id())
