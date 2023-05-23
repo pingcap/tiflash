@@ -373,28 +373,22 @@ void MockRaftStoreProxy::bootstrap_with_region(
     UInt64 region_id,
     std::optional<std::pair<std::string, std::string>> maybe_range)
 {
-    UNUSED(tmt);
-    auto _ = genLockGuard();
-    if (!regions.empty())
     {
-        throw Exception("Mock Proxy regions are not cleared");
+        auto _ = genLockGuard();
+        if (!regions.empty())
+        {
+            throw Exception("Mock Proxy regions are not cleared");
+        }
+        auto task_lock = kvs.genTaskLock();
+        auto lock = kvs.genRegionWriteLock(task_lock);
+        if (!lock.regions.empty())
+        {
+            throw Exception("KVStore regions are not cleared");
+        }
     }
-    regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
-
-    auto task_lock = kvs.genTaskLock();
-    auto lock = kvs.genRegionWriteLock(task_lock);
-    if (!lock.regions.empty())
-    {
-        throw Exception("KVStore regions are not cleared");
-    }
-    {
-        auto start = RecordKVFormat::genKey(table_id, 0);
-        auto end = RecordKVFormat::genKey(table_id + 1, 0);
-        auto range = maybe_range.value_or(std::make_pair(start.toString(), end.toString()));
-        auto region = tests::makeRegion(region_id, range.first, range.second);
-        lock.regions.emplace(region_id, region);
-        lock.index.add(region);
-    }
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id + 1, 0);
+    debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or(std::make_pair(start.toString(), end.toString()))});
 }
 
 void MockRaftStoreProxy::debugAddRegions(
