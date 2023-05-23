@@ -1242,29 +1242,14 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTest, KVStoreRestore)
+TEST_F(RegionKVStoreTest, Restore)
 {
+    auto ctx = TiFlashTestEnv::getGlobalContext();
     {
         KVStore & kvs = getKVS();
         {
             ASSERT_EQ(kvs.getRegion(0), nullptr);
-            auto task_lock = kvs.genTaskLock();
-            auto lock = kvs.genRegionWriteLock(task_lock);
-            {
-                auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
-                lock.regions.emplace(1, region);
-                lock.index.add(region);
-            }
-            {
-                auto region = makeRegion(2, RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20));
-                lock.regions.emplace(2, region);
-                lock.index.add(region);
-            }
-            {
-                auto region = makeRegion(3, RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40));
-                lock.regions.emplace(3, region);
-                lock.index.add(region);
-            }
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
         }
         kvs.tryPersistRegion(1);
         kvs.tryPersistRegion(2);
@@ -1278,52 +1263,7 @@ TEST_F(RegionKVStoreTest, KVStoreRestore)
     }
 }
 
-TEST_F(RegionKVStoreTest, RegionMerge)
-{
-    ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", ""), createRegionInfo(1000, "", "x")).source_at_left, false);
-    ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "", "x"), createRegionInfo(1000, "x", "")).source_at_left, true);
-    ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", "y"), createRegionInfo(1000, "y", "z")).source_at_left, true);
-    ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "y", "z"), createRegionInfo(1000, "x", "y")).source_at_left, false);
-
-    {
-        RegionState region_state;
-        bool source_at_left;
-        RegionState source_region_state;
-
-        region_state.setStartKey(RecordKVFormat::genKey(1, 0));
-        region_state.setEndKey(RecordKVFormat::genKey(1, 10));
-
-        source_region_state.setStartKey(RecordKVFormat::genKey(1, 10));
-        source_region_state.setEndKey(RecordKVFormat::genKey(1, 20));
-
-        source_at_left = false;
-
-        ChangeRegionStateRange(region_state, source_at_left, source_region_state);
-
-        ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(1, 0));
-        ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(1, 20));
-    }
-    {
-        RegionState region_state;
-        bool source_at_left;
-        RegionState source_region_state;
-
-        region_state.setStartKey(RecordKVFormat::genKey(2, 5));
-        region_state.setEndKey(RecordKVFormat::genKey(2, 10));
-
-        source_region_state.setStartKey(RecordKVFormat::genKey(2, 0));
-        source_region_state.setEndKey(RecordKVFormat::genKey(2, 5));
-
-        source_at_left = true;
-
-        ChangeRegionStateRange(region_state, source_at_left, source_region_state);
-
-        ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(2, 0));
-        ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(2, 10));
-    }
-}
-
-TEST_F(RegionKVStoreTest, RegionRangeIndex)
+TEST_F(RegionKVStoreTest, RegionRange)
 {
     {
         RegionsRangeIndex region_index;
@@ -1465,6 +1405,52 @@ TEST_F(RegionKVStoreTest, RegionRangeIndex)
 
         region_index.remove(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 2)), 2);
         ASSERT_EQ(root_map.size(), 2);
+    }
+    // Test region range with merge.
+    {
+        {
+            // Compute `source_at_left` by region range.
+            ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", ""), createRegionInfo(1000, "", "x")).source_at_left, false);
+            ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "", "x"), createRegionInfo(1000, "x", "")).source_at_left, true);
+            ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", "y"), createRegionInfo(1000, "y", "z")).source_at_left, true);
+            ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "y", "z"), createRegionInfo(1000, "x", "y")).source_at_left, false);
+        }
+        {
+            RegionState region_state;
+            bool source_at_left;
+            RegionState source_region_state;
+
+            region_state.setStartKey(RecordKVFormat::genKey(1, 0));
+            region_state.setEndKey(RecordKVFormat::genKey(1, 10));
+
+            source_region_state.setStartKey(RecordKVFormat::genKey(1, 10));
+            source_region_state.setEndKey(RecordKVFormat::genKey(1, 20));
+
+            source_at_left = false;
+
+            ChangeRegionStateRange(region_state, source_at_left, source_region_state);
+
+            ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(1, 0));
+            ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(1, 20));
+        }
+        {
+            RegionState region_state;
+            bool source_at_left;
+            RegionState source_region_state;
+
+            region_state.setStartKey(RecordKVFormat::genKey(2, 5));
+            region_state.setEndKey(RecordKVFormat::genKey(2, 10));
+
+            source_region_state.setStartKey(RecordKVFormat::genKey(2, 0));
+            source_region_state.setEndKey(RecordKVFormat::genKey(2, 5));
+
+            source_at_left = true;
+
+            ChangeRegionStateRange(region_state, source_at_left, source_region_state);
+
+            ASSERT_EQ(region_state.getRange()->comparableKeys().first.key, RecordKVFormat::genKey(2, 0));
+            ASSERT_EQ(region_state.getRange()->comparableKeys().second.key, RecordKVFormat::genKey(2, 10));
+        }
     }
 }
 

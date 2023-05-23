@@ -62,14 +62,14 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
     {
         auto applied_index = 0;
         auto region_id = 1;
         {
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
 
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}}});
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_NE(r1, nullptr);
@@ -96,8 +96,7 @@ try
         auto applied_index = 0;
         auto region_id = 2;
         {
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {2}, {{{RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}}});
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE;
 
@@ -129,8 +128,7 @@ try
         auto applied_index = 0;
         auto region_id = 3;
         {
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {3}, {{{RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE;
 
@@ -160,8 +158,7 @@ try
         auto applied_index = 0;
         auto region_id = 4;
         {
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {4}, {{{RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60)}}});
             MockRaftStoreProxy::FailCond cond;
             cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE;
 
@@ -338,6 +335,7 @@ try
             proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
+            ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
             {
                 // Only one file
                 MockSSTReader::getMockSSTData().clear();

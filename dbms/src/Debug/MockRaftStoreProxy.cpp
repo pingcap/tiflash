@@ -375,7 +375,7 @@ void MockRaftStoreProxy::bootstrap_with_region(
 {
     UNUSED(tmt);
     auto _ = genLockGuard();
-    if (regions.size())
+    if (!regions.empty())
     {
         throw Exception("Mock Proxy regions are not cleared");
     }
@@ -383,7 +383,7 @@ void MockRaftStoreProxy::bootstrap_with_region(
 
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
-    if (lock.regions.size())
+    if (!lock.regions.empty())
     {
         throw Exception("KVStore regions are not cleared");
     }

@@ -95,6 +95,7 @@ public:
 
     void TearDown() override
     {
+        proxy_instance->clear();
     }
 
 protected:
@@ -143,6 +144,7 @@ protected:
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
     {
         // Drop files on disk
+        LOG_INFO(&Poco::Logger::get("Test"), "Clean path {} for bootstrap", path);
         Poco::File file(path);
         if (file.exists())
             file.remove(true);

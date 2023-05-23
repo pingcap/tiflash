@@ -285,6 +285,12 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t region_id,
         uint64_t to);
 
+    void clear()
+    {
+        auto _ = genLockGuard();
+        regions.clear();
+    }
+
     MockRaftStoreProxy()
     {
         log = Logger::get("MockRaftStoreProxy");
