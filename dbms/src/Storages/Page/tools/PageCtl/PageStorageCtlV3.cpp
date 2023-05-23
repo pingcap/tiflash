@@ -489,17 +489,27 @@ private:
                 }
             }
         }
+        // region_id, min_log_index, max_log_index, log_count
+        std::vector<std::tuple<UInt64, UInt64, UInt64, UInt64>> regions_vec;
+        regions_vec.reserve(regions.size());
+        for (const auto & [region_id, min_max] : regions)
+        {
+            regions_vec.emplace_back(std::make_tuple(region_id, min_max.first, min_max.second, min_max.first > min_max.second ? 0 : min_max.second - min_max.first + 1));
+        }
+        sort(regions_vec.begin(), regions_vec.end(), [](const auto & lhs, const auto & rhs) {
+            return std::get<3>(lhs) > std::get<3>(rhs);
+        });
         FmtBuffer all_region_info;
         all_region_info.append("  All regions: \n\n");
         all_region_info.joinStr(
-            regions.begin(),
-            regions.end(),
+            regions_vec.begin(),
+            regions_vec.end(),
             [](const auto arg, FmtBuffer & fb) {
                 fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
-                             arg.first,
-                             arg.second.first,
-                             arg.second.second,
-                             arg.second.first > arg.second.second ? 0 : arg.second.second - arg.second.first + 1);
+                             std::get<0>(arg),
+                             std::get<1>(arg),
+                             std::get<2>(arg),
+                             std::get<3>(arg));
             },
             "");
 
