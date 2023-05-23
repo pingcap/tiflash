@@ -153,7 +153,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
         auto remote_table_ranges = buildRemoteTableRanges();
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
-        auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
+        batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
         RUNTIME_CHECK(!batch_cop_tasks.empty());
     }
 

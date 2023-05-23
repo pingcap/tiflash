@@ -86,6 +86,7 @@ protected:
         , log(log_)
         , thread_manager(newThreadManager())
     {
+        RUNTIME_CHECK(concurrency > 0);
     }
 
     virtual String getName() const noexcept = 0;
