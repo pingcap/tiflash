@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -28,6 +29,10 @@
 
 #include <boost/program_options.hpp>
 #include <magic_enum.hpp>
+#include <unordered_set>
+
+#include "Storages/Page/V3/Universal/UniversalPageId.h"
+#include "common/types.h"
 
 namespace DB::PS::V3
 {
@@ -43,6 +48,7 @@ struct ControlOptions
         DISPLAY_BLOBS_INFO = 3,
         CHECK_ALL_DATA_CRC = 4,
         DISPLAY_WAL_ENTRIES = 5,
+        DISPLAY_REGION_INFO = 6,
     };
 
     std::vector<std::string> paths;
@@ -74,6 +80,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  3 is display all blobs(in disk) data distribution
  4 is check every data is valid
  5 is dump entries in WAL log files
+ 6 is display all region info
 )") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
         ("storage_type,S", value<int>()->default_value(0), R"(Storage Type(Only useful for UniversalPageStorage):
@@ -290,6 +297,18 @@ private:
                 }
                 break;
             }
+            case ControlOptions::DisplayType::DISPLAY_REGION_INFO:
+            {
+                if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+                {
+                    std::cout << getAllRegionInfo(mvcc_table_directory) << std::endl;
+                }
+                else
+                {
+                    std::cout << "Only UniversalPageStorage support this mode." << std::endl;
+                }
+                break;
+            }
             default:
                 std::cout << "Invalid display mode." << std::endl;
                 break;
@@ -443,6 +462,47 @@ private:
             directory_info.fmtAppend("    no found page {}", page_id);
         }
         return directory_info.toString();
+    }
+
+    static String getAllRegionInfo(universal::PageDirectoryType::MVCCMapType & mvcc_table_directory)
+    {
+        // region_id -> pair<min_raft_log_index, max_raft_log_index>
+        std::unordered_map<UInt64, std::pair<UInt64, UInt64>> regions;
+        for (const auto & [page_id, versioned_entries] : mvcc_table_directory)
+        {
+            UNUSED(versioned_entries);
+            auto maybe_region_id = RaftDataReader::tryParseRegionId(page_id);
+            if (maybe_region_id)
+            {
+                auto region_id = *maybe_region_id;
+                if (regions.find(region_id) == regions.end())
+                {
+                    regions.emplace(region_id, std::make_pair(UINT64_MAX, 0));
+                }
+                auto maybe_raft_log_index = RaftDataReader::tryParseRaftLogIndex(page_id);
+                if (maybe_raft_log_index)
+                {
+                    auto raft_log_index = *maybe_raft_log_index;
+                    auto & [min_raft_log_index, max_raft_log_index] = regions[region_id];
+                    min_raft_log_index = std::min(min_raft_log_index, raft_log_index);
+                    max_raft_log_index = std::max(max_raft_log_index, raft_log_index);
+                }
+            }
+        }
+        FmtBuffer all_region_info;
+        all_region_info.append("  All regions: \n\n");
+        all_region_info.joinStr(
+            regions.begin(),
+            regions.end(),
+            [](const auto arg, FmtBuffer & fb) {
+                fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {}\n",
+                             arg.first,
+                             arg.second.first,
+                             arg.second.second);
+            },
+            "");
+
+        return all_region_info.toString();
     }
 
     static String getSummaryInfo(typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory, typename Trait::BlobStore & blob_store)

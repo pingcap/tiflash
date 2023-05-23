@@ -37,6 +37,10 @@ public:
     // return the first id not less than `page_id`
     std::optional<UniversalPageId> getLowerBound(const UniversalPageId & page_id);
 
+    static std::optional<UInt64> tryParseRegionId(const UniversalPageId & page_id);
+
+    static std::optional<UInt64> tryParseRaftLogIndex(const UniversalPageId & page_id);
+
 private:
     static char raft_data_end_key[1];
 
