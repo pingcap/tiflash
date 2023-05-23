@@ -39,7 +39,7 @@ void BgStorageInitHolder::waitUntilFinish()
 
 void doInitStores(Context & global_context, const LoggerPtr & log)
 {
-    auto storages = global_context.getTMTContext().getStorages().getAllStorage();
+    const auto storages = global_context.getTMTContext().getStorages().getAllStorage();
 
     std::atomic<int> init_cnt = 0;
     std::atomic<int> err_cnt = 0;

@@ -119,6 +119,11 @@ public:
         const String & table_name,
         const Context & context)
         = 0;
+    
+    virtual void updateTableInfo(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const Context & context) = 0;
 
     virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.

@@ -31,15 +31,12 @@ public:
     }
 
     SchemaSyncerPtr getOrCreateSchemaSyncer(KeyspaceID keyspace_id){
-        // boost::shared_lock<boost::shared_mutex> read_lock(schema_syncers_mutex);
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto syncer = schema_syncers.find(keyspace_id);
         if (syncer == schema_syncers.end()) {
             read_lock.unlock();
             std::unique_lock<std::shared_mutex> write_lock(schema_syncers_mutex);
-            // boost::upgrade_lock<boost::shared_mutex> upgrade_lock(schema_syncers_mutex);
-            // boost::upgrade_to_unique_lock<boost::shared_mutex> lock(upgrade_lock);
-            // 再找一次，避免 A 和 B 都 是 end，都在要这把锁来创建
+
             syncer = schema_syncers.find(keyspace_id);
             if (syncer == schema_syncers.end()){
                 return createSchemaSyncer(keyspace_id);
@@ -68,20 +65,16 @@ public:
     }
 
     bool syncSchemas(Context & context, KeyspaceID keyspace_id){
-        // 先暴力加 unique lock
         auto schema_syncer = getOrCreateSchemaSyncer(keyspace_id);
         return schema_syncer->syncSchemas(context);
     }
 
-    // TODO:是不是这一层也要加锁感觉，不然是不是会出问题？
     bool syncTableSchema(Context & context, KeyspaceID keyspace_id, TableID table_id){
         auto schema_syncer = getOrCreateSchemaSyncer(keyspace_id);
-        LOG_INFO(Logger::get("TiDBSchemaSyncerManager"), "get schema_syncer");
         return schema_syncer->syncTableSchema(context, table_id);
     }
 
     void reset(KeyspaceID keyspace_id){
-        // boost::shared_lock<boost::shared_mutex> read_lock(schema_syncers_mutex);
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
@@ -91,9 +84,7 @@ public:
         schema_syncer->reset();
     }
 
-    // TODO:那返回地方要处理 nullptr
     TiDB::DBInfoPtr getDBInfoByName(KeyspaceID keyspace_id, const String & database_name){
-        // boost::shared_lock<boost::shared_mutex> read_lock(schema_syncers_mutex);
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
@@ -103,14 +94,11 @@ public:
         return schema_syncer->getDBInfoByName(database_name);
     }
 
-    // TODO:那返回地方要处理 nullptr
     TiDB::DBInfoPtr getDBInfoByMappedName(KeyspaceID keyspace_id, const String & mapped_database_name)
     {
-        // boost::shared_lock<boost::shared_mutex> read_lock(schema_syncers_mutex);
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
-            //schema_syncer = createSchemaSyncer(keyspace_id);
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return nullptr;
         }
@@ -124,8 +112,6 @@ public:
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return false;
         }
-        // boost::upgrade_lock<boost::shared_mutex> upgrade_lock(schema_syncers_mutex);
-        // boost::upgrade_to_unique_lock<boost::shared_mutex> lock(upgrade_lock);
         read_lock.unlock();
 
         std::unique_lock<std::shared_mutex> lock(schema_syncers_mutex);
@@ -139,7 +125,6 @@ public:
     }
 
     void removeTableID(KeyspaceID keyspace_id, TableID table_id) {
-        // boost::shared_lock<boost::shared_mutex> read_lock(schema_syncers_mutex);
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr) {
@@ -149,7 +134,6 @@ public:
     }
 
 private:
-    // boost::shared_mutex schema_syncers_mutex;
     std::shared_mutex schema_syncers_mutex;
 
     KVClusterPtr cluster;

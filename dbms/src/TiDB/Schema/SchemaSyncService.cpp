@@ -54,7 +54,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 
 void SchemaSyncService::addKeyspaceGCTasks()
 {
-    auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
+    const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
     // Add new sync schema task for new keyspace.
@@ -110,7 +110,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
 
 void SchemaSyncService::removeKeyspaceGCTasks()
 {
-    auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
+    const auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
 
     // Remove stale sync schema task.
@@ -184,6 +184,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
             {
                 // Only keep a weak_ptr on storage so that the memory can be free as soon as
                 // it is dropped.
+                LOG_INFO(log, "add storage with table id {} into storages_to_gc", managed_storage->getTableInfo().id);
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
             }
         }
@@ -201,6 +202,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         String database_name = storage->getDatabaseName();
         String table_name = storage->getTableName();
         const auto & table_info = storage->getTableInfo();
+
         tmt_context.getSchemaSyncerManager()->removeTableID(keyspace_id, table_info.id);
 
         auto canonical_name = [&]() {

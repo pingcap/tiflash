@@ -27,7 +27,9 @@ extern const int TIDB_TABLE_ALREADY_EXISTS;
 void ManagedStorages::put(ManageableStoragePtr storage)
 {
     // 用 unique_lock 的话重启的时候性能会有明显裂化
-    std::lock_guard lock(mutex);
+    // std::lock_guard lock(mutex);
+    std::lock_guard lock(shared_mutex);
+    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::put");
     //std::unique_lock<std::shared_mutex> lock(shared_mutex);
 
     KeyspaceID keyspace_id = storage->getTableInfo().keyspace_id;
@@ -46,35 +48,39 @@ void ManagedStorages::put(ManageableStoragePtr storage)
 
 ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_id) const
 {
-    // std::lock_guard lock(mutex);
-    //LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get");
-    std::lock_guard lock(mutex);
-    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
-    //LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get get lock");
+    //std::lock_guard lock(mutex);
+    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get");
+    //std::lock_guard lock(mutex);
+    // std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
+    shared_mutex.lock_shared();
+    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get get lock");
 
-    if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end())
+    if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end()){
+        shared_mutex.unlock_shared();
         return it->second;
+    }
+    shared_mutex.unlock_shared();
     return nullptr;
 }
 
 StorageMap ManagedStorages::getAllStorage() const
 {
-    std::lock_guard lock(mutex);
-    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
+    //std::lock_guard lock(mutex);
+    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     return storages;
 }
 
 KeyspaceSet ManagedStorages::getAllKeyspaces() const
 {
-    std::lock_guard lock(mutex);
-    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
+    //std::lock_guard lock(mutex);
+    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     return keyspaces;
 }
 
 ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table, bool include_tombstone) const
 {
-    std::lock_guard lock(mutex);
-    //std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
+    //std::lock_guard lock(mutex);
+    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     // std::cout << " into ManagedStorages::getByName " << std::endl;
     // for (const auto & storage: storages) {
     //     std::cout << "storage: db and table name " << storage.second->getDatabaseName() << " " << storage.second->getTableInfo().name << std::endl;
@@ -91,7 +97,9 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
 
 void ManagedStorages::remove(KeyspaceID keyspace_id, TableID table_id)
 {
-    std::lock_guard lock(mutex);
+    //std::lock_guard lock(mutex);
+    std::lock_guard lock(shared_mutex);
+    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::remove");
     //std::unique_lock<std::shared_mutex> lock(shared_mutex);
 
     auto it = storages.find(KeyspaceTableID{keyspace_id, table_id});

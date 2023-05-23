@@ -153,6 +153,11 @@ public:
         const String & table_name,
         const Context & context) override;
 
+    void updateTableInfo(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const Context & context) override;
+
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }

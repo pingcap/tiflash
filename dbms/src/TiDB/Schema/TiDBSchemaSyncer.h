@@ -49,11 +49,11 @@ private:
 
     std::mutex mutex_for_sync_table_schema; // for syncTableSchema
 
-    std::mutex mutex; // for syncSchemas 
+    std::mutex mutex_for_sync_schema; // for syncSchemas 
 
-    std::shared_mutex shared_mutex_for_databases; // mutex for databases?
+    std::shared_mutex shared_mutex_for_databases; // mutex for databases
 
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases; // 这个什么时候会用到呢
+    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     std::shared_mutex shared_mutex_for_table_id_map; // mutex for table_id_to_database_id and partition_id_to_logical_id;
 
@@ -94,11 +94,6 @@ public:
 
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
 
-    // background 的逻辑本身可以保证同时一个keyspace 只会有一个 线程在做 syncSchema，所以 syncSchema 本身不需要加锁来避免多个同时跑
-    // syncSchemas 需要加锁，因为 syncTableSchema 内部可能会调用 syncSchemas
-    // 不过 syncSchemas 可以跟 syncTableSchema 一起跑么？
-    // syncSchema 主要是更新两个 map，特定 ddl 会更新表本身。syncTableSchema 主要是更新表本身。
-    // 因为 map 和 表本身都各自上锁，应该能保证两个并行跑也不会出问题。不过都要在改 map 和 改表前做确定，do only once，不要多次重复
     // 多个 syncTableSchema 会调用这个，不能一起跑，要加锁保证
     bool syncSchemas(Context & context) override;
 

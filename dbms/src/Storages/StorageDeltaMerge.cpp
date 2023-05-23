@@ -92,6 +92,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     , global_context(global_context_.getGlobalContext())
     , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
+    LOG_INFO(log, "hyy StorageDeltaMerge tomstone is {}", tombstone);
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
@@ -1425,6 +1426,20 @@ ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info){
     return new_columns;
 }
 
+
+void StorageDeltaMerge::updateTableInfo(
+    const TableLockHolder &,
+    TiDB::TableInfo & table_info,
+    const Context & context) {
+
+    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
+    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
+    {
+        auto & tmt_context = context.getTMTContext();
+        tidb_table_info.engine_type = tmt_context.getEngineType();
+    }
+}
+
 void StorageDeltaMerge::alterSchemaChange(
     const TableLockHolder &,
     TiDB::TableInfo & table_info,
@@ -1465,7 +1480,7 @@ void StorageDeltaMerge::alterSchemaChange(
         getColumns(),
         hidden_columns,
         table_info,
-        1, // 后面删掉
+        0,
         context);
 
     // TODO:这边应该有些字段要改？

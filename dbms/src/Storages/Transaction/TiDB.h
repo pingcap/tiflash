@@ -400,7 +400,7 @@ struct TableInfo
     bool is_view = false;
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO:可以删了
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;

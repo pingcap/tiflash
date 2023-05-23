@@ -22,6 +22,7 @@ namespace DB
 struct MockSchemaNameMapper : public SchemaNameMapper
 {
     String mapDatabaseName(const TiDB::DBInfo & db_info) const override { return db_info.name; }
+    String mapDatabaseName(DatabaseID database_id, KeyspaceID /*keyspace_id*/) const override { return "db_" + std::to_string(database_id);}
     String mapTableName(const TiDB::TableInfo & table_info) const override { return table_info.name; }
 
     String mapPartitionName(const TiDB::TableInfo & table_info) const override

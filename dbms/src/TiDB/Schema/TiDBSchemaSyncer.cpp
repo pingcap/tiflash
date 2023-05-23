@@ -21,8 +21,8 @@ namespace DB
 
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context){
-    LOG_INFO(log, "Start sync schema");
-    std::lock_guard<std::mutex> lock(mutex);
+    LOG_INFO(log, "Start syncSchemas");
+    std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
 
@@ -166,11 +166,6 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     // 1. get table_id and database_id, 如果是分区表的话，table_id_ != table_id
     auto [find, database_id, table_id] = findDatabaseIDAndTableID(table_id_);
     if (!find){
-        // {
-        //     std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
-        //     LOG_INFO(log, "syncTableSchema findDatabaseIDAndTableID failed with table_id_to_database_id size is {}", table_id_to_database_id.size());
-        // }
-        
         LOG_WARNING(log, "Can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", table_id_);
         syncSchemas(context);
         std::tie(find, database_id, table_id) = findDatabaseIDAndTableID(table_id_);

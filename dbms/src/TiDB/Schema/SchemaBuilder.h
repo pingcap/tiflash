@@ -96,6 +96,8 @@ private:
     void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
 
     void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
+
+    void applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id);
 };
 
 } // namespace DB
