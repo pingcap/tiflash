@@ -495,10 +495,11 @@ private:
             regions.begin(),
             regions.end(),
             [](const auto arg, FmtBuffer & fb) {
-                fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {}\n",
+                fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
                              arg.first,
                              arg.second.first,
-                             arg.second.second);
+                             arg.second.second,
+                             std::max(arg.second.second - arg.second.first + 1, 0));
             },
             "");
 
