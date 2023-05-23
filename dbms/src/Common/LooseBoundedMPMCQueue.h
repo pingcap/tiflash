@@ -41,10 +41,12 @@ public:
     LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : capacity(std::max(1, capacity_))
         , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
-        , get_auxiliary_memory_usage(max_auxiliary_memory_usage == std::numeric_limits<Int64>::max() ? [](const T &) {
-            return 0;
-        }
-                                                                                                     : std::move(get_auxiliary_memory_usage_))
+        , get_auxiliary_memory_usage(
+              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+                  ? [](const T &) {
+                        return 0;
+                    }
+                  : std::move(get_auxiliary_memory_usage_))
     {}
 
     /// blocking function.
@@ -199,6 +201,7 @@ public:
 private:
     bool isFullWithoutLock() const
     {
+        assert(current_auxiliary_memory_usage >= 0);
         return queue.size() >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage;
     }
 
@@ -233,6 +236,18 @@ private:
         queue.emplace_front(std::forward<U>(data), memory_usage);
         current_auxiliary_memory_usage += memory_usage;
         reader_head.notifyNext();
+        /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,
+        /// T1: a writer write an object with size 100
+        /// T2: two writers(w2, w3) try to write, but all blocked because of the max_auxiliary_memory_usage
+        /// T3: a reader reads the object, and it will notify one of the waiting writers
+        /// T4: assuming w2 is notified, then it writes an object of size 50, and there is no reader at that time
+        /// then the queue's size is 1 and current_auxiliary_memory_usage is 50, which means the
+        /// queue is not full, but w3 is still blocked, the queue's status is not changed until
+        /// 1. there is another reader
+        /// 2. there is another writer
+        /// if we notify the writer if the queue is not full here, w3 can write immediately
+        if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
+            writer_head.notifyNext();
     }
 
 private:
