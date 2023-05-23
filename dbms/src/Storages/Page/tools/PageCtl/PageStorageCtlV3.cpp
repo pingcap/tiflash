@@ -499,7 +499,7 @@ private:
                              arg.first,
                              arg.second.first,
                              arg.second.second,
-                             std::max(arg.second.second - arg.second.first + 1, 0));
+                             arg.second.first > arg.second.second ? 0 : arg.second.second - arg.second.first + 1);
             },
             "");
 
