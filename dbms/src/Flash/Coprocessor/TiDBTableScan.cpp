@@ -28,8 +28,8 @@ TiDBTableScan::TiDBTableScan(
     , pushed_down_filters(is_partition_table_scan ? std::move(table_scan->partition_table_scan().pushed_down_filter_conditions()) : std::move(table_scan->tbl_scan().pushed_down_filter_conditions()))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
-    // When keep_order is true, we will not push down filters to tablescan.
-    // So even if keep_order is not set, but pushed down filters is not empty, we can't keep order.
+    // When keep_order is true, we will not push down filters to tablescan in TiDB.
+    // So even if keep_order is not set (may be lost), but pushed down filters is not empty, we can't keep order.
     , keep_order(!is_partition_table_scan && pushed_down_filters.empty() && (!table_scan->tbl_scan().has_keep_order() || table_scan->tbl_scan().keep_order()))
     , is_fast_scan(table_scan->tbl_scan().is_fast_scan())
 {
