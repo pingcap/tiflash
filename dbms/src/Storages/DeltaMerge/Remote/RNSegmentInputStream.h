@@ -30,7 +30,7 @@ class RNSegmentInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "RNSegment";
 
 public:
-    ~RNSegmentInputStream() override = default;
+    ~RNSegmentInputStream() override;
 
     String getName() const override { return NAME; }
 
@@ -73,6 +73,9 @@ private:
     RNReadSegmentTaskPtr current_seg_task = nullptr;
     bool done = false;
     size_t processed_seg_tasks = 0;
+
+    double duration_wait_ready_task_sec = 0;
+    double duration_read_sec = 0;
 };
 
 } // namespace DB::DM::Remote

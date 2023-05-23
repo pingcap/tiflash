@@ -22,6 +22,17 @@
 namespace DB::DM::Remote
 {
 
+RNSegmentInputStream::~RNSegmentInputStream()
+{
+    LOG_INFO(
+        log,
+        "Finished reading remote segments, rows={} read_segments={} total_wait_ready_task={:.3f}s total_read={:.3f}s",
+        action.totalRows(),
+        processed_seg_tasks,
+        duration_wait_ready_task_sec,
+        duration_read_sec);
+}
+
 Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
     if (done)
@@ -33,7 +44,10 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
         {
             workers->startInBackground();
 
+            Stopwatch w{CLOCK_MONOTONIC_COARSE};
             auto pop_result = workers->getReadyChannel()->pop(current_seg_task);
+            duration_wait_ready_task_sec += w.elapsedSeconds();
+
             if (pop_result == MPMCQueueResult::OK)
             {
                 processed_seg_tasks += 1;
@@ -42,7 +56,6 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
             else if (pop_result == MPMCQueueResult::FINISHED)
             {
                 current_seg_task = nullptr;
-                LOG_INFO(log, "Finished reading remote segments, rows={} read_segments={}", action.totalRows(), processed_seg_tasks);
                 done = true;
                 return {};
             }
@@ -58,7 +71,10 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
             }
         }
 
+        Stopwatch w{CLOCK_MONOTONIC_COARSE};
         Block res = current_seg_task->getInputStream()->read(res_filter, return_filter);
+        duration_read_sec += w.elapsedSeconds();
+
         if (!res)
         {
             // Current stream is drained, try read from next stream.
