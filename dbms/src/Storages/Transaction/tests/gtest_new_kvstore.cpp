@@ -18,6 +18,46 @@ namespace DB
 {
 namespace tests
 {
+TEST_F(RegionKVStoreTest, PersistenceV1)
+try
+{
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+
+    KVStore & kvs = getKVS();
+    {
+        ASSERT_EQ(kvs.getRegion(0), nullptr);
+        auto task_lock = kvs.genTaskLock();
+        auto lock = kvs.genRegionWriteLock(task_lock);
+        {
+            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
+            lock.regions.emplace(1, region);
+            lock.index.add(region);
+        }
+    }
+    {
+        kvs.tryPersistRegion(1);
+        kvs.gcRegionPersistedCache(Seconds{0});
+    }
+    {
+        // test CompactLog
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        auto region = kvs.getRegion(1);
+        region->markCompactLog();
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
+        request.mutable_compact_log();
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
+        // CompactLog always returns true now, even if we can't do a flush.
+        // We use a tryFlushData to pre-filter.
+        ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
+
+        // Filter
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
+    }
+}
+CATCH
+
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
@@ -455,7 +495,7 @@ try
 CATCH
 
 
-TEST_F(RegionKVStoreTest, KVStoreSnapshot2)
+TEST_F(RegionKVStoreTest, KVStoreV2Snapshot)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();

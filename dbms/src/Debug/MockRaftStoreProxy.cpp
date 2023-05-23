@@ -309,7 +309,7 @@ MockReadIndexTask * MockRaftStoreProxy::makeReadIndexTask(kvrpcpb::ReadIndexRequ
         r->data = std::make_shared<RawMockReadIndexTask>();
         r->data->req = std::move(req);
         r->data->region = region;
-        tasks.push_back(r->data);
+        read_index_tasks.push_back(r->data);
         return r;
     }
     return nullptr;
@@ -347,9 +347,9 @@ void MockRaftStoreProxy::testRunNormal(const std::atomic_bool & over)
 void MockRaftStoreProxy::runOneRound()
 {
     auto _ = genLockGuard();
-    while (!tasks.empty())
+    while (!read_index_tasks.empty())
     {
-        auto & t = *tasks.front();
+        auto & t = *read_index_tasks.front();
         if (!region_id_to_drop.count(t.req.context().region_id()))
         {
             if (region_id_to_error.count(t.req.context().region_id()))
@@ -357,7 +357,7 @@ void MockRaftStoreProxy::runOneRound()
             else
                 t.update(false, false);
         }
-        tasks.pop_front();
+        read_index_tasks.pop_front();
     }
 }
 
@@ -385,6 +385,26 @@ void MockRaftStoreProxy::bootstrap(
         auto range = maybe_range.value_or(std::make_pair(start.toString(), end.toString()));
         auto region = tests::makeRegion(region_id, range.first, range.second);
         lock.regions.emplace(region_id, region);
+        lock.index.add(region);
+    }
+}
+
+void MockRaftStoreProxy::debugAddRegions(
+    KVStore & kvs,
+    TMTContext & tmt,
+    std::vector<UInt64> region_ids,
+    std::vector<std::pair<std::string, std::string>> && ranges)
+{
+    UNUSED(tmt);
+    int n = ranges.size();
+    auto _ = genLockGuard();
+    auto task_lock = kvs.genTaskLock();
+    auto lock = kvs.genRegionWriteLock(task_lock);
+    for (int i = 0; i < n; i++)
+    {
+        regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
+        auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+        lock.regions.emplace(region_ids[i], region);
         lock.index.add(region);
     }
 }

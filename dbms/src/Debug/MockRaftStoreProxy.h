@@ -202,6 +202,13 @@ struct MockRaftStoreProxy : MutexLockWrap
         KVStore & kvs,
         TMTContext & tmt);
 
+    /// manually add a region.
+    void debugAddRegions(
+        KVStore & kvs,
+        TMTContext & tmt,
+        std::vector<UInt64> region_ids,
+        std::vector<std::pair<std::string, std::string>> && ranges);
+
     /// We assume that we generate one command, and immediately commit.
     /// normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
@@ -279,10 +286,12 @@ struct MockRaftStoreProxy : MutexLockWrap
         table_id = 1;
     }
 
+    // Mock Proxy will drop read index requests to these regions
     std::unordered_set<uint64_t> region_id_to_drop;
+    // Mock Proxy will return error read index response to these regions
     std::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
-    std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
+    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
     AsyncWaker::Notifier notifier;
     TableID table_id;
     LoggerPtr log;

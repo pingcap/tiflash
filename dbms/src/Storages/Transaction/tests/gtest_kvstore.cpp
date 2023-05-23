@@ -18,44 +18,6 @@ namespace DB
 {
 namespace tests
 {
-TEST_F(RegionKVStoreTest, NewProxy)
-{
-    createDefaultRegions();
-    auto ctx = TiFlashTestEnv::getGlobalContext();
-
-    KVStore & kvs = getKVS();
-    {
-        ASSERT_EQ(kvs.getRegion(0), nullptr);
-        auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
-        {
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
-            lock.regions.emplace(1, region);
-            lock.index.add(region);
-        }
-    }
-    {
-        kvs.tryPersistRegion(1);
-        kvs.gcRegionPersistedCache(Seconds{0});
-    }
-    {
-        // test CompactLog
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        auto region = kvs.getRegion(1);
-        region->markCompactLog();
-        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
-        request.mutable_compact_log();
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-        // CompactLog always returns true now, even if we can't do a flush.
-        // We use a tryFlushData to pre-filter.
-        ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
-
-        // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
-    }
-}
-
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
     createDefaultRegions();
@@ -71,25 +33,11 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
-        auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
-        {
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10), kvs.getProxyHelper());
-            lock.regions.emplace(1, region);
-            lock.index.add(region);
-        }
-        {
-            auto region = makeRegion(2, RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20), kvs.getProxyHelper());
-            lock.regions.emplace(2, region);
-            lock.index.add(region);
-        }
-        {
-            auto region = makeRegion(3, RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40), kvs.getProxyHelper());
-            lock.regions.emplace(3, region);
-            lock.index.add(region);
-        }
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
     }
     {
+        // `read_index_worker_manager` is not set, fallback to v1.
+        // We don't support batch read index version 1 now
         ASSERT_EQ(kvs.read_index_worker_manager, nullptr);
         {
             auto region = kvs.getRegion(1);
@@ -110,22 +58,17 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             },
             1);
         ASSERT_NE(kvs.read_index_worker_manager, nullptr);
-
+    }
+    {
         {
+            // Normal async notifier
             kvs.asyncRunReadIndexWorkers();
             SCOPE_EXIT({
                 kvs.stopReadIndexWorkers();
             });
 
-            auto tar_region_id = 9;
-            {
-                auto task_lock = kvs.genTaskLock();
-                auto lock = kvs.genRegionWriteLock(task_lock);
-
-                auto region = makeRegion(tar_region_id, RecordKVFormat::genKey(2, 0), RecordKVFormat::genKey(2, 10));
-                lock.regions.emplace(region->id(), region);
-                lock.index.add(region);
-            }
+            UInt64 tar_region_id = 9;
+            proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {tar_region_id}, {{{RecordKVFormat::genKey(2, 0), RecordKVFormat::genKey(2, 10)}}});
             {
                 ASSERT_EQ(proxy_instance->regions.at(tar_region_id)->getLatestCommitIndex(), 5);
                 proxy_instance->regions.at(tar_region_id)->updateCommitIndex(66);
@@ -149,6 +92,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
                 EngineStoreApplyRes::None);
         }
         {
+            // Async notifier error
             kvs.asyncRunReadIndexWorkers();
             SCOPE_EXIT({
                 kvs.stopReadIndexWorkers();
@@ -175,15 +119,16 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
         }
 
+        // Test read index
+        // Note `batchReadIndex` always returns latest committed index in our mock class.
         kvs.asyncRunReadIndexWorkers();
         SCOPE_EXIT({
             kvs.stopReadIndexWorkers();
         });
 
         {
-            // test read index
             auto region = kvs.getRegion(1);
-            auto req = GenRegionReadIndexReq(*region, 8);
+            auto req = GenRegionReadIndexReq(*region, 8); // start_ts = 8
             auto resp = kvs.batchReadIndex({req}, 100);
             ASSERT_EQ(resp[0].first.read_index(), 5);
             {
@@ -200,10 +145,11 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             r.second->updateCommitIndex(667);
         }
         {
+            // Found in `history_success_tasks`
             auto region = kvs.getRegion(1);
             auto req = GenRegionReadIndexReq(*region, 8);
             auto resp = kvs.batchReadIndex({req}, 100);
-            ASSERT_EQ(resp[0].first.read_index(), 5); // history
+            ASSERT_EQ(resp[0].first.read_index(), 5);
         }
         {
             auto region = kvs.getRegion(1);
@@ -221,6 +167,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
                 ASSERT_EQ(std::get<0>(r), WaitIndexResult::Timeout);
             }
             {
+                // Wait for a new index 667 + 1 to be applied
                 AsyncWaker::Notifier notifier;
                 std::thread t([&]() {
                     notifier.wake();
