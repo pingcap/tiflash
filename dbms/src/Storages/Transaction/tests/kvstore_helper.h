@@ -93,7 +93,9 @@ public:
         }
     }
 
-    void TearDown() override {}
+    void TearDown() override
+    {
+    }
 
 protected:
     KVStore & getKVS() { return *kvstore; }

@@ -599,19 +599,22 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 }
 
-TEST_F(RegionKVStoreTest, Region)
+TEST_F(RegionKVStoreTest, RegionReadWrite)
 {
-    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
+    KVStore & kvs = getKVS();
+    UInt64 region_id = 1;
+    proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::make_optional(std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
+    auto region = kvs.getRegion(region_id);
     {
+        // Test create RegionMeta.
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
         ASSERT_EQ(meta.peerId(), 2);
     }
-    auto region = makeRegion(1, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000));
     {
+        // Test GenRegionReadIndexReq.
         ASSERT_TRUE(region->checkIndex(5));
-    }
-    {
         auto start_ts = 199;
         auto req = GenRegionReadIndexReq(*region, start_ts);
         ASSERT_EQ(req.ranges().size(), 1);
@@ -622,12 +625,14 @@ TEST_F(RegionKVStoreTest, Region)
         ASSERT_EQ(region->getRange()->comparableKeys().second.key, req.ranges()[0].end_key());
     }
     {
+        // Test read committed and lock with CommittedScanner.
         region->insert("lock", RecordKVFormat::genKey(table_id, 3), RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
         region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insert("write", RecordKVFormat::genKey(table_id, 3, 8), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
         ASSERT_EQ(1, region->writeCFCount());
         ASSERT_EQ(region->dataInfo(), "[write 1 lock 1 default 1 ]");
         {
+            // There is a lock.
             auto iter = region->createCommittedScanner();
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
@@ -635,6 +640,7 @@ TEST_F(RegionKVStoreTest, Region)
             ASSERT_EQ(k->lock_version(), 3);
         }
         {
+            // The record is committed since there is a write record.
             std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
             ASSERT_TRUE(data_list_read);
             ASSERT_EQ(1, data_list_read->size());
@@ -650,6 +656,7 @@ TEST_F(RegionKVStoreTest, Region)
         region->clearAllData();
     }
     {
+        // Test duplicate and tryCompactionFilter
         region->insert("write", RecordKVFormat::genKey(table_id, 3, 8), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
         ASSERT_EQ(region->dataInfo(), "[write 1 ]");
 
@@ -670,6 +677,7 @@ TEST_F(RegionKVStoreTest, Region)
         ASSERT_EQ(region->dataInfo(), "[]");
     }
     {
+        // Test read and delete committed Del record.
         region->insert("write", RecordKVFormat::genKey(table_id, 4, 8), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::DelFlag, 5));
         ASSERT_EQ(1, region->writeCFCount());
         region->remove("write", RecordKVFormat::genKey(table_id, 4, 8));
@@ -684,13 +692,10 @@ TEST_F(RegionKVStoreTest, Region)
     }
     {
         ASSERT_EQ(0, region->dataSize());
-
         region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         ASSERT_LT(0, region->dataSize());
-
         region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
-
         // remove duplicate records
         region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
@@ -705,7 +710,6 @@ TEST_F(RegionKVStoreTest, KVStore)
     KVStore & kvs = getKVS();
     {
         // Run without read-index workers
-
         kvs.initReadIndexWorkers(
             []() {
                 return std::chrono::milliseconds(10);
@@ -717,46 +721,32 @@ TEST_F(RegionKVStoreTest, KVStore)
         kvs.releaseReadIndexWorkers();
     }
     {
+        // Test set set id
         auto store = metapb::Store{};
-        store.set_id(1234);
+        store.set_id(2345);
         kvs.setStore(store);
         ASSERT_EQ(kvs.getStoreID(), store.id());
     }
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
-        auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
-        {
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
-            lock.regions.emplace(1, region);
-            lock.index.add(region);
-        }
-        {
-            auto region = makeRegion(2, RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20));
-            lock.regions.emplace(2, region);
-            lock.index.add(region);
-        }
-        {
-            auto region = makeRegion(3, RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40));
-            lock.regions.emplace(3, region);
-            lock.index.add(region);
-        }
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 2, 3}, {{{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 10), RecordKVFormat::genKey(1, 20)}, {RecordKVFormat::genKey(1, 30), RecordKVFormat::genKey(1, 40)}}});
     }
     {
+        // Test gc region persister
         kvs.tryPersistRegion(1);
         kvs.gcRegionPersistedCache(Seconds{0});
     }
     {
+        // Test getRegionsByRangeOverlap
         ASSERT_EQ(kvs.regionSize(), 3);
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 15), TiKVKey("")));
         ASSERT_EQ(mmp.size(), 2);
         kvs.handleDestroy(3, ctx.getTMTContext());
         kvs.handleDestroy(3, ctx.getTMTContext());
-    }
-    {
-        RegionMap mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 15), TiKVKey("")));
-        ASSERT_EQ(mmp.size(), 1);
-        ASSERT_EQ(mmp.at(2)->id(), 2);
+
+        RegionMap mmp2 = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 15), TiKVKey("")));
+        ASSERT_EQ(mmp2.size(), 1);
+        ASSERT_EQ(mmp2.at(2)->id(), 2);
     }
     {
         {
@@ -1288,7 +1278,7 @@ TEST_F(RegionKVStoreTest, KVStoreRestore)
     }
 }
 
-void test_mergeresult()
+TEST_F(RegionKVStoreTest, RegionMerge)
 {
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", ""), createRegionInfo(1000, "", "x")).source_at_left, false);
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "", "x"), createRegionInfo(1000, "x", "")).source_at_left, true);
@@ -1333,7 +1323,7 @@ void test_mergeresult()
     }
 }
 
-TEST_F(RegionKVStoreTest, Basic)
+TEST_F(RegionKVStoreTest, RegionRangeIndex)
 {
     {
         RegionsRangeIndex region_index;
@@ -1475,9 +1465,6 @@ TEST_F(RegionKVStoreTest, Basic)
 
         region_index.remove(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 2)), 2);
         ASSERT_EQ(root_map.size(), 2);
-    }
-    {
-        test_mergeresult();
     }
 }
 

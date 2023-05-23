@@ -183,26 +183,31 @@ struct MockRaftStoreProxy : MutexLockWrap
         Type type = NORMAL;
     };
 
-    /// boostrap a region.
-    void bootstrap(
+    /// Boostrap with a given region.
+    /// Similar to TiKV's `bootstrap_region`.
+    void bootstrap_with_region(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
         std::optional<std::pair<std::string, std::string>> maybe_range);
 
-    /// boostrap a table, since applying snapshot needs table schema.
+    /// Boostrap a table.
+    /// Must be called if:
+    /// 1. Applying snapshot which needs table schema
+    /// 2. Doing row2col.
     TableID bootstrap_table(
         Context & ctx,
         KVStore & kvs,
-        TMTContext & tmt);
+        TMTContext & tmt,
+        bool drop_at_first = true);
 
-    /// clear tables.
+    /// Clear tables.
     void clear_tables(
         Context & ctx,
         KVStore & kvs,
         TMTContext & tmt);
 
-    /// manually add a region.
+    /// Manually add a region.
     void debugAddRegions(
         KVStore & kvs,
         TMTContext & tmt,
@@ -210,7 +215,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<std::pair<std::string, std::string>> && ranges);
 
     /// We assume that we generate one command, and immediately commit.
-    /// normal write to a region.
+    /// Normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,

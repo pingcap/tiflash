@@ -367,7 +367,7 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
     cb(*this);
 }
 
-void MockRaftStoreProxy::bootstrap(
+void MockRaftStoreProxy::bootstrap_with_region(
     KVStore & kvs,
     TMTContext & tmt,
     UInt64 region_id,
@@ -375,10 +375,18 @@ void MockRaftStoreProxy::bootstrap(
 {
     UNUSED(tmt);
     auto _ = genLockGuard();
+    if (regions.size())
+    {
+        throw Exception("Mock Proxy regions are not cleared");
+    }
     regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
 
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
+    if (lock.regions.size())
+    {
+        throw Exception("KVStore regions are not cleared");
+    }
     {
         auto start = RecordKVFormat::genKey(table_id, 0);
         auto end = RecordKVFormat::genKey(table_id + 1, 0);
@@ -718,13 +726,18 @@ void MockRaftStoreProxy::snapshot(
 TableID MockRaftStoreProxy::bootstrap_table(
     Context & ctx,
     KVStore & kvs,
-    TMTContext & tmt)
+    TMTContext & tmt,
+    bool drop_at_first)
 {
     UNUSED(kvs);
     ColumnsDescription columns;
     auto & data_type_factory = DataTypeFactory::instance();
     columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
     auto tso = tmt.getPDClient()->getTS();
+    if (drop_at_first)
+    {
+        MockTiDB::instance().dropDB(ctx, "d", true);
+    }
     MockTiDB::instance().newDataBase("d");
     // Make sure there is a table with smaller id.
     MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
