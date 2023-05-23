@@ -91,7 +91,9 @@ protected:
     const LoggerPtr log;
     Block header;
 
-    OperatorProfilePtr profile = std::make_shared<OperatorProfile>();
+    OperatorProfilePtr profile_ptr = std::make_shared<OperatorProfile>();
+    // To reduce the overheads of `profile_ptr.get()`
+    OperatorProfile & profile = *profile_ptr;
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.

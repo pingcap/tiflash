@@ -31,10 +31,6 @@ extern const char random_pipeline_model_cancel_failpoint[];
     if (unlikely(exec_status.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
-#define START_TIMER_FOR_WAITING               \
-    if (op_status == OperatorStatus::WAITING) \
-        profile->start();
-
 OperatorStatus Operator::await()
 {
     // `exec_status.is_cancelled` has been checked by `EventTask`.
@@ -45,22 +41,20 @@ OperatorStatus Operator::await()
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    // profile->start() has been call in other functions or the constructor of profile.
     if (op_status != OperatorStatus::WAITING)
-        profile->update();
+        profile.update();
     return op_status;
 }
 
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
     auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile->update();
-    START_TIMER_FOR_WAITING
+    profile.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -68,7 +62,7 @@ OperatorStatus Operator::executeIO()
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
     assert(!block);
     auto op_status = readImpl(block);
 #ifndef NDEBUG
@@ -79,8 +73,7 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
-    profile->update(block);
-    START_TIMER_FOR_WAITING
+    profile.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -88,7 +81,7 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
@@ -98,8 +91,7 @@ OperatorStatus TransformOp::transform(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile->update(block);
-    START_TIMER_FOR_WAITING
+    profile.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -107,7 +99,7 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
     assert(!block);
     auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
@@ -118,8 +110,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile->update(block);
-    START_TIMER_FOR_WAITING
+    profile.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -127,13 +118,12 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
-    profile->update();
-    START_TIMER_FOR_WAITING
+    profile.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -141,7 +131,7 @@ OperatorStatus SinkOp::prepare()
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
-    profile->start();
+    profile.anchor();
 #ifndef NDEBUG
     if (block)
     {
@@ -153,13 +143,11 @@ OperatorStatus SinkOp::write(Block && block)
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
-    profile->update();
-    START_TIMER_FOR_WAITING
+    profile.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
 #undef CHECK_IS_CANCELLED
-#undef START_TIMER_FOR_WAITING
 
 } // namespace DB

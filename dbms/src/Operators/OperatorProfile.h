@@ -33,12 +33,12 @@ struct OperatorProfile
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
 
-    void start()
+    ALWAYS_INLINE void anchor()
     {
         total_stopwatch.start();
     }
 
-    void update(const Block & block)
+    ALWAYS_INLINE void update(const Block & block)
     {
         if likely (block)
         {
@@ -50,7 +50,7 @@ struct OperatorProfile
         execution_time += total_stopwatch.elapsedFromLastTime();
     }
 
-    void update()
+    ALWAYS_INLINE void update()
     {
         execution_time += total_stopwatch.elapsedFromLastTime();
     }
