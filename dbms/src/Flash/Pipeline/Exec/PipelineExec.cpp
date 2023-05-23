@@ -194,4 +194,16 @@ OperatorStatus PipelineExec::awaitImpl()
 #undef HANDLE_OP_STATUS
 #undef HANDLE_LAST_OP_STATUS
 
+void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
+{
+    source_op->getProfileInfo()->execution_time += extra_time;
+    extra_time = source_op->getProfileInfo()->execution_time;
+    for (const auto & transform_op : transform_ops)
+    {
+        transform_op->getProfileInfo()->execution_time += extra_time;
+        extra_time = transform_op->getProfileInfo()->execution_time;
+    }
+    sink_op->getProfileInfo()->execution_time += extra_time;
+}
+
 } // namespace DB

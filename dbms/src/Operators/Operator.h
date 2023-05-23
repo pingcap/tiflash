@@ -86,6 +86,8 @@ public:
         header = header_;
     }
 
+    const OperatorProfilePtr & getProfileInfo() const { return profile_ptr; }
+
 protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;

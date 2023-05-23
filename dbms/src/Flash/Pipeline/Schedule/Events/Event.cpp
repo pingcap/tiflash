@@ -131,7 +131,14 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    waiting_time_to_be_scheduled = stopwatch.elapsed();
     scheduleTasks();
+}
+
+UInt64 Event::getWaitingTimeToBeScheduled() const
+{
+    assertStatus(EventStatus::SCHEDULED);
+    return waiting_time_to_be_scheduled;
 }
 
 void Event::scheduleTasks()
@@ -216,7 +223,7 @@ void Event::switchStatus(EventStatus from, EventStatus to)
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 
-void Event::assertStatus(EventStatus expect)
+void Event::assertStatus(EventStatus expect) const
 {
     auto cur_status = status.load();
     RUNTIME_ASSERT(

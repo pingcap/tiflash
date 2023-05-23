@@ -47,6 +47,8 @@ protected:
     void finalizeImpl() override;
     virtual void doFinalizeImpl(){};
 
+    UInt64 getWaitingTimeToBeScheduled() const;
+
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
