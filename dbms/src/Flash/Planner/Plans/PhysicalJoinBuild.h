@@ -37,7 +37,7 @@ public:
         , prepare_actions(prepare_actions_)
     {}
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,

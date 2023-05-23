@@ -63,7 +63,7 @@ public:
 
     void updateStreams(Context & context);
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus &,
         PipelineExecGroupBuilder & group_builder,
         Context &,

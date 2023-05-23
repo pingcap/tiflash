@@ -47,7 +47,7 @@ public:
         return mpp_exchange_receiver->getSourceNum();
     }
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,

@@ -49,7 +49,7 @@ public:
         , aggregate_context(aggregate_context_)
     {}
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,

@@ -32,7 +32,7 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
         result_queue);
 }
 
-void PhysicalGetResultSink::buildPipelineExecGroup(
+void PhysicalGetResultSink::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

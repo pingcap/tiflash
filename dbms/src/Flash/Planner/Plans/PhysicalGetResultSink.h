@@ -50,7 +50,7 @@ public:
         throw Exception("Unsupport");
     }
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,

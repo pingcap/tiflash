@@ -65,13 +65,13 @@ public:
 
     virtual size_t childrenSize() const = 0;
 
-    virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
+    void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void buildPipelineExecGroup(
-        PipelineExecutorStatus & /*exec_status*/,
-        PipelineExecGroupBuilder & /*group_builder*/,
-        Context & /*context*/,
-        size_t /*concurrency*/);
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t concurrency);
 
     virtual void buildPipeline(
         PipelineBuilder & /*builder*/,
@@ -103,6 +103,15 @@ protected:
     virtual EventPtr doSinkComplete(PipelineExecutorStatus & /*exec_status*/);
 
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
+
+    virtual void buildPipelineExecGroupImpl(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        Context & /*context*/,
+        size_t /*concurrency*/)
+    {
+        throw Exception("Unsupported");
+    }
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

@@ -47,7 +47,7 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,

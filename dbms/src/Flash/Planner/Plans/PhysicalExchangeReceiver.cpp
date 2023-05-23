@@ -93,7 +93,7 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
     }
 }
 
-void PhysicalExchangeReceiver::buildPipelineExecGroup(
+void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

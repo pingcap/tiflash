@@ -23,7 +23,7 @@
 
 namespace DB
 {
-void PhysicalAggregationBuild::buildPipelineExecGroup(
+void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

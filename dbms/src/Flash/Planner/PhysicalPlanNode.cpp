@@ -92,12 +92,14 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
 }
 
 void PhysicalPlanNode::buildPipelineExecGroup(
-    PipelineExecutorStatus & /*exec_status*/,
-    PipelineExecGroupBuilder & /*group_builder*/,
-    Context & /*context*/,
-    size_t /*concurrency*/)
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    throw Exception("Unsupport");
+    buildPipelineExecGroupImpl(exec_status, group_builder, context, concurrency);
+    if (is_tidb_operator)
+        context.getDAGContext()->addOperatorProfiles(executor_id, group_builder.getCurProfiles());
 }
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)

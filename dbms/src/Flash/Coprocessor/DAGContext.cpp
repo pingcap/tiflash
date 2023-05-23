@@ -183,7 +183,10 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
 void DAGContext::addOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)
 {
     std::lock_guard lock(profile_mu);
-    operator_profiles_map[executor_id] = std::move(profiles);
+    /// The profiles of some operators has been recorded.
+    /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
+    if (operator_profiles_map.find(executor_id) == operator_profiles_map.end())
+        operator_profiles_map[executor_id] = std::move(profiles);
 }
 
 void DAGContext::addInboundIOOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)

@@ -19,7 +19,7 @@
 
 namespace DB
 {
-void PhysicalJoinBuild::buildPipelineExecGroup(
+void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

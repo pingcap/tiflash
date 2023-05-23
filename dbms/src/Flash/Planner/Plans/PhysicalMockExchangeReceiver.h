@@ -50,7 +50,7 @@ public:
 
     size_t getSourceNum() const { return source_num; };
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,

@@ -58,7 +58,7 @@ public:
         Context & context,
         PipelineExecutorStatus & exec_status) override;
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,

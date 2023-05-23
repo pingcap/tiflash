@@ -49,7 +49,7 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    void buildPipelineExecGroup(
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & /*exec_status*/,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,
