@@ -16,6 +16,8 @@
 
 #include <Common/Stopwatch.h>
 #include <Core/Block.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 #include <memory>
 
@@ -32,6 +34,17 @@ struct OperatorProfile
     size_t allocated_bytes = 0;
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
+
+    // Some special fields, used by Exchange/RemoteTableScan
+    bool is_local = true;
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
+    RemoteExecutionSummary remote_execution_summary;
+
+    ALWAYS_INLINE void initForRemote(size_t connections)
+    {
+        is_local = false;
+        connection_profile_infos.resize(connections);
+    }
 
     ALWAYS_INLINE void anchor()
     {

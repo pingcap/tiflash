@@ -34,6 +34,7 @@ public:
         , stream_id(stream_id_)
     {
         exchange_receiver->verifyStreamId(stream_id);
+        profile.initForRemote(exchange_receiver->getSourceNum());
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }

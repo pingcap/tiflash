@@ -26,6 +26,7 @@ CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
     , coprocessor_reader(coprocessor_reader_)
 {
     assert(coprocessor_reader);
+    profile.initForRemote(coprocessor_reader->getSourceNum());
     setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(coprocessor_reader->getOutputSchema()))));
 }
 
@@ -92,6 +93,10 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
             }
 
             const auto & decode_detail = result.decode_detail;
+            auto & connection_profile_info = profile.connection_profile_infos[0];
+            connection_profile_info.packets += decode_detail.packets;
+            connection_profile_info.bytes += decode_detail.packet_bytes;
+            
             total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,

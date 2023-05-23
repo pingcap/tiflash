@@ -68,7 +68,15 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
                 return OperatorStatus::HAS_OUTPUT;
             }
 
+            /// only the last response contains execution summaries
+            if (result.resp != nullptr)
+                profile.remote_execution_summary.add(*result.resp);
+
             const auto & decode_detail = result.decode_detail;
+            auto & connection_profile_info = profile.connection_profile_infos[result.call_index];
+            connection_profile_info.packets += decode_detail.packets;
+            connection_profile_info.bytes += decode_detail.packet_bytes;
+
             total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,
