@@ -43,10 +43,13 @@ public:
     void startInBackground() noexcept
     {
         std::call_once(start_flag, [this] {
+            LOG_DEBUG(log, "Starting {} workers, concurrency={}", getName(), concurrency);
+            active_workers = concurrency;
             for (size_t index = 0; index < concurrency; ++index)
             {
                 thread_manager->schedule(true, getName(), [this, index] {
                     workerLoop(index);
+                    handleWorkerFinished();
                 });
             }
         });
@@ -77,6 +80,7 @@ public:
 protected:
     const LoggerPtr log;
     std::shared_ptr<ThreadManager> thread_manager;
+    std::atomic<Int64> active_workers = 0;
 
     ThreadedWorker(
         std::shared_ptr<MPMCQueue<Src>> source_queue_,
@@ -96,16 +100,22 @@ protected:
 
     virtual Dest doWork(const Src & task) = 0;
 
+private:
+    void handleWorkerFinished()
+    {
+        active_workers--;
+        if (active_workers == 0)
+        {
+            std::call_once(finish_flag, [this] {
+                LOG_DEBUG(log, "{} workers finished, total_processed_tasks={} concurrency={}", getName(), total_processed_tasks, concurrency);
+                // Note: the result queue may be already cancelled, but it is fine.
+                result_queue->finish();
+            });
+        }
+    }
+
     void workerLoop(size_t thread_idx)
     {
-        size_t processed_tasks = 0;
-        bool normal_finish = false;
-
-        LOG_DEBUG(log, "{}#{} started", getName(), thread_idx);
-        SCOPE_EXIT({
-            LOG_DEBUG(log, "{}#{} finished, processed_tasks={} is_normal_finish={}", getName(), thread_idx, processed_tasks, normal_finish);
-        });
-
         try
         {
             while (true)
@@ -114,15 +124,17 @@ protected:
                 auto pop_result = source_queue->pop(task);
                 if (pop_result != MPMCQueueResult::OK)
                 {
-                    // When upstream is stopped (finished or cancelled), populate the stop to the the result queue.
                     if (pop_result == MPMCQueueResult::FINISHED)
                     {
-                        result_queue->finish();
-                        normal_finish = true;
+                        // No more work to do, just exit.
+                        // The FINISH signal will be passed to downstreams when
+                        // all workers are exited.
                         break;
                     }
                     else if (pop_result == MPMCQueueResult::CANCELLED)
                     {
+                        // There are errors, populate the error to downstreams
+                        // immediately.
                         auto cancel_reason = source_queue->getCancelReason();
                         LOG_WARNING(log, "{}#{} meeting error from upstream: {}", getName(), thread_idx, cancel_reason);
                         result_queue->cancelWith(cancel_reason);
@@ -150,7 +162,7 @@ protected:
                     }
                 }
 
-                processed_tasks++;
+                total_processed_tasks++;
             }
         }
         catch (...)
@@ -161,10 +173,11 @@ protected:
         }
     }
 
-
 private:
     std::once_flag start_flag;
     std::once_flag wait_flag;
+    std::once_flag finish_flag;
+    std::atomic<Int64> total_processed_tasks;
 };
 
 } // namespace DB
