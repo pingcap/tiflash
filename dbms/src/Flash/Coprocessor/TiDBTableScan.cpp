@@ -82,7 +82,6 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             tipb_table_scan->add_primary_prefix_column_ids(id);
         tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
         tipb_table_scan->set_keep_order(false);
-        tipb_table_scan->set_keep_order(false);
     }
     else
     {
