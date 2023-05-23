@@ -23,7 +23,7 @@
 
 namespace DB
 {
-#define ADD_TEST_DEBUG_LOG_FMT
+// #define ADD_TEST_DEBUG_LOG_FMT
 
 #ifdef ADD_TEST_DEBUG_LOG_FMT
 
