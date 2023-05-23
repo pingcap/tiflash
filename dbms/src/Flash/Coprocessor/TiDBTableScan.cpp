@@ -29,7 +29,7 @@ TiDBTableScan::TiDBTableScan(
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
-    , is_fast_scan(table_scan->tbl_scan().is_fast_scan())
+    , is_fast_scan(is_partition_table_scan ? table_scan->partition_table_scan().is_fast_scan() : table_scan->tbl_scan().is_fast_scan())
 {
     if (is_partition_table_scan)
     {

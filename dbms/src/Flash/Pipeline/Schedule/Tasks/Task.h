@@ -41,7 +41,6 @@ enum class ExecTaskStatus
     FINISHED,
     ERROR,
     CANCELLED,
-    FINALIZE,
 };
 
 class Task
@@ -103,6 +102,8 @@ protected:
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status{ExecTaskStatus::INIT};
+
+    bool is_finalized = false;
 };
 using TaskPtr = std::unique_ptr<Task>;
 

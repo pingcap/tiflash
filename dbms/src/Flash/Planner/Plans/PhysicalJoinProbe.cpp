@@ -29,7 +29,7 @@ void PhysicalJoinProbe::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, prepare_actions, log);
 
     auto input_header = group_builder.getCurrentHeader();
-    join_ptr->initProbe(input_header, group_builder.concurrency);
+    join_ptr->initProbe(input_header, group_builder.concurrency());
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
     group_builder.transform([&](auto & builder) {
