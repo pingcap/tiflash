@@ -360,6 +360,9 @@ void StorageDisaggregated::buildReceiverSources(
                 exchange_receiver,
                 /*stream_id=*/0));
     }
+    const String & executor_id = table_scan.getTableScanExecutorID();
+    context.getDAGContext()->addInboundIOOperatorProfiles(executor_id, group_builder.getCurProfiles());
+    context.getDAGContext()->addOperatorProfiles(executor_id, group_builder.getCurProfiles());
 }
 
 void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
@@ -382,6 +385,7 @@ void StorageDisaggregated::filterConditions(
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfiles(filter_conditions.executor_id, group_builder.getCurProfiles());
     }
 }
 
