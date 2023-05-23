@@ -28,8 +28,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 
-#include "Storages/S3/S3Common.h"
-
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfDeltaMerge;
@@ -277,7 +275,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
-    if (!S3::ClientFactory::instance().isEnabled())
+    // Under disagg mode, a write node could serve large amount of data, place delta index tasks
+    // after restart is useless and waste of S3 reading. Only do it when deployed non-disagg mode.
+    if (!global_context.getSharedContextDisagg()->notDisaggregatedMode())
     {
         // Generate place delta index tasks
         for (auto & [end, segment] : segments)
