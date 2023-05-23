@@ -54,16 +54,19 @@ public:
 
     void wait() noexcept
     {
-        try
-        {
-            thread_manager->wait();
-        }
-        catch (...)
-        {
-            // This should not occur, as we should have caught all exceptions in workerLoop.
-            auto error = getCurrentExceptionMessage(false);
-            LOG_WARNING(log, "{} meet unexepcted error: {}", getName(), error);
-        }
+        std::call_once(wait_flag, [this] {
+            try
+            {
+                // thread_manager->wait can be only called once.
+                thread_manager->wait();
+            }
+            catch (...)
+            {
+                // This should not occur, as we should have caught all exceptions in workerLoop.
+                auto error = getCurrentExceptionMessage(false);
+                LOG_WARNING(log, "{} meet unexepcted error: {}", getName(), error);
+            }
+        });
     }
 
 public:
@@ -161,6 +164,7 @@ protected:
 
 private:
     std::once_flag start_flag;
+    std::once_flag wait_flag;
 };
 
 } // namespace DB
