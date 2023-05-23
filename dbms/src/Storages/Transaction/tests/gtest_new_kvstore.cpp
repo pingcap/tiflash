@@ -202,8 +202,8 @@ try
         {
             initStorages();
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
 
             MockRaftStoreProxy::FailCond cond;
 
@@ -239,7 +239,7 @@ try
         auto region_id = 1;
         {
             KVStore & kvs = getKVS();
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             MockRaftStoreProxy::FailCond cond;
 
             auto kvr1 = kvs.getRegion(region_id);
@@ -330,9 +330,9 @@ try
         {
             initStorages();
             KVStore & kvs = getKVS();
-            table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
+            table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
             LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
-            proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
@@ -504,8 +504,8 @@ try
         region_id = 2;
         initStorages();
         KVStore & kvs = getKVS();
-        table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
-        proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         {
@@ -568,8 +568,8 @@ try
         region_id = 3;
         initStorages();
         KVStore & kvs = getKVS();
-        table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
-        proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         {

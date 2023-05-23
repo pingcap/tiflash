@@ -278,7 +278,7 @@ void RawMockReadIndexTask::update(bool lock, bool region_error)
         has_region_error = region_error;
     }
     if (waker)
-        waker->wake();
+        waker->wakeNotifier();
 }
 
 MockProxyRegionPtr MockRaftStoreProxy::getRegion(uint64_t id)
@@ -300,7 +300,7 @@ MockReadIndexTask * MockRaftStoreProxy::makeReadIndexTask(kvrpcpb::ReadIndexRequ
 {
     auto _ = genLockGuard();
 
-    wake();
+    wakeNotifier();
 
     auto region = doGetRegion(req.context().region_id());
     if (region)
@@ -330,7 +330,7 @@ size_t MockRaftStoreProxy::size() const
     return regions.size();
 }
 
-void MockRaftStoreProxy::wake()
+void MockRaftStoreProxy::wakeNotifier()
 {
     notifier.wake();
 }
@@ -367,7 +367,7 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
     cb(*this);
 }
 
-void MockRaftStoreProxy::bootstrap_with_region(
+void MockRaftStoreProxy::bootstrapWithRegion(
     KVStore & kvs,
     TMTContext & tmt,
     UInt64 region_id,
@@ -717,7 +717,7 @@ void MockRaftStoreProxy::snapshot(
     new_kv_region->setApplied(index, term);
 }
 
-TableID MockRaftStoreProxy::bootstrap_table(
+TableID MockRaftStoreProxy::bootstrapTable(
     Context & ctx,
     KVStore & kvs,
     TMTContext & tmt,

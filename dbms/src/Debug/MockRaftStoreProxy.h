@@ -161,7 +161,7 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     size_t size() const;
 
-    void wake();
+    void wakeNotifier();
 
     void testRunNormal(const std::atomic_bool & over);
 
@@ -185,7 +185,7 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     /// Boostrap with a given region.
     /// Similar to TiKV's `bootstrap_region`.
-    void bootstrap_with_region(
+    void bootstrapWithRegion(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
@@ -195,7 +195,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     /// Must be called if:
     /// 1. Applying snapshot which needs table schema
     /// 2. Doing row2col.
-    TableID bootstrap_table(
+    TableID bootstrapTable(
         Context & ctx,
         KVStore & kvs,
         TMTContext & tmt,

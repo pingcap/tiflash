@@ -186,7 +186,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
     kvs.stopReadIndexWorkers();
     kvs.releaseReadIndexWorkers();
     over = true;
-    proxy_instance->wake();
+    proxy_instance->wakeNotifier();
     proxy_runner.join();
     ASSERT(GCMonitor::instance().checkClean());
     ASSERT(!GCMonitor::instance().empty());
@@ -605,7 +605,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
     TableID table_id = 100;
     KVStore & kvs = getKVS();
     UInt64 region_id = 1;
-    proxy_instance->bootstrap_with_region(kvs, ctx.getTMTContext(), region_id, std::make_optional(std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_optional(std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
     auto region = kvs.getRegion(region_id);
     {
         // Test create RegionMeta.

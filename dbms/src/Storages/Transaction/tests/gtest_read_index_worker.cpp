@@ -445,7 +445,7 @@ void ReadIndexTest::testNormal()
         }
     }
     over = true;
-    proxy_instance.wake();
+    proxy_instance.wakeNotifier();
     proxy_runner.join();
     manager.reset();
     ASSERT(GCMonitor::instance().checkClean());
