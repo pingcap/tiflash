@@ -330,6 +330,8 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
+    dag_context.addInboundIOOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
+
     if (group_builder.empty())
     {
         group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
@@ -354,15 +356,21 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     /// If there is no local source, there is no need to execute cast and push down filter, return directly.
     /// But we should make sure that the analyzer is initialized before return.
     if (remote_read_start_index == 0)
+    {
+        dag_context.addOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
+        if (filter_conditions.hasValue())
+            dag_context.addOperatorProfiles(filter_conditions.executor_id, group_builder.getCurProfiles());
         return;
+    }
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
+    dag_context.addOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
-        /// TODO: record profile
+        dag_context.addOperatorProfiles(filter_conditions.executor_id, group_builder.getCurProfiles());
     }
 }
 
