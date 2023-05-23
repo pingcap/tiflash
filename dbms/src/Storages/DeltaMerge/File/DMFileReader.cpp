@@ -215,10 +215,6 @@ DMFileReader::DMFileReader(
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
 {
-    Stopwatch watch;
-    SCOPE_EXIT(
-        scan_context->total_dmfile_read_time_ns += watch.elapsed(););
-
     for (const auto & cd : read_columns)
     {
         // New inserted column, will be filled with default value later
