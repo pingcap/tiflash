@@ -90,10 +90,9 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     {
         LOG_ERROR(
             log,
-            "Cannot read from istream, size={} gcount={} eof={} state={:02X} cur_offset={} content_length={} errmsg={} cost={}ns",
+            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errmsg={} cost={}ns",
             size,
             gcount,
-            istr.eof(),
             istr.rdstate(),
             cur_offset,
             content_length,
