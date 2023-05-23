@@ -45,6 +45,19 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
+OperatorProfilePtr PipelineExecBuilder::getCurProfile() const
+{
+    if (sink_op)
+        return sink_op->getProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getProfileInfo();
+    }
+}
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -87,5 +100,13 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
 {
     RUNTIME_CHECK(!group.empty());
     return group.back().getCurrentHeader();
+}
+
+OperatorProfiles PipelineExecGroupBuilder::getCurProfiles() const
+{
+    OperatorProfiles ret;
+    for (const auto & builder : group)
+        ret.push_back(builder.getCurProfile());
+    return ret;
 }
 } // namespace DB

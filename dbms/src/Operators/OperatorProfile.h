@@ -70,5 +70,6 @@ struct OperatorProfile
 };
 
 using OperatorProfilePtr = std::shared_ptr<OperatorProfile>;
+using OperatorProfiles = std::vector<OperatorProfilePtr>;
 
 } // namespace DB

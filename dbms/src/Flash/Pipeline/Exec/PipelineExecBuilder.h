@@ -31,6 +31,8 @@ struct PipelineExecBuilder
     Block getCurrentHeader() const;
 
     PipelineExecPtr build();
+
+    OperatorProfilePtr getCurProfile() const;
 };
 
 struct PipelineExecGroupBuilder
@@ -39,9 +41,9 @@ struct PipelineExecGroupBuilder
     using BuilderGroup = std::vector<PipelineExecBuilder>;
     BuilderGroup group;
 
-    size_t concurrency() { return group.size(); }
+    size_t concurrency() const { return group.size(); }
 
-    bool empty() { return group.empty(); }
+    bool empty() const { return group.empty(); }
 
     void addConcurrency(SourceOpPtr && source);
 
@@ -62,5 +64,7 @@ struct PipelineExecGroupBuilder
     PipelineExecGroup build();
 
     Block getCurrentHeader();
+
+    OperatorProfiles getCurProfiles() const;
 };
 } // namespace DB

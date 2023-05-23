@@ -22,6 +22,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
+#include <mutex>
 
 namespace DB
 {
@@ -177,6 +178,18 @@ void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subqu
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
+}
+
+void DAGContext::addOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)
+{
+    std::lock_guard lock(profile_mu);
+    operator_profiles_map[executor_id] = std::move(profiles);
+}
+
+void DAGContext::addInboundIOOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)
+{
+    std::lock_guard lock(profile_mu);
+    inbound_io_input_operator_profiles_map[executor_id] = std::move(profiles);
 }
 
 void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
