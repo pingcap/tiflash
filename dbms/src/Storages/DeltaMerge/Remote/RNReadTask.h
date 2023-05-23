@@ -91,12 +91,10 @@ public:
         const PushDownFilterPtr & push_down_filter,
         ReadMode read_mode);
 
-    BlockInputStreamPtr takeInputStream()
+    BlockInputStreamPtr getInputStream() const
     {
         RUNTIME_CHECK(input_stream != nullptr);
-        auto is = input_stream;
-        input_stream = nullptr;
-        return is;
+        return input_stream;
     }
 
 private:
@@ -117,7 +115,13 @@ public:
 
     static RNReadTaskPtr create(const std::vector<RNReadSegmentTaskPtr> & segment_read_tasks_)
     {
-        return std::make_shared<RNReadTask>(segment_read_tasks_);
+        return std::shared_ptr<RNReadTask>(new RNReadTask(segment_read_tasks_));
+    }
+
+private:
+    explicit RNReadTask(const std::vector<RNReadSegmentTaskPtr> & segment_read_tasks_)
+        : segment_read_tasks(segment_read_tasks_)
+    {
     }
 };
 

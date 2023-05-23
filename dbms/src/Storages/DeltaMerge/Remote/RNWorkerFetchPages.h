@@ -34,6 +34,8 @@ class RNWorkerFetchPages
 protected:
     RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
 
+    String getName() const noexcept override { return "FetchPages"; }
+
 private:
     void doFetchPages(
         const RNReadSegmentTaskPtr & seg_task,
@@ -43,19 +45,28 @@ private:
     const pingcap::kv::Cluster * cluster;
 
 public:
-    explicit RNWorkerFetchPages(
-        std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> source_queue_,
-        std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> result_queue_,
-        LoggerPtr log_,
-        size_t concurrency_,
-        pingcap::kv::Cluster * cluster_)
+    struct Options
+    {
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
+        const LoggerPtr & log;
+        const size_t concurrency;
+        const pingcap::kv::Cluster * cluster;
+    };
+
+    explicit RNWorkerFetchPages(const Options & options)
         : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            source_queue_,
-            result_queue_,
-            log_,
-            concurrency_)
-        , cluster(cluster_)
+            options.source_queue,
+            options.result_queue,
+            options.log,
+            options.concurrency)
+        , cluster(options.cluster)
     {}
+
+    static RNWorkerFetchPagesPtr create(const Options & options)
+    {
+        return std::make_shared<RNWorkerFetchPages>(options);
+    }
 };
 
 } // namespace DB::DM::Remote

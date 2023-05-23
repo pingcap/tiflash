@@ -29,9 +29,6 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
-#include <Flash/Disaggregated/RNPagePreparer.h>
-#include <Flash/Disaggregated/RNPageReceiver.h>
-#include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -41,8 +38,8 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
@@ -121,7 +118,12 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
+    buildRemoteSegmentInputStreams(
+        db_context,
+        read_task,
+        query_info,
+        num_streams,
+        pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -154,7 +156,6 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
         auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
         RUNTIME_CHECK(!batch_cop_tasks.empty());
     }
-    size_t n = batch_cop_tasks.size();
 
     std::mutex output_lock;
     std::vector<DM::Remote::RNReadSegmentTaskPtr> output_seg_tasks;
@@ -483,27 +484,12 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
-    const DM::RNRemoteReadTaskPtr & remote_read_tasks,
+    const DM::Remote::RNReadTaskPtr & read_task,
     const SelectQueryInfo &,
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
-    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
-    // TODO: We can reduce max io_concurrency to numSegments.
-
     const auto & executor_id = table_scan.getTableScanExecutorID();
-    // Build a RNPageReceiver to fetch the pages from all write nodes
-    auto * kv_cluster = db_context.getTMTContext().getKVCluster();
-    auto receiver_ctx = std::make_unique<GRPCPagesReceiverContext>(remote_read_tasks, kv_cluster);
-    auto page_receiver = std::make_shared<RNPageReceiver>(
-        std::move(receiver_ctx),
-        /*source_num_=*/remote_read_tasks->numSegments(),
-        num_streams,
-        log->identifier(),
-        executor_id);
-
-    bool do_prepare = false;
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
@@ -518,60 +504,31 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
 
-    auto page_preparer = std::make_shared<RNPagePreparer>(
-        remote_read_tasks,
-        page_receiver,
-        column_defines,
-        read_tso,
-        push_down_filter,
-        read_mode,
-        num_streams,
-        log->identifier(),
-        executor_id,
-        do_prepare);
+    auto workers = DM::Remote::RNWorkers::create({
+        .log = log->getChild(executor_id),
+        .read_task = read_task,
+        .columns_to_read = column_defines,
+        .read_tso = read_tso,
+        .push_down_filter = push_down_filter,
+        .read_mode = read_mode,
+        .cluster = db_context.getTMTContext().getKVCluster(),
+    });
 
-    constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
+    RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
-
-    auto streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
-        db_context,
-        remote_read_tasks,
-        page_preparer,
-        column_defines,
-        read_tso,
-        num_streams,
-        extra_table_id_index,
-        push_down_filter,
-        extra_info,
-        /*tracing_id*/ log->identifier(),
-        read_mode);
-    RUNTIME_CHECK(!streams.empty(), streams.size(), num_streams);
-    pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
-
-
-    // // auto sub_streams_size = io_concurrency / num_streams;
-    // for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
-    // {
-    //     // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
-    //     // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
-
-    //     auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
-    //         db_context,
-    //         remote_read_tasks,
-    //         page_preparer,
-    //         column_defines,
-    //         read_tso,
-    //         sub_streams_size,
-    //         extra_table_id_index,
-    //         push_down_filter,
-    //         extra_info,
-    //         /*tracing_id*/ log->identifier(),
-    //         read_mode);
-    //     RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
-
-    //     // auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
-    //     pipeline.streams.emplace_back(std::move(union_stream));
-    // }
+    for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
+    {
+        auto stream = DM::Remote::RNSegmentInputStream::create({
+            .debug_tag = log->identifier(),
+            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
+            // because we want to extend the lifetime of the WorkerPtr until read is finished.
+            // Also, we want to start the Worker after the read.
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        });
+        pipeline.streams.emplace_back(stream);
+    }
 
     auto * dag_context = db_context.getDAGContext();
     auto & table_scan_io_input_streams = dag_context->getInBoundIOInputStreamsMap()[executor_id];

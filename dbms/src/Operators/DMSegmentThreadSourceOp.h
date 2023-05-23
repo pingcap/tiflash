@@ -63,6 +63,7 @@ private:
     const UInt64 max_version;
     const size_t expected_block_size;
     const DM::ReadMode read_mode;
+    const TableID physical_table_id;
 
     bool done = false;
 

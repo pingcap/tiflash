@@ -38,6 +38,8 @@ class RNWorkerPrepareStreams
 protected:
     RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
 
+    String getName() const noexcept override { return "PrepareStreams"; }
+
 public:
     const ColumnDefinesPtr columns_to_read;
     const UInt64 read_tso;
@@ -45,24 +47,33 @@ public:
     const ReadMode read_mode;
 
 public:
-    explicit RNWorkerPrepareStreams(
-        std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> source_queue_,
-        std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> result_queue_,
-        LoggerPtr log_,
-        size_t concurrency_,
-        const ColumnDefinesPtr & columns_to_read_,
-        UInt64 read_tso_,
-        const PushDownFilterPtr & push_down_filter_,
-        ReadMode read_mode_)
+    struct Options
+    {
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
+        const LoggerPtr & log;
+        const size_t concurrency;
+        const ColumnDefinesPtr & columns_to_read;
+        const UInt64 read_tso;
+        const PushDownFilterPtr & push_down_filter;
+        const ReadMode read_mode;
+    };
+
+    static RNWorkerPrepareStreamsPtr create(const Options & options)
+    {
+        return std::make_shared<RNWorkerPrepareStreams>(options);
+    }
+
+    explicit RNWorkerPrepareStreams(const Options & options)
         : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            source_queue_,
-            result_queue_,
-            log_,
-            concurrency_)
-        , columns_to_read(columns_to_read_)
-        , read_tso(read_tso_)
-        , push_down_filter(push_down_filter_)
-        , read_mode(read_mode_)
+            options.source_queue,
+            options.result_queue,
+            options.log,
+            options.concurrency)
+        , columns_to_read(options.columns_to_read)
+        , read_tso(options.read_tso)
+        , push_down_filter(options.push_down_filter)
+        , read_mode(options.read_mode)
     {}
 };
 

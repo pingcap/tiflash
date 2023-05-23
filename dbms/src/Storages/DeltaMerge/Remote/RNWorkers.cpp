@@ -12,37 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 
 namespace DB::DM::Remote
 {
 
-RNWorkers::RNWorkers(
-    LoggerPtr log,
-    const std::vector<RNReadSegmentTaskPtr> & unprocessed_seg_tasks,
-    const ColumnDefinesPtr & columns_to_read_,
-    UInt64 read_tso_,
-    const PushDownFilterPtr & push_down_filter_,
-    ReadMode read_mode_)
+RNWorkers::RNWorkers(const Options & options)
 {
-    size_t n = unprocessed_seg_tasks.size();
-    worker_fetch_pages = std::make_shared<RNWorkerFetchPages>(
-        /* source */ std::make_shared<Channel>(n),
-        /* result */ std::make_shared<Channel>(n),
-        log,
-        /* concurrency */ n);
+    size_t n = options.read_task->segment_read_tasks.size();
+    worker_fetch_pages = RNWorkerFetchPages::create({
+        .source_queue = std::make_shared<Channel>(n),
+        .result_queue = std::make_shared<Channel>(n),
+        .log = options.log,
+        .concurrency = n,
+        .cluster = options.cluster,
+    });
 
-    worker_prepare_streams = std::make_shared<RNWorkerPrepareStreams>(
-        /* source */ worker_fetch_pages->result_queue,
-        /* result */ std::make_shared<Channel>(n),
-        log,
-        /* concurrency */ n,
-        columns_to_read_,
-        read_tso_,
-        push_down_filter_,
-        read_mode_);
+    worker_prepare_streams = RNWorkerPrepareStreams::create({
+        .source_queue = worker_fetch_pages->result_queue,
+        .result_queue = std::make_shared<Channel>(n),
+        .log = options.log,
+        .concurrency = n,
+        .columns_to_read = options.columns_to_read,
+        .read_tso = options.read_tso,
+        .push_down_filter = options.push_down_filter,
+        .read_mode = options.read_mode,
+    });
 
-    for (auto const & seg_task : unprocessed_seg_tasks)
+    for (auto const & seg_task : options.read_task->segment_read_tasks)
     {
         auto push_result = worker_fetch_pages->source_queue->tryPush(seg_task);
         RUNTIME_CHECK(push_result == MPMCQueueResult::OK);
@@ -61,7 +59,7 @@ void RNWorkers::wait()
     worker_prepare_streams->wait();
 }
 
-RNWorkers::ChannelPtr RNWorkers::getPreparedChannel() const
+RNWorkers::ChannelPtr RNWorkers::getReadyChannel() const
 {
     return worker_prepare_streams->result_queue;
 }

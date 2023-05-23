@@ -32,16 +32,9 @@ public:
     using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
     using ChannelPtr = std::shared_ptr<Channel>;
 
-    explicit RNWorkers(
-        LoggerPtr log,
-        const std::vector<RNReadSegmentTaskPtr> & unprocessed_seg_tasks,
-        const ColumnDefinesPtr & columns_to_read_,
-        UInt64 read_tso_,
-        const PushDownFilterPtr & push_down_filter_,
-        ReadMode read_mode_);
-
+public:
     /// Get the channel which outputs ready-for-read segment tasks.
-    ChannelPtr getPreparedChannel() const;
+    ChannelPtr getReadyChannel() const;
 
     void startInBackground();
 
@@ -50,6 +43,25 @@ public:
     ~RNWorkers()
     {
         wait();
+    }
+
+public:
+    struct Options
+    {
+        const LoggerPtr log;
+        const RNReadTaskPtr & read_task;
+        const ColumnDefinesPtr & columns_to_read;
+        const UInt64 read_tso;
+        const PushDownFilterPtr & push_down_filter;
+        const ReadMode read_mode;
+        const pingcap::kv::Cluster * cluster;
+    };
+
+    explicit RNWorkers(const Options & options);
+
+    static RNWorkersPtr create(const Options & options)
+    {
+        return std::make_shared<RNWorkers>(options);
     }
 
 private:

@@ -80,10 +80,10 @@ protected:
         std::shared_ptr<MPMCQueue<Dest>> result_queue_,
         LoggerPtr log_,
         size_t concurrency_)
-        : source_queue(source_queue_)
+        : concurrency(concurrency_)
+        , source_queue(source_queue_)
         , result_queue(result_queue_)
         , log(log_)
-        , concurrency(concurrency_)
         , thread_manager(newThreadManager())
     {
     }
@@ -107,21 +107,21 @@ protected:
             while (true)
             {
                 Src task;
-                auto pop_result = source_queue.pop(task);
+                auto pop_result = source_queue->pop(task);
                 if (pop_result != MPMCQueueResult::OK)
                 {
                     // When upstream is stopped (finished or cancelled), populate the stop to the the result queue.
                     if (pop_result == MPMCQueueResult::FINISHED)
                     {
-                        result_queue.finish();
+                        result_queue->finish();
                         normal_finish = true;
                         break;
                     }
                     else if (pop_result == MPMCQueueResult::CANCELLED)
                     {
-                        auto cancel_reason = source_queue.getCancelReason();
+                        auto cancel_reason = source_queue->getCancelReason();
                         LOG_WARNING(log, "{}#{} meeting error from upstream: {}", getName(), thread_idx, cancel_reason);
-                        result_queue.cancelWith(cancel_reason);
+                        result_queue->cancelWith(cancel_reason);
                         break;
                     }
                     else
@@ -131,7 +131,7 @@ protected:
                 }
 
                 auto work_result = doWork(task);
-                auto push_result = result_queue.push(work_result);
+                auto push_result = result_queue->push(work_result);
                 if (push_result != MPMCQueueResult::OK)
                 {
                     if (push_result == MPMCQueueResult::CANCELLED)
@@ -153,7 +153,7 @@ protected:
         {
             auto error = getCurrentExceptionMessage(false);
             LOG_ERROR(log, "{}#{} meet error: {}", getName(), thread_idx, error);
-            result_queue.cancelWith(fmt::format("{} failed: {}", getName(), error));
+            result_queue->cancelWith(fmt::format("{} failed: {}", getName(), error));
         }
     }
 

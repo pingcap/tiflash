@@ -15,9 +15,11 @@
 #pragma once
 
 #include <Common/MPMCQueue.h>
+#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::DM::Remote
@@ -28,24 +30,11 @@ class RNSegmentInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "RNSegment";
 
 public:
-    RNSegmentInputStream(
-        const Context & db_context_,
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & ready_segments_,
-        const ColumnDefines & columns_to_read_,
-        const PushDownFilterPtr & push_down_filter_,
-        UInt64 max_version_,
-        size_t expected_block_size_,
-        ReadMode read_mode_,
-        int extra_table_id_index_,
-        std::string_view req_id)
-        : ready_segments(ready_segments_)
-    {}
-
-    ~RNSegmentInputStream() override;
+    ~RNSegmentInputStream() override = default;
 
     String getName() const override { return NAME; }
 
-    Block getHeader() const override { return header; }
+    Block getHeader() const override { return action.getHeader(); }
 
 protected:
     Block readImpl() override
@@ -56,8 +45,34 @@ protected:
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
+public:
+    struct Options
+    {
+        std::string_view debug_tag;
+        const RNWorkersPtr & workers;
+        const ColumnDefines & columns_to_read;
+        int extra_table_id_index;
+    };
+
+    explicit RNSegmentInputStream(const Options & options)
+        : log(Logger::get(options.debug_tag))
+        , workers(options.workers)
+        , action(options.columns_to_read, options.extra_table_id_index)
+    {}
+
+    static BlockInputStreamPtr create(const Options & options)
+    {
+        return std::make_shared<RNSegmentInputStream>(options);
+    }
+
 private:
-    const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> ready_segments;
+    const LoggerPtr log;
+    const RNWorkersPtr workers;
+    AddExtraTableIDColumnTransformAction action;
+
+    RNReadSegmentTaskPtr current_seg_task = nullptr;
+    bool done = false;
+    size_t processed_seg_tasks = 0;
 };
 
 } // namespace DB::DM::Remote

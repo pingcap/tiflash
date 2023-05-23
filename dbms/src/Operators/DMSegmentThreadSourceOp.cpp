@@ -35,7 +35,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     size_t expected_block_size_,
     DM::ReadMode read_mode_,
     const int extra_table_id_index,
-    const TableID physical_table_id,
+    const TableID physical_table_id_,
     const String & req_id)
     : SourceOp(exec_status_, req_id)
     , dm_context(dm_context_)
@@ -46,7 +46,8 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , max_version(max_version_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
-    , action(columns_to_read_, extra_table_id_index, physical_table_id)
+    , physical_table_id(physical_table_id_)
+    , action(columns_to_read_, extra_table_id_index)
 {
     setHeader(action.getHeader());
 }
@@ -72,7 +73,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
     {
         std::swap(block, t_block.value());
         t_block.reset();
-        if (action.transform(block))
+        if (action.transform(block, physical_table_id))
         {
             return OperatorStatus::HAS_OUTPUT;
         }
