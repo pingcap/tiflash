@@ -75,6 +75,15 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    void read(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const Names & /*column_names*/,
+        const SelectQueryInfo & /*query_info*/,
+        const Context & /*context*/,
+        size_t /*max_block_size*/,
+        unsigned num_streams) override;
+
     RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
@@ -90,6 +99,7 @@ private:
         unsigned num_streams);
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
+    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
@@ -120,8 +130,12 @@ private:
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
+    std::vector<RequestAndRegionIDs> buildDispatchRequests();
+    void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
+    void buildReceiverSources(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void filterConditions(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
 

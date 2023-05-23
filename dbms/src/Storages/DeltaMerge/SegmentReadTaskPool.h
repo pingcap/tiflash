@@ -160,7 +160,8 @@ class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
     SegmentReadTaskPool(
-        int64_t table_id_,
+        int64_t physical_table_id_,
+        int extra_table_id_index_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
@@ -171,29 +172,7 @@ public:
         AfterSegmentRead after_segment_read_,
         const String & tracing_id,
         bool enable_read_thread_,
-        Int64 num_streams_)
-        : pool_id(nextPoolId())
-        , table_id(table_id_)
-        , dm_context(dm_context_)
-        , columns_to_read(columns_to_read_)
-        , filter(filter_)
-        , max_version(max_version_)
-        , expected_block_size(expected_block_size_)
-        , read_mode(read_mode_)
-        , tasks_wrapper(enable_read_thread_, std::move(tasks_))
-        , after_segment_read(after_segment_read_)
-        , log(Logger::get(tracing_id))
-        , unordered_input_stream_ref_count(0)
-        , exception_happened(false)
-        , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
-        // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-        // to encounter empty queues frequently, resulting in too much waiting and thread context
-        // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
-        , block_slot_limit(std::max(num_streams_, 3))
-        // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
-        // situations where the computation may be faster and the storage layer may not be able to keep up.
-        , active_segment_limit(std::max(num_streams_, 2))
-    {}
+        Int64 num_streams_);
 
     ~SegmentReadTaskPool()
     {
@@ -205,7 +184,7 @@ public:
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
         LOG_DEBUG(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
                   pool_id,
-                  table_id,
+                  physical_table_id,
                   pop_times,
                   pop_empty_times,
                   pop_empty_ratio,
@@ -219,10 +198,6 @@ public:
     SegmentReadTaskPtr nextTask();
     const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
     SegmentReadTaskPtr getTask(UInt64 seg_id);
-
-    uint64_t poolId() const { return pool_id; }
-
-    int64_t tableId() const { return table_id; }
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
@@ -246,10 +221,12 @@ public:
         return add_to_scheduler;
     }
 
-    MemoryTrackerPtr & getMemoryTracker()
-    {
-        return mem_tracker;
-    }
+public:
+    const uint64_t pool_id;
+    const int64_t physical_table_id;
+
+    // The memory tracker of MPPTask.
+    const MemoryTrackerPtr mem_tracker;
 
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
@@ -257,8 +234,7 @@ private:
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
 
-    const uint64_t pool_id;
-    const int64_t table_id;
+    const int extra_table_id_index;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
@@ -277,9 +253,6 @@ private:
 
     std::atomic<bool> exception_happened;
     DB::Exception exception;
-
-    // The memory tracker of MPPTask.
-    MemoryTrackerPtr mem_tracker;
 
     // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
     // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.

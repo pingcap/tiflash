@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,22 +14,13 @@
 
 #pragma once
 
-#include <Core/Block.h>
-#include <Interpreters/JoinUtils.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Common/FailPoint.h>
 
 namespace DB
 {
-struct ProbeProcessInfo;
-Block crossProbeBlockDeepCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
-/// return <probed_block, is_matched_rows>
-std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
+namespace tests
+{
+void initRandomFailPoint(const std::string & config_str);
+void disableRandomFailPoint(const std::string & config_str);
+} // namespace tests
 } // namespace DB

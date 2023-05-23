@@ -58,16 +58,25 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
-    concurrency = init_concurrency;
-    group.resize(concurrency);
+    group.emplace_back();
+    group.back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::reset()
+{
+    group.clear();
+}
+
+void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
+{
+    group.insert(group.end(), std::make_move_iterator(other.group.begin()), std::make_move_iterator(other.group.end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(concurrency > 0);
+    RUNTIME_CHECK(!group.empty());
     PipelineExecGroup pipeline_exec_group;
     for (auto & builder : group)
         pipeline_exec_group.push_back(builder.build());

@@ -101,6 +101,7 @@ public:
     bool hasSpilledData() const { return has_spilled_data; };
     /// only for test now
     bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
+    void removeConstantColumns(Block & block) const;
 
 private:
     friend class SpillHandler;
@@ -117,6 +118,8 @@ private:
     const UInt64 partition_num;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     const Block input_schema;
+    std::vector<size_t> const_column_indexes;
+    Block header_without_constants;
     const LoggerPtr logger;
     std::mutex spill_finished_mutex;
     bool spill_finished = false;

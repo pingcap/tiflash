@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
@@ -101,8 +103,9 @@ public:
         const FilterConditions * filter_conditions = nullptr,
         bool keep_order = false);
 
-    SourceOps getSourceOpsFromDeltaMerge(
+    void buildExecFromDeltaMerge(
         PipelineExecutorStatus & exec_status_,
+        PipelineExecGroupBuilder & group_builder,
         Context & context,
         Int64 table_id,
         size_t concurrency = 1,

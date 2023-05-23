@@ -12,24 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Block.h>
-#include <Interpreters/JoinUtils.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/FailPointUtils.h>
 
 namespace DB
 {
-struct ProbeProcessInfo;
-Block crossProbeBlockDeepCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
-/// return <probed_block, is_matched_rows>
-std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
-    ASTTableJoin::Kind kind,
-    ASTTableJoin::Strictness strictness,
-    ProbeProcessInfo & probe_process_info,
-    const Blocks & right_blocks);
+namespace tests
+{
+void initRandomFailPoint(const std::string & config_str)
+{
+    fiu_init(0); // init failpoint
+    auto config = loadConfigFromString(config_str);
+    FailPointHelper::initRandomFailPoints(*config, Logger::get("test"));
+}
+
+void disableRandomFailPoint(const std::string & config_str)
+{
+    auto config = loadConfigFromString(config_str);
+    FailPointHelper::disableRandomFailPoints(*config, Logger::get("test"));
+}
+
+} // namespace tests
 } // namespace DB

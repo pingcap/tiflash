@@ -250,7 +250,7 @@ bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_clien
     {
         LOG_DEBUG(s3_client.log, "Created bucket {}", s3_client.bucket());
     }
-    else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
+    else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou" || outcome.GetError().GetExceptionName() == "BucketAlreadyExists")
     {
         LOG_DEBUG(s3_client.log, "Bucket {} already exist", s3_client.bucket());
     }
@@ -259,7 +259,7 @@ bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_clien
         const auto & err = outcome.GetError();
         LOG_ERROR(s3_client.log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
     }
-    return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
+    return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou" || outcome.GetError().GetExceptionName() == "BucketAlreadyExists";
 }
 
 void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
