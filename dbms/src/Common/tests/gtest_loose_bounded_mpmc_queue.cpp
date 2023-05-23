@@ -210,7 +210,7 @@ TEST_F(LooseBoundedMPMCQueueTest, AuxiliaryMemoryBound)
 try
 {
     size_t max_size = 10;
-    Int64 auxiliary_memory_bound = 0;
+    Int64 auxiliary_memory_bound;
     Int64 value;
 
     {
@@ -294,6 +294,18 @@ try
         thread_manager->wait();
         if (current_exception)
             std::rethrow_exception(current_exception);
+    }
+
+    {
+        /// case 7, force push does not limited by memory bound
+        LooseBoundedMPMCQueue<Int64> queue(max_size, sizeof(Int64) * max_size / 2, [](const Int64 &) { return sizeof(Int64); });
+        for (size_t i = 0; i < max_size / 2; i++)
+            ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+        for (size_t i = max_size / 2; i < max_size; i++)
+        {
+            ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::FULL);
+            ASSERT_TRUE(queue.forcePush(i) == MPMCQueueResult::OK);
+        }
     }
 }
 CATCH
