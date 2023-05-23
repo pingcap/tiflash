@@ -91,12 +91,6 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 
         try
         {
-            // auto remote_table_ranges = buildRemoteTableRanges();
-            // // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
-            // auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
-            // auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
-            // RUNTIME_CHECK(!batch_cop_tasks.empty());
-
             // Fetch the remote segment read tasks from write nodes
             read_task = buildReadTask(db_context, scan_context);
             break;
