@@ -361,7 +361,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         if (use_new_pack_properties)
         {
             const size_t use_packs_count = std::count(use_packs.begin(), use_packs.end(), true);
-            RUNTIME_CHECK_MSG(static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count, "size doesn't match [new_pack_properties_size={}] [use_packs_size={}]", new_pack_properties.property_size(), use_packs_count);
+            RUNTIME_CHECK_MSG(static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count, "size doesn't match, new_pack_properties_size={} use_packs_size={}", new_pack_properties.property_size(), use_packs_count);
         }
         for (size_t pack_id = 0; pack_id < use_packs.size(); ++pack_id)
         {
