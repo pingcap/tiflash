@@ -104,7 +104,16 @@ void PipelineExecutorStatus::consume(ResultHandler & result_handler)
     auto consumed_result_queue = getConsumedResultQueue();
     Block ret;
     while (consumed_result_queue->pop(ret) == MPMCQueueResult::OK)
-        result_handler(ret);
+    {
+        try
+        {
+            result_handler(ret);
+        }
+        catch (...)
+        {
+            onErrorOccurred(std::current_exception());
+        }
+    }
     // In order to ensure that `onEventFinish` has finished calling at this point
     // and avoid referencing the already destructed `mu` in `onEventFinish`.
     {
