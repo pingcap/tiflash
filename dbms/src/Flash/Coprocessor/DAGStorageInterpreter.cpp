@@ -180,18 +180,16 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
 // <has_cast, extra_cast, project_for_remote_read>
 std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const TiDBTableScan & table_scan)
 {
-    bool has_need_cast_column = false;
-    for (auto b : need_cast_column)
-        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
-    if (!has_need_cast_column)
+    // if no column need to add cast, return directly
+    if (std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true) == may_need_add_cast_column.end())
         return {false, nullptr};
 
     ExpressionActionsChain chain;
     // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    if (analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         assert(extra_cast);
@@ -495,7 +493,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, is_need_add_cast_column) = getColumnsForTableScan();
+    std::tie(required_columns, may_need_add_cast_column) = getColumnsForTableScan();
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
@@ -504,15 +502,15 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_start_index)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, may_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        RUNTIME_CHECK(remote_read_start_index <= group_builder.group.size());
+        RUNTIME_CHECK(remote_read_start_index <= group_builder.concurrency());
         size_t i = 0;
         // local sources
         while (i < remote_read_start_index)
         {
-            auto & group = group_builder.group[i++];
+            auto & group = group_builder.getCurGroup()[i++];
             group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
         }
     }
@@ -523,7 +521,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     DAGPipeline & pipeline)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, may_need_add_cast_column, table_scan);
     if (has_cast)
     {
         RUNTIME_CHECK(remote_read_streams_start_index <= pipeline.streams.size());
@@ -1276,16 +1274,16 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
+std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableScan()
 {
-    Names required_columns_tmp;
-    required_columns_tmp.reserve(table_scan.getColumnSize());
-    std::vector<ExtraCastAfterTSMode> need_cast_column;
-    need_cast_column.reserve(table_scan.getColumnSize());
+    // Get handle column name.
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
 
+    // Get column names for table scan.
+    Names required_columns_tmp;
+    required_columns_tmp.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
@@ -1310,35 +1308,17 @@ std::tuple<Names, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getC
         required_columns_tmp.emplace_back(std::move(name));
     }
 
-    std::unordered_set<ColumnID> col_id_set;
+    // Get the columns that may need to add extra cast.
+    std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
-    {
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
-    }
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+    std::vector<UInt8> may_need_add_cast_column_tmp;
+    may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
+    // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
     for (const auto & col : table_scan.getColumns())
-    {
-        if (col.hasGeneratedColumnFlag())
-        {
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            continue;
-        }
+        may_need_add_cast_column_tmp.push_back(!col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
 
-        if (col_id_set.contains(col.id))
-        {
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
-        }
-        else
-        {
-            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-            else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-            else
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-        }
-    }
-
-    return {required_columns_tmp, need_cast_column};
+    return {required_columns_tmp, may_need_add_cast_column_tmp};
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`

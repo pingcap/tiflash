@@ -797,37 +797,23 @@ DM::PushDownFilterPtr StorageDeltaMerge::buildPushDownFilter(const RSOperatorPtr
         }
 
         // need_cast_column should be the same size as table_scan_column_info and source_columns_of_analyzer
-        std::vector<ExtraCastAfterTSMode> need_cast_column;
-        need_cast_column.reserve(table_scan_column_info.size());
+        std::vector<UInt8> may_need_add_cast_column;
+        may_need_add_cast_column.reserve(table_scan_column_info.size());
         for (const auto & col : table_scan_column_info)
-        {
-            if (!filter_col_id_set.contains(col.id))
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            else
-            {
-                if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeTime)
-                    need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                else
-                    need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-        }
+            may_need_add_cast_column.push_back(!col.hasGeneratedColumnFlag() && filter_col_id_set.contains(col.id) && col.id != -1);
 
         std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns_of_analyzer, context);
         ExpressionActionsChain chain;
         auto & step = analyzer->initAndGetLastStep(chain);
         auto & actions = step.actions;
         ExpressionActionsPtr extra_cast = nullptr;
-        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, need_cast_column, table_scan_column_info); has_cast)
+        if (auto [has_cast, casted_columns] = analyzer->buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info); has_cast)
         {
             NamesWithAliases project_cols;
             for (size_t i = 0; i < columns_to_read.size(); ++i)
             {
                 if (filter_col_id_set.contains(columns_to_read[i].id))
-                {
                     project_cols.emplace_back(casted_columns[i], columns_to_read[i].name);
-                }
             }
             actions->add(ExpressionAction::project(project_cols));
 
