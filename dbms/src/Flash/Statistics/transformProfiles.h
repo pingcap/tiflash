@@ -20,60 +20,60 @@
 
 namespace DB
 {
-    template<typename FF>
-    bool tryTransformForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+template <typename FF>
+bool tryTransformForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+{
+    const auto & profile_streams_map = dag_context.getProfileStreamsMap();
+    auto it = profile_streams_map.find(executor_id);
+    if (it != profile_streams_map.end())
     {
-        const auto & profile_streams_map = dag_context.getProfileStreamsMap();
-        auto it = profile_streams_map.find(executor_id);
-        if (it != profile_streams_map.end())
+        for (const auto & input_stream : it->second)
         {
-            for (const auto & input_stream : it->second)
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
-                {
-                    ff(*p_stream);
-                }
+                ff(*p_stream);
             }
-            return true;
         }
-        return false;
+        return true;
     }
+    return false;
+}
 
-    template<typename FF>
-    void tryTransformForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+template <typename FF>
+void tryTransformForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+{
+    const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
+    auto it = operator_profiles_map.find(executor_id);
+    if (it != operator_profiles_map.end())
     {
-        const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
-        auto it = operator_profiles_map.find(executor_id);
-        if (it != operator_profiles_map.end())
-        {
-            for (const auto & profile_info : it->second)
-                ff(*profile_info);
-        }
+        for (const auto & profile_info : it->second)
+            ff(*profile_info);
     }
+}
 
-    template<typename FF>
-    bool tryTransformInBoundIOForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+template <typename FF>
+bool tryTransformInBoundIOForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+{
+    const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
+    auto it = io_stream_map.find(executor_id);
+    if (it != io_stream_map.end())
     {
-        const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
-        auto it = io_stream_map.find(executor_id);
-        if (it != io_stream_map.end())
-        {
-            for (const auto & io_stream : it->second)
-                ff(*io_stream);
-            return true;
-        }
-        return false;
+        for (const auto & io_stream : it->second)
+            ff(*io_stream);
+        return true;
     }
+    return false;
+}
 
-    template<typename FF>
-    void tryTransformInBoundIOForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+template <typename FF>
+void tryTransformInBoundIOForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+{
+    const auto & operator_profiles_map = dag_context.getInboundIOOperatorProfileInfosMap();
+    auto it = operator_profiles_map.find(executor_id);
+    if (it != operator_profiles_map.end())
     {
-        const auto & operator_profiles_map = dag_context.getInboundIOOperatorProfileInfosMap();
-        auto it = operator_profiles_map.find(executor_id);
-        if (it != operator_profiles_map.end())
-        {
-            for (const auto & profile_info : it->second)
-                ff(*profile_info);
-        }
+        for (const auto & profile_info : it->second)
+            ff(*profile_info);
     }
+}
 } // namespace DB

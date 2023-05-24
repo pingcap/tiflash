@@ -188,7 +188,7 @@ std::unordered_map<String, OperatorProfileInfos> & DAGContext::getOperatorProfil
 
 void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
 {
-    std::lock_guard lock(profile_mu);
+    std::lock_guard lock(operator_profile_infos_map_mu);
     /// The profiles of some operators has been recorded.
     /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
     if (operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
@@ -197,7 +197,7 @@ void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorPro
 
 void DAGContext::addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
 {
-    std::lock_guard lock(profile_mu);
+    std::lock_guard lock(operator_profile_infos_map_mu);
     inbound_io_input_operator_profile_infos_map[executor_id] = std::move(profile_infos);
 }
 

@@ -339,7 +339,8 @@ private:
     TableLockHolders table_locks;
 
     /// profile related
-    std::mutex profile_mu;
+    /// PhysicalPlan will be added to profile_infos to map concurrently at runtime, so a lock is needed to prevent data race.
+    std::mutex operator_profile_infos_map_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.

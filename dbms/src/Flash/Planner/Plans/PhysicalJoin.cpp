@@ -54,19 +54,6 @@ void recordJoinExecuteInfo(
     RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
-void recordJoinExecuteInfo(
-    DAGContext & dag_context,
-    const String & executor_id,
-    const String & build_side_executor_id,
-    const JoinPtr & join_ptr)
-{
-    JoinExecuteInfo join_execute_info;
-    join_execute_info.build_side_root_executor_id = build_side_executor_id;
-    join_execute_info.join_ptr = join_ptr;
-    RUNTIME_CHECK(join_execute_info.join_ptr);
-    dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
-}
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(

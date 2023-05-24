@@ -47,10 +47,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
         for (const auto & join_build_stream : join_execute_info.join_build_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)
-            {
-                const auto & profile_info = p_stream->getProfileInfo();
-                join_build_base.append(profile_info);
-            }
+                join_build_base.append(p_stream->getProfileInfo());
         }
         for (const auto & join_build_profile_info : join_execute_info.join_build_profile_infos)
             join_build_base.append(*join_build_profile_info);
