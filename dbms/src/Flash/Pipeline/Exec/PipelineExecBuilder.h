@@ -46,6 +46,7 @@ public:
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
     BuilderGroup & getCurGroup() { return groups.back(); }
+    const BuilderGroup & getCurGroup() const { return groups.back(); }
 
     void addGroup() { groups.emplace_back(); }
 

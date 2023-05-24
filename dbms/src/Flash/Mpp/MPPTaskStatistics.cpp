@@ -139,21 +139,33 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
 {
-    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    if (!dag_context.getInBoundIOInputStreamsMap().empty())
     {
-        for (const auto & io_stream : map_entry.second)
+        for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); p_stream)
+            for (const auto & io_stream : map_entry.second)
             {
-                const auto & profile_info = p_stream->getProfileInfo();
-                if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); p_stream)
                 {
-                    remote_input_bytes += profile_info.bytes;
+                    const auto & profile_info = p_stream->getProfileInfo();
+                    if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
+                        remote_input_bytes += profile_info.bytes;
+                    else
+                        local_input_bytes += profile_info.bytes;
                 }
+            }
+        }
+    }
+    else
+    {
+        for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
+        {
+            for (const auto & profile_info : map_entry.second)
+            {
+                if (profile_info->is_local)
+                    local_input_bytes += profile_info->bytes;
                 else
-                {
-                    local_input_bytes += profile_info.bytes;
-                }
+                    remote_input_bytes += profile_info->bytes;
             }
         }
     }

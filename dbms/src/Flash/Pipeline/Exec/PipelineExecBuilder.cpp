@@ -112,7 +112,7 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
 OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const
 {
     OperatorProfileInfos ret;
-    for (const auto & builder : group)
+    for (const auto & builder : getCurGroup())
         ret.push_back(builder.getCurProfileInfo());
     return ret;
 }
