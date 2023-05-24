@@ -320,7 +320,7 @@ static void validate(KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_
     ASSERT_EQ(counter, key_count);
 }
 
-TEST_F(RegionKVStoreTest, KVStoreSnapshot)
+TEST_F(RegionKVStoreTest, KVStoreSnapshotV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -494,7 +494,7 @@ try
 CATCH
 
 
-TEST_F(RegionKVStoreTest, KVStoreV2Snapshot)
+TEST_F(RegionKVStoreTest, KVStoreSnapshotV2)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
@@ -557,42 +557,6 @@ try
             {
                 auto [index, term] = proxy_instance->rawWrite(region_id, {kro2}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
                 proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-            }
-        }
-    }
-    return;
-
-    {
-        // This is the case that kvs not belong to this region has been written.
-        // TODO Why should we allow this happen? Is it because we may be slow to update region range before some later valid keys are added? Or just because it is expensive to do this check?
-        region_id = 3;
-        initStorages();
-        KVStore & kvs = getKVS();
-        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
-        auto kvr1 = kvs.getRegion(region_id);
-        auto r1 = proxy_instance->getRegion(region_id);
-        {
-            // Shall filter out of range kvs.
-            auto klo = RecordKVFormat::genKey(table_id - 1, 1);
-            auto kro = RecordKVFormat::genKey(table_id + 1, 0);
-            MockSSTReader::getMockSSTData().clear();
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
-            default_cf.insert_raw(klo, "v1");
-            default_cf.insert_raw(kro, "v1");
-            default_cf.finish_file(SSTFormatKind::KIND_SST);
-            default_cf.freeze();
-            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
-            default_cf.insert_raw(klo, "v1");
-            default_cf.insert_raw(kro, "v1");
-            write_cf.finish_file(SSTFormatKind::KIND_SST);
-            write_cf.freeze();
-
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
-            MockRaftStoreProxy::FailCond cond;
-            {
-                auto [index, term] = proxy_instance->rawWrite(region_id, {klo}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
             }
         }
     }
