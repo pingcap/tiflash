@@ -189,8 +189,8 @@ public:
     void tryCompactionFilter(const Timestamp safe_point);
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
-    metapb::Region getMetaRegion() const;
-    raft_serverpb::MergeState getMergeState() const;
+    metapb::Region cloneMetaRegion() const;
+    raft_serverpb::MergeState cloneMergeState() const;
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;

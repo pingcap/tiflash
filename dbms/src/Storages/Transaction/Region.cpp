@@ -804,13 +804,13 @@ UInt64 RegionRaftCommandDelegate::appliedIndex()
 {
     return meta.makeRaftCommandDelegate().applyState().applied_index();
 }
-metapb::Region Region::getMetaRegion() const
+metapb::Region Region::cloneMetaRegion() const
 {
-    return meta.getMetaRegion();
+    return meta.cloneMetaRegion();
 }
-raft_serverpb::MergeState Region::getMergeState() const
+raft_serverpb::MergeState Region::cloneMergeState() const
 {
-    return meta.getMergeState();
+    return meta.cloneMergeState();
 }
 
 std::pair<size_t, size_t> Region::getApproxMemCacheInfo() const

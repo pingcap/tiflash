@@ -232,7 +232,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
         auto target_region = kvs.getRegion(1);
 
 
-        auto && [request, response] = MockRaftStoreProxy::composePrepareMerge(target_region->getMetaRegion(), source_region->appliedIndex());
+        auto && [request, response] = MockRaftStoreProxy::composePrepareMerge(target_region->cloneMetaRegion(), source_region->appliedIndex());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -243,7 +243,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->cloneMergeState().commit());
         region->setStateApplying();
 
         try
@@ -284,7 +284,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->cloneMergeState().commit());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -314,7 +314,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
-    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    auto old_epoch = source_region->mutMeta().cloneMetaRegion().region_epoch();
     auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, {{RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}}, old_epoch);
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
@@ -406,7 +406,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         auto region_id = 7;
         auto source_region = kvs.getRegion(region_id);
         auto target_region = kvs.getRegion(1);
-        auto && [request, response] = MockRaftStoreProxy::composePrepareMerge(target_region->getMetaRegion(), source_region->appliedIndex());
+        auto && [request, response] = MockRaftStoreProxy::composePrepareMerge(target_region->cloneMetaRegion(), source_region->appliedIndex());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                source_region->id(),
@@ -420,7 +420,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         auto source_id = 7, target_id = 1;
         auto source_region = kvs.getRegion(source_id);
 
-        auto && [request, response] = MockRaftStoreProxy::composeCommitMerge(source_region->getMetaRegion(), source_region->appliedIndex());
+        auto && [request, response] = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         source_region->setStateApplying();
         source_region->makeRaftCommandDelegate(kvs.genTaskLock());
         const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
@@ -451,7 +451,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     {
         auto source_id = 7, target_id = 1;
         auto source_region = kvs.getRegion(source_id);
-        auto && [request, response] = MockRaftStoreProxy::composeCommitMerge(source_region->getMetaRegion(), source_region->appliedIndex());
+        auto && [request, response] = MockRaftStoreProxy::composeCommitMerge(source_region->cloneMetaRegion(), source_region->appliedIndex());
         {
             auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
             ASSERT_TRUE(mmp.count(target_id) != 0);
@@ -520,7 +520,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         auto req = GenRegionReadIndexReq(*region, start_ts);
         ASSERT_EQ(req.ranges().size(), 1);
         ASSERT_EQ(req.start_ts(), start_ts);
-        ASSERT_EQ(region->getMetaRegion().region_epoch().DebugString(),
+        ASSERT_EQ(region->cloneMetaRegion().region_epoch().DebugString(),
                   req.context().region_epoch().DebugString());
         ASSERT_EQ(region->getRange()->comparableKeys().first.key, req.ranges()[0].start_key());
         ASSERT_EQ(region->getRange()->comparableKeys().second.key, req.ranges()[0].end_key());
@@ -783,13 +783,13 @@ TEST_F(RegionKVStoreTest, AdminChangePeer)
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_optional(std::make_pair(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 100))));
     }
     {
-        auto meta = kvs.getRegion(region_id)->getMetaRegion();
+        auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
         auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {2, 4}, false);
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 6, 5, ctx.getTMTContext());
         ASSERT_NE(kvs.getRegion(region_id), nullptr);
     }
     {
-        auto meta = kvs.getRegion(region_id)->getMetaRegion();
+        auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
         auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {3, 4});
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 7, 5, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
@@ -876,7 +876,7 @@ try
         };
         {
             kvs.handleApplySnapshot(
-                region->getMetaRegion(),
+                region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
@@ -910,7 +910,7 @@ try
         };
         {
             kvs.handleApplySnapshot(
-                region->getMetaRegion(),
+                region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 9,
@@ -927,7 +927,7 @@ try
     }
     // Finally, the region is migrated out
     {
-        auto meta = kvs.getRegion(region_id)->getMetaRegion();
+        auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
         auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {3});
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 10, 6, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
@@ -980,7 +980,7 @@ try
         {
             // Pre-handle snapshot to DTFiles is ignored because the table is dropped.
             kvs.handleApplySnapshot(
-                region->getMetaRegion(),
+                region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
@@ -990,7 +990,7 @@ try
             try
             {
                 kvs.handleApplySnapshot(
-                    region->getMetaRegion(),
+                    region->cloneMetaRegion(),
                     2,
                     {}, // empty snap files
                     6, // smaller index

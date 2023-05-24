@@ -448,13 +448,13 @@ RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb:
     region_state.setRegion(std::move(region));
 }
 
-metapb::Region RegionMeta::getMetaRegion() const
+metapb::Region RegionMeta::cloneMetaRegion() const
 {
     std::lock_guard lock(mutex);
     return region_state.getRegion();
 }
 
-raft_serverpb::MergeState RegionMeta::getMergeState() const
+raft_serverpb::MergeState RegionMeta::cloneMergeState() const
 {
     std::lock_guard lock(mutex);
     return region_state.getMergeState();

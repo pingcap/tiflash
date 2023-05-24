@@ -778,7 +778,7 @@ void MockRaftStoreProxy::snapshot(
         term = region->getLatestCommitTerm();
     }
 
-    auto new_kv_region = kvs.genRegionPtr(old_kv_region->getMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
+    auto new_kv_region = kvs.genRegionPtr(old_kv_region->cloneMetaRegion(), old_kv_region->mutMeta().peerId(), index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 

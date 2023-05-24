@@ -109,8 +109,8 @@ public:
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;
     MetaRaftCommandDelegate & makeRaftCommandDelegate();
 
-    metapb::Region getMetaRegion() const;
-    raft_serverpb::MergeState getMergeState() const;
+    metapb::Region cloneMetaRegion() const;
+    raft_serverpb::MergeState cloneMergeState() const;
 
     RegionMeta() = delete;
 
