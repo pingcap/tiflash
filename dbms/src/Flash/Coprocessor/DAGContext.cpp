@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/transformProfiles.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
@@ -317,20 +318,15 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     // collect table scan metrics
     UInt64 time_processed_ns = 0;
     UInt64 num_produced_bytes = 0;
-    for (auto & p : getProfileStreamsMap())
+    if (!tryTransformForStream(*this, table_scan_executor_id, [&](const IProfilingBlockInputStream & p_stream) {
+            time_processed_ns = std::max(time_processed_ns, p_stream.getProfileInfo().execution_time);
+            num_produced_bytes += p_stream.getProfileInfo().bytes;
+        }))
     {
-        if (p.first == table_scan_executor_id)
-        {
-            for (auto & stream_ptr : p.second)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
-                {
-                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                    num_produced_bytes += p_stream->getProfileInfo().bytes;
-                }
-            }
-            break;
-        }
+        tryTransformForOperator(*this, table_scan_executor_id, [&](const OperatorProfileInfo & profile_info) {
+            time_processed_ns = std::max(time_processed_ns, profile_info.execution_time);
+            num_produced_bytes += profile_info.bytes;
+        });
     }
 
     // convert to bytes per second
