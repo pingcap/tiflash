@@ -234,7 +234,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composePrepareMerge(metapb::Region target, UInt64 min_index);
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeCommitMerge(metapb::Region source, UInt64 commit);
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeRollbackMerge(UInt64 commit);
-    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch new_epoch);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch old_epoch);
 
     struct Cf
     {

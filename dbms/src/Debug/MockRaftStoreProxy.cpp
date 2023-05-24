@@ -576,7 +576,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch origin_epoch)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch old_epoch)
 {
     if (region_ids.size() != ranges.size())
     {
