@@ -38,7 +38,7 @@ public:
     MPMCQueueResult tryPush(Block && block);
     MPMCQueueResult tryPop(Block & block);
 
-    void produerFinish();
+    void producerFinish();
 
 private:
     MPMCQueue<Block> queue;
@@ -59,7 +59,7 @@ public:
 
     ~SharedQueueSinkOp()
     {
-        shared_queue->produerFinish();
+        shared_queue->producerFinish();
     }
 
     String getName() const override

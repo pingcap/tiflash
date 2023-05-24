@@ -30,12 +30,12 @@ try
     {
         Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};
         ASSERT_EQ(shared_queue->tryPush(std::move(block)), MPMCQueueResult::OK);
-        shared_queue->produerFinish();
+        shared_queue->producerFinish();
     }
     {
         Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};
         ASSERT_EQ(shared_queue->tryPush(std::move(block)), MPMCQueueResult::OK);
-        shared_queue->produerFinish();
+        shared_queue->producerFinish();
     }
     {
         Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};

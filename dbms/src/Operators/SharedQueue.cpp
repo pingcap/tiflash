@@ -45,7 +45,7 @@ MPMCQueueResult SharedQueue::tryPop(Block & block)
     return queue.tryPop(block);
 }
 
-void SharedQueue::produerFinish()
+void SharedQueue::producerFinish()
 {
     auto cur_value = active_producer.fetch_sub(1);
     RUNTIME_CHECK(cur_value >= 1);
