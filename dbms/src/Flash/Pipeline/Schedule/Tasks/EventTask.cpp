@@ -92,9 +92,9 @@ ExecTaskStatus EventTask::awaitImpl()
     EXECUTE(doAwaitImpl);
 }
 
-UInt64 EventTask::getWaitingTimeToBeScheduled() const
+UInt64 EventTask::getWaitingTimeToScheduled() const
 {
-    return event->getWaitingTimeToBeScheduled();
+    return event->getWaitingTimeToScheduled();
 }
 
 #undef EXECUTE

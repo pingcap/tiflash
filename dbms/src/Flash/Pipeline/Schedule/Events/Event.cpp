@@ -131,14 +131,8 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
-    waiting_time_to_be_scheduled = stopwatch.elapsed();
+    waiting_time_to_scheduled = stopwatch.elapsed();
     scheduleTasks();
-}
-
-UInt64 Event::getWaitingTimeToBeScheduled() const
-{
-    assertStatus(EventStatus::SCHEDULED);
-    return waiting_time_to_be_scheduled;
 }
 
 void Event::scheduleTasks()
@@ -182,6 +176,7 @@ void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
+    waiting_time_to_finished = stopwatch.elapsed();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
     {
@@ -208,6 +203,18 @@ void Event::finish()
     // since `exec_status.onEventSchedule()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
     exec_status.onEventFinish();
+}
+
+UInt64 Event::getWaitingTimeToScheduled() const
+{
+    assertStatus(EventStatus::SCHEDULED);
+    return waiting_time_to_scheduled;
+}
+
+UInt64 Event::getWaitingTimeToFinished() const
+{
+    assertStatus(EventStatus::FINISHED);
+    return waiting_time_to_finished;
 }
 
 void Event::switchStatus(EventStatus from, EventStatus to)

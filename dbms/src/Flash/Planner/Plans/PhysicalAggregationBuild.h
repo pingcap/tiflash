@@ -20,6 +20,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB
 {
@@ -67,5 +68,7 @@ private:
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     AggregateContextPtr aggregate_context;
+
+    OperatorProfileInfos profile_infos;
 };
 } // namespace DB

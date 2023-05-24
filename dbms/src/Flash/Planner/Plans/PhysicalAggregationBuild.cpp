@@ -61,6 +61,8 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
+
+    profile_infos = group_builder.getCurProfileInfos();
 }
 
 EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_status)
@@ -84,7 +86,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_
     if (!indexes.empty())
     {
         auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes));
+        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
     }
     return nullptr;
 }
