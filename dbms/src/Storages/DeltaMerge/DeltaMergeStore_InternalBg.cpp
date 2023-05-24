@@ -277,7 +277,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     // Under disagg mode, a write node could serve large amount of data, place delta index tasks
     // after restart is useless and waste of S3 reading. Only do it when deployed non-disagg mode.
-    if (!global_context.getSharedContextDisagg()->notDisaggregatedMode())
+    if (global_context.getSharedContextDisagg()->notDisaggregatedMode())
     {
         // Generate place delta index tasks
         for (auto & [end, segment] : segments)
