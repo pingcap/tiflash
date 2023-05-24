@@ -357,23 +357,13 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             context.tracing_id);
         const auto & use_packs = pack_filter.getUsePacksConst();
         size_t new_pack_properties_index = 0;
-        bool use_new_pack_properties = pack_properties.property_size() == 0;
+        const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            size_t use_packs_count = 0;
-            for (auto is_used : use_packs)
-            {
-                if (is_used)
-                    use_packs_count += 1;
-            }
-            if (unlikely((size_t)new_pack_properties.property_size() != use_packs_count))
-            {
-                throw Exception(
-                    fmt::format("size doesn't match [new_pack_properties_size={}] [use_packs_size={}]", new_pack_properties.property_size(), use_packs_count),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
+            const size_t use_packs_count = std::count(use_packs.begin(), use_packs.end(), true);
+            RUNTIME_CHECK_MSG(static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count, "size doesn't match [new_pack_properties_size={}] [use_packs_size={}]", new_pack_properties.property_size(), use_packs_count);
         }
-        for (size_t pack_id = 0; pack_id < use_packs.size(); pack_id++)
+        for (size_t pack_id = 0; pack_id < use_packs.size(); ++pack_id)
         {
             if (!use_packs[pack_id])
                 continue;
