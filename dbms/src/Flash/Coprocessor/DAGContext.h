@@ -57,6 +57,7 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams join_build_streams;
+    OperatorProfileInfos join_build_profile_infos;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;

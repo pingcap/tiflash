@@ -52,6 +52,8 @@ void JoinStatistics::collectExtraRuntimeDetail()
                 join_build_base.append(profile_info);
             }
         }
+        for (const auto & join_build_profile_info : join_execute_info.join_build_profile_infos)
+            join_build_base.append(*join_build_profile_info);
     }
 }
 
