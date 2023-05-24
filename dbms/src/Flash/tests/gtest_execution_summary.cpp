@@ -50,18 +50,17 @@ public:
     for (auto enable_planner : planner_bools)                                     \
     {                                                                             \
         enablePlanner(enable_planner);                                            \
-        for (const auto t : type)                                                 \
-        {
+        std::vector<bool> pipeline_bools{false};                                  \
+        if (enable_planner)                                                       \
+            pipeline_bools.push_back(true);                                       \
+        for (auto enable_pipeline : pipeline_bools)                               \
+        {                                                                         \
+            enablePipeline(enable_pipeline);                                      \
+            for (const auto t : type)                                             \
+            {
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_END \
     }                                      \
-    }
-
-#define WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN \
-    std::vector<bool> planner_bools{false, true};       \
-    for (auto enable_planner : planner_bools)           \
-    {                                                   \
-        enablePlanner(enable_planner);
-#define WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END \
+    }                                      \
     }
 };
 
@@ -144,7 +143,7 @@ CATCH
 TEST_F(ExecutionSummaryTestRunner, treeBased)
 try
 {
-    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+    WRAP_FOR_TEST_BEGIN
     {
         auto request = context
                            .scan("test_db", "test_table")
@@ -237,14 +236,14 @@ try
         testForExecutionSummary(request, expect);
     }
 
-    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
+    WRAP_FOR_TEST_END
 }
 CATCH
 
 TEST_F(ExecutionSummaryTestRunner, expand)
 try
 {
-    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+    WRAP_FOR_TEST_BEGIN
     {
         auto request = context
                            .scan("test_db", "test_table")
@@ -261,7 +260,7 @@ try
         Expect expect{{"table_scan_0", {12, concurrency}}, {"expand_1", {24, concurrency}}};
         testForExecutionSummary(request, expect);
     }
-    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
+    WRAP_FOR_TEST_END
 }
 CATCH
 
@@ -284,8 +283,6 @@ CATCH
 
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_END
-#undef WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
-#undef WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 
 } // namespace tests
 } // namespace DB
