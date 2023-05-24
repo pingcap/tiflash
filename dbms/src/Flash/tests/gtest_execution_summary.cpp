@@ -82,7 +82,9 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}},
+                      {"selection_1", {not_check_rows, concurrency}},
+                      {"limit_2", {2, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, limit can be executed in parallel.
 
         testForExecutionSummary(request, expect);
     }
@@ -91,7 +93,8 @@ try
                            .scan("test_db", "test_table")
                            .limit(5)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 1}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}},
+                      {"limit_1", {5, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, limit can be executed in parallel.
         testForExecutionSummary(request, expect);
     }
     {
@@ -99,7 +102,8 @@ try
                            .scan("test_db", "test_table")
                            .topN("s1", true, 5)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}},
+                      {"topn_1", {not_check_rows, enable_pipeline ? concurrency : 1}}}; // for pipeline mode, limit can be executed in parallel.
         testForExecutionSummary(request, expect);
     }
 

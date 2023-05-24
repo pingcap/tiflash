@@ -73,7 +73,10 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
-    profile_info.update(block);
+    if (op_status == OperatorStatus::HAS_OUTPUT)
+        profile_info.update(block);
+    else
+        profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -91,7 +94,10 @@ OperatorStatus TransformOp::transform(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile_info.update(block);
+    if (op_status == OperatorStatus::HAS_OUTPUT)
+        profile_info.update(block);
+    else
+        profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -110,7 +116,10 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile_info.update(block);
+    if (op_status == OperatorStatus::HAS_OUTPUT)
+        profile_info.update(block);
+    else
+        profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
