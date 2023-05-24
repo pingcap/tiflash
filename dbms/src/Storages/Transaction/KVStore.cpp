@@ -560,6 +560,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto handle_batch_split = [&](Regions & split_regions) {
             {
+                // `split_regions` doesn't include the derived region.
                 auto manage_lock = genRegionWriteLock(task_lock);
 
                 for (auto & new_region : split_regions)

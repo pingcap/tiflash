@@ -303,6 +303,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         region->insert("lock", RecordKVFormat::genKey(table_id, 3), RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
         region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insert("write", RecordKVFormat::genKey(table_id, 3, 8), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
+
         region->insert("lock", RecordKVFormat::genKey(table_id, 8), RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
         region->insert("default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
         region->insert("write", RecordKVFormat::genKey(table_id, 8, 8), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -310,7 +311,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
 
-    // split region
+    // Split region
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
@@ -328,10 +329,11 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         ASSERT_EQ(mmp.size(), 1);
     }
     {
+        // We don't force migration of committed data from derived region to dm store.
         ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 default 1 ]");
         ASSERT_EQ(kvs.getRegion(7)->dataInfo(), "[lock 1 ]");
     }
-    // rollback 1 to before split
+    // Rollback 1 to before split
     // 7 is persisted
     {
         kvs.handleDestroy(1, tmt);
@@ -354,12 +356,13 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
     {
+        // Region 1 and 7 overlaps.
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 2);
     }
-    // split again
+    // Split again
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
@@ -764,15 +767,34 @@ TEST_F(RegionKVStoreTest, Writes)
         kvs.handleDestroy(2, ctx.getTMTContext());
         ASSERT_EQ(kvs.regionSize(), 1);
     }
+}
+
+
+TEST_F(RegionKVStoreTest, AdminSplit)
+{
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
+    proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1}, {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}});
     {
         testRaftSplit(kvs, ctx.getTMTContext());
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{}, raft_cmdpb::AdminResponse{}, 8192, 5, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
+}
+
+TEST_F(RegionKVStoreTest, AdminMerge)
+{
+    createDefaultRegions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    KVStore & kvs = getKVS();
+    proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1, 7}, {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}, {RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}});
+
     {
         testRaftMergeRollback(kvs, ctx.getTMTContext());
         testRaftMerge(kvs, ctx.getTMTContext());
     }
 }
+
 
 TEST_F(RegionKVStoreTest, AdminChangePeer)
 {
