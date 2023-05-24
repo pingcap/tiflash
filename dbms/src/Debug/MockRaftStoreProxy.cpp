@@ -386,7 +386,7 @@ void MockRaftStoreProxy::bootstrapWithRegion(
     }
     auto start = RecordKVFormat::genKey(table_id, 0);
     auto end = RecordKVFormat::genKey(table_id + 1, 0);
-    debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or({start.toString(), end.toString()})});
+    debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or(std::make_pair(start.toString(), end.toString()))});
 }
 
 void MockRaftStoreProxy::debugAddRegions(
