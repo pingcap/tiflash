@@ -98,6 +98,7 @@ public:
     void getPermutation(const ICollator & collator, bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const;
     void reserve(size_t n) override;
+    void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
