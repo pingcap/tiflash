@@ -49,13 +49,13 @@ public:
         , aggregate_context(aggregate_context_)
     {}
 
+private:
     void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
 
-private:
     EventPtr doSinkComplete(PipelineExecutorStatus & exec_status) override;
 
     DISABLE_USELESS_FUNCTION_FOR_BREAKER

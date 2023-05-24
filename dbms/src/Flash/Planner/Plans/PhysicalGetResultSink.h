@@ -50,6 +50,12 @@ public:
         throw Exception("Unsupport");
     }
 
+private:
+    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
+    {
+        throw Exception("Unsupport");
+    }
+
     void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
@@ -58,11 +64,5 @@ public:
 
 private:
     ResultQueuePtr result_queue;
-
-private:
-    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
-    {
-        throw Exception("Unsupport");
-    }
 };
 } // namespace DB
