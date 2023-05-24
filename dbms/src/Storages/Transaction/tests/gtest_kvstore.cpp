@@ -806,13 +806,13 @@ TEST_F(RegionKVStoreTest, AdminChangePeer)
     }
     {
         auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
-        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {2, 4}, false);
+        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(std::move(meta), {2, 4}, false);
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 6, 5, ctx.getTMTContext());
         ASSERT_NE(kvs.getRegion(region_id), nullptr);
     }
     {
         auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
-        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {3, 4});
+        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(std::move(meta), {3, 4});
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 7, 5, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
     }
@@ -950,7 +950,7 @@ try
     // Finally, the region is migrated out
     {
         auto meta = kvs.getRegion(region_id)->cloneMetaRegion();
-        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {3});
+        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(std::move(meta), {3});
         kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 10, 6, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
     }

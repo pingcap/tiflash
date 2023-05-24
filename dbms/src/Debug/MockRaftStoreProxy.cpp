@@ -400,7 +400,7 @@ void MockRaftStoreProxy::debugAddRegions(
     auto _ = genLockGuard();
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; ++i)
     {
         regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));
         auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
@@ -523,7 +523,7 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
     return adminCommand(region_id, std::move(request), std::move(response));
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region meta, std::vector<UInt64> peer_ids, bool is_v2)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -544,7 +544,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composePrepareMerge(metapb::Region target, UInt64 min_index)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composePrepareMerge(metapb::Region && target, UInt64 min_index)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -555,7 +555,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCommitMerge(metapb::Region source, UInt64 commit)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCommitMerge(metapb::Region && source, UInt64 commit)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
@@ -576,7 +576,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     return std::make_tuple(request, response);
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch old_epoch)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> && region_ids, std::vector<std::pair<std::string, std::string>> && ranges, metapb::RegionEpoch old_epoch)
 {
     if (region_ids.size() != ranges.size())
     {
@@ -587,8 +587,8 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     raft_cmdpb::AdminResponse response;
     request.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
     metapb::RegionEpoch new_epoch;
-    new_epoch.set_version(origin_epoch.version() + 1);
-    new_epoch.set_conf_ver(origin_epoch.conf_ver());
+    new_epoch.set_version(old_epoch.version() + 1);
+    new_epoch.set_conf_ver(old_epoch.conf_ver());
     {
         raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
         for (size_t i = 0; i < n; i++)
