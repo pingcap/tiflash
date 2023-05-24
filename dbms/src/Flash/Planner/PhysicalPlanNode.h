@@ -31,7 +31,7 @@ class DAGContext;
 
 class PipelineExecutorStatus;
 
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;

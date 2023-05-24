@@ -35,15 +35,23 @@ struct PipelineExecBuilder
     OperatorProfileInfoPtr getCurProfileInfo() const;
 };
 
-struct PipelineExecGroupBuilder
+class PipelineExecGroupBuilder
 {
-    // A Group generates a set of pipeline_execs running in parallel.
+public:
+    PipelineExecGroupBuilder()
+    {
+        groups.emplace_back();
+    }
+
     using BuilderGroup = std::vector<PipelineExecBuilder>;
-    BuilderGroup group;
 
-    size_t concurrency() const { return group.size(); }
+    BuilderGroup & getCurGroup() { return groups.back(); }
 
-    bool empty() const { return group.empty(); }
+    void addGroup() { groups.emplace_back(); }
+
+    size_t concurrency() const { return getCurGroup().size(); }
+
+    bool empty() const { return getCurGroup().empty(); }
 
     void addConcurrency(SourceOpPtr && source);
 
@@ -55,7 +63,7 @@ struct PipelineExecGroupBuilder
     template <typename FF>
     void transform(FF && ff)
     {
-        for (auto & builder : group)
+        for (auto & builder : getCurGroup())
         {
             ff(builder);
         }
@@ -66,5 +74,19 @@ struct PipelineExecGroupBuilder
     Block getCurrentHeader();
 
     OperatorProfileInfos getCurProfileInfos() const;
+
+private:
+    // groups generates a set of pipeline_execs running in parallel.
+    //
+    // group1  -->   group2  -->   cur_group
+    // exec1         exec1         exec1
+    // exec2         exec2         exec2
+    // exec3                       exec3
+    //                             exec4
+    //
+    // Only `cur_group` will be modified, other groups are already stable.
+    // The concurrency level of different groups can be different. Usually, a `SharedQueue` is used to connect different groups.
+    // This way, different operators with different levels of concurrency can be executed together in a pipeline.
+    std::vector<BuilderGroup> groups;
 };
 } // namespace DB
