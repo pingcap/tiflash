@@ -546,7 +546,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
             streams.push_back(stream);
         }
 
-        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams);
+        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context);
         stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
@@ -2673,7 +2673,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "buildBitmapFilterStableOnly total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={}ms", some_packs_sets.size(), segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 
