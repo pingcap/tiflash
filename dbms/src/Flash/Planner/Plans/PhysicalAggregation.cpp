@@ -227,6 +227,7 @@ void PhysicalAggregation::buildPipeline(
             is_final_agg,
             aggregate_descriptions,
             aggregate_context);
+        agg_build->notTiDBOperator();
         // Break the pipeline for agg_build.
         auto agg_build_builder = builder.breakPipeline(agg_build);
         // agg_build pipeline.

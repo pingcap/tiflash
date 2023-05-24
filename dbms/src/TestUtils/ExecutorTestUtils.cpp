@@ -330,24 +330,26 @@ void ExecutorTest::testForExecutionSummary(
     ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
     statistics_collector.initialize(&dag_context);
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+    bool enable_planner = context.context->getSettingsRef().enable_planner;
+    bool enable_pipeline = context.context->getSettingsRef().enable_pipeline || context.context->getSettingsRef().enforce_enable_pipeline;
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
     for (const auto & summary : summaries)
     {
         ASSERT_TRUE(summary.has_executor_id()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         auto it = expect.find(summary.executor_id());
         ASSERT_TRUE(it != expect.end())
             << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
-            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+            << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.first != not_check_rows)
             ASSERT_EQ(summary.num_produced_rows(), it->second.first)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.second != not_check_concurrency)
             ASSERT_EQ(summary.concurrency(), it->second.second)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
     }
 }
