@@ -351,7 +351,7 @@ void MockRaftStoreProxy::runOneRound()
     {
         auto & t = *read_index_tasks.front();
         auto region_id = t.req.context().region_id();
-        if (!region_id_to_drop.count(region_id))
+        if (!region_id_to_drop.contains(region_id))
         {
             if (region_id_to_error.count(region_id))
                 t.update(false, true);
