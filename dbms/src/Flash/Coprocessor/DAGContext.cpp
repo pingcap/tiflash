@@ -348,7 +348,7 @@ RU DAGContext::getReadRU() const
         (void)id; // Disable unused variable warnning.
         ru += sc->getReadRU();
     }
-    return static_cast<RU>(ru);
+    return std::ceil(ru);
 }
 
 } // namespace DB
