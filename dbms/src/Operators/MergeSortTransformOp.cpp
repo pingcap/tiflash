@@ -18,14 +18,13 @@
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/SortHelper.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
-#include <Interpreters/sortBlock.h>
-#include <Operators/LocalSortTransformOp.h>
+#include <Operators/MergeSortTransformOp.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
-void LocalSortTransformOp::operatePrefix()
+void MergeSortTransformOp::operatePrefix()
 {
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
@@ -36,13 +35,13 @@ void LocalSortTransformOp::operatePrefix()
     spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
-void LocalSortTransformOp::operateSuffix()
+void MergeSortTransformOp::operateSuffix()
 {
     if likely (merge_impl)
         merge_impl->readSuffix();
 }
 
-Block LocalSortTransformOp::getMergeOutput()
+Block MergeSortTransformOp::getMergeOutput()
 {
     assert(merge_impl);
     Block block = merge_impl->read();
@@ -51,11 +50,11 @@ Block LocalSortTransformOp::getMergeOutput()
     return block;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
+OperatorStatus MergeSortTransformOp::fromPartialToMerge(Block & block)
 {
-    assert(status == LocalSortStatus::PARTIAL);
+    assert(status == MergeSortStatus::PARTIAL);
     // convert to merge phase.
-    status = LocalSortStatus::MERGE;
+    status = MergeSortStatus::MERGE;
     if likely (!sorted_blocks.empty())
     {
         // In merge phase, the MergeSortingBlocksBlockInputStream of pull model is used to do merge sort.
@@ -72,11 +71,11 @@ OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToRestore()
+OperatorStatus MergeSortTransformOp::fromPartialToRestore()
 {
-    assert(status == LocalSortStatus::PARTIAL);
+    assert(status == MergeSortStatus::PARTIAL);
     // convert to restore phase.
-    status = LocalSortStatus::RESTORE;
+    status = MergeSortStatus::RESTORE;
 
     LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
@@ -99,14 +98,14 @@ OperatorStatus LocalSortTransformOp::fromPartialToRestore()
     return OperatorStatus::IO;
 }
 
-OperatorStatus LocalSortTransformOp::fromPartialToSpill()
+OperatorStatus MergeSortTransformOp::fromPartialToSpill()
 {
-    assert(status == LocalSortStatus::PARTIAL);
+    assert(status == MergeSortStatus::PARTIAL);
     // convert to restore phase.
-    status = LocalSortStatus::SPILL;
+    status = MergeSortStatus::SPILL;
     assert(!cached_handler);
     if (!spiller->hasSpilledData())
-        LOG_INFO(log, "Begin spill in local sort");
+        LOG_INFO(log, "Begin spill in merge sort");
     cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
@@ -117,22 +116,22 @@ OperatorStatus LocalSortTransformOp::fromPartialToSpill()
     return OperatorStatus::IO;
 }
 
-OperatorStatus LocalSortTransformOp::fromSpillToPartial()
+OperatorStatus MergeSortTransformOp::fromSpillToPartial()
 {
-    assert(status == LocalSortStatus::SPILL);
+    assert(status == MergeSortStatus::SPILL);
     assert(cached_handler);
     cached_handler.reset();
     sum_bytes_in_blocks = 0;
     sorted_blocks.clear();
-    status = LocalSortStatus::PARTIAL;
+    status = MergeSortStatus::PARTIAL;
     return OperatorStatus::NEED_INPUT;
 }
 
-OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
+OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
 {
     switch (status)
     {
-    case LocalSortStatus::PARTIAL:
+    case MergeSortStatus::PARTIAL:
     {
         if unlikely (!block)
         {
@@ -141,9 +140,8 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
                 : fromPartialToMerge(block);
         }
 
-        // execute partial sort and store the sorted block in `sorted_blocks`.
+        // store the sorted block in `sorted_blocks`.
         SortHelper::removeConstantsFromBlock(block);
-        sortBlock(block, order_desc, limit);
         sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 
@@ -157,26 +155,26 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
     }
 }
 
-OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
+OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
 {
     switch (status)
     {
-    case LocalSortStatus::PARTIAL:
+    case MergeSortStatus::PARTIAL:
         return OperatorStatus::NEED_INPUT;
-    case LocalSortStatus::SPILL:
+    case MergeSortStatus::SPILL:
     {
         assert(cached_handler);
         return cached_handler->batchRead()
             ? OperatorStatus::IO
             : fromSpillToPartial();
     }
-    case LocalSortStatus::MERGE:
+    case MergeSortStatus::MERGE:
     {
         if likely (merge_impl)
             block = getMergeOutput();
         return OperatorStatus::HAS_OUTPUT;
     }
-    case LocalSortStatus::RESTORE:
+    case MergeSortStatus::RESTORE:
     {
         if (restored_result.hasData())
         {
@@ -190,17 +188,17 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
     }
 }
 
-OperatorStatus LocalSortTransformOp::executeIOImpl()
+OperatorStatus MergeSortTransformOp::executeIOImpl()
 {
     switch (status)
     {
-    case LocalSortStatus::SPILL:
+    case MergeSortStatus::SPILL:
     {
         assert(cached_handler);
         cached_handler->spill();
         return OperatorStatus::NEED_INPUT;
     }
-    case LocalSortStatus::RESTORE:
+    case MergeSortStatus::RESTORE:
     {
         restored_result.put(getMergeOutput());
         return OperatorStatus::HAS_OUTPUT;
@@ -210,16 +208,16 @@ OperatorStatus LocalSortTransformOp::executeIOImpl()
     }
 }
 
-void LocalSortTransformOp::transformHeaderImpl(Block &)
+void MergeSortTransformOp::transformHeaderImpl(Block &)
 {
 }
 
-bool LocalSortTransformOp::RestoredResult::hasData() const
+bool MergeSortTransformOp::RestoredResult::hasData() const
 {
     return finished || block.has_value();
 }
 
-void LocalSortTransformOp::RestoredResult::put(Block && ret)
+void MergeSortTransformOp::RestoredResult::put(Block && ret)
 {
     assert(!hasData());
     if unlikely (!ret)
@@ -227,7 +225,7 @@ void LocalSortTransformOp::RestoredResult::put(Block && ret)
     block.emplace(std::move(ret));
 }
 
-Block LocalSortTransformOp::RestoredResult::output()
+Block MergeSortTransformOp::RestoredResult::output()
 {
     if unlikely (finished)
         return {};
