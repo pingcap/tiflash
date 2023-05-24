@@ -94,7 +94,7 @@ enum class ReceiveStatus
 struct ReceiveResult
 {
     ReceiveStatus recv_status;
-    RecvMsgPtr recv_msg;
+    ReceivedMessagePtr recv_msg;
 };
 
 template <typename RPCContext>
@@ -141,7 +141,6 @@ public:
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
     int getExternalThreadCnt() const { return thread_count; }
-    std::vector<MsgChannelPtr> & getMsgChannels() { return msg_channels; }
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
@@ -167,7 +166,7 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     DecodeDetail decodeChunks(
-        const RecvMsgPtr & recv_msg,
+        const ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
@@ -186,13 +185,12 @@ private:
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,
         const Block & header,
-        const RecvMsgPtr & recv_msg,
+        const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg);
+    inline ReceiveResult toReceiveResult(MPMCQueueResult result, ReceivedMessagePtr && recv_msg);
 
-    void prepareMsgChannels();
-    void prepareGRPCReceiveQueue();
+    void prepareReceivedMessageQueue();
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
 
@@ -226,8 +224,7 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    std::vector<MsgChannelPtr> msg_channels;
-    std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
+    ReceivedMessageQueue received_message_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
     std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;

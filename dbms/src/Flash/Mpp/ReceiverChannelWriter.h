@@ -28,9 +28,8 @@ namespace DB
 class ReceiverChannelWriter : public ReceiverChannelBase
 {
 public:
-    ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
-        : ReceiverChannelBase(msg_channels_->size(), req_info_, log_, data_size_in_queue_, mode_)
-        , msg_channels(msg_channels_)
+    ReceiverChannelWriter(ReceivedMessageQueue * received_message_queue, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
+        : ReceiverChannelBase(received_message_queue, req_info_, log_, data_size_in_queue_, mode_)
     {}
 
     // "write" means writing the packet to the channel which is a LooseBoundedMPMCQueue.
@@ -48,52 +47,8 @@ public:
     // Return true if all push succeed, otherwise return false.
     // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
     template <bool enable_fine_grained_shuffle, bool is_force = false>
-    bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
-    {
-        const auto & packet = tracked_packet->packet;
-        const mpp::Error * error_ptr = packet.has_error() ? &packet.error() : nullptr;
-        const String * resp_ptr = packet.data().empty() ? nullptr : &packet.data();
-
-        WriteToChannelFunc write_func;
-        if constexpr (is_force)
-            write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {
-                return (*msg_channels)[i]->forcePush(std::move(recv_msg));
-            };
-        else
-            write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {
-                return (*msg_channels)[i]->push(std::move(recv_msg));
-            };
-
-        bool success;
-        if constexpr (enable_fine_grained_shuffle)
-            success = writeFineGrain(write_func, source_index, tracked_packet, error_ptr, resp_ptr);
-        else
-            success = writeNonFineGrain(write_func, source_index, tracked_packet, error_ptr, resp_ptr);
-
-        if (likely(success))
-            ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
-        LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
-        return success;
-    }
+    bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
     bool isWritable() const;
-
-private:
-    using WriteToChannelFunc = std::function<MPMCQueueResult(size_t, ReceivedMessagePtr &&)>;
-
-    bool writeFineGrain(
-        WriteToChannelFunc write_func,
-        size_t source_index,
-        const TrackedMppDataPacketPtr & tracked_packet,
-        const mpp::Error * error_ptr,
-        const String * resp_ptr);
-    bool writeNonFineGrain(
-        WriteToChannelFunc write_func,
-        size_t source_index,
-        const TrackedMppDataPacketPtr & tracked_packet,
-        const mpp::Error * error_ptr,
-        const String * resp_ptr);
-
-    std::vector<MsgChannelPtr> * msg_channels;
 };
 } // namespace DB

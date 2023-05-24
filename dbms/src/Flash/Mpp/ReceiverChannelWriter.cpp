@@ -18,101 +18,59 @@
 
 namespace DB
 {
-namespace
+template <bool enable_fine_grained_shuffle, bool is_force>
+bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
 {
-inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
-{
-    switch (mode)
+    const auto & packet = tracked_packet->packet;
+    const mpp::Error * error_ptr = packet.has_error() ? &packet.error() : nullptr;
+    const String * resp_ptr = packet.data().empty() ? nullptr : &packet.data();
+    auto received_message = toReceivedMessage(tracked_packet, error_ptr, resp_ptr, received_message_queue->msg_index++, source_index, req_info);
+    if constexpr (enable_fine_grained_shuffle)
     {
-    case ReceiverMode::Local:
-        fiu_do_on(FailPoints::random_receiver_local_msg_push_failure_failpoint, push_succeed = false);
-        break;
-    case ReceiverMode::Sync:
-        fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false);
-        break;
-    case ReceiverMode::Async:
-        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false);
-        break;
-    default:
-        RUNTIME_ASSERT(false, "Illegal ReceiverMode");
+        received_message->remaining_consumer = std::make_shared<std::atomic<size_t>>(fine_grained_channel_size);
     }
-}
-} // namespace
-
-bool ReceiverChannelWriter::writeFineGrain(
-    WriteToChannelFunc write_func,
-    size_t source_index,
-    const TrackedMppDataPacketPtr & tracked_packet,
-    const mpp::Error * error_ptr,
-    const String * resp_ptr)
-{
-    bool success = true;
-    auto & packet = tracked_packet->packet;
-    std::vector<std::vector<const String *>> chunks(msg_channels->size());
-
-    if (!splitFineGrainedShufflePacketIntoChunks(source_index, packet, chunks))
-        return false;
-
-    // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
-    for (size_t i = 0; i < msg_channels->size() && success; ++i)
+    if (error_ptr == nullptr && resp_ptr == nullptr && received_message->chunks.empty())
     {
-        if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
-            continue;
-
-        auto recv_msg = std::make_shared<ReceivedMessage>(
-            source_index,
-            req_info,
-            tracked_packet,
-            error_ptr,
-            resp_ptr,
-            std::move(chunks[i]));
-        success = (write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK);
-
-        injectFailPointReceiverPushFail(success, mode);
-
-        // Only the first ExchangeReceiverInputStream need to handle resp.
-        resp_ptr = nullptr;
+        /// don't need to push an empty response to received_message_queue
+        return true;
     }
-    return success;
-}
 
-bool ReceiverChannelWriter::writeNonFineGrain(
-    WriteToChannelFunc write_func,
-    size_t source_index,
-    const TrackedMppDataPacketPtr & tracked_packet,
-    const mpp::Error * error_ptr,
-    const String * resp_ptr)
-{
-    bool success = true;
-    auto & packet = tracked_packet->packet;
-    std::vector<const String *> chunks(packet.chunks_size());
+    std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;
+    if constexpr (is_force)
+        write_func = [&](ReceivedMessagePtr & recv_msg) {
+            return received_message_queue->msg_channel->forcePush(std::move(recv_msg));
+        };
+    else
+        write_func = [&](ReceivedMessagePtr & recv_msg) {
+            return received_message_queue->msg_channel->push(std::move(recv_msg));
+        };
 
-    for (int i = 0; i < packet.chunks_size(); ++i)
-        chunks[i] = &packet.chunks(i);
-
-    if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
+    bool success = write_func(received_message) == MPMCQueueResult::OK;
+    injectFailPointReceiverPushFail(success, mode);
+    if constexpr (enable_fine_grained_shuffle)
     {
-        auto recv_msg = std::make_shared<ReceivedMessage>(
-            source_index,
-            req_info,
-            tracked_packet,
-            error_ptr,
-            resp_ptr,
-            std::move(chunks));
-
-        success = write_func(0, std::move(recv_msg)) == MPMCQueueResult::OK;
-        injectFailPointReceiverPushFail(success, mode);
+        if (success)
+            success = writeMessageToFineGrainChannels(received_message);
     }
+
+    if (likely(success))
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+    LOG_TRACE(log, "push recv_msg to msg_channel succeed:{}, enable_fine_grained_shuffle: {}, fine grained channel size: {}", success, enable_fine_grained_shuffle, fine_grained_channel_size);
     return success;
 }
 
 bool ReceiverChannelWriter::isWritable() const
 {
-    for (const auto & msg_channel : *msg_channels)
-    {
-        if (msg_channel->isFull())
-            return false;
-    }
-    return true;
+    return received_message_queue->msg_channel->isFull();
 }
+
+template <>
+bool ReceiverChannelWriter::write<true, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template <>
+bool ReceiverChannelWriter::write<true, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template <>
+bool ReceiverChannelWriter::write<false, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template <>
+bool ReceiverChannelWriter::write<false, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+
 } // namespace DB
