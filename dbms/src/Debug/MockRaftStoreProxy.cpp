@@ -526,11 +526,18 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
     return adminCommand(region_id, std::move(request), std::move(response));
 }
 
-std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region meta, std::vector<UInt64> peer_ids)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region meta, std::vector<UInt64> peer_ids, bool is_v2)
 {
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
-    request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
+    if (is_v2)
+    {
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
+    }
+    else
+    {
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeer);
+    }
     meta.mutable_peers()->Clear();
     for (auto i : peer_ids)
     {
@@ -559,6 +566,44 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     auto * commit_merge = request.mutable_commit_merge();
     commit_merge->set_commit(commit);
     *commit_merge->mutable_source() = source;
+    return std::make_tuple(request, response);
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeRollbackMerge(UInt64 commit)
+{
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
+    auto * rollback_merge = request.mutable_rollback_merge();
+    rollback_merge->set_commit(commit);
+    return std::make_tuple(request, response);
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> region_ids, std::vector<std::pair<std::string, std::string>> ranges, metapb::RegionEpoch origin_epoch)
+{
+    if (region_ids.size() != ranges.size())
+    {
+        throw Exception("error composeBatchSplit input");
+    }
+    auto n = region_ids.size();
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
+    metapb::RegionEpoch new_epoch;
+    new_epoch.set_version(origin_epoch.version() + 1);
+    new_epoch.set_conf_ver(origin_epoch.conf_ver());
+    {
+        raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
+        for (size_t i = 0; i < n; i++)
+        {
+            auto * region = splits->add_regions();
+            region->set_id(region_ids[i]);
+            region->set_start_key(ranges[i].first);
+            region->set_end_key(ranges[i].second);
+            region->add_peers();
+            *region->mutable_region_epoch() = new_epoch;
+        }
+    }
     return std::make_tuple(request, response);
 }
 

@@ -21,19 +21,11 @@ namespace tests
 TEST_F(RegionKVStoreTest, PersistenceV1)
 try
 {
-    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
-
     KVStore & kvs = getKVS();
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
-        auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
-        {
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
-            lock.regions.emplace(1, region);
-            lock.index.add(region);
-        }
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
     }
     {
         kvs.tryPersistRegion(1);
@@ -239,19 +231,8 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
         auto source_region = kvs.getRegion(region_id);
         auto target_region = kvs.getRegion(1);
 
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        {
-            request.set_cmd_type(raft_cmdpb::AdminCmdType::PrepareMerge);
-            auto * prepare_merge = request.mutable_prepare_merge();
-            {
-                auto min_index = source_region->appliedIndex();
-                prepare_merge->set_min_index(min_index);
 
-                metapb::Region * target = prepare_merge->mutable_target();
-                *target = target_region->getMetaRegion();
-            }
-        }
+        auto && [request, response] = MockRaftStoreProxy::composePrepareMerge(target_region->getMetaRegion(), source_region->appliedIndex());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -262,18 +243,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        {
-            request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
-
-            auto * rollback_merge = request.mutable_rollback_merge();
-            {
-                auto merge_state = region->getMergeState();
-                rollback_merge->set_commit(merge_state.commit());
-            }
-        }
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
         region->setStateApplying();
 
         try
@@ -314,18 +284,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        {
-            request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
-
-            auto * rollback_merge = request.mutable_rollback_merge();
-            {
-                auto merge_state = region->getMergeState();
-                rollback_merge->set_commit(merge_state.commit());
-            }
-        }
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -350,44 +309,13 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
 
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
-    raft_cmdpb::AdminRequest request;
-    raft_cmdpb::AdminResponse response;
-    {
-        // split region
-        auto region_id = 1;
-        RegionID region_id2 = 7;
-        auto source_region = kvs.getRegion(region_id);
-        metapb::RegionEpoch new_epoch;
-        new_epoch.set_version(source_region->version() + 1);
-        new_epoch.set_conf_ver(source_region->confVer());
-        TiKVKey start_key1, start_key2, end_key1, end_key2;
-        {
-            start_key1 = RecordKVFormat::genKey(1, 5);
-            start_key2 = RecordKVFormat::genKey(1, 0);
-            end_key1 = RecordKVFormat::genKey(1, 10);
-            end_key2 = RecordKVFormat::genKey(1, 5);
-        }
-        {
-            request.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
-            raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
-            {
-                auto * region = splits->add_regions();
-                region->set_id(region_id);
-                region->set_start_key(start_key1);
-                region->set_end_key(end_key1);
-                region->add_peers();
-                *region->mutable_region_epoch() = new_epoch;
-            }
-            {
-                auto * region = splits->add_regions();
-                region->set_id(region_id2);
-                region->set_start_key(start_key2);
-                region->set_end_key(end_key2);
-                region->add_peers();
-                *region->mutable_region_epoch() = new_epoch;
-            }
-        }
-    }
+
+    // split region
+    RegionID region_id = 1;
+    RegionID region_id2 = 7;
+    auto source_region = kvs.getRegion(region_id);
+    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
+    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, {{RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}}, old_epoch);
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
         auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
@@ -491,15 +419,8 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     {
         auto source_id = 7, target_id = 1;
         auto source_region = kvs.getRegion(source_id);
-        raft_cmdpb::AdminRequest request;
-        {
-            request.set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
-            auto * commit_merge = request.mutable_commit_merge();
-            {
-                commit_merge->set_commit(source_region->appliedIndex());
-                *commit_merge->mutable_source() = source_region->getMetaRegion();
-            }
-        }
+
+        auto && [request, response] = MockRaftStoreProxy::composeCommitMerge(source_region->getMetaRegion(), source_region->appliedIndex());
         source_region->setStateApplying();
         source_region->makeRaftCommandDelegate(kvs.genTaskLock());
         const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
@@ -653,7 +574,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         }
         ASSERT_EQ(ori_size, region->dataSize());
 
-        region->tryCompactionFilter(100);
+        region->tryCompactionFilter(101);
         ASSERT_EQ(region->dataInfo(), "[]");
     }
     {
@@ -859,34 +780,18 @@ TEST_F(RegionKVStoreTest, AdminChangePeer)
     auto ctx = TiFlashTestEnv::getGlobalContext();
     auto & kvs = getKVS();
     {
-        auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
-        auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 100));
-        lock.regions.emplace(region_id, region);
-        lock.index.add(region);
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_optional(std::make_pair(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 100))));
     }
     {
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeer);
         auto meta = kvs.getRegion(region_id)->getMetaRegion();
-        meta.mutable_peers()->Clear();
-        meta.add_peers()->set_id(2);
-        meta.add_peers()->set_id(4);
-        *response.mutable_change_peer()->mutable_region() = meta;
-        kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), region_id, 6, 5, ctx.getTMTContext());
+        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {2, 4}, false);
+        kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 6, 5, ctx.getTMTContext());
         ASSERT_NE(kvs.getRegion(region_id), nullptr);
     }
     {
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
         auto meta = kvs.getRegion(region_id)->getMetaRegion();
-        meta.mutable_peers()->Clear();
-        meta.add_peers()->set_id(3);
-        meta.add_peers()->set_id(4);
-        *response.mutable_change_peer()->mutable_region() = meta;
-        kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), region_id, 7, 5, ctx.getTMTContext());
+        auto && [request, response] = MockRaftStoreProxy::composeChangePeer(meta, {3, 4});
+        kvs.handleAdminRaftCmd(std::move(request), std::move(response), region_id, 7, 5, ctx.getTMTContext());
         ASSERT_EQ(kvs.getRegion(region_id), nullptr);
     }
 }
