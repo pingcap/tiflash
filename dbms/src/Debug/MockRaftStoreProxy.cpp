@@ -351,9 +351,9 @@ void MockRaftStoreProxy::runOneRound()
     {
         auto & t = *read_index_tasks.front();
         auto region_id = t.req.context().region_id();
-        if (!region_id_to_drop.count(region_id))
+        if (!region_id_to_drop.contains(region_id))
         {
-            if (region_id_to_error.count(region_id))
+            if (region_id_to_error.contains(region_id))
                 t.update(false, true);
             else
                 t.update(false, false);
@@ -376,10 +376,7 @@ void MockRaftStoreProxy::bootstrapWithRegion(
 {
     {
         auto _ = genLockGuard();
-        if (!regions.empty())
-        {
-            throw Exception("Mock Proxy regions are not cleared");
-        }
+        RUNTIME_CHECK_MSG(regions.empty(), "Mock Proxy regions are not cleared");
         auto task_lock = kvs.genTaskLock();
         auto lock = kvs.genRegionWriteLock(task_lock);
         if (!lock.regions.empty())
@@ -389,7 +386,7 @@ void MockRaftStoreProxy::bootstrapWithRegion(
     }
     auto start = RecordKVFormat::genKey(table_id, 0);
     auto end = RecordKVFormat::genKey(table_id + 1, 0);
-    debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or(std::make_pair(start.toString(), end.toString()))});
+    debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or({start.toString(), end.toString()})});
 }
 
 void MockRaftStoreProxy::debugAddRegions(
