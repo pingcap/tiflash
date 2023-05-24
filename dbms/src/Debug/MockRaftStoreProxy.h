@@ -165,6 +165,7 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     void testRunNormal(const std::atomic_bool & over);
 
+    /// Handle one read index task.
     void runOneRound();
 
     void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);

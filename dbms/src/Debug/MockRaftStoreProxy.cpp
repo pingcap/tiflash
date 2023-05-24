@@ -278,7 +278,7 @@ void RawMockReadIndexTask::update(bool lock, bool region_error)
         has_region_error = region_error;
     }
     if (waker)
-        waker->wakeNotifier();
+        waker->wake();
 }
 
 MockProxyRegionPtr MockRaftStoreProxy::getRegion(uint64_t id)
@@ -350,9 +350,10 @@ void MockRaftStoreProxy::runOneRound()
     while (!read_index_tasks.empty())
     {
         auto & t = *read_index_tasks.front();
-        if (!region_id_to_drop.count(t.req.context().region_id()))
+        auto region_id = t.req.context().region_id();
+        if (!region_id_to_drop.count(region_id))
         {
-            if (region_id_to_error.count(t.req.context().region_id()))
+            if (region_id_to_error.count(region_id))
                 t.update(false, true);
             else
                 t.update(false, false);
