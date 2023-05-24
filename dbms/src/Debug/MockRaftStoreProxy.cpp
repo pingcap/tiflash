@@ -353,7 +353,7 @@ void MockRaftStoreProxy::runOneRound()
         auto region_id = t.req.context().region_id();
         if (!region_id_to_drop.contains(region_id))
         {
-            if (region_id_to_error.count(region_id))
+            if (region_id_to_error.contains(region_id))
                 t.update(false, true);
             else
                 t.update(false, false);
