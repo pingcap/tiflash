@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <common/logger_useful.h>
 
@@ -43,11 +44,16 @@ public:
     void startInBackground() noexcept
     {
         std::call_once(start_flag, [this] {
+            watch_start.restart();
+
             LOG_DEBUG(log, "Starting {} workers, concurrency={}", getName(), concurrency);
             active_workers = concurrency;
+
             for (size_t index = 0; index < concurrency; ++index)
             {
                 thread_manager->schedule(true, getName(), [this, index] {
+                    total_wait_schedule_ms += watch_start.elapsedMilliseconds();
+
                     workerLoop(index);
                     handleWorkerFinished();
                 });
@@ -107,7 +113,15 @@ private:
         if (active_workers == 0)
         {
             std::call_once(finish_flag, [this] {
-                LOG_DEBUG(log, "{} workers finished, total_processed_tasks={} concurrency={}", getName(), total_processed_tasks, concurrency);
+                LOG_DEBUG(
+                    log,
+                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s",
+                    getName(),
+                    total_processed_tasks,
+                    concurrency,
+                    watch_start.elapsedSeconds(),
+                    total_wait_schedule_ms / 1000.0,
+                    total_wait_upstream_ms / 1000.0);
                 // Note: the result queue may be already cancelled, but it is fine.
                 result_queue->finish();
             });
@@ -121,7 +135,11 @@ private:
             while (true)
             {
                 Src task;
+
+                Stopwatch w;
                 auto pop_result = source_queue->pop(task);
+                total_wait_upstream_ms += w.elapsedMilliseconds();
+
                 if (pop_result != MPMCQueueResult::OK)
                 {
                     if (pop_result == MPMCQueueResult::FINISHED)
@@ -174,10 +192,13 @@ private:
     }
 
 private:
+    Stopwatch watch_start;
     std::once_flag start_flag;
     std::once_flag wait_flag;
     std::once_flag finish_flag;
-    std::atomic<Int64> total_processed_tasks;
+    std::atomic<Int64> total_processed_tasks = 0;
+    std::atomic<Int64> total_wait_schedule_ms = 0;
+    std::atomic<Int64> total_wait_upstream_ms = 0;
 };
 
 } // namespace DB
