@@ -38,7 +38,7 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 
 class PipelineExecutorStatus;
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 class ASTCreateQuery;
 
