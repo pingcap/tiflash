@@ -61,7 +61,6 @@ protected:
     void collectExtraRuntimeDetail() override;
 
 private:
-    bool tryCollectExtraRuntimeDetailForStream();
-    void tryCollectExtraRuntimeDetailForOperator();
+    void updateExchangeReceiveDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos);
 };
 } // namespace DB

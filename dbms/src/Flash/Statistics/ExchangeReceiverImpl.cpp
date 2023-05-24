@@ -15,6 +15,8 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 
+#include "DataStreams/IBlockInputStream.h"
+
 namespace DB
 {
 String ExchangeReceiveDetail::toJson() const
@@ -40,54 +42,30 @@ void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.append("]");
 }
 
-bool ExchangeReceiverStatistics::tryCollectExtraRuntimeDetailForStream()
+void ExchangeReceiverStatistics::updateExchangeReceiveDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos)
 {
-    const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
-    auto it = io_stream_map.find(executor_id);
-    if (it != io_stream_map.end())
+    RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
+    for (size_t i = 0; i < partition_num; ++i)
     {
-        for (const auto & io_stream : it->second)
-        {
-            /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
-            if (auto * exchange_receiver_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get()); exchange_receiver_stream)
-            {
-                const auto & connection_profile_infos = exchange_receiver_stream->getConnectionProfileInfos();
-                RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
-                for (size_t i = 0; i < partition_num; ++i)
-                {
-                    exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-                    exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
-                }
-            }
-        }
-        return true;
-    }
-    return false;
-}
-
-void ExchangeReceiverStatistics::tryCollectExtraRuntimeDetailForOperator()
-{
-    const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
-    auto it = operator_profiles_map.find(executor_id);
-    if (it != operator_profiles_map.end())
-    {
-        for (const auto & profile_info : it->second)
-        {
-            const auto & connection_profile_infos = profile_info->connection_profile_infos;
-            RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
-            for (size_t i = 0; i < partition_num; ++i)
-            {
-                exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-                exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
-            }
-        }
+        exchange_receive_details[i].packets += connection_profile_infos[i].packets;
+        exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
     }
 }
 
 void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
 {
-    if (!tryCollectExtraRuntimeDetailForStream())
-        tryCollectExtraRuntimeDetailForOperator();
+    if (tryTransformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
+            /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
+            if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream); exchange_receiver_stream)
+                updateExchangeReceiveDetail(exchange_receiver_stream->getConnectionProfileInfos());
+        }))
+    {
+        return;
+    }
+
+    tryTransformInBoundIOForOperator(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+        updateExchangeReceiveDetail(profile_info.connection_profile_infos);
+    });
 }
 
 ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

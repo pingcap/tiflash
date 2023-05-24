@@ -16,13 +16,11 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Flash/Statistics/transformProfiles.h>
 #include <common/types.h>
-#include <fmt/core.h>
-#include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
 #include <memory>
@@ -30,8 +28,6 @@
 
 namespace DB
 {
-class DAGContext;
-
 template <typename ExecutorImpl>
 class ExecutorStatistics : public ExecutorStatisticsBase
 {
@@ -85,13 +81,14 @@ public:
 
     void collectRuntimeDetail() override
     {
-        if (tryCollectForStream())
+        if (tryTransformForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) { base.append(p_stream.getProfileInfo()); }))
         {
+            // Special handling of join build time is only required for streams.
             collectJoinBuildTime();
         }
         else
         {
-            tryCollectForOperator();
+            tryTransformForOperator(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) { base.append(profile_info); });
         }
 
         if constexpr (ExecutorImpl::has_extra_info)
@@ -103,37 +100,6 @@ public:
     static bool isMatch(const tipb::Executor * executor)
     {
         return ExecutorImpl::isMatch(executor);
-    }
-
-private:
-    bool tryCollectForStream()
-    {
-        const auto & profile_streams_map = dag_context.getProfileStreamsMap();
-        auto it = profile_streams_map.find(executor_id);
-        if (it != profile_streams_map.end())
-        {
-            for (const auto & input_stream : it->second)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
-                {
-                    const auto & profile_info = p_stream->getProfileInfo();
-                    base.append(profile_info);
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    void tryCollectForOperator()
-    {
-        const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
-        auto it = operator_profiles_map.find(executor_id);
-        if (it != operator_profiles_map.end())
-        {
-            for (const auto & profile_info : it->second)
-                base.append(*profile_info);
-        }
     }
 
 protected:
