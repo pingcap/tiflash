@@ -111,7 +111,7 @@ void PipelineExecutorStatus::consume(ResultHandler & result_handler)
         }
         catch (...)
         {
-            // If A throws an error, here should notify the query to terminate, and wait for the end of the query.
+            // If result_handler throws an error, here should notify the query to terminate, and wait for the end of the query.
             onErrorOccurred(std::current_exception());
         }
     }
