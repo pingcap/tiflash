@@ -109,6 +109,13 @@ public:
         total_remote_region_num += other.total_remote_region_num();
         total_user_read_bytes += other.total_user_read_bytes();
     }
+
+    // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
+    // For Read I/O, 1/64 RU per KB.
+    double getReadRU() const
+    {
+        return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0;
+    }
 };
 
 using ScanContextPtr = std::shared_ptr<ScanContext>;
