@@ -138,7 +138,6 @@ protected:
 protected:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
-    static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)

@@ -487,7 +487,7 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
 }
 
 
-std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index)
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest && request, raft_cmdpb::AdminResponse && response)
 {
     uint64_t index = 0;
     uint64_t term = 0;
@@ -500,16 +500,6 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        request.mutable_compact_log();
-        request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
-        request.mutable_compact_log()->set_compact_index(compact_index);
-        // Find compact term, otherwise log must have been compacted.
-        if (region->commands.count(compact_index))
-        {
-            request.mutable_compact_log()->set_compact_term(region->commands[index].term);
-        }
         region->commands[index] = {
             term,
             MockProxyRegion::AdminCommand{
@@ -518,6 +508,58 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
             }};
     }
     return std::make_tuple(index, term);
+}
+
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index)
+{
+    auto region = getRegion(region_id);
+    assert(region != nullptr);
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
+    request.mutable_compact_log()->set_compact_index(compact_index);
+    // Find compact term, otherwise log must have been compacted.
+    if (region->commands.count(compact_index))
+    {
+        request.mutable_compact_log()->set_compact_term(region->commands[compact_index].term);
+    }
+    return adminCommand(region_id, std::move(request), std::move(response));
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region meta, std::vector<UInt64> peer_ids)
+{
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
+    meta.mutable_peers()->Clear();
+    for (auto i : peer_ids)
+    {
+        meta.add_peers()->set_id(i);
+    }
+    *response.mutable_change_peer()->mutable_region() = meta;
+    return std::make_tuple(request, response);
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composePrepareMerge(metapb::Region target, UInt64 min_index)
+{
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::PrepareMerge);
+    auto * prepare_merge = request.mutable_prepare_merge();
+    prepare_merge->set_min_index(min_index);
+    *prepare_merge->mutable_target() = target;
+    return std::make_tuple(request, response);
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCommitMerge(metapb::Region source, UInt64 commit)
+{
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
+    auto * commit_merge = request.mutable_commit_merge();
+    commit_merge->set_commit(commit);
+    *commit_merge->mutable_source() = source;
+    return std::make_tuple(request, response);
 }
 
 void MockRaftStoreProxy::doApply(

@@ -228,6 +228,12 @@ struct MockRaftStoreProxy : MutexLockWrap
     /// Create a compactLog admin command, returns (index, term) of the admin command itself.
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
 
+    std::tuple<uint64_t, uint64_t> adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest &&, raft_cmdpb::AdminResponse &&);
+
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeChangePeer(metapb::Region meta, std::vector<UInt64> peer_ids);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composePrepareMerge(metapb::Region target, UInt64 min_index);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeCommitMerge(metapb::Region source, UInt64 commit);
+
     struct Cf
     {
         Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
