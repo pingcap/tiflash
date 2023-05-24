@@ -744,20 +744,6 @@ TableID MockRaftStoreProxy::bootstrapTable(
     return table_id;
 }
 
-void MockRaftStoreProxy::clear_tables(
-    Context & ctx,
-    KVStore & kvs,
-    TMTContext & tmt)
-{
-    UNUSED(kvs);
-    UNUSED(tmt);
-    if (this->table_id != 1)
-    {
-        MockTiDB::instance().dropTable(ctx, "d", "t", false);
-    }
-    this->table_id = 1;
-}
-
 void GCMonitor::add(RawObjType type, int64_t diff)
 {
     auto _ = genLockGuard();

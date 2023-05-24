@@ -202,12 +202,6 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         bool drop_at_first = true);
 
-    /// Clear tables.
-    void clear_tables(
-        Context & ctx,
-        KVStore & kvs,
-        TMTContext & tmt);
-
     /// Manually add a region.
     void debugAddRegions(
         KVStore & kvs,
