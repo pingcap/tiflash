@@ -32,7 +32,7 @@ struct PipelineExecBuilder
 
     PipelineExecPtr build();
 
-    OperatorProfilePtr getCurProfile() const;
+    OperatorProfileInfoPtr getCurProfileInfo() const;
 };
 
 struct PipelineExecGroupBuilder
@@ -65,6 +65,6 @@ struct PipelineExecGroupBuilder
 
     Block getCurrentHeader();
 
-    OperatorProfiles getCurProfiles() const;
+    OperatorProfileInfos getCurProfileInfos() const;
 };
 } // namespace DB

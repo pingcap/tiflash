@@ -99,7 +99,7 @@ void PhysicalPlanNode::buildPipelineExecGroup(
 {
     buildPipelineExecGroupImpl(exec_status, group_builder, context, concurrency);
     if (is_tidb_operator)
-        context.getDAGContext()->addOperatorProfiles(executor_id, group_builder.getCurProfiles());
+        context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)

@@ -111,7 +111,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
                 mpp_exchange_receiver,
                 /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
     }
-    context.getDAGContext()->addInboundIOOperatorProfiles(executor_id, group_builder.getCurProfiles());
+    context.getDAGContext()->addInboundIOOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

@@ -59,5 +59,9 @@ private:
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
+
+private:
+    bool tryCollectExtraRuntimeDetailForStream();
+    void tryCollectExtraRuntimeDetailForOperator();
 };
 } // namespace DB

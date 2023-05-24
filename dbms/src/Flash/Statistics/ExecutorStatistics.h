@@ -85,6 +85,29 @@ public:
 
     void collectRuntimeDetail() override
     {
+        if (tryCollectForStream())
+        {
+            collectJoinBuildTime();
+        }
+        else
+        {
+            tryCollectForOperator();
+        }
+
+        if constexpr (ExecutorImpl::has_extra_info)
+        {
+            collectExtraRuntimeDetail();
+        }
+    }
+
+    static bool isMatch(const tipb::Executor * executor)
+    {
+        return ExecutorImpl::isMatch(executor);
+    }
+
+private:
+    bool tryCollectForStream()
+    {
         const auto & profile_streams_map = dag_context.getProfileStreamsMap();
         auto it = profile_streams_map.find(executor_id);
         if (it != profile_streams_map.end())
@@ -97,19 +120,20 @@ public:
                     base.append(profile_info);
                 }
             }
+            return true;
         }
-
-        if constexpr (ExecutorImpl::has_extra_info)
-        {
-            collectExtraRuntimeDetail();
-        }
-
-        collectJoinBuildTime();
+        return false;
     }
 
-    static bool isMatch(const tipb::Executor * executor)
+    void tryCollectForOperator()
     {
-        return ExecutorImpl::isMatch(executor);
+        const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
+        auto it = operator_profiles_map.find(executor_id);
+        if (it != operator_profiles_map.end())
+        {
+            for (const auto & profile_info : it->second)
+                base.append(*profile_info);
+        }
     }
 
 protected:

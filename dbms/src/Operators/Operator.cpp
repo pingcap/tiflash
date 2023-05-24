@@ -42,19 +42,19 @@ OperatorStatus Operator::await()
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     if (op_status != OperatorStatus::WAITING)
-        profile.update();
+        profile_info.update();
     return op_status;
 }
 
 OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
     auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile.update();
+    profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -62,7 +62,7 @@ OperatorStatus Operator::executeIO()
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
     assert(!block);
     auto op_status = readImpl(block);
 #ifndef NDEBUG
@@ -73,7 +73,7 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
-    profile.update(block);
+    profile_info.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -81,7 +81,7 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
@@ -91,7 +91,7 @@ OperatorStatus TransformOp::transform(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile.update(block);
+    profile_info.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -99,7 +99,7 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
     assert(!block);
     auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
@@ -110,7 +110,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile.update(block);
+    profile_info.update(block);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -118,12 +118,12 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
-    profile.update();
+    profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -131,7 +131,7 @@ OperatorStatus SinkOp::prepare()
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
-    profile.anchor();
+    profile_info.anchor();
 #ifndef NDEBUG
     if (block)
     {
@@ -143,7 +143,7 @@ OperatorStatus SinkOp::write(Block && block)
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
-    profile.update();
+    profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }

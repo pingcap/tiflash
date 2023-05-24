@@ -331,7 +331,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
     /// record profiles of local and remote io source
-    dag_context.addInboundIOOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
+    dag_context.addInboundIOOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     if (group_builder.empty())
     {
@@ -358,20 +358,20 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     /// But we should make sure that the analyzer is initialized before return.
     if (remote_read_start_index == 0)
     {
-        dag_context.addOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
+        dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
         if (filter_conditions.hasValue())
-            dag_context.addOperatorProfiles(filter_conditions.executor_id, group_builder.getCurProfiles());
+            dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
         return;
     }
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
-    dag_context.addOperatorProfiles(table_scan.getTableScanExecutorID(), group_builder.getCurProfiles());
+    dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
-        dag_context.addOperatorProfiles(filter_conditions.executor_id, group_builder.getCurProfiles());
+        dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
 

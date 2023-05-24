@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
-#include <Operators/OperatorProfile.h>
+#include <Operators/OperatorProfileInfo.h>
 
 #include <memory>
 
@@ -86,16 +86,16 @@ public:
         header = header_;
     }
 
-    const OperatorProfilePtr & getProfileInfo() const { return profile_ptr; }
+    const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
 
 protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;
     Block header;
 
-    OperatorProfilePtr profile_ptr = std::make_shared<OperatorProfile>();
-    // To reduce the overheads of `profile_ptr.get()`
-    OperatorProfile & profile = *profile_ptr;
+    OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
+    // To reduce the overheads of `profile_info_ptr.get()`
+    OperatorProfileInfo & profile_info = *profile_info_ptr;
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.

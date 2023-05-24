@@ -31,11 +31,11 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Operators/OperatorProfile.h>
 
 namespace DB
 {
@@ -144,7 +144,9 @@ public:
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
-    void addOperatorProfiles(const String & executor_id, OperatorProfiles && profiles);
+    std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
+
+    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -152,7 +154,9 @@ public:
 
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
 
-    void addInboundIOOperatorProfiles(const String & executor_id, OperatorProfiles && profiles);
+    std::unordered_map<String, OperatorProfileInfos> & getInboundIOOperatorProfileInfosMap();
+
+    void addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
@@ -337,8 +341,8 @@ private:
     std::mutex profile_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
-    /// operator_profiles_map is a map that maps from executor_id to OperatorProfiles.
-    std::unordered_map<String, OperatorProfiles> operator_profiles_map;
+    /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.
+    std::unordered_map<String, OperatorProfileInfos> operator_profile_infos_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
@@ -347,9 +351,9 @@ private:
     /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
-    /// inbound_io_input_operator_profiles_map is a map that maps from executor_id (table_scan / exchange_receiver) to OperatorProfiles.
-    /// OperatorProfiles are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
-    std::unordered_map<String, OperatorProfiles> inbound_io_input_operator_profiles_map;
+    /// inbound_io_input_operator_profile_infos_map is a map that maps from executor_id (table_scan / exchange_receiver) to OperatorProfileInfos.
+    /// OperatorProfileInfos are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
+    std::unordered_map<String, OperatorProfileInfos> inbound_io_input_operator_profile_infos_map;
 
     UInt64 flags;
     UInt64 sql_mode;

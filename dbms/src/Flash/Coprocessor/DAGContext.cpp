@@ -22,6 +22,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
+
 #include <mutex>
 
 namespace DB
@@ -180,19 +181,29 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
-void DAGContext::addOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)
+std::unordered_map<String, OperatorProfileInfos> & DAGContext::getOperatorProfileInfosMap()
+{
+    return operator_profile_infos_map;
+}
+
+void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
 {
     std::lock_guard lock(profile_mu);
     /// The profiles of some operators has been recorded.
     /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
-    if (operator_profiles_map.find(executor_id) == operator_profiles_map.end())
-        operator_profiles_map[executor_id] = std::move(profiles);
+    if (operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
+        operator_profile_infos_map[executor_id] = std::move(profile_infos);
 }
 
-void DAGContext::addInboundIOOperatorProfiles(const String & executor_id, OperatorProfiles && profiles)
+void DAGContext::addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
 {
     std::lock_guard lock(profile_mu);
-    inbound_io_input_operator_profiles_map[executor_id] = std::move(profiles);
+    inbound_io_input_operator_profile_infos_map[executor_id] = std::move(profile_infos);
+}
+
+std::unordered_map<String, OperatorProfileInfos> & DAGContext::getInboundIOOperatorProfileInfosMap()
+{
+    return inbound_io_input_operator_profile_infos_map;
 }
 
 void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
