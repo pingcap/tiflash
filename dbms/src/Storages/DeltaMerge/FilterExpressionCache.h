@@ -16,9 +16,9 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 
+#include <boost/dynamic_bitset.hpp>
 #include <list>
 #include <shared_mutex>
-#include <string>
 
 // TODO: make it configurable.
 #define DefaultFilterExpressionCacheCapacity 100
@@ -34,6 +34,9 @@ namespace DB::DM
 class FilterExpressionCache
 {
 public:
+    using Key = std::string;
+    using Value = std::pair<boost::dynamic_bitset<>, BitmapFilterPtr>;
+
     explicit FilterExpressionCache(size_t capacity = DefaultFilterExpressionCacheCapacity)
         : capacity(capacity)
     {}
@@ -41,10 +44,10 @@ public:
     ~FilterExpressionCache() = default;
 
     // Get the result of filter expression from cache.
-    std::optional<BitmapFilterPtr> get(const std::string & filter_expression) const;
+    std::optional<Value> get(const Key & filter_expression) const;
 
     // Set the result of filter expression to cache.
-    void set(const std::string & filter_expression, const BitmapFilterPtr & result);
+    void set(const Key & filter_expression, const Value & result);
 
     // Clear the cache.
     void clear();
@@ -60,10 +63,11 @@ private:
 
     // The list to store the filter expression.
     // The most recently used item is at the front of the list.
-    mutable std::list<std::pair<std::string, BitmapFilterPtr>> list;
+    // filter_expression -> <use_packs, bitmap_filter>
+    mutable std::list<std::pair<Key, Value>> list;
 
     // The map to store the filter expression and its result.
-    std::unordered_map<std::string, std::list<std::pair<std::string, BitmapFilterPtr>>::iterator> map;
+    std::unordered_map<Key, std::list<std::pair<Key, Value>>::iterator> map;
 };
 
 } // namespace DB::DM

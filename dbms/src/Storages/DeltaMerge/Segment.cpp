@@ -2908,11 +2908,11 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                 max_version,
                 expected_block_size);
         }
-        LOG_DEBUG(log, "Cache hit for filter expression: {}, stable rows: {}, skipped rows: {}, cache size: {}", filter_expression, cache_result->get()->size(), cache_result->get()->size() - cache_result->get()->count(), filter_expression_cache.size());
+        LOG_DEBUG(log, "Cache hit for filter expression: {}, stable rows: {}, skipped rows: {}, cache size: {}", filter_expression, cache_result->second->size(), cache_result->second->size() - cache_result->second->count(), filter_expression_cache.size());
         // The size of the cache should be equal to the number of rows in the stable layer of the segment
-        RUNTIME_CHECK(cache_result->get()->size() == segment_snap->stable->getDMFilesRows());
+        RUNTIME_CHECK(cache_result->second->size() == segment_snap->stable->getDMFilesRows());
         // cache_result & bitmap_filter[0:stable_rows] = bitmap_filter[0:stable_rows]
-        cache_result->get()->rangeAnd(bitmap_filter);
+        cache_result->second->rangeAnd(bitmap_filter);
         // TODO: call runOptimize twice here, should be optimized
         bitmap_filter->runOptimize();
     }

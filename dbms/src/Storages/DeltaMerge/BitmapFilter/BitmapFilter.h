@@ -35,9 +35,12 @@ public:
     void set(IColumn::Filter & f, UInt32 start, UInt32 limit);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
-    // filter[start, limit] & f -> f
+    // filter[start, start + limit) & f -> f
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    // filter & f -> f
     void rangeAnd(BitmapFilterPtr & f) const;
+    // filter | f -> filter
+    BitmapFilter& operator|=(const BitmapFilter& b);
 
     void runOptimize();
 

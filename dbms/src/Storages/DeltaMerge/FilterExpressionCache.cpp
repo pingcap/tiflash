@@ -20,7 +20,7 @@
 namespace DB::DM
 {
 
-std::optional<BitmapFilterPtr> FilterExpressionCache::get(const std::string & filter_expression) const
+std::optional<FilterExpressionCache::Value> FilterExpressionCache::get(const Key & filter_expression) const
 {
     std::shared_lock lock(rw_mutex);
 
@@ -32,16 +32,18 @@ std::optional<BitmapFilterPtr> FilterExpressionCache::get(const std::string & fi
     return it->second->second;
 }
 
-void FilterExpressionCache::set(const std::string & filter_expression, const BitmapFilterPtr & result)
+void FilterExpressionCache::set(const Key & filter_expression, const Value & result)
 {
-    if (result->size() == 0)
+    if (result.second->size() == 0)
         return;
     std::unique_lock lock(rw_mutex);
     auto it = map.find(filter_expression);
     if (it != map.end())
     {
         list.splice(list.begin(), list, it->second);
-        it->second->second = result;
+        auto & [use_packs, bitmap_filter] = it->second->second;
+        use_packs |= result.first;
+        *bitmap_filter |= *result.second;
         return;
     }
 
