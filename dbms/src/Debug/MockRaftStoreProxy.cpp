@@ -379,10 +379,7 @@ void MockRaftStoreProxy::bootstrapWithRegion(
         RUNTIME_CHECK_MSG(regions.empty(), "Mock Proxy regions are not cleared");
         auto task_lock = kvs.genTaskLock();
         auto lock = kvs.genRegionWriteLock(task_lock);
-        if (!lock.regions.empty())
-        {
-            throw Exception("KVStore regions are not cleared");
-        }
+        RUNTIME_CHECK_MSG(lock.regions.empty(), "KVStore regions are not cleared");
     }
     auto start = RecordKVFormat::genKey(table_id, 0);
     auto end = RecordKVFormat::genKey(table_id + 1, 0);
@@ -578,10 +575,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
 
 std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeBatchSplit(std::vector<UInt64> && region_ids, std::vector<std::pair<std::string, std::string>> && ranges, metapb::RegionEpoch old_epoch)
 {
-    if (region_ids.size() != ranges.size())
-    {
-        throw Exception("error composeBatchSplit input");
-    }
+    RUNTIME_CHECK_MSG(region_ids.size() == ranges.size(), "error composeBatchSplit input");
     auto n = region_ids.size();
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
