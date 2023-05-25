@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Operators/Operator.h>
 
