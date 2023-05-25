@@ -17,7 +17,9 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/FilterExpressionCache.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+
 
 namespace DB::DM
 {
@@ -39,6 +41,9 @@ public:
         BlockInputStreamPtr filter_column_stream_,
         SkippableBlockInputStreamPtr rest_column_stream_,
         const BitmapFilterPtr & bitmap_filter_,
+        size_t stable_rows_,
+        String filter_expression_,
+        FilterExpressionCache & filter_expression_cache_,
         const String & req_id_);
 
     String getName() const override { return NAME; }
@@ -47,6 +52,8 @@ public:
 
 protected:
     Block readImpl() override;
+
+    void readSuffixImpl() override;
 
 private:
     Block header;
@@ -59,6 +66,12 @@ private:
     SkippableBlockInputStreamPtr rest_column_stream;
     // The MVCC-bitmap.
     BitmapFilterPtr bitmap_filter;
+    size_t stable_rows;
+    String filter_expression;
+    // Used to cache the result of filter expression.
+    BitmapFilterPtr cache_bitmap;
+    // The cache of push down filter expression.
+    FilterExpressionCache & filter_expression_cache;
 
     const LoggerPtr log;
 };

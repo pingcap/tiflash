@@ -146,13 +146,13 @@ public:
 
     struct SegmentMetaInfo
     {
-        SegmentFormat::Version version;
-        UInt64 epoch;
+        SegmentFormat::Version version{};
+        UInt64 epoch{};
         RowKeyRange range;
-        PageIdU64 segment_id;
-        PageIdU64 next_segment_id;
-        PageIdU64 delta_id;
-        PageIdU64 stable_id;
+        PageIdU64 segment_id{};
+        PageIdU64 next_segment_id{};
+        PageIdU64 delta_id{};
+        PageIdU64 stable_id{};
     };
 
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;

@@ -123,6 +123,7 @@ private:
             {
                 MemoryTrackerSetter setter(true, pool->mem_tracker.get());
                 task = nullptr;
+                stream->readSuffix();
                 stream = nullptr;
             }
             pool = nullptr;
