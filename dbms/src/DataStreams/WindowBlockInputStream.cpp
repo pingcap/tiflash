@@ -274,17 +274,17 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int64 n)
+RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, UInt64 n)
 {
     auto dist = distance(current_row, partition_start);
     assert(dist >= 0);
-    if (dist <= n)
+    if (dist <= static_cast<Int64>(n))
         return partition_start;
 
     RowNumber result_row = current_row;
 
     // The step happens only in a block
-    if (static_cast<Int64>(result_row.row) >= n)
+    if (result_row.row >= n)
     {
         result_row.row -= n;
         return result_row;
@@ -297,7 +297,7 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
     while (n > 0)
     {
         auto & block = blockAt(result_row);
-        if (static_cast<Int64>(block.rows) > n)
+        if (block.rows > n)
         {
             result_row.row = block.rows - n - 1; // index, so we need to -1
             break;
@@ -309,7 +309,7 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
     return result_row;
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, Int64 n)
+std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, UInt64 n)
 {
     // Range of rows is [frame_start, frame_end),
     // and frame_end position is behind the position of the last frame row.
@@ -320,7 +320,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     assert(dist >= 1);
 
     // Offset is too large and the partition_end is the longest position we can reach
-    if (dist <= n)
+    if (dist <= static_cast<Int64>(n))
         return std::make_tuple(partition_end, partition_ended);
 
     // Now, frame_end is impossible to reach to partition_end.
@@ -328,7 +328,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     auto & block = blockAt(frame_end_row);
 
     // The step happens only in a block
-    if (static_cast<Int64>(block.rows - frame_end_row.row - 1) >= n)
+    if ((block.rows - frame_end_row.row - 1) >= n)
     {
         frame_end_row.row += n;
         return std::make_tuple(frame_end_row, partition_ended);
@@ -341,7 +341,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     while (n > 0)
     {
         auto block_rows = static_cast<Int64>(blockAt(frame_end_row).rows);
-        if (n >= block_rows)
+        if (static_cast<Int64>(n) >= block_rows)
         {
             frame_end_row.row = 0;
             ++frame_end_row.block;
