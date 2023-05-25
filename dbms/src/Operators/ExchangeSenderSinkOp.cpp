@@ -25,12 +25,12 @@ extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
-void ExchangeSenderSinkOp::operatePrefix()
+void ExchangeSenderSinkOp::operatePrefixImpl()
 {
     writer->prepare(getHeader());
 }
 
-void ExchangeSenderSinkOp::operateSuffix()
+void ExchangeSenderSinkOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish write with {} rows", total_rows);
 }

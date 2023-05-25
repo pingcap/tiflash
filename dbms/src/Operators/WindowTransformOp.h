@@ -32,7 +32,7 @@ public:
         return "WindowTransformOp";
     }
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

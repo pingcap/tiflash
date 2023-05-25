@@ -54,7 +54,7 @@ public:
         return "UnorderedSourceOp";
     }
 
-    void operatePrefix() override
+    void operatePrefixImpl() override
     {
         addReadTaskPoolToScheduler();
     }

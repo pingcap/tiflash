@@ -24,7 +24,7 @@
 
 namespace DB
 {
-void MergeSortTransformOp::operatePrefix()
+void MergeSortTransformOp::operatePrefixImpl()
 {
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
@@ -35,7 +35,7 @@ void MergeSortTransformOp::operatePrefix()
     spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
-void MergeSortTransformOp::operateSuffix()
+void MergeSortTransformOp::operateSuffixImpl()
 {
     if likely (merge_impl)
         merge_impl->readSuffix();

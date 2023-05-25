@@ -45,8 +45,8 @@ public:
         return "MergeSortTransformOp";
     }
 
-    void operatePrefix() override;
-    void operateSuffix() override;
+    void operatePrefixImpl() override;
+    void operateSuffixImpl() override;
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

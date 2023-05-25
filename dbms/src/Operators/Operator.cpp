@@ -26,6 +26,25 @@ extern const char random_pipeline_model_operator_run_failpoint[];
 extern const char random_pipeline_model_cancel_failpoint[];
 } // namespace FailPoints
 
+void Operator::switchStatus(OperatorStatus to)
+{
+    op_status = to;
+}
+
+void Operator::operatePrefix()
+{
+    profile_info.anchor();
+    operatePrefixImpl();
+    profile_info.update();
+}
+
+void Operator::operateSuffix()
+{
+    profile_info.anchor();
+    operateSuffixImpl();
+    profile_info.update();
+}
+
 #define CHECK_IS_CANCELLED                                                               \
     fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel()); \
     if (unlikely(exec_status.isCancelled()))                                             \
@@ -33,14 +52,19 @@ extern const char random_pipeline_model_cancel_failpoint[];
 
 OperatorStatus Operator::await()
 {
+    if (op_status != OperatorStatus::WAITING)
+        return op_status;
+
     // `exec_status.is_cancelled` has been checked by `EventTask`.
     // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
 
-    auto op_status = awaitImpl();
+    switchStatus(awaitImpl());
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
+    // When `op_status` turns to `OperatorStatus::WAITING`, `profile_info.update()` must be called,
+    // which means that `OperatorProfileInfo::StopWatch::last_ts` has been reseted, so there is no need to call `profile_info.anchor()`.
     if (op_status != OperatorStatus::WAITING)
         profile_info.update();
     return op_status;
@@ -50,7 +74,7 @@ OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto op_status = executeIOImpl();
+    switchStatus(executeIOImpl());
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -64,7 +88,7 @@ OperatorStatus SourceOp::read(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    auto op_status = readImpl(block);
+    switchStatus(readImpl(block));
 #ifndef NDEBUG
     if (block)
     {
@@ -85,7 +109,7 @@ OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto op_status = transformImpl(block);
+    switchStatus(transformImpl(block));
 #ifndef NDEBUG
     if (block)
     {
@@ -107,7 +131,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    auto op_status = tryOutputImpl(block);
+    switchStatus(tryOutputImpl(block));
 #ifndef NDEBUG
     if (block)
     {
@@ -128,7 +152,7 @@ OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    auto op_status = prepareImpl();
+    switchStatus(prepareImpl());
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
@@ -148,7 +172,7 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    auto op_status = writeImpl(std::move(block));
+    switchStatus(writeImpl(std::move(block)));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif

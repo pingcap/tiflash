@@ -59,16 +59,14 @@ public:
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus executeIO();
-    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
-    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
     virtual bool isAwaitable() const { return false; }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
-    virtual void operatePrefix() {}
-    virtual void operateSuffix() {}
+    void operatePrefix();
+    void operateSuffix();
 
     virtual String getName() const = 0;
 
@@ -89,6 +87,16 @@ public:
     const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
 
 protected:
+    virtual void operatePrefixImpl() {}
+    virtual void operateSuffixImpl() {}
+
+    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
+
+    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+
+    inline void switchStatus(OperatorStatus to);
+
+protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;
     Block header;
@@ -96,6 +104,8 @@ protected:
     OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
     // To reduce the overheads of `profile_info_ptr.get()`
     OperatorProfileInfo & profile_info = *profile_info_ptr;
+
+    OperatorStatus op_status{OperatorStatus::WAITING};
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.

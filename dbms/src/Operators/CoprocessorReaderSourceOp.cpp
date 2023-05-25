@@ -35,13 +35,13 @@ String CoprocessorReaderSourceOp::getName() const
     return "CoprocessorReaderSourceOp";
 }
 
-void CoprocessorReaderSourceOp::operatePrefix()
+void CoprocessorReaderSourceOp::operatePrefixImpl()
 {
     LOG_DEBUG(log, "start reading from remote coprocessor", total_rows);
     coprocessor_reader->open();
 }
 
-void CoprocessorReaderSourceOp::operateSuffix()
+void CoprocessorReaderSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish read {} rows from remote coprocessor", total_rows);
 }

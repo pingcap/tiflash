@@ -47,7 +47,7 @@ public:
 
     String getName() const override;
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
 protected:
     OperatorStatus readImpl(Block & block) override;

@@ -44,7 +44,7 @@ public:
         return "ExchangeReceiverSourceOp";
     }
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
 protected:
     OperatorStatus readImpl(Block & block) override;

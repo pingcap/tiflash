@@ -38,7 +38,7 @@ protected:
 
     void transformHeaderImpl(Block & header_) override;
 
-    void operatePrefix() override;
+    void operatePrefixImpl() override;
 
 private:
     GeneratedColumnPlaceHolderTransformAction action;

@@ -33,8 +33,8 @@ public:
 
     String getName() const override;
 
-    void operatePrefix() override;
-    void operateSuffix() override;
+    void operatePrefixImpl() override;
+    void operateSuffixImpl() override;
 
 protected:
     OperatorStatus readImpl(Block & block) override;
