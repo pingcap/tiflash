@@ -101,6 +101,25 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     {
         RUNTIME_CHECK_MSG(spill_dir.isDirectory(), "Spill dir {} is a file", spill_dir.path());
     }
+    for (size_t i = 0; i < input_schema.columns(); ++i)
+    {
+        if (input_schema.getByPosition(i).column != nullptr && input_schema.getByPosition(i).column->isColumnConst())
+            const_column_indexes.push_back(i);
+    }
+    RUNTIME_CHECK_MSG(const_column_indexes.size() < input_schema.columns(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+    header_without_constants = input_schema;
+    removeConstantColumns(header_without_constants);
+}
+
+void Spiller::removeConstantColumns(Block & block) const
+{
+    /// note must erase the constant column in reverse order because the index stored in const_column_indexes is based on
+    /// the original Block, if the column before the index is removed, the index has to be updated or it becomes invalid index
+    for (auto it = const_column_indexes.rbegin(); it != const_column_indexes.rend(); ++it) // NOLINT
+    {
+        RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
+        block.erase(*it);
+    }
 }
 
 CachedSpillHandlerPtr Spiller::createCachedSpillHandler(
@@ -200,7 +219,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
             restore_stream_read_rows.push_back(file->getSpillDetails().rows);
             if (release_spilled_file_on_restore)
                 file_infos.back().file = std::move(file);
-            ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, config.file_provider, spill_version));
+            ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
         }
     }
     else
@@ -221,7 +240,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         for (UInt64 i = 0; i < spill_file_read_stream_num; ++i)
         {
             if (likely(!file_infos[i].empty()))
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
+                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
         }
     }
     for (size_t i = 0; i < spill_file_read_stream_num; ++i)

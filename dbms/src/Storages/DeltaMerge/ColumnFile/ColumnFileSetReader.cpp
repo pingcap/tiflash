@@ -74,11 +74,12 @@ std::pair<size_t, size_t> findColumnFile(const ColumnFiles & column_files, size_
 }
 
 ColumnFileSetReader::ColumnFileSetReader(
-    const DMContext & context,
+    const DMContext & context_,
     const ColumnFileSetSnapshotPtr & snapshot_,
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)
-    : snapshot(snapshot_)
+    : context(context_)
+    , snapshot(snapshot_)
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {
@@ -94,7 +95,7 @@ ColumnFileSetReader::ColumnFileSetReader(
 
 ColumnFileSetReaderPtr ColumnFileSetReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
-    auto * new_reader = new ColumnFileSetReader();
+    auto * new_reader = new ColumnFileSetReader(context);
     new_reader->snapshot = snapshot;
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
@@ -170,6 +171,10 @@ size_t ColumnFileSetReader::readRows(MutableColumns & output_columns, size_t off
                 (*row_ids)[row_ids_offset + i] = start_row_id + i;
             }
         }
+    }
+    for (const auto & col : output_columns)
+    {
+        context.scan_context->total_user_read_bytes += col->byteSize();
     }
     return actual_read;
 }

@@ -18,7 +18,6 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
-#include <Operators/Operator.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -174,19 +173,6 @@ public:
     virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    virtual SourceOps readSourceOps(
-        PipelineExecutorStatus &,
-        const Names &,
-        const SelectQueryInfo &,
-        const Context &,
-        size_t,
-        unsigned)
-    {
-        throw Exception(
-            fmt::format("Method readSourceOps is not supported by storage {}", getName()),
-            ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:

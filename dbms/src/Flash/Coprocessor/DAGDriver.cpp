@@ -154,16 +154,17 @@ try
         }
     }
 
-    auto ru = query_executor->collectRequestUnit();
+    auto cpu_ru = query_executor->collectRequestUnit();
+    auto read_ru = dag_context.getReadRU();
     if constexpr (!batch)
     {
-        LOG_INFO(log, "cop finish with request unit: {}", ru);
-        GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(ru);
+        LOG_INFO(log, "cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(cpu_ru + read_ru);
     }
     else
     {
-        LOG_INFO(log, "batch cop finish with request unit: {}", ru);
-        GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(ru);
+        LOG_INFO(log, "batch cop finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(cpu_ru + read_ru);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

@@ -45,6 +45,9 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 class StoragePathPool;
 
+class PipelineExecutorStatus;
+class PipelineExecGroupBuilder;
+
 namespace DM
 {
 class StoragePool;
@@ -363,21 +366,23 @@ public:
     ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
-    SourceOps readSourceOps(PipelineExecutorStatus & exec_status_,
-                            const Context & db_context,
-                            const DB::Settings & db_settings,
-                            const ColumnDefines & columns_to_read,
-                            const RowKeyRanges & sorted_ranges,
-                            size_t num_streams,
-                            UInt64 max_version,
-                            const PushDownFilterPtr & filter,
-                            const String & tracing_id,
-                            bool keep_order,
-                            bool is_fast_scan = false,
-                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-                            const SegmentIdSet & read_segments = {},
-                            size_t extra_table_id_index = InvalidColumnID,
-                            ScanContextPtr scan_context = nullptr);
+    void read(
+        PipelineExecutorStatus & exec_status_,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & sorted_ranges,
+        size_t num_streams,
+        UInt64 max_version,
+        const PushDownFilterPtr & filter,
+        const String & tracing_id,
+        bool keep_order,
+        bool is_fast_scan = false,
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+        const SegmentIdSet & read_segments = {},
+        size_t extra_table_id_index = InvalidColumnID,
+        ScanContextPtr scan_context = nullptr);
 
     Remote::DisaggPhysicalTableReadSnapshotPtr
     writeNodeBuildRemoteReadSnapshot(
