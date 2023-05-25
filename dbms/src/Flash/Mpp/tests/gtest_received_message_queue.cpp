@@ -16,15 +16,12 @@
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/MemoryTracker.h>
-#include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -204,7 +201,7 @@ try
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false, true>(0);
+                        auto pop_result = queue.pop<false, false>(0);
                         ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                         ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
                     }
