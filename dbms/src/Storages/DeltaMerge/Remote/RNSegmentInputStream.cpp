@@ -82,7 +82,7 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
             continue;
         }
 
-        if (!res.rows())
+        if (res.rows() == 0)
         {
             // try read from next task
             continue;
