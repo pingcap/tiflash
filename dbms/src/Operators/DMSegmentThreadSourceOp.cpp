@@ -45,64 +45,66 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
 {
-    void DMSegmentThreadSourceOp::operateSuffix()
+}
+
+void DMSegmentThreadSourceOp::operateSuffix()
+{
+    LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
+}
+
+OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
+{
+    if (done)
     {
-        LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
     }
-
-    OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
+    if (t_block.has_value())
     {
-        if (done)
-        {
-            block = {};
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        if (t_block.has_value())
-        {
-            std::swap(block, t_block.value());
-            t_block.reset();
-            total_rows += block.rows();
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        return OperatorStatus::IO;
+        std::swap(block, t_block.value());
+        t_block.reset();
+        total_rows += block.rows();
+        return OperatorStatus::HAS_OUTPUT;
     }
+    return OperatorStatus::IO;
+}
 
-    OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
+OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
+{
+    if (done)
+        return OperatorStatus::HAS_OUTPUT;
+
+    while (!cur_stream)
     {
-        if (done)
-            return OperatorStatus::HAS_OUTPUT;
-
-        while (!cur_stream)
+        auto task = task_pool->nextTask();
+        if (!task)
         {
-            auto task = task_pool->nextTask();
-            if (!task)
-            {
-                done = true;
-                LOG_DEBUG(log, "Read done");
-                return OperatorStatus::HAS_OUTPUT;
-            }
-            cur_segment = task->segment;
-
-            auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-            cur_stream = task->segment->getInputStream(read_mode, *dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, max_version, block_size);
-            LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
-        }
-        FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
-
-        Block res = cur_stream->read(filter_ignored, false);
-        if (res)
-        {
-            t_block.emplace(std::move(res));
+            done = true;
+            LOG_DEBUG(log, "Read done");
             return OperatorStatus::HAS_OUTPUT;
         }
-        else
-        {
-            after_segment_read(dm_context, cur_segment);
-            LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
-            cur_segment = {};
-            cur_stream = {};
-        }
-        return OperatorStatus::IO;
+        cur_segment = task->segment;
+
+        auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+        cur_stream = task->segment->getInputStream(read_mode, *dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, max_version, block_size);
+        LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
     }
+    FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
+
+    Block res = cur_stream->read(filter_ignored, false);
+    if (res)
+    {
+        t_block.emplace(std::move(res));
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    else
+    {
+        after_segment_read(dm_context, cur_segment);
+        LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
+        cur_segment = {};
+        cur_stream = {};
+    }
+    return OperatorStatus::IO;
+}
 
 } // namespace DB
