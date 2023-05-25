@@ -319,7 +319,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     auto dist = distance(partition_end, current_row);
     assert(dist >= 1);
 
-    // Distance is too long and partition_end is the longest distance.
+    // Offset is too large and the partition_end is the longest position we can reach
     if (dist <= n)
         return std::make_tuple(partition_end, partition_ended);
 
@@ -386,6 +386,9 @@ Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
 
 void WindowTransformAction::advanceFrameStart()
 {
+    if (frame_started)
+        return;
+
     switch (window_description.frame.begin_type)
     {
     case WindowFrame::BoundaryType::Unbounded:
@@ -395,9 +398,6 @@ void WindowTransformAction::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
-        if (frame_started)
-            return;
-
         RUNTIME_CHECK_MSG(
             only_have_pure_window,
             "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
@@ -510,12 +510,7 @@ void WindowTransformAction::advanceFrameEnd()
     }
     case WindowFrame::BoundaryType::Offset:
     {
-        constexpr size_t frame_end_pos = 0;
-        constexpr size_t is_frame_end_pos = 1;
-        auto res = stepBackward(current_row, window_description.frame.end_offset);
-        frame_ended = std::get<is_frame_end_pos>(res);
-        if (frame_ended)
-            frame_end = std::get<frame_end_pos>(res);
+        std::tie(frame_end, frame_ended) = stepBackward(current_row, window_description.frame.end_offset);
         break;
     }
     default:
@@ -799,7 +794,7 @@ RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num)
     }
 
     --prev_row_num.block;
-    assert(static_cast<Int64>(prev_row_num.block - first_block_number) < static_cast<Int64>(window_blocks.size()));
+    assert(static_cast<Int64>(prev_row_num.block) - static_cast<Int64>(first_block_number) < static_cast<Int64>(window_blocks.size()));
     const auto new_block_rows = blockAt(prev_row_num).rows;
     prev_row_num.row = new_block_rows - 1;
     return prev_row_num;
