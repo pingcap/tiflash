@@ -514,7 +514,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::ingestFiles(
+UInt64 DeltaMergeStore::ingestFiles(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
     const std::vector<DM::ExternalDTFileInfo> & external_files,
@@ -744,6 +744,8 @@ void DeltaMergeStore::ingestFiles(
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+
+    return bytes;
 }
 
 std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
