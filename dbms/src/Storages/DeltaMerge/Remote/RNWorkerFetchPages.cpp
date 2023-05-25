@@ -127,7 +127,7 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
     }
 
     const size_t max_retry_times = 3;
-    std::exception_ptr first_exception;
+    std::exception_ptr last_exception;
 
     // TODO: Maybe don't need to re-fetch all pages when retry.
     for (size_t i = 0; i < max_retry_times; ++i)
@@ -143,8 +143,7 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         }
         catch (const pingcap::Exception & e)
         {
-            if (!first_exception)
-                first_exception = std::current_exception();
+            last_exception = std::current_exception();
             LOG_WARNING(
                 log,
                 "Meet RPC client exception when fetching pages: {}, will be retried. seg_task={}",
@@ -155,8 +154,8 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
     }
 
     // Still failed after retry...
-    RUNTIME_CHECK(first_exception);
-    std::rethrow_exception(first_exception);
+    RUNTIME_CHECK(last_exception);
+    std::rethrow_exception(last_exception);
 }
 
 void RNWorkerFetchPages::doFetchPages(

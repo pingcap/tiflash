@@ -62,7 +62,7 @@ struct RNReadSegmentMeta
     const RowKeyRanges read_ranges;
     const DisaggTaskId snapshot_id;
     const DMContextPtr dm_context;
-    // ======== Fields below are information about this reading ========
+    // =================================================================
 };
 
 /// Represent a read from a remote segment. Initially it is built from information
