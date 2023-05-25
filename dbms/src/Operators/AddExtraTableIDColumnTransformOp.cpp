@@ -12,32 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/AddExtraTableIDColumnInputStream.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
 
 namespace DB
 {
 
-AddExtraTableIDColumnInputStream::AddExtraTableIDColumnInputStream(
-    BlockInputStreamPtr input,
-    int extra_table_id_index,
-    TableID physical_table_id_)
-    : physical_table_id(physical_table_id_)
-    , action(input->getHeader(), extra_table_id_index)
+OperatorStatus AddExtraTableIDColumnTransformOp::transformImpl(Block & block)
 {
-    children.push_back(input);
+    if (!action.transform(block, physical_table_id))
+        block = {};
+    return OperatorStatus::HAS_OUTPUT;
 }
 
-Block AddExtraTableIDColumnInputStream::readImpl()
+void AddExtraTableIDColumnTransformOp::transformHeaderImpl(Block & header_)
 {
-    Block res = children.back()->read();
-    if (!res)
-        return res;
-
-    auto ok = action.transform(res, physical_table_id);
-    if (!ok)
-        return {};
-
-    return res;
+    header_ = action.getHeader();
 }
 
 } // namespace DB

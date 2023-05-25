@@ -83,7 +83,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     return genNamesAndTypes(table_scan.getColumns(), column_prefix);
 }
 
-std::tuple<DM::ColumnDefinesPtr, size_t> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
 {
     auto column_defines = std::make_shared<DM::ColumnDefines>();
     size_t extra_table_id_index = InvalidColumnID;

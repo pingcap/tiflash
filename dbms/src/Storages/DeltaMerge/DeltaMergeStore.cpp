@@ -27,6 +27,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -1199,20 +1200,27 @@ void DeltaMergeStore::read(
         }
         else
         {
-            group_builder.addConcurrency(
-                std::make_unique<DMSegmentThreadSourceOp>(
+            auto source = std::make_unique<DMSegmentThreadSourceOp>(
+                exec_status,
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                log_tracing_id);
+            auto source_header = source->getHeader();
+            group_builder.addConcurrency(std::move(source));
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
                     exec_status,
-                    dm_context,
-                    read_task_pool,
-                    after_segment_read,
-                    columns_to_read,
-                    filter,
-                    max_version,
-                    expected_block_size,
-                    /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                    log_tracing_id,
+                    source_header,
                     extra_table_id_index,
-                    physical_table_id,
-                    log_tracing_id));
+                    physical_table_id));
+            });
         }
     }
     LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
