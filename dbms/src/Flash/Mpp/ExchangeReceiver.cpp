@@ -853,9 +853,9 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
     ReceivedMessagePtr recv_msg;
     MPMCQueueResult res;
     if (enable_fine_grained_shuffle_flag)
-        res = received_message_queue.pop<true, true>(recv_msg, stream_id);
+        std::tie(res, recv_msg) = received_message_queue.pop<true, true>(stream_id);
     else
-        res = received_message_queue.pop<true, false>(recv_msg, stream_id);
+        std::tie(res, recv_msg) = received_message_queue.pop<true, false>(stream_id);
     return toReceiveResult(res, std::move(recv_msg));
 }
 
@@ -867,11 +867,11 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
     MPMCQueueResult res;
     if (enable_fine_grained_shuffle_flag)
     {
-        res = received_message_queue.pop<false, true>(recv_msg, stream_id);
+        std::tie(res, recv_msg) = received_message_queue.pop<false, true>(stream_id);
     }
     else
     {
-        res = received_message_queue.pop<false, false>(recv_msg, stream_id);
+        std::tie(res, recv_msg) = received_message_queue.pop<false, false>(stream_id);
     }
     return toReceiveResult(res, std::move(recv_msg));
 }
