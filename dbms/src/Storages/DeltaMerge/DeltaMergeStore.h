@@ -46,7 +46,7 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 class StoragePathPool;
 
 class PipelineExecutorStatus;
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 namespace DM
 {

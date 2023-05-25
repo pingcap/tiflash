@@ -93,18 +93,21 @@ void PhysicalWindow::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
-    // TODO support non fine grained shuffle.
-    RUNTIME_CHECK(fine_grained_shuffle.enable());
-
     executeExpression(exec_status, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
+
+    if (!fine_grained_shuffle.enable())
+        executeUnion(exec_status, group_builder, log);
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
+
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
+        restoreConcurrency(exec_status, group_builder, concurrency, log);
 
     executeExpression(exec_status, group_builder, window_description.after_window, log);
 }

@@ -82,10 +82,10 @@ void ReadIndexTest::testError()
                 auto resp = future->poll();
                 ASSERT(!resp);
             }
-            ASSERT_EQ(proxy_instance.tasks.size(), 1);
+            ASSERT_EQ(proxy_instance.read_index_tasks.size(), 1);
 
             // force response region error `data_is_not_ready`
-            proxy_instance.tasks.front()->update(false, true);
+            proxy_instance.read_index_tasks.front()->update(false, true);
 
             for (auto & future : futures)
             {
@@ -129,10 +129,10 @@ void ReadIndexTest::testError()
                 auto resp = future->poll();
                 ASSERT(!resp);
             }
-            ASSERT_EQ(proxy_instance.tasks.size(), 1);
+            ASSERT_EQ(proxy_instance.read_index_tasks.size(), 1);
 
             // force response to have lock
-            proxy_instance.tasks.front()->update(true, false);
+            proxy_instance.read_index_tasks.front()->update(true, false);
 
             proxy_instance.runOneRound();
             for (auto & future : futures)
@@ -445,7 +445,7 @@ void ReadIndexTest::testNormal()
         }
     }
     over = true;
-    proxy_instance.wake();
+    proxy_instance.wakeNotifier();
     proxy_runner.join();
     manager.reset();
     ASSERT(GCMonitor::instance().checkClean());
@@ -588,7 +588,7 @@ void ReadIndexTest::testBatch()
         }
         manager->runOneRoundAll();
         {
-            auto & t = proxy_instance.tasks.back();
+            auto & t = proxy_instance.read_index_tasks.back();
             ASSERT_EQ(t->req.start_ts(), 10);
             t->update(); // only response ts `10`
         }

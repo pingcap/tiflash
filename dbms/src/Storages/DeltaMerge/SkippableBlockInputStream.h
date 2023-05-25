@@ -74,17 +74,19 @@ template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_)
+    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_)
         : rows(inputs_.size(), 0)
         , precede_stream_rows(0)
+        , scan_context(scan_context_)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
     }
 
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_)
+    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_, const ScanContextPtr & scan_context_)
         : rows(std::move(rows_))
         , precede_stream_rows(0)
+        , scan_context(scan_context_)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -154,6 +156,7 @@ public:
             if (res)
             {
                 res.setStartOffset(res.startOffset() + precede_stream_rows);
+                addReadBytes(res.bytes());
                 break;
             }
             else
@@ -181,6 +184,7 @@ public:
                 {
                     res.setSegmentRowIdCol(createSegmentRowIdCol(res.startOffset(), res.rows()));
                 }
+                addReadBytes(res.bytes());
                 break;
             }
             else
@@ -206,9 +210,17 @@ private:
         }
         return seg_row_id_col;
     }
+    void addReadBytes(UInt64 bytes)
+    {
+        if (likely(scan_context != nullptr))
+        {
+            scan_context->total_user_read_bytes += bytes;
+        }
+    }
     BlockInputStreams::iterator current_stream;
     std::vector<size_t> rows;
     size_t precede_stream_rows;
+    const ScanContextPtr scan_context;
 };
 
 } // namespace DM

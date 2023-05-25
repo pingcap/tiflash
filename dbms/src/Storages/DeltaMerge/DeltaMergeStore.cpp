@@ -27,6 +27,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -1059,7 +1060,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
     LOG_INFO(tracing_logger,
-             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}, is_fast_scan={}, is_push_down_filter_empty={}",
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} is_fast_scan={} is_push_down_filter_empty={}",
              keep_order,
              db_context.getSettingsRef().dt_enable_read_thread,
              enable_read_thread,
@@ -1185,9 +1186,9 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream);
 
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        if (enable_read_thread)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
@@ -1197,24 +1198,33 @@ void DeltaMergeStore::read(
                     extra_table_id_index,
                     log_tracing_id));
         }
-        else
-        {
-            group_builder.addConcurrency(
-                std::make_unique<DMSegmentThreadSourceOp>(
-                    exec_status,
-                    dm_context,
-                    read_task_pool,
-                    after_segment_read,
-                    columns_to_read,
-                    filter,
-                    max_version,
-                    expected_block_size,
-                    /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                    extra_table_id_index,
-                    physical_table_id,
-                    log_tracing_id));
-        }
     }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_status,
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                log_tracing_id));
+        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_status,
+                log_tracing_id,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
+    }
+
     LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 

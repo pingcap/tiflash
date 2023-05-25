@@ -506,12 +506,12 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, may_need_add_cast_column, table_scan);
     if (has_cast)
     {
-        RUNTIME_CHECK(remote_read_start_index <= group_builder.group.size());
+        RUNTIME_CHECK(remote_read_start_index <= group_builder.concurrency());
         size_t i = 0;
         // local sources
         while (i < remote_read_start_index)
         {
-            auto & group = group_builder.group[i++];
+            auto & group = group_builder.getCurGroup()[i++];
             group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
         }
     }

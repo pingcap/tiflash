@@ -263,14 +263,9 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
-                return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
-                // TODO support non fine grained shuffle.
-                is_supported = FineGrainedShuffle(&executor).enable();
-                if (settings.enforce_enable_pipeline)
-                    throw Exception("Pipeline mode does not support non-fine-grained window function, and an error is reported because the setting enforce_enable_pipeline is true.");
-                return is_supported;
+                return true;
             case tipb::ExecType::TypeJoin:
                 // TODO support spill.
                 // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
