@@ -15,35 +15,38 @@
 #pragma once
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/Transaction/Types.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
 
-/**
-  * Adds an extra TableID column to the block.
-  */
-class AddExtraTableIDColumnInputStream : public IProfilingBlockInputStream
+class AddExtraTableIDColumnTransformOp : public TransformOp
 {
-    static constexpr auto NAME = "AddExtraTableIDColumn";
-
 public:
-    AddExtraTableIDColumnInputStream(
-        BlockInputStreamPtr input,
+    AddExtraTableIDColumnTransformOp(
+        PipelineExecutorStatus & exec_status_,
+        const String & req_id,
+        const DM::ColumnDefines & columns_to_read,
         int extra_table_id_index,
-        TableID physical_table_id);
+        TableID physical_table_id_)
+        : TransformOp(exec_status_, req_id)
+        , action(columns_to_read, extra_table_id_index)
+        , physical_table_id(physical_table_id_)
+    {}
 
-    String getName() const override { return NAME; }
-
-    Block getHeader() const override { return action.getHeader(); }
+    String getName() const override
+    {
+        return "AddExtraTableIDColumnTransformOp";
+    }
 
 protected:
-    Block readImpl() override;
+    OperatorStatus transformImpl(Block & block) override;
+
+    void transformHeaderImpl(Block & header_) override;
 
 private:
-    const TableID physical_table_id;
     AddExtraTableIDColumnTransformAction action;
+    const TableID physical_table_id;
 };
 
 } // namespace DB
