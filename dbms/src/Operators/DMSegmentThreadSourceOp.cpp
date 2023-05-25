@@ -45,6 +45,12 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
 {
+    setHeader(toEmptyBlock(columns_to_read));
+}
+
+String DMSegmentThreadSourceOp::getName() const
+{
+    return NAME;
 }
 
 void DMSegmentThreadSourceOp::operateSuffix()
