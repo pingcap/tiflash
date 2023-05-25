@@ -172,7 +172,7 @@ try
     {
         LOG_DEBUG(
             log,
-            "{} dag request with tso {} without encode cost: {} seconds, produce {} rows, {} bytes and with peak_memory_usage {} bytes.",
+            "{} dag request with tso {} without encode cost: {} seconds, produce {} rows, {} bytes with peak_memory_usage {} bytes.",
             batch ? "batch cop" : "cop",
             context.getSettingsRef().read_tso,
             p_stream->getProfileInfo().execution_time / (double)1000000000,
@@ -201,7 +201,7 @@ try
             }
             LOG_DEBUG(
                 log,
-                "the executor {} in {} dag request with tso {} cost: {} seconds, produce {} rows, {} bytes, {} blocks and with concurrency {}.",
+                "the executor {} in {} dag request with tso {} cost: {} seconds, produce {} rows, {} bytes, {} blocks with concurrency {}.",
                 entry.first,
                 batch ? "batch cop" : "cop",
                 context.getSettingsRef().read_tso,

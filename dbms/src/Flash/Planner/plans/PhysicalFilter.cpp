@@ -40,6 +40,8 @@ PhysicalPlanNodePtr PhysicalFilter::build(
         conditions.push_back(&c);
     String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, conditions);
 
+    LOG_DEBUG(log, "filter_column_name: {} and before_filter_actions.size: {}", filter_column_name, before_filter_actions->getActions().size());
+
     auto physical_filter = std::make_shared<PhysicalFilter>(
         executor_id,
         child->getSchema(),
