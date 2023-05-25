@@ -591,7 +591,7 @@ std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStorePro
     new_epoch.set_conf_ver(old_epoch.conf_ver());
     {
         raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
-        for (size_t i = 0; i < n; i++)
+        for (size_t i = 0; i < n; ++i)
         {
             auto * region = splits->add_regions();
             region->set_id(region_ids[i]);
