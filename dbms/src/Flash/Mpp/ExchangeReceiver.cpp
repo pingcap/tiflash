@@ -851,20 +851,11 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
 {
     verifyStreamId(stream_id);
     ReceivedMessagePtr recv_msg;
-    auto res = enable_fine_grained_shuffle_flag
-        ? received_message_queue.msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg)
-        : received_message_queue.msg_channel->pop(recv_msg);
-    if (enable_fine_grained_shuffle_flag && recv_msg != nullptr)
-    {
-        if (recv_msg->remaining_consumer->fetch_sub(1) == 1)
-        {
-            ReceivedMessagePtr original_msg;
-            auto pop_result = received_message_queue.grpc_recv_queue->tryPop(original_msg);
-            assert(pop_result != MPMCQueueResult::EMPTY);
-            if (original_msg != nullptr)
-                assert(*original_msg->remaining_consumer == 0);
-        }
-    }
+    MPMCQueueResult res;
+    if (enable_fine_grained_shuffle_flag)
+        res = received_message_queue.pop<true, true>(recv_msg, stream_id);
+    else
+        res = received_message_queue.pop<true, false>(recv_msg, stream_id);
     return toReceiveResult(res, std::move(recv_msg));
 }
 
@@ -873,9 +864,15 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
 {
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
     ReceivedMessagePtr recv_msg;
-    auto res = enable_fine_grained_shuffle_flag
-        ? received_message_queue.msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg)
-        : received_message_queue.msg_channel->tryPop(recv_msg);
+    MPMCQueueResult res;
+    if (enable_fine_grained_shuffle_flag)
+    {
+        res = received_message_queue.pop<false, true>(recv_msg, stream_id);
+    }
+    else
+    {
+        res = received_message_queue.pop<false, false>(recv_msg, stream_id);
+    }
     return toReceiveResult(res, std::move(recv_msg));
 }
 

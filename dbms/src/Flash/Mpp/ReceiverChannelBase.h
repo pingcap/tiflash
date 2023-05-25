@@ -85,11 +85,6 @@ struct ReceivedMessage
         , chunks(chunks_)
     {}
 
-    void switchMemTracker()
-    {
-        packet->switchMemTracker(current_memory_tracker);
-    }
-
     bool containUsefulMessage() const
     {
         return error_ptr != nullptr || resp_ptr != nullptr || !chunks.empty();
@@ -104,6 +99,46 @@ struct ReceivedMessageQueue
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
     std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
+    template <bool need_wait, bool fine_grained_shuffle>
+    MPMCQueueResult pop(ReceivedMessagePtr recv_msg, size_t stream_id)
+    {
+        MPMCQueueResult res;
+        if constexpr (fine_grained_shuffle)
+        {
+            if constexpr (need_wait)
+            {
+                res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
+            }
+            else
+            {
+                res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
+            }
+            if (recv_msg != nullptr)
+            {
+                if (recv_msg->remaining_consumer->fetch_sub(1) == 1)
+                {
+                    /// if there is no consumer, then pop it from original queue
+                    ReceivedMessagePtr original_msg;
+                    auto pop_result = grpc_recv_queue->tryPop(original_msg);
+                    assert(pop_result != MPMCQueueResult::EMPTY);
+                    if (original_msg != nullptr)
+                        assert(*original_msg->remaining_consumer == 0);
+                }
+            }
+        }
+        else
+        {
+            if constexpr (need_wait)
+            {
+                res = grpc_recv_queue->pop(recv_msg);
+            }
+            else
+            {
+                res = grpc_recv_queue->tryPop(recv_msg);
+            }
+        }
+        return res;
+    }
 };
 
 ReceivedMessagePtr toReceivedMessage(
