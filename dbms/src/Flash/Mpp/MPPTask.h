@@ -47,14 +47,17 @@ enum class AbortType
     ONERROR,
 };
 
-// This struct only print logs when MPPTask is destructed
-struct MPPTaskDestructedHinter
+// This struct notify the MPPTaskManager that this MPPTask is completed destructed
+class MPPTaskMonitorHelper
 {
-    explicit MPPTaskDestructedHinter(const LoggerPtr log_)
-        : log(log_)
-    {}
-    ~MPPTaskDestructedHinter() { LOG_INFO(log, "MPPTask is completely destructed"); }
-    const LoggerPtr log;
+public:
+    MPPTaskMonitorHelper(MPPTaskManager * manager_, const String & task_unique_id);
+
+    ~MPPTaskMonitorHelper();
+
+private:
+    MPPTaskManager * manager;
+    const String task_unique_id;
 };
 
 class MPPTask : public std::enable_shared_from_this<MPPTask>
@@ -129,13 +132,13 @@ private:
     MPPTaskId id;
     const LoggerPtr log;
 
-    // We must ensure this member variable is put at this place to be destructed at proper time
-    MPPTaskDestructedHinter destructed_hinter;
-
     ContextPtr context;
 
     MPPTaskManager * manager;
     std::atomic<bool> registered{false};
+
+    // We must ensure this member variable is put at this place to be destructed at proper time
+    MPPTaskMonitorHelper mpp_task_monitor_helper;
 
     MPPTaskScheduleEntry schedule_entry;
 

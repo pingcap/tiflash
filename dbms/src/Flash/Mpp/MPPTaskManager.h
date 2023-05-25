@@ -23,7 +23,9 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -60,7 +62,8 @@ using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
 
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
-class MPPTaskManager : private boost::noncopyable
+class MPPTaskManager : public std::enable_shared_from_this<MPPTaskManager>
+    , private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
@@ -72,10 +75,20 @@ class MPPTaskManager : private boost::noncopyable
 
     std::condition_variable cv;
 
+    bool is_shutdown;
+
+    // All created MPPTasks should be put into this variable.
+    // Only when the MPPTask is completed destructed, the task can be removed from it.
+    std::unordered_map<String, Stopwatch> monitored_tasks;
+
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
-    ~MPPTaskManager() = default;
+    ~MPPTaskManager();
+
+    void addMonitoredTask(const String & task_unique_id);
+
+    void removeMonitoredTask(const String & task_unique_id);
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
 
@@ -100,6 +113,7 @@ public:
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
     void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
+    void monitorMPPTasks();
 };
 
 } // namespace DB
