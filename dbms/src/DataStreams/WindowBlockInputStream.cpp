@@ -291,7 +291,7 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, Int6
     }
 
     // The step happens between blocks
-    n -= result_row.row + 1;
+    n -= (result_row.row + 1);
     --result_row.block;
     result_row.row = blockAt(result_row).rows - 1;
     while (n > 0)
