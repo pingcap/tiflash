@@ -306,7 +306,7 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
                 auto str = fmt::format(
                     "{}, local state: {}, proxy internal state: {}",
                     region.second->toString(),
-                    region.second->cloneMetaRegion().ShortDebugString(),
+                    region.second->getMetaRegion().ShortDebugString(),
                     kvstore->getProxyHelper()->getRegionLocalState(region.first).ShortDebugString());
                 output(str);
             }

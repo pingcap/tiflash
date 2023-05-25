@@ -243,7 +243,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->cloneMergeState().commit());
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
         region->setStateApplying();
 
         try
@@ -284,7 +284,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
     {
         auto region = kvs.getRegion(region_id);
-        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->cloneMergeState().commit());
+        auto && [request, response] = MockRaftStoreProxy::composeRollbackMerge(region->getMergeState().commit());
         kvs.handleAdminRaftCmd(std::move(request),
                                std::move(response),
                                region_id,
@@ -315,7 +315,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
-    auto old_epoch = source_region->mutMeta().cloneMetaRegion().region_epoch();
+    auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
     auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, {{RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}}, old_epoch);
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
@@ -523,7 +523,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         auto req = GenRegionReadIndexReq(*region, start_ts);
         ASSERT_EQ(req.ranges().size(), 1);
         ASSERT_EQ(req.start_ts(), start_ts);
-        ASSERT_EQ(region->cloneMetaRegion().region_epoch().DebugString(),
+        ASSERT_EQ(region->getMetaRegion().region_epoch().DebugString(),
                   req.context().region_epoch().DebugString());
         ASSERT_EQ(region->getRange()->comparableKeys().first.key, req.ranges()[0].start_key());
         ASSERT_EQ(region->getRange()->comparableKeys().second.key, req.ranges()[0].end_key());
@@ -897,6 +897,8 @@ try
             },
         };
         {
+            RegionMockTest mock_test(kvstore.get(), region);
+
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,
@@ -931,6 +933,8 @@ try
             },
         };
         {
+            RegionMockTest mock_test(kvstore.get(), region);
+
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,

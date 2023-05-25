@@ -808,9 +808,17 @@ metapb::Region Region::cloneMetaRegion() const
 {
     return meta.cloneMetaRegion();
 }
+const metapb::Region & Region::getMetaRegion() const
+{
+    return meta.getMetaRegion();
+}
 raft_serverpb::MergeState Region::cloneMergeState() const
 {
     return meta.cloneMergeState();
+}
+const raft_serverpb::MergeState & Region::getMergeState() const
+{
+    return meta.getMergeState();
 }
 
 std::pair<size_t, size_t> Region::getApproxMemCacheInfo() const

@@ -190,7 +190,9 @@ public:
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region cloneMetaRegion() const;
+    const metapb::Region & getMetaRegion() const;
     raft_serverpb::MergeState cloneMergeState() const;
+    const raft_serverpb::MergeState & getMergeState() const;
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;

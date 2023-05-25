@@ -454,10 +454,21 @@ metapb::Region RegionMeta::cloneMetaRegion() const
     return region_state.getRegion();
 }
 
+const metapb::Region & RegionMeta::getMetaRegion() const
+{
+    std::lock_guard lock(mutex);
+    return region_state.getRegion();
+}
+
 raft_serverpb::MergeState RegionMeta::cloneMergeState() const
 {
     std::lock_guard lock(mutex);
     return region_state.getMergeState();
 }
 
+const raft_serverpb::MergeState & RegionMeta::getMergeState() const
+{
+    std::lock_guard lock(mutex);
+    return region_state.getMergeState();
+}
 } // namespace DB
