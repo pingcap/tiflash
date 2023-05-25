@@ -51,6 +51,23 @@ struct OperatorProfileInfo
         total_stopwatch.start();
     }
 
+    ALWAYS_INLINE void anchor(const Block & block)
+    {
+        if likely (block)
+        {
+            ++blocks;
+            rows += block.rows();
+            bytes += block.bytes();
+            allocated_bytes += block.allocatedBytes();
+        }
+        anchor();
+    }
+
+    ALWAYS_INLINE void update()
+    {
+        execution_time += total_stopwatch.elapsedFromLastTime();
+    }
+
     ALWAYS_INLINE void update(const Block & block)
     {
         if likely (block)
@@ -60,12 +77,7 @@ struct OperatorProfileInfo
             bytes += block.bytes();
             allocated_bytes += block.allocatedBytes();
         }
-        execution_time += total_stopwatch.elapsedFromLastTime();
-    }
-
-    ALWAYS_INLINE void update()
-    {
-        execution_time += total_stopwatch.elapsedFromLastTime();
+        update();
     }
 };
 
