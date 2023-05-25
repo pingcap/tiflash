@@ -1186,9 +1186,9 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream);
 
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        if (enable_read_thread)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
@@ -1198,7 +1198,10 @@ void DeltaMergeStore::read(
                     extra_table_id_index,
                     log_tracing_id));
         }
-        else
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
                 exec_status,
@@ -1212,9 +1215,6 @@ void DeltaMergeStore::read(
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 log_tracing_id));
         }
-    }
-    if (!enable_read_thread)
-    {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
                 exec_status,
