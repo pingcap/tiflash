@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,11 +44,10 @@ public:
     void startInBackground() noexcept
     {
         std::call_once(start_flag, [this] {
-            watch_start.restart();
-
             LOG_DEBUG(log, "Starting {} workers, concurrency={}", getName(), concurrency);
             active_workers = concurrency;
 
+            watch_start.restart();
             for (size_t index = 0; index < concurrency; ++index)
             {
                 thread_manager->schedule(true, getName(), [this, index] {
@@ -115,13 +114,14 @@ private:
             std::call_once(finish_flag, [this] {
                 LOG_DEBUG(
                     log,
-                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s",
+                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.2f}s total_wait_schedule={:.2f}s total_wait_upstream={:.2f}s total_wait_downstream={:.2f}s",
                     getName(),
                     total_processed_tasks,
                     concurrency,
                     watch_start.elapsedSeconds(),
                     total_wait_schedule_ms / 1000.0,
-                    total_wait_upstream_ms / 1000.0);
+                    total_wait_upstream_ms / 1000.0,
+                    total_wait_downstream_ms / 1000.0);
                 // Note: the result queue may be already cancelled, but it is fine.
                 result_queue->finish();
             });
@@ -136,7 +136,7 @@ private:
             {
                 Src task;
 
-                Stopwatch w;
+                Stopwatch w{CLOCK_MONOTONIC_COARSE};
                 auto pop_result = source_queue->pop(task);
                 total_wait_upstream_ms += w.elapsedMilliseconds();
 
@@ -151,7 +151,7 @@ private:
                     }
                     else if (pop_result == MPMCQueueResult::CANCELLED)
                     {
-                        // There are errors, populate the error to downstreams
+                        // There are errors from upstream, populate the error to downstreams
                         // immediately.
                         auto cancel_reason = source_queue->getCancelReason();
                         LOG_WARNING(log, "{}#{} meeting error from upstream: {}", getName(), thread_idx, cancel_reason);
@@ -165,13 +165,23 @@ private:
                 }
 
                 auto work_result = doWork(task);
+
+                w.restart();
                 auto push_result = result_queue->push(work_result);
+                total_wait_downstream_ms += w.elapsedMilliseconds();
+
                 if (push_result != MPMCQueueResult::OK)
                 {
                     if (push_result == MPMCQueueResult::CANCELLED)
                     {
-                        // The result_queue has been closed by other workers, so we
-                        // no longer process any tasks from the source.
+                        // There are two possible cases:
+                        // Case A: The upstream is cancelled and one of the worker cancelled the downstream.
+                        // Case B: There is something wrong with the downstream
+                        // In case B, we need to populate the error to upstream, so that the whole
+                        // pipeline is cancelled.
+                        auto cancel_reason = source_queue->getCancelReason();
+                        LOG_WARNING(log, "{}#{} meeting error from downstream: {}", getName(), thread_idx, cancel_reason);
+                        source_queue->cancelWith(cancel_reason);
                         break;
                     }
                     else
@@ -187,18 +197,21 @@ private:
         {
             auto error = getCurrentExceptionMessage(false);
             LOG_ERROR(log, "{}#{} meet error: {}", getName(), thread_idx, error);
-            result_queue->cancelWith(fmt::format("{} failed: {}", getName(), error));
+            auto cancel_reason = fmt::format("{} failed: {}", getName(), error);
+            result_queue->cancelWith(cancel_reason);
+            source_queue->cancelWith(cancel_reason);
         }
     }
 
 private:
-    Stopwatch watch_start;
+    Stopwatch watch_start{CLOCK_MONOTONIC_COARSE};
     std::once_flag start_flag;
     std::once_flag wait_flag;
     std::once_flag finish_flag;
     std::atomic<Int64> total_processed_tasks = 0;
     std::atomic<Int64> total_wait_schedule_ms = 0;
     std::atomic<Int64> total_wait_upstream_ms = 0;
+    std::atomic<Int64> total_wait_downstream_ms = 0;
 };
 
 } // namespace DB
