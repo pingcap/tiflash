@@ -152,10 +152,11 @@ try
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)
         GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
 
+    Int64 peak_memory = 0;
     if (context.getProcessListElement())
     {
         auto process_info = context.getProcessListElement()->getInfo();
-        auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+        peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         if constexpr (!batch)
         {
             GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
@@ -170,10 +171,12 @@ try
     {
         LOG_DEBUG(
             log,
-            "dag request without encode cost: {} seconds, produce {} rows, {} bytes.",
+            "{} dag request without encode cost: {} seconds, produce {} rows, {} bytes and with peak_memory_usage {} bytes.",
+            batch ? "batch cop" : "cop",
             p_stream->getProfileInfo().execution_time / (double)1000000000,
             p_stream->getProfileInfo().rows,
-            p_stream->getProfileInfo().bytes);
+            p_stream->getProfileInfo().bytes,
+            peak_memory);
 
         if constexpr (!batch)
         {
