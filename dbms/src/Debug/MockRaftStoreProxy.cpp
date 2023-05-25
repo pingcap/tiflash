@@ -516,7 +516,7 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
     request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
     request.mutable_compact_log()->set_compact_index(compact_index);
     // Find compact term, otherwise log must have been compacted.
-    if (region->commands.count(compact_index))
+    if (region->commands.contains(compact_index))
     {
         request.mutable_compact_log()->set_compact_term(region->commands[compact_index].term);
     }
