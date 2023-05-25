@@ -149,7 +149,7 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
 }
 
 template <bool is_force, bool enable_fine_grained_shuffle>
-bool ReceivedMessageQueue::push(ReceivedMessagePtr & received_message, ReceiverMode mode)
+bool ReceivedMessageQueue::pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode)
 {
     std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;
     if constexpr (is_force)
@@ -188,28 +188,33 @@ GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessage
     return res;
 }
 
-void ReceivedMessageQueue::init(AsyncRequestHandlerWaitQueuePtr & conn_wait_queue, const LoggerPtr & log_, size_t max_buffer_size, bool enable_fine_grained, size_t fine_grained_stream_size)
+ReceivedMessageQueue::ReceivedMessageQueue(
+    const AsyncRequestHandlerWaitQueuePtr & conn_wait_queue,
+    const LoggerPtr & log_,
+    size_t max_buffer_size,
+    bool enable_fine_grained,
+    size_t fine_grained_channel_size_)
+    : fine_grained_channel_size(enable_fine_grained ? fine_grained_channel_size_ : 0)
+    , log(log_)
 {
     msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
     if (enable_fine_grained)
     {
-        for (size_t i = 0; i < fine_grained_stream_size; ++i)
+        for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
             msg_channels_for_fine_grained_shuffle.push_back(std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
     }
-    fine_grained_channel_size = fine_grained_stream_size;
-    log = log_;
 }
 
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, true>(size_t stream_id);
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, false>(size_t stream_id);
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, true>(size_t stream_id);
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, false>(size_t stream_id);
-template bool ReceivedMessageQueue::push<true, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::push<true, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::push<false, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::push<false, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushToMessageChannel<true, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushToMessageChannel<true, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushToMessageChannel<false, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushToMessageChannel<false, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 template GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue<true>(ReceivedMessagePtr & received_message);
 template GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue<false>(ReceivedMessagePtr & received_message);
 

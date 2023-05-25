@@ -69,13 +69,13 @@ using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<Rece
 class ReceivedMessageQueue
 {
     /// msg_channel is a bounded queue that saves the received messages
-    /// msg_channels_for_fine_grained_shuffle is multiple unbounded queues that saves fine grained received messages
+    /// msg_channels_for_fine_grained_shuffle is unbounded queues that saves fine grained received messages
     /// all the received messages in msg_channels_for_fine_grained_shuffle must be saved in msg_channel first, so the
-    /// total size/memory of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle
+    /// total size of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle
     /// is unbounded queues
-    /// for non fine grained shuffle, all the read/read to the queue is based on msg_channel/grpc_recv_queue
+    /// for non fine grained shuffle, all the read/write to the queue is based on msg_channel/grpc_recv_queue
     /// for fine grained shuffle
-    /// write: the channel writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
+    /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumer` in msg, if `remaining_consumer` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
     MsgChannelPtr msg_channel;
@@ -92,12 +92,17 @@ public:
     std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id);
 
     template <bool is_force, bool enable_fine_grained_shuffle>
-    bool push(ReceivedMessagePtr & received_message, ReceiverMode mode);
+    bool pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode);
 
     template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes pushToGRPCReceiveQueue(ReceivedMessagePtr & received_message);
 
-    void init(AsyncRequestHandlerWaitQueuePtr & conn_wait_queue, const LoggerPtr & log_, size_t max_buffer_size, bool enable_fine_grained, size_t fine_grained_stream_size);
+    ReceivedMessageQueue(
+        const AsyncRequestHandlerWaitQueuePtr & conn_wait_queue,
+        const LoggerPtr & log_,
+        size_t max_buffer_size,
+        bool enable_fine_grained,
+        size_t fine_grained_stream_size);
 
     void finish()
     {
@@ -117,7 +122,7 @@ public:
     }
     bool isWritable() const
     {
-        return msg_channel->isFull();
+        return !msg_channel->isFull();
     }
 };
 } // namespace DB

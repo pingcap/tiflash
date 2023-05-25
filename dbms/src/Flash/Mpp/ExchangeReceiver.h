@@ -188,7 +188,7 @@ private:
         const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(MPMCQueueResult result, ReceivedMessagePtr && recv_msg);
+    inline ReceiveResult toReceiveResult(std::pair<MPMCQueueResult, ReceivedMessagePtr> && pop_result);
 
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
@@ -223,7 +223,7 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    ReceivedMessageQueue received_message_queue;
+    std::unique_ptr<ReceivedMessageQueue> received_message_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
     std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;

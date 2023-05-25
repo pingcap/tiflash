@@ -28,7 +28,7 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
         return true;
     }
 
-    auto success = received_message_queue->push<is_force, enable_fine_grained_shuffle>(received_message, mode);
+    auto success = received_message_queue->pushToMessageChannel<is_force, enable_fine_grained_shuffle>(received_message, mode);
 
     if (likely(success))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
