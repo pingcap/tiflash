@@ -77,16 +77,6 @@ public:
         });
     }
 
-public:
-    const size_t concurrency;
-    const std::shared_ptr<MPMCQueue<Src>> source_queue;
-    const std::shared_ptr<MPMCQueue<Dest>> result_queue;
-
-protected:
-    const LoggerPtr log;
-    std::shared_ptr<ThreadManager> thread_manager;
-    std::atomic<Int64> active_workers = 0;
-
     ThreadedWorker(
         std::shared_ptr<MPMCQueue<Src>> source_queue_,
         std::shared_ptr<MPMCQueue<Dest>> result_queue_,
@@ -100,6 +90,16 @@ protected:
     {
         RUNTIME_CHECK(concurrency > 0);
     }
+
+public:
+    const size_t concurrency;
+    const std::shared_ptr<MPMCQueue<Src>> source_queue;
+    const std::shared_ptr<MPMCQueue<Dest>> result_queue;
+
+protected:
+    const LoggerPtr log;
+    std::shared_ptr<ThreadManager> thread_manager;
+    std::atomic<Int64> active_workers = 0;
 
     virtual String getName() const noexcept = 0;
 
