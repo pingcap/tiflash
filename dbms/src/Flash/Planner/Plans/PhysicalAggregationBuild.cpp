@@ -62,6 +62,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
 
+    // The profile info needs to be updated for the second stage's agg final spill.
     profile_infos = group_builder.getCurProfileInfos();
 }
 
