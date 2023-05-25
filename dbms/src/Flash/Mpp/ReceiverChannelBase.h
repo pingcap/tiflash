@@ -129,7 +129,7 @@ struct ReceivedMessageQueue
                 {
                     /// if there is no consumer, then pop it from original queue
                     ReceivedMessagePtr original_msg;
-                    auto pop_result = grpc_recv_queue->tryPop(original_msg);
+                    auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
                     assert(pop_result != MPMCQueueResult::EMPTY);
                     if (original_msg != nullptr)
                         assert(*original_msg->remaining_consumer == 0);
