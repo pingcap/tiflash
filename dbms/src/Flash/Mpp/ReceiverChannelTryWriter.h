@@ -39,7 +39,9 @@ public:
     GRPCReceiveQueueRes tryReWrite();
 
 private:
+    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryWriteImpl(ReceivedMessagePtr & msg);
+    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryRewriteImpl(ReceivedMessagePtr & msg);
 
     // Push data may fail, so we need to save the message and re-push it at the proper time.

@@ -30,17 +30,8 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, cons
     }
 
     GRPCReceiveQueueRes res;
-    res = tryWriteImpl(received_message);
+    res = tryWriteImpl<enable_fine_grained_shuffle>(received_message);
     fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
-
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (res == GRPCReceiveQueueRes::OK)
-        {
-            if (!writeMessageToFineGrainChannels(received_message))
-                res = GRPCReceiveQueueRes::CANCELLED;
-        }
-    }
 
     if (likely(res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
@@ -54,17 +45,8 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
     GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
     if (rewrite_msg != nullptr)
     {
-        GRPCReceiveQueueRes write_res = tryRewriteImpl(rewrite_msg);
-        if constexpr (enable_fine_grained_shuffle)
-        {
-            if (write_res == GRPCReceiveQueueRes::OK)
-            {
-                /// if write to first queue success, then write the message to fine grain queues
-                if (!writeMessageToFineGrainChannels(rewrite_msg))
-                    write_res = GRPCReceiveQueueRes::CANCELLED;
-            }
-        }
-        if (write_res == GRPCReceiveQueueRes::OK)
+        res = tryRewriteImpl<enable_fine_grained_shuffle>(rewrite_msg);
+        if (res == GRPCReceiveQueueRes::OK)
         {
             rewrite_msg = nullptr;
         }
@@ -75,22 +57,46 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
     return res;
 }
 
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(std::shared_ptr<ReceivedMessage> & msg)
+template <bool enable_fine_grained_shuffle>
+GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(ReceivedMessagePtr & msg)
 {
-    GRPCReceiveQueueRes res = received_message_queue->grpc_recv_queue->push(msg);
     assert(rewrite_msg == nullptr);
+    GRPCReceiveQueueRes res = received_message_queue->grpc_recv_queue->push(msg);
+    if constexpr (enable_fine_grained_shuffle)
+    {
+        if (res == GRPCReceiveQueueRes::OK)
+        {
+            if (!writeMessageToFineGrainChannels(msg))
+                res = GRPCReceiveQueueRes::CANCELLED;
+        }
+    }
     if (res == GRPCReceiveQueueRes::FULL)
         rewrite_msg = std::move(msg);
     return res;
 }
 
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(std::shared_ptr<ReceivedMessage> & msg)
+template <bool enable_fine_grained_shuffle>
+GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(ReceivedMessagePtr & msg)
 {
-    return received_message_queue->grpc_recv_queue->push(msg);
+    auto res = received_message_queue->grpc_recv_queue->push(msg);
+    if constexpr (enable_fine_grained_shuffle)
+    {
+        if (res == GRPCReceiveQueueRes::OK)
+        {
+            /// if write to first queue success, then write the message to fine grain queues
+            if (!writeMessageToFineGrainChannels(rewrite_msg))
+                res = GRPCReceiveQueueRes::CANCELLED;
+        }
+    }
+    return res;
 }
 
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<true>();
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<false>();
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite<true>(size_t, const TrackedMppDataPacketPtr &);
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite<false>(size_t, const TrackedMppDataPacketPtr &);
+template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl<true>(ReceivedMessagePtr &);
+template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl<false>(ReceivedMessagePtr &);
+template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl<true>(ReceivedMessagePtr &);
+template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl<false>(ReceivedMessagePtr &);
 } // namespace DB
