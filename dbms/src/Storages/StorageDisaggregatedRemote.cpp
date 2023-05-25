@@ -81,6 +81,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 
     double total_backoff_seconds = 0.0;
     SCOPE_EXIT({
+        // This metric is per-read.
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
     });
 

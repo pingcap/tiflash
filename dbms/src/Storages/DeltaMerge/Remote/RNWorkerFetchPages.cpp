@@ -83,6 +83,7 @@ RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask(const RNReadSegme
 
     Stopwatch w_occupy;
     auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes);
+    // This metric is per-segment.
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy).Observe(w_occupy.elapsedSeconds());
 
     return occupy_result;
@@ -111,6 +112,12 @@ std::shared_ptr<disaggregated::FetchDisaggPagesRequest> buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
+    SCOPE_EXIT({
+        // This metric is per-segment.
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_worker_fetch_page).Observe(watch_work.elapsedSeconds());
+    });
+
     auto occupy_result = blockingOccupySpaceForTask(seg_task);
     auto req = buildFetchPagesRequest(seg_task, occupy_result.pages_not_in_cache);
     {
@@ -166,6 +173,10 @@ void RNWorkerFetchPages::doFetchPages(
     if (request->page_ids_size() == 0)
         return;
 
+    Stopwatch watch_rpc{CLOCK_MONOTONIC_COARSE};
+    bool rpc_is_observed = false;
+    double total_write_page_cache_sec = 0.0;
+
     grpc::ClientContext client_context;
     auto rpc_call = std::make_shared<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>>(request);
     auto stream_resp = cluster->rpc_client->sendStreamRequest(
@@ -190,10 +201,23 @@ void RNWorkerFetchPages::doFetchPages(
         if (bool more = stream_resp->Read(packet.get()); !more)
             break;
 
+        if (!rpc_is_observed)
+        {
+            // Count RPC time as sending request + receive first response packet.
+            rpc_is_observed = true;
+            // This metric is per-segment, because we only count once for each task.
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_fetch_page).Observe(watch_rpc.elapsedSeconds());
+        }
+
         if (packet->has_error())
         {
             throw Exception(fmt::format("{} (from {})", packet->error().msg(), seg_task->info()));
         }
+
+        Stopwatch watch_write_page_cache{CLOCK_MONOTONIC_COARSE};
+        SCOPE_EXIT({
+            total_write_page_cache_sec += watch_write_page_cache.elapsedSeconds();
+        });
 
         std::vector<UInt64> received_page_ids;
         for (const String & page : packet->pages())
@@ -235,6 +259,9 @@ void RNWorkerFetchPages::doFetchPages(
             seg_task->info(),
             received_page_ids);
     }
+
+    // This metric is per-segment.
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_write_page_cache).Observe(total_write_page_cache_sec);
 
     // Verify all pending pages are now received.
     RUNTIME_CHECK_MSG(

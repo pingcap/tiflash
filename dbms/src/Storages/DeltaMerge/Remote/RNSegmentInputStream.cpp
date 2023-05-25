@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MPMCQueue.h>
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
@@ -31,6 +32,11 @@ RNSegmentInputStream::~RNSegmentInputStream()
         processed_seg_tasks,
         duration_wait_ready_task_sec,
         duration_read_sec);
+
+    // This metric is per-stream.
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_wait_next_task).Observe(duration_wait_ready_task_sec);
+    // This metric is per-stream.
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_read).Observe(duration_read_sec);
 }
 
 Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
