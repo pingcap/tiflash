@@ -1200,7 +1200,7 @@ void DeltaMergeStore::read(
         }
         else
         {
-            auto source = std::make_unique<DMSegmentThreadSourceOp>(
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
                 exec_status,
                 dm_context,
                 read_task_pool,
@@ -1210,19 +1210,21 @@ void DeltaMergeStore::read(
                 max_version,
                 expected_block_size,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                log_tracing_id);
-            auto source_header = source->getHeader();
-            group_builder.addConcurrency(std::move(source));
-            group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
-                    exec_status,
-                    log_tracing_id,
-                    source_header,
-                    extra_table_id_index,
-                    physical_table_id));
-            });
+                log_tracing_id));
         }
     }
+    if (!enable_read_thread)
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_status,
+                log_tracing_id,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
+    }
+
     LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 

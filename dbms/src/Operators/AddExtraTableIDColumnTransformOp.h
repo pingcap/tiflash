@@ -27,11 +27,11 @@ public:
     AddExtraTableIDColumnTransformOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
-        const Block & input_header,
+        const DM::ColumnDefines & columns_to_read,
         int extra_table_id_index,
         TableID physical_table_id_)
         : TransformOp(exec_status_, req_id)
-        , action(input_header, extra_table_id_index)
+        , action(columns_to_read, extra_table_id_index)
         , physical_table_id(physical_table_id_)
     {}
 
