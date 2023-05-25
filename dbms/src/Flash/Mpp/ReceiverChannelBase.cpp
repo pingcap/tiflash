@@ -19,6 +19,22 @@
 
 namespace DB
 {
+namespace
+{
+const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
+{
+    if (unlikely(packet.has_error()))
+        return &packet.error();
+    return nullptr;
+}
+
+const String * getRespPtr(const mpp::MPPDataPacket & packet)
+{
+    if (unlikely(!packet.data().empty()))
+        return &packet.data();
+    return nullptr;
+}
+} // namespace
 void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
 {
     switch (mode)
@@ -81,7 +97,6 @@ bool ReceiverChannelBase::writeMessageToFineGrainChannels(ReceivedMessagePtr ori
     for (size_t i = 0; i < fine_grained_channel_size && success; ++i)
     {
         auto recv_msg = std::make_shared<ReceivedMessage>(
-            original_message->message_index,
             original_message->source_index,
             original_message->req_info,
             original_message->packet,
@@ -102,33 +117,31 @@ bool ReceiverChannelBase::writeMessageToFineGrainChannels(ReceivedMessagePtr ori
     return success;
 }
 
-const mpp::Error * ReceiverChannelBase::getErrorPtr(const mpp::MPPDataPacket & packet)
-{
-    if (unlikely(packet.has_error()))
-        return &packet.error();
-    return nullptr;
-}
-
-const String * ReceiverChannelBase::getRespPtr(const mpp::MPPDataPacket & packet)
-{
-    if (unlikely(!packet.data().empty()))
-        return &packet.data();
-    return nullptr;
-}
-
-ReceivedMessagePtr toReceivedMessage(const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr, size_t message_index, size_t source_index, const String & req_info)
+ReceivedMessagePtr toReceivedMessage(
+    const TrackedMppDataPacketPtr & tracked_packet,
+    size_t source_index,
+    const String & req_info,
+    bool for_fine_grained_shuffle,
+    size_t fine_grained_consumer_size)
 {
     const auto & packet = tracked_packet->packet;
+    const mpp::Error * error_ptr = getErrorPtr(packet);
+    const String * resp_ptr = getRespPtr(packet);
     std::vector<const String *> chunks(packet.chunks_size());
     for (int i = 0; i < packet.chunks_size(); ++i)
         chunks[i] = &packet.chunks(i);
-    return std::make_shared<ReceivedMessage>(
-        message_index,
+    auto ret = std::make_shared<ReceivedMessage>(
         source_index,
         req_info,
         tracked_packet,
         error_ptr,
         resp_ptr,
         std::move(chunks));
+    if (for_fine_grained_shuffle)
+    {
+        assert(fine_grained_consumer_size > 0);
+        ret->remaining_consumer = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
+    }
+    return ret;
 }
 } // namespace DB

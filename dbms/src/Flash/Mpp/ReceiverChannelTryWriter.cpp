@@ -19,25 +19,11 @@
 
 namespace DB
 {
-namespace
-{
-inline bool loopJudge(GRPCReceiveQueueRes res)
-{
-    return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL);
-}
-} // namespace
-
 template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
 {
-    const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
-    const String * resp_ptr = getRespPtr(tracked_packet->packet);
-    auto received_message = toReceivedMessage(tracked_packet, error_ptr, resp_ptr, received_message_queue->msg_index++, source_index, req_info);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        received_message->remaining_consumer = std::make_shared<std::atomic<size_t>>(fine_grained_channel_size);
-    }
-    if (error_ptr == nullptr && resp_ptr == nullptr && received_message->chunks.empty())
+    auto received_message = toReceivedMessage(tracked_packet, source_index, req_info, enable_fine_grained_shuffle, fine_grained_channel_size);
+    if (!received_message->containUsefulMessage())
     {
         /// don't need to push an empty response to received_message_queue
         return GRPCReceiveQueueRes::OK;
@@ -66,33 +52,25 @@ template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
 {
     GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
-    auto iter = rewrite_msgs.begin();
-
-    while (loopJudge(res) && (iter != rewrite_msgs.end()))
+    if (rewrite_msg != nullptr)
     {
-        GRPCReceiveQueueRes write_res = tryRewriteImpl(iter->second);
+        GRPCReceiveQueueRes write_res = tryRewriteImpl(rewrite_msg);
         if constexpr (enable_fine_grained_shuffle)
         {
             if (write_res == GRPCReceiveQueueRes::OK)
             {
-                if (!writeMessageToFineGrainChannels(iter->second))
+                /// if write to first queue success, then write the message to fine grain queues
+                if (!writeMessageToFineGrainChannels(rewrite_msg))
                     write_res = GRPCReceiveQueueRes::CANCELLED;
             }
         }
         if (write_res == GRPCReceiveQueueRes::OK)
         {
-            auto tmp_iter = iter;
-            ++iter;
-            rewrite_msgs.erase(tmp_iter);
+            rewrite_msg = nullptr;
         }
-        else
-        {
-            ++iter;
-            res = write_res;
-        }
-
-        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
+        /// if rewrite fails, wait for the next rewrite
     }
+    fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
 
     return res;
 }
@@ -100,9 +78,9 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(std::shared_ptr<ReceivedMessage> & msg)
 {
     GRPCReceiveQueueRes res = received_message_queue->grpc_recv_queue->push(msg);
-    assert(rewrite_msgs.find(0) == rewrite_msgs.end());
+    assert(rewrite_msg == nullptr);
     if (res == GRPCReceiveQueueRes::FULL)
-        rewrite_msgs.insert({0, std::move(msg)});
+        rewrite_msg = std::move(msg);
     return res;
 }
 

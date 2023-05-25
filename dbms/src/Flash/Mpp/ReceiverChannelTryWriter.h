@@ -43,6 +43,6 @@ private:
     GRPCReceiveQueueRes tryRewriteImpl(ReceivedMessagePtr & msg);
 
     // Push data may fail, so we need to save the message and re-push it at the proper time.
-    std::map<size_t, ReceivedMessagePtr> rewrite_msgs;
+    ReceivedMessagePtr rewrite_msg;
 };
 } // namespace DB

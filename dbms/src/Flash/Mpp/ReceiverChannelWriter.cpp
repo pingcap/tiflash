@@ -21,15 +21,8 @@ namespace DB
 template <bool enable_fine_grained_shuffle, bool is_force>
 bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
 {
-    const auto & packet = tracked_packet->packet;
-    const mpp::Error * error_ptr = packet.has_error() ? &packet.error() : nullptr;
-    const String * resp_ptr = packet.data().empty() ? nullptr : &packet.data();
-    auto received_message = toReceivedMessage(tracked_packet, error_ptr, resp_ptr, received_message_queue->msg_index++, source_index, req_info);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        received_message->remaining_consumer = std::make_shared<std::atomic<size_t>>(fine_grained_channel_size);
-    }
-    if (error_ptr == nullptr && resp_ptr == nullptr && received_message->chunks.empty())
+    auto received_message = toReceivedMessage(tracked_packet, source_index, req_info, enable_fine_grained_shuffle, fine_grained_channel_size);
+    if (!received_message->containUsefulMessage())
     {
         /// don't need to push an empty response to received_message_queue
         return true;
@@ -64,13 +57,9 @@ bool ReceiverChannelWriter::isWritable() const
     return received_message_queue->msg_channel->isFull();
 }
 
-template <>
-bool ReceiverChannelWriter::write<true, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template <>
-bool ReceiverChannelWriter::write<true, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template <>
-bool ReceiverChannelWriter::write<false, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template <>
-bool ReceiverChannelWriter::write<false, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<true, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<true, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<false, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<false, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
 } // namespace DB
