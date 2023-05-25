@@ -34,7 +34,7 @@ PipelineTask::PipelineTask(
 
 void PipelineTask::doFinalizeImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     pipeline_exec->executeSuffix();
     pipeline_exec.reset();
 }
@@ -62,7 +62,7 @@ void PipelineTask::doFinalizeImpl()
 
 ExecTaskStatus PipelineTask::doExecuteImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->execute();
     switch (op_status)
     {
@@ -78,7 +78,7 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
 
 ExecTaskStatus PipelineTask::doExecuteIOImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->executeIO();
     switch (op_status)
     {
@@ -97,7 +97,7 @@ ExecTaskStatus PipelineTask::doExecuteIOImpl()
 
 ExecTaskStatus PipelineTask::doAwaitImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->await();
     switch (op_status)
     {

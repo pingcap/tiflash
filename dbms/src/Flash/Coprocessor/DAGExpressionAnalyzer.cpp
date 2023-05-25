@@ -40,6 +40,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -900,12 +901,12 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 
 std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
     std::vector<String> casted_columns;
-    casted_columns.reserve(need_cast_column.size());
+    casted_columns.reserve(may_need_add_cast_column.size());
     // For TimeZone
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
     String tz_col = getActions(tz_expr, actions);
@@ -916,16 +917,16 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
     // For Duration
     String fsp_col;
     static const String dur_func_name = "FunctionConvertDurationFromNanos";
-    for (size_t i = 0; i < need_cast_column.size(); ++i)
+    for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
     {
         String casted_name = source_columns[i].name;
-        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
+        if (!context.getTimezoneInfo().is_utc_timezone && may_need_add_cast_column[i] && table_scan_columns[i].tp == TiDB::TypeTimestamp)
         {
             casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             has_cast = true;
         }
 
-        if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
+        if (may_need_add_cast_column[i] && table_scan_columns[i].tp == TiDB::TypeTime)
         {
             if (table_scan_columns[i].decimal > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
@@ -947,13 +948,13 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
 
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const TiDBTableScan & table_scan)
 {
     auto & step = initAndGetLastStep(chain);
     auto & actions = step.actions;
 
-    auto [has_cast, casted_columns] = buildExtraCastsAfterTS(actions, need_cast_column, table_scan.getColumns());
+    auto [has_cast, casted_columns] = buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan.getColumns());
 
     if (!has_cast)
         return false;
@@ -964,7 +965,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     // after the cast, the block will be (a int64, b float, c int64, casted_c MyDuration)
     // After this projection, the block will be (a int64, b float, c MyDuration)
     NamesWithAliases project_cols;
-    for (size_t i = 0; i < need_cast_column.size(); ++i)
+    for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
         project_cols.emplace_back(casted_columns[i], source_columns[i].name);
     actions->add(ExpressionAction::project(project_cols));
 

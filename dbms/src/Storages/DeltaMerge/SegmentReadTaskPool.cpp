@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -161,9 +162,48 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     BlockInputStreamPtr stream;
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
     stream = t->segment->getInputStream(read_mode, *dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
+    stream = std::make_shared<AddExtraTableIDColumnInputStream>(stream, extra_table_id_index, physical_table_id);
     LOG_DEBUG(log, "getInputStream succ, read_mode={}, pool_id={} segment_id={}", magic_enum::enum_name(read_mode), pool_id, t->segment->segmentId());
     return stream;
 }
+
+SegmentReadTaskPool::SegmentReadTaskPool(
+    int64_t physical_table_id_,
+    int extra_table_id_index_,
+    const DMContextPtr & dm_context_,
+    const ColumnDefines & columns_to_read_,
+    const PushDownFilterPtr & filter_,
+    uint64_t max_version_,
+    size_t expected_block_size_,
+    ReadMode read_mode_,
+    SegmentReadTasks && tasks_,
+    AfterSegmentRead after_segment_read_,
+    const String & tracing_id,
+    bool enable_read_thread_,
+    Int64 num_streams_)
+    : pool_id(nextPoolId())
+    , physical_table_id(physical_table_id_)
+    , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
+    , extra_table_id_index(extra_table_id_index_)
+    , dm_context(dm_context_)
+    , columns_to_read(columns_to_read_)
+    , filter(filter_)
+    , max_version(max_version_)
+    , expected_block_size(expected_block_size_)
+    , read_mode(read_mode_)
+    , tasks_wrapper(enable_read_thread_, std::move(tasks_))
+    , after_segment_read(after_segment_read_)
+    , log(Logger::get(tracing_id))
+    , unordered_input_stream_ref_count(0)
+    , exception_happened(false)
+    // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
+    // to encounter empty queues frequently, resulting in too much waiting and thread context
+    // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
+    , block_slot_limit(std::max(num_streams_, 3))
+    // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
+    // situations where the computation may be faster and the storage layer may not be able to keep up.
+    , active_segment_limit(std::max(num_streams_, 2))
+{}
 
 void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
 {
@@ -222,9 +262,9 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
         {
             throw DB::Exception(fmt::format("segment_id {} not found from merging segments", task.first));
         }
-        if (std::find(itr->second.begin(), itr->second.end(), poolId()) == itr->second.end())
+        if (std::find(itr->second.begin(), itr->second.end(), pool_id) == itr->second.end())
         {
-            throw DB::Exception(fmt::format("pool_id={} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
+            throw DB::Exception(fmt::format("pool_id={} not found from merging segment {}=>{}", pool_id, itr->first, itr->second));
         }
         if (target == segments.end() || itr->second.size() > target->second.size())
         {

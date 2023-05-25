@@ -94,11 +94,6 @@ Block LateMaterializationBlockInputStream::readImpl()
                 rest_column_stream->read();
                 LOG_ERROR(log, "Late materialization skip block failed, at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
             }
-            else
-            {
-                RUNTIME_CHECK(skipped_rows == rows);
-                LOG_DEBUG(log, "Late materialization skip read block at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
-            }
         }
         else
         {

@@ -590,12 +590,13 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
         else
         {
             LOG_DEBUG(exc_log, "refined local tunnel is enabled");
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            String req_info = fmt::format("local tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            LoggerPtr local_log = Logger::get(fmt::format("{} {}", exc_log->identifier(), req_info));
 
             LocalRequestHandler local_request_handler(
                 getMemoryTracker(),
-                [this](bool meet_error, const String & local_err_msg) {
-                    this->connectionDone(meet_error, local_err_msg, exc_log);
+                [this, log = local_log](bool meet_error, const String & local_err_msg) {
+                    this->connectionDone(meet_error, local_err_msg, log);
                 },
                 [this]() {
                     this->connectionLocalDone();
@@ -603,7 +604,7 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                 [this]() {
                     this->addLocalConnectionNum();
                 },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+                ReceiverChannelWriter(&(getMsgChannels()), req_info, local_log, getDataSizeInQueue(), ReceiverMode::Local));
 
             rpc_context->establishMPPConnectionLocalV2(
                 req,
@@ -824,29 +825,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
-{
-    return receive(
-        stream_id,
-        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
-            return grpc_recv_queue[stream_id].pop(recv_msg);
-        });
-}
-
-template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream_id)
-{
-    return receive(
-        stream_id,
-        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
-            return grpc_recv_queue[stream_id].tryPop(recv_msg);
-        });
-}
-
-template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
-    size_t stream_id,
-    std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func)
+void ExchangeReceiverBase<RPCContext>::verifyStreamId(size_t stream_id) const
 {
     if (unlikely(stream_id >= grpc_recv_queue.size()))
     {
@@ -854,9 +833,12 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
         LOG_ERROR(exc_log, err_msg);
         throw Exception(err_msg);
     }
+}
 
-    RecvMsgPtr recv_msg;
-    switch (recv_func(stream_id, recv_msg))
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg)
+{
+    switch (result)
     {
     case MPMCQueueResult::OK:
         assert(recv_msg);
@@ -866,6 +848,24 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
     default:
         return {ReceiveStatus::eof, nullptr};
     }
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
+{
+    verifyStreamId(stream_id);
+    RecvMsgPtr recv_msg;
+    auto res = grpc_recv_queue[stream_id].pop(recv_msg);
+    return toReceiveResult(res, std::move(recv_msg));
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
+{
+    // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
+    RecvMsgPtr recv_msg;
+    auto res = grpc_recv_queue[stream_id].tryPop(recv_msg);
+    return toReceiveResult(res, std::move(recv_msg));
 }
 
 template <typename RPCContext>

@@ -20,9 +20,16 @@
 
 namespace DB
 {
-Block crossProbeBlock(
+struct ProbeProcessInfo;
+Block crossProbeBlockDeepCopyRightBlock(
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
     ProbeProcessInfo & probe_process_info,
-    const BlocksList & right_blocks);
+    const Blocks & right_blocks);
+/// return <probed_block, is_matched_rows>
+std::pair<Block, bool> crossProbeBlockShallowCopyRightBlock(
+    ASTTableJoin::Kind kind,
+    ASTTableJoin::Strictness strictness,
+    ProbeProcessInfo & probe_process_info,
+    const Blocks & right_blocks);
 } // namespace DB

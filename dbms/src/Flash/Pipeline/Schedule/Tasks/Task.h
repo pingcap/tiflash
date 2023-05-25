@@ -41,7 +41,6 @@ enum class ExecTaskStatus
     FINISHED,
     ERROR,
     CANCELLED,
-    FINALIZE,
 };
 
 class Task
@@ -53,11 +52,6 @@ public:
 
     virtual ~Task();
 
-    MemoryTrackerPtr getMemTracker() const
-    {
-        return mem_tracker;
-    }
-
     ExecTaskStatus execute();
 
     ExecTaskStatus executeIO();
@@ -67,6 +61,18 @@ public:
     // `finalize` must be called before destructuring.
     // `TaskHelper::FINALIZE_TASK` can help this.
     void finalize();
+
+    ALWAYS_INLINE void startTraceMemory()
+    {
+        assert(nullptr == current_memory_tracker);
+        assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
+        current_memory_tracker = mem_tracker_ptr;
+    }
+    ALWAYS_INLINE void endTraceMemory()
+    {
+        CurrentMemoryTracker::submitLocalDeltaMemory();
+        current_memory_tracker = nullptr;
+    }
 
 public:
     LoggerPtr log;
@@ -81,9 +87,7 @@ protected:
     virtual void finalizeImpl() {}
 
 private:
-    void switchStatus(ExecTaskStatus to);
-
-    void assertNormalStatus(ExecTaskStatus expect);
+    inline void switchStatus(ExecTaskStatus to);
 
 public:
     TaskProfileInfo profile_info;
@@ -92,9 +96,14 @@ public:
     size_t mlfq_level{0};
 
 protected:
-    MemoryTrackerPtr mem_tracker;
+    // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
+    MemoryTrackerPtr mem_tracker_holder;
+    // To reduce the overheads of `mem_tracker.get()`
+    MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status{ExecTaskStatus::INIT};
+
+    bool is_finalized = false;
 };
 using TaskPtr = std::unique_ptr<Task>;
 

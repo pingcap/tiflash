@@ -145,6 +145,8 @@ namespace DB
     M(random_pipeline_model_event_finish_failpoint)     \
     M(random_pipeline_model_operator_run_failpoint)     \
     M(random_pipeline_model_cancel_failpoint)           \
+    M(random_pipeline_model_execute_prefix_failpoint)   \
+    M(random_pipeline_model_execute_suffix_failpoint)   \
     M(random_spill_to_disk_failpoint)                   \
     M(random_restore_from_disk_failpoint)               \
     M(random_exception_when_connect_local_tunnel)       \
@@ -317,6 +319,22 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         enableRandomFailPoint(pair_tokens[0], rate);
     }
     LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+}
+
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+{
+    String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
+    if (random_fail_point_cfg.empty())
+        return;
+
+    Poco::StringTokenizer string_tokens(random_fail_point_cfg, ",");
+    for (const auto & string_token : string_tokens)
+    {
+        Poco::StringTokenizer pair_tokens(string_token, "-");
+        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        disableFailPoint(pair_tokens[0]);
+    }
+    LOG_INFO(log, "Disable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
