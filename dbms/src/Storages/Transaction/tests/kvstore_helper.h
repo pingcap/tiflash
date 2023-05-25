@@ -93,7 +93,10 @@ public:
         }
     }
 
-    void TearDown() override {}
+    void TearDown() override
+    {
+        proxy_instance->clear();
+    }
 
 protected:
     KVStore & getKVS() { return *kvstore; }
@@ -135,12 +138,12 @@ protected:
 protected:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
-    static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
     {
         // Drop files on disk
+        LOG_INFO(Logger::get("Test"), "Clean path {} for bootstrap", path);
         Poco::File file(path);
         if (file.exists())
             file.remove(true);
