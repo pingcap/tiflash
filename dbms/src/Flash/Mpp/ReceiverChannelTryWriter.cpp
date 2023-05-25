@@ -29,9 +29,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, cons
         return GRPCReceiveQueueRes::OK;
     }
 
-    GRPCReceiveQueueRes res;
-    res = tryWriteImpl<enable_fine_grained_shuffle>(received_message);
-    fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
+    GRPCReceiveQueueRes res = tryWriteImpl<enable_fine_grained_shuffle>(received_message);
 
     if (likely(res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
@@ -52,7 +50,6 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
         }
         /// if rewrite fails, wait for the next rewrite
     }
-    fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
 
     return res;
 }
@@ -61,15 +58,9 @@ template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(ReceivedMessagePtr & msg)
 {
     assert(rewrite_msg == nullptr);
-    GRPCReceiveQueueRes res = received_message_queue->grpc_recv_queue->push(msg);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (res == GRPCReceiveQueueRes::OK)
-        {
-            if (!writeMessageToFineGrainChannels(msg))
-                res = GRPCReceiveQueueRes::CANCELLED;
-        }
-    }
+
+    GRPCReceiveQueueRes res = received_message_queue->pushToGRPCReceiveQueue<enable_fine_grained_shuffle>(msg);
+
     if (res == GRPCReceiveQueueRes::FULL)
         rewrite_msg = std::move(msg);
     return res;
@@ -78,17 +69,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(ReceivedMessagePtr & 
 template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(ReceivedMessagePtr & msg)
 {
-    auto res = received_message_queue->grpc_recv_queue->push(msg);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (res == GRPCReceiveQueueRes::OK)
-        {
-            /// if write to first queue success, then write the message to fine grain queues
-            if (!writeMessageToFineGrainChannels(rewrite_msg))
-                res = GRPCReceiveQueueRes::CANCELLED;
-        }
-    }
-    return res;
+    return received_message_queue->pushToGRPCReceiveQueue<enable_fine_grained_shuffle>(msg);
 }
 
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<true>();

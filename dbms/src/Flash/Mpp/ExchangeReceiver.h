@@ -190,7 +190,6 @@ private:
 
     inline ReceiveResult toReceiveResult(MPMCQueueResult result, ReceivedMessagePtr && recv_msg);
 
-    void prepareReceivedMessageQueue();
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
 

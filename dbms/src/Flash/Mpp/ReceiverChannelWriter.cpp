@@ -28,23 +28,7 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
         return true;
     }
 
-    std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;
-    if constexpr (is_force)
-        write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return received_message_queue->msg_channel->forcePush(recv_msg);
-        };
-    else
-        write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return received_message_queue->msg_channel->push(recv_msg);
-        };
-
-    bool success = write_func(received_message) == MPMCQueueResult::OK;
-    injectFailPointReceiverPushFail(success, mode);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (success)
-            success = writeMessageToFineGrainChannels(received_message);
-    }
+    auto success = received_message_queue->push<is_force, enable_fine_grained_shuffle>(received_message, mode);
 
     if (likely(success))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
@@ -54,7 +38,7 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
 
 bool ReceiverChannelWriter::isWritable() const
 {
-    return received_message_queue->msg_channel->isFull();
+    return received_message_queue->isWritable();
 }
 
 template bool ReceiverChannelWriter::write<true, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);

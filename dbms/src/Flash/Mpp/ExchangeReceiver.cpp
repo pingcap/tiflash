@@ -340,7 +340,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        prepareReceivedMessageQueue();
+        received_message_queue.init(async_wait_rewrite_queue, exc_log, max_buffer_size, enable_fine_grained_shuffle_flag, output_stream_count);
         if (isReceiverForTiFlashStorage())
             rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
 
@@ -434,19 +434,6 @@ void ExchangeReceiverBase<RPCContext>::waitAsyncConnectionDone()
 {
     for (auto & handler_ptr : async_handler_ptrs)
         handler_ptr->wait();
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::prepareReceivedMessageQueue()
-{
-    received_message_queue.msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
-    received_message_queue.grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(received_message_queue.msg_channel, async_wait_rewrite_queue, exc_log);
-    if (enable_fine_grained_shuffle_flag)
-    {
-        for (size_t i = 0; i < output_stream_count; ++i)
-            /// these are unbounded queues
-            received_message_queue.msg_channels_for_fine_grained_shuffle.push_back(std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
-    }
 }
 
 template <typename RPCContext>

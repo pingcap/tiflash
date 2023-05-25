@@ -16,7 +16,6 @@
 
 #include <Common/FailPoint.h>
 #include <Common/LooseBoundedMPMCQueue.h>
-#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
@@ -24,12 +23,12 @@
 
 namespace DB
 {
-namespace FailPoints
+enum class ReceiverMode
 {
-extern const char random_receiver_local_msg_push_failure_failpoint[];
-extern const char random_receiver_sync_msg_push_failure_failpoint[];
-extern const char random_receiver_async_msg_push_failure_failpoint[];
-} // namespace FailPoints
+    Local = 0,
+    Sync,
+    Async
+};
 
 struct ReceivedMessage
 {
@@ -67,7 +66,7 @@ struct ReceivedMessage
 using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
 using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
-struct ReceivedMessageQueue
+class ReceivedMessageQueue
 {
     /// msg_channel is a bounded queue that saves the received messages
     /// msg_channels_for_fine_grained_shuffle is multiple unbounded queues that saves fine grained received messages
@@ -82,47 +81,23 @@ struct ReceivedMessageQueue
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
     std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
+    size_t fine_grained_channel_size;
+    LoggerPtr log;
+
+    bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
+    bool writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode);
+
+public:
     template <bool need_wait, bool fine_grained_shuffle>
-    std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id)
-    {
-        MPMCQueueResult res;
-        ReceivedMessagePtr recv_msg;
-        if constexpr (fine_grained_shuffle)
-        {
-            if constexpr (need_wait)
-            {
-                res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
-            }
-            else
-            {
-                res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
-            }
-            if (recv_msg != nullptr)
-            {
-                if (recv_msg->remaining_consumer->fetch_sub(1) == 1)
-                {
-                    /// if there is no consumer, then pop it from original queue
-                    ReceivedMessagePtr original_msg;
-                    auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
-                    assert(pop_result != MPMCQueueResult::EMPTY);
-                    if (original_msg != nullptr)
-                        assert(*original_msg->remaining_consumer == 0);
-                }
-            }
-        }
-        else
-        {
-            if constexpr (need_wait)
-            {
-                res = grpc_recv_queue->pop(recv_msg);
-            }
-            else
-            {
-                res = grpc_recv_queue->tryPop(recv_msg);
-            }
-        }
-        return {res, recv_msg};
-    }
+    std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id);
+
+    template <bool is_force, bool enable_fine_grained_shuffle>
+    bool push(ReceivedMessagePtr & received_message, ReceiverMode mode);
+
+    template <bool enable_fine_grained_shuffle>
+    GRPCReceiveQueueRes pushToGRPCReceiveQueue(ReceivedMessagePtr & received_message);
+
+    void init(AsyncRequestHandlerWaitQueuePtr & conn_wait_queue, const LoggerPtr & log_, size_t max_buffer_size, bool enable_fine_grained, size_t fine_grained_stream_size);
 
     void finish()
     {
@@ -136,8 +111,13 @@ struct ReceivedMessageQueue
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
             channel->cancel();
     }
-    void init()
+    size_t getFineGrainedStreamSize() const
     {
+        return fine_grained_channel_size;
+    }
+    bool isWritable() const
+    {
+        return msg_channel->isFull();
     }
 };
 } // namespace DB

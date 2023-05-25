@@ -25,20 +25,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_receiver_local_msg_push_failure_failpoint[];
-extern const char random_receiver_sync_msg_push_failure_failpoint[];
-extern const char random_receiver_async_msg_push_failure_failpoint[];
-} // namespace FailPoints
-
-enum class ReceiverMode
-{
-    Local = 0,
-    Sync,
-    Async
-};
-
 namespace ExchangeReceiverMetric
 {
 inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
@@ -66,15 +52,13 @@ ReceivedMessagePtr toReceivedMessage(
     bool for_fine_grained_shuffle,
     size_t fine_grained_consumer_size);
 
-void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode);
-
 class ReceiverChannelBase
 {
 public:
     ReceiverChannelBase(ReceivedMessageQueue * received_message_queue_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
         : data_size_in_queue(data_size_in_queue_)
         , received_message_queue(received_message_queue_)
-        , fine_grained_channel_size(received_message_queue->msg_channels_for_fine_grained_shuffle.size())
+        , fine_grained_channel_size(received_message_queue->getFineGrainedStreamSize())
         , req_info(req_info_)
         , log(log_)
         , mode(mode_)
@@ -83,9 +67,6 @@ public:
     ~ReceiverChannelBase() = default;
 
 protected:
-    bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
-    bool writeMessageToFineGrainChannels(ReceivedMessagePtr original_message);
-
     std::atomic<Int64> * data_size_in_queue;
     ReceivedMessageQueue * received_message_queue = nullptr;
     size_t fine_grained_channel_size;
