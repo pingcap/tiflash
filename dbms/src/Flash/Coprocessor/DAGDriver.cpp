@@ -90,6 +90,7 @@ try
 {
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
+    dag_context.collect_execution_summaries = true;
 
     BlockIO streams = executeQuery(context, internal);
     if (!streams.in || streams.out)
@@ -171,12 +172,45 @@ try
     {
         LOG_DEBUG(
             log,
-            "{} dag request without encode cost: {} seconds, produce {} rows, {} bytes and with peak_memory_usage {} bytes.",
+            "{} dag request with tso {} without encode cost: {} seconds, produce {} rows, {} bytes and with peak_memory_usage {} bytes.",
             batch ? "batch cop" : "cop",
+            context.getSettingsRef().read_tso,
             p_stream->getProfileInfo().execution_time / (double)1000000000,
             p_stream->getProfileInfo().rows,
             p_stream->getProfileInfo().bytes,
             peak_memory);
+
+        const auto & profile_streams_map = dag_context.getProfileStreamsMap();
+        for (const auto & entry : profile_streams_map)
+        {
+            size_t execution_time = 0;
+            size_t rows = 0;
+            size_t bytes = 0;
+            size_t blocks = 0;
+            size_t concurrency = 0;
+            for (const auto & stream_ptr : entry.second)
+            {
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
+                {
+                    execution_time = std::max(execution_time, p_stream->getProfileInfo().execution_time);
+                    rows += p_stream->getProfileInfo().rows;
+                    bytes += p_stream->getProfileInfo().bytes;
+                    blocks += p_stream->getProfileInfo().blocks;
+                }
+                concurrency++;
+            }
+            LOG_DEBUG(
+                log,
+                "the executor {} in {} dag request with tso {} cost: {} seconds, produce {} rows, {} bytes, {} blocks and with concurrency {}.",
+                entry.first,
+                batch ? "batch cop" : "cop",
+                context.getSettingsRef().read_tso,
+                execution_time / (double)1000000000,
+                rows,
+                bytes,
+                blocks,
+                concurrency);
+        }
 
         if constexpr (!batch)
         {
