@@ -22,7 +22,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
-#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {
@@ -72,11 +71,22 @@ void PhysicalTopN::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
     executeExpression(exec_status, group_builder, before_sort_actions, log);
 
-    executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
+    // If the `limit` is very large, using a `final sort` can avoid outputting excessively large amounts of data.
+    // TODO find a suitable threshold is necessary; 10000 is just a value picked without much consideration.
+    if (group_builder.concurrency() * limit <= 10000)
+    {
+        executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
+    }
+    else
+    {
+        executeFinalSort(exec_status, group_builder, order_descr, limit, context, log);
+        if (is_restore_concurrency)
+            restoreConcurrency(exec_status, group_builder, concurrency, log);
+    }
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)
