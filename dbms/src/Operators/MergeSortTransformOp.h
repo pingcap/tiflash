@@ -21,11 +21,10 @@
 
 namespace DB
 {
-/// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
-class LocalSortTransformOp : public TransformOp
+class MergeSortTransformOp : public TransformOp
 {
 public:
-    LocalSortTransformOp(
+    MergeSortTransformOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id_,
         const SortDescription & order_desc_,
@@ -43,7 +42,7 @@ public:
 
     String getName() const override
     {
-        return "LocalSortTransformOp";
+        return "MergeSortTransformOp";
     }
 
     void operatePrefix() override;
@@ -83,7 +82,7 @@ private:
      *                      ▼
      * MERGE/RESTORE◄────PARTIAL
      */
-    enum class LocalSortStatus
+    enum class MergeSortStatus
     {
         // Accept the block and execute partial sort
         PARTIAL,
@@ -94,7 +93,7 @@ private:
         // merge the blocks from partial sort in disk
         RESTORE,
     };
-    LocalSortStatus status{LocalSortStatus::PARTIAL};
+    MergeSortStatus status{MergeSortStatus::PARTIAL};
 
     /// Before operation, will remove constant columns from blocks. And after, place constant columns back.
     /// (to avoid excessive virtual function calls and because constants cannot be serialized in Native format for temporary files)
@@ -135,4 +134,5 @@ private:
     };
     RestoredResult restored_result;
 };
+
 } // namespace DB
