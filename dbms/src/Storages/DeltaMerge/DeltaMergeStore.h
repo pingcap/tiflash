@@ -671,8 +671,8 @@ private:
 
     bool handleBackgroundTask(bool heavy);
 
-    void restoreStableFiles();
-    void restoreStableFilesFromLocal();
+    void restoreStableFiles() const;
+    void restoreStableFilesFromLocal() const;
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,

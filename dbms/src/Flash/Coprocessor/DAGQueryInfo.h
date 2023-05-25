@@ -19,7 +19,6 @@
 #include <google/protobuf/repeated_ptr_field.h>
 #include <tipb/expression.pb.h>
 
-#include <unordered_map>
 
 namespace DB
 {
@@ -37,6 +36,7 @@ struct DAGQueryInfo
         , pushed_down_filters(pushed_down_filters_)
         , timezone_info(timezone_info_){};
 
+    // A light copy of tipb::TableScan::columns from TiDB, some attributes are empty, like name.
     const ColumnInfos & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
