@@ -31,11 +31,11 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
     std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;
     if constexpr (is_force)
         write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return received_message_queue->msg_channel->forcePush(std::move(recv_msg));
+            return received_message_queue->msg_channel->forcePush(recv_msg);
         };
     else
         write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return received_message_queue->msg_channel->push(std::move(recv_msg));
+            return received_message_queue->msg_channel->push(recv_msg);
         };
 
     bool success = write_func(received_message) == MPMCQueueResult::OK;
