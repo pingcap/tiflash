@@ -157,8 +157,6 @@ struct WindowTransformAction
 
     bool onlyHaveRowNumber();
 
-    bool onlyHaveRowNumberAndRank();
-
     Int64 getPartitionEndRow(size_t block_rows);
 
     void appendInfo(FmtBuffer & buffer) const;
@@ -236,7 +234,6 @@ struct WindowTransformAction
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
-    bool only_have_pure_window = false;
 };
 
 class WindowBlockInputStream : public IProfilingBlockInputStream

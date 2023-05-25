@@ -23,35 +23,14 @@
 
 namespace DB
 {
-//#define ADD_TEST_DEBUG_LOG_FMT
+// #define ADD_TEST_DEBUG_LOG_FMT
 
 #ifdef ADD_TEST_DEBUG_LOG_FMT
 
 static Poco::Logger * global_logger_for_test = nullptr;
 static std::mutex global_logger_mutex;
-#define STDOUT_TEST_LOG_FMT(...)                                                \
-    do                                                                          \
-    {                                                                           \
-        std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) > 1 \
-            ? LogFmtDetails::toCheckedFmtStr(                                   \
-                FMT_STRING(LOG_GET_FIRST_ARG(__VA_ARGS__)),                     \
-                __VA_ARGS__)                                                    \
-            : LogFmtDetails::firstArg(__VA_ARGS__);                             \
-        {                                                                       \
-            auto _ = std::lock_guard(global_logger_mutex);                      \
-            std::cout << fmt::format(                                           \
-                "[{}][{}:{}][{}]",                                              \
-                Clock::now(),                                                   \
-                &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)],          \
-                __LINE__,                                                       \
-                formatted_message)                                              \
-                      << std::endl;                                             \
-        }                                                                       \
-    } while (false)
 
-//#define TEST_LOG_FMT(...) LOG_ERROR(global_logger_for_test, __VA_ARGS__)
-
-#define TEST_LOG_FMT(...) STDOUT_TEST_LOG_FMT(__VA_ARGS__)
+#define TEST_LOG_FMT(...) LOG_ERROR(global_logger_for_test, __VA_ARGS__)
 
 void F_TEST_LOG_FMT(const std::string & s)
 {
@@ -451,11 +430,10 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
             else
             {
                 TEST_LOG_FMT(
-                    "poll ReadIndexElement failed for region {}, time cost {}, timeout {}, start time {}",
+                    "poll ReadIndexElement failed for region {}, time cost {}, timeout {}",
                     region_id,
-                    SteadyClock::now() - start_time,
-                    timeout,
-                    start_time);
+                    std::chrono::duration<double, std::milli>(SteadyClock::now() - start_time).count(),
+                    timeout);
             }
 
             if (clean_task)
@@ -756,7 +734,7 @@ ReadIndexWorker::ReadIndexWorker(
 
 bool ReadIndexWorker::lastRunTimeout(SteadyClock::duration timeout) const
 {
-    TEST_LOG_FMT("worker {}, last run time {}, timeout {}", getID(), last_run_time.load(std::memory_order_relaxed), timeout);
+    TEST_LOG_FMT("worker {}, last run time {}, timeout {}", getID(), last_run_time.load(std::memory_order_relaxed).time_since_epoch().count(), std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
     return last_run_time.load(std::memory_order_relaxed) + timeout < SteadyClock::now();
 }
 
