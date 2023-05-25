@@ -152,12 +152,12 @@ struct MockRaftStoreProxy : MutexLockWrap
     }
 
     MockProxyRegionPtr getRegion(uint64_t id);
-
     MockProxyRegionPtr doGetRegion(uint64_t id);
 
     MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
 
     void init(size_t region_num);
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
 
     size_t size() const;
 

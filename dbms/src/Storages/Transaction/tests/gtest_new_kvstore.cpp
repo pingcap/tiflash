@@ -305,10 +305,7 @@ static void validate(KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_
 {
     auto kvr1 = kvs.getRegion(region_id);
     auto r1 = proxy_instance->getRegion(region_id);
-    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-        RaftStoreProxyPtr{proxy_instance.get()}));
-    // Bind ffi to MockSSTReader.
-    proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+    auto proxy_helper = proxy_instance->generateProxyHelper();
     auto ssts = cf_data.ssts();
     ASSERT_EQ(ssts.size(), sst_size);
     auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) -> std::unique_ptr<MonoSSTReader> {
@@ -337,6 +334,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshotV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     {
         UInt64 region_id = 1;
         TableID table_id;
@@ -511,6 +509,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshotV2)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
     TableID table_id;
     {

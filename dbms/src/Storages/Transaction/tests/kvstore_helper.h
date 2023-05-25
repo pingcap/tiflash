@@ -82,8 +82,7 @@ public:
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
-        proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-            RaftStoreProxyPtr{proxy_instance.get()}));
+        proxy_helper = proxy_instance->generateProxyHelper();
         kvstore->restore(*path_pool, proxy_helper.get());
         {
             auto store = metapb::Store{};

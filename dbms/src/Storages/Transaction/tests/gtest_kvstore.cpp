@@ -850,6 +850,7 @@ try
     auto table_id = 101;
     auto region_id = 19;
     auto region_id_str = std::to_string(region_id);
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
 
     auto settings_backup = ctx.getGlobalContext().getSettings();
     ctx.getGlobalContext().getSettingsRef().dt_segment_limit_rows = 50;
@@ -897,8 +898,6 @@ try
             },
         };
         {
-            RegionMockTest mock_test(kvstore.get(), region);
-
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,
@@ -933,8 +932,6 @@ try
             },
         };
         {
-            RegionMockTest mock_test(kvstore.get(), region);
-
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,
@@ -983,8 +980,8 @@ try
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
-    // In this test we only deal with meta,
-    ASSERT_EQ(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    // In this test we only deal with meta though,
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     {
         auto region_id = 19;
         auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
