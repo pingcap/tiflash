@@ -457,14 +457,14 @@ void ExchangeReceiverBase<RPCContext>::cancel()
         if (isReceiverForTiFlashStorage())
             rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
     }
-    cancelAllMsgChannels();
+    cancelReceivedQueue();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::close()
 {
     setEndState(ExchangeReceiverState::CLOSED);
-    finishAllMsgChannels();
+    finishReceivedQueue();
 }
 
 template <typename RPCContext>
@@ -1063,7 +1063,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     {
         auto log_level = meet_error ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(exc_log, log_level, "Finish receiver channels, meet error: {}, error message: {}", meet_error, first_err_msg);
-        finishAllMsgChannels();
+        finishReceivedQueue();
     }
 }
 
@@ -1077,25 +1077,15 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
+void ExchangeReceiverBase<RPCContext>::finishReceivedQueue()
 {
-    received_message_queue.grpc_recv_queue->finish();
-    if (enable_fine_grained_shuffle_flag)
-    {
-        for (auto & channel : received_message_queue.msg_channels_for_fine_grained_shuffle)
-            channel->finish();
-    }
+    received_message_queue.finish();
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::cancelAllMsgChannels()
+void ExchangeReceiverBase<RPCContext>::cancelReceivedQueue()
 {
-    received_message_queue.grpc_recv_queue->cancel();
-    if (enable_fine_grained_shuffle_flag)
-    {
-        for (auto & channel : received_message_queue.msg_channels_for_fine_grained_shuffle)
-            channel->cancel();
-    }
+    received_message_queue.cancel();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

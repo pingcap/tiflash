@@ -179,8 +179,8 @@ private:
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
     void waitAsyncConnectionDone();
 
-    void finishAllMsgChannels();
-    void cancelAllMsgChannels();
+    void finishReceivedQueue();
+    void cancelReceivedQueue();
 
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,

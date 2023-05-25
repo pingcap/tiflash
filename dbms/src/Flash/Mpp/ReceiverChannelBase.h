@@ -96,6 +96,16 @@ using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<Rece
 
 struct ReceivedMessageQueue
 {
+    /// msg_channel is a bounded queue that saves the received messages
+    /// msg_channels_for_fine_grained_shuffle is multiple unbounded queues that saves fine grained received messages
+    /// all the received messages in msg_channels_for_fine_grained_shuffle must be saved in msg_channel first, so the
+    /// total size/memory of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle
+    /// is unbounded queues
+    /// for non fine grained shuffle, all the read/read to the queue is based on msg_channel/grpc_recv_queue
+    /// for fine grained shuffle
+    /// write: the channel writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
+    /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumer` in msg, if `remaining_consumer` is 0, then
+    ///       remove the msg from msg_channel/grpc_recv_queue
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
     std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
@@ -138,6 +148,18 @@ struct ReceivedMessageQueue
             }
         }
         return res;
+    }
+    void finish()
+    {
+        grpc_recv_queue->finish();
+        for (auto & channel : msg_channels_for_fine_grained_shuffle)
+            channel->finish();
+    }
+    void cancel()
+    {
+        grpc_recv_queue->cancel();
+        for (auto & channel : msg_channels_for_fine_grained_shuffle)
+            channel->cancel();
     }
 };
 
