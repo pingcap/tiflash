@@ -659,7 +659,8 @@ public:
                                                    const RowKeyRanges & read_ranges,
                                                    const RSOperatorPtr & filter,
                                                    UInt64 max_version,
-                                                   size_t expected_block_size);
+                                                   size_t expected_block_size,
+                                                   const std::vector<IdSetPtr> & read_packs = {});
     BlockInputStreamPtr getBitmapFilterInputStream(const DMContext & dm_context,
                                                    const ColumnDefines & columns_to_read,
                                                    const SegmentSnapshotPtr & segment_snap,
@@ -675,7 +676,9 @@ public:
                                                      const RowKeyRanges & data_ranges,
                                                      const PushDownFilterPtr & filter,
                                                      UInt64 max_version,
-                                                     size_t expected_block_size);
+                                                     size_t expected_block_size,
+                                                     const std::vector<IdSetPtr> & read_packs = {},
+                                                     const boost::dynamic_bitset<> & use_packs = {});
 
 
 private:

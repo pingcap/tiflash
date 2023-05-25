@@ -44,6 +44,7 @@ public:
         size_t stable_rows_,
         String filter_expression_,
         FilterExpressionCache & filter_expression_cache_,
+        const boost::dynamic_bitset<> & use_packs,
         const String & req_id_);
 
     String getName() const override { return NAME; }
@@ -72,6 +73,8 @@ private:
     BitmapFilterPtr cache_bitmap;
     // The cache of push down filter expression.
     FilterExpressionCache & filter_expression_cache;
+    // The bitset of the packs to read.
+    const boost::dynamic_bitset<> & use_packs;
 
     const LoggerPtr log;
 };

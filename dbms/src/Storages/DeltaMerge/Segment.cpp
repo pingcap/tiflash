@@ -2684,7 +2684,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         const RowKeyRanges & read_ranges,
                                                         const RSOperatorPtr & filter,
                                                         UInt64 max_version,
-                                                        size_t expected_block_size)
+                                                        size_t expected_block_size,
+                                                        const std::vector<IdSetPtr> & read_packs)
 {
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
@@ -2730,7 +2731,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
         expected_block_size,
         enable_handle_clean_read,
         is_fast_scan,
-        enable_del_clean_read);
+        enable_del_clean_read,
+        read_packs);
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
     SkippableBlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(
@@ -2755,7 +2757,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
                                                           const RowKeyRanges & data_ranges,
                                                           const PushDownFilterPtr & filter,
                                                           UInt64 max_version,
-                                                          size_t expected_block_size)
+                                                          size_t expected_block_size,
+                                                          const std::vector<IdSetPtr> & read_packs,
+                                                          const boost::dynamic_bitset<> & use_packs)
 {
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
@@ -2773,7 +2777,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         expected_block_size,
         enable_handle_clean_read,
         is_fast_scan,
-        enable_del_clean_read);
+        enable_del_clean_read,
+        read_packs);
 
     auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
     SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
@@ -2823,7 +2828,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         expected_block_size,
         enable_handle_clean_read,
         is_fast_scan,
-        enable_del_clean_read);
+        enable_del_clean_read,
+        read_packs);
 
     auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
@@ -2849,6 +2855,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->stable->getDMFilesRows(),
         filter->before_where->dumpActions(),
         segment_snap->stable->getFilterExpressionCache(),
+        use_packs,
         dm_context.tracing_id);
 }
 
@@ -2886,6 +2893,36 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         max_version,
         expected_block_size);
 
+    boost::dynamic_bitset<> stable_use_packs;
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    std::vector<size_t> prefix_pack_sizes;
+    prefix_pack_sizes.reserve(dmfiles.size());
+    size_t preceded_pack_sizes = 0;
+    {
+        for (const auto & dmfile : dmfiles)
+        {
+            DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+                dmfile,
+                dm_context.db_context.getMinMaxIndexCache(),
+                /*set_cache_if_miss*/ true,
+                read_ranges,
+                filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+                /*read_pack*/ {},
+                dm_context.db_context.getFileProvider(),
+                dm_context.db_context.getReadLimiter(),
+                dm_context.scan_context,
+                dm_context.tracing_id);
+            auto use_packs = pack_filter.getUsePacksConst();
+            stable_use_packs.resize(stable_use_packs.size() + use_packs.size());
+            stable_use_packs <<= use_packs.size();
+            use_packs.resize(stable_use_packs.size());
+            stable_use_packs |= use_packs;
+            const auto & pack_stats = dmfile->getPackStats();
+            prefix_pack_sizes.push_back(preceded_pack_sizes + pack_stats.size());
+            preceded_pack_sizes += pack_stats.size();
+        }
+    }
+
     if (filter && filter->before_where)
     {
         // if has filter conditions pushed down, use late materialization
@@ -2910,11 +2947,79 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         }
         LOG_DEBUG(log, "Cache hit for filter expression: {}, stable rows: {}, skipped rows: {}, cache size: {}", filter_expression, cache_result->second->size(), cache_result->second->size() - cache_result->second->count(), filter_expression_cache.size());
         // The size of the cache should be equal to the number of rows in the stable layer of the segment
-        RUNTIME_CHECK(cache_result->second->size() == segment_snap->stable->getDMFilesRows());
+        RUNTIME_CHECK(cache_result->second->size() == segment_snap->stable->getDMFilesRows() && cache_result->first.size() == stable_use_packs.size());
         // cache_result & bitmap_filter[0:stable_rows] = bitmap_filter[0:stable_rows]
         cache_result->second->rangeAnd(bitmap_filter);
         // TODO: call runOptimize twice here, should be optimized
         bitmap_filter->runOptimize();
+
+        BlockInputStreamPtr cached_stream;
+        BlockInputStreamPtr not_cached_stream;
+
+        auto cached_packs = cache_result->first & stable_use_packs;
+        // getBitmapFilterInputStream
+        {
+            std::vector<IdSetPtr> read_packs_sets;
+            read_packs_sets.reserve(dmfiles.size());
+            size_t prefix = 0;
+            for (const auto prefix_pack_size : prefix_pack_sizes)
+            {
+                auto read_pack_set = std::make_shared<IdSet>();
+                for (size_t j = prefix; j < prefix_pack_size; ++j)
+                {
+                    if (cached_packs.test(j))
+                    {
+                        read_pack_set->insert(j - prefix);
+                    }
+                }
+                read_packs_sets.push_back(read_pack_set);
+                prefix = prefix_pack_size;
+            }
+
+            cached_stream = getBitmapFilterInputStream(
+                std::move(bitmap_filter),
+                segment_snap,
+                dm_context,
+                columns_to_read,
+                real_ranges,
+                filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+                max_version,
+                expected_block_size,
+                read_packs_sets);
+        }
+        auto not_cached_packs = stable_use_packs - cached_packs;
+        // getLateMaterializationStream
+        {
+            std::vector<IdSetPtr> read_packs_sets;
+            read_packs_sets.reserve(dmfiles.size());
+            size_t prefix = 0;
+            for (const auto prefix_pack_size : prefix_pack_sizes)
+            {
+                auto read_pack_set = std::make_shared<IdSet>();
+                for (size_t j = prefix; j < prefix_pack_size; ++j)
+                {
+                    if (not_cached_packs.test(j))
+                    {
+                        read_pack_set->insert(j - prefix);
+                    }
+                }
+                read_packs_sets.push_back(read_pack_set);
+                prefix = prefix_pack_size;
+            }
+
+            not_cached_stream = getLateMaterializationStream(
+                std::move(bitmap_filter),
+                dm_context,
+                columns_to_read,
+                segment_snap,
+                real_ranges,
+                filter,
+                max_version,
+                expected_block_size,
+                read_packs_sets,
+                not_cached_packs);
+        }
+        return std::make_shared<ConcatBlockInputStream>(std::vector{cached_stream, not_cached_stream}, dm_context.tracing_id);
     }
 
     return getBitmapFilterInputStream(

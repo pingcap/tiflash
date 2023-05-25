@@ -31,6 +31,7 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     size_t stable_rows_,
     String filter_expression_,
     FilterExpressionCache & filter_expression_cache_,
+    const boost::dynamic_bitset<> & use_packs,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
     , filter_column_name(filter_column_name_)
@@ -39,8 +40,9 @@ LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     , bitmap_filter(bitmap_filter_)
     , stable_rows(stable_rows_)
     , filter_expression(std::move(filter_expression_))
-    , cache_bitmap(std::make_shared<BitmapFilter>(stable_rows, true))
+    , cache_bitmap(std::make_shared<BitmapFilter>(stable_rows, false))
     , filter_expression_cache(filter_expression_cache_)
+    , use_packs(use_packs)
     , log(Logger::get(NAME, req_id_))
 {}
 
@@ -173,8 +175,7 @@ void LateMaterializationBlockInputStream::readSuffixImpl()
     filter_column_stream->readSuffix();
     rest_column_stream->readSuffix();
     // Update filter_expression_cache
-    cache_bitmap->runOptimize();
-    filter_expression_cache.set(filter_expression, cache_bitmap);
+    filter_expression_cache.set(filter_expression, {use_packs, cache_bitmap});
     LOG_DEBUG(log, "Late materialization readSuffix, filter_expression: {}, cache_bitmap: {}/{}", filter_expression, cache_bitmap->count(), cache_bitmap->size());
 }
 

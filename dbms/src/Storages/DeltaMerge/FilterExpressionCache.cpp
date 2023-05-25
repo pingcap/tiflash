@@ -44,6 +44,7 @@ void FilterExpressionCache::set(const Key & filter_expression, const Value & res
         auto & [use_packs, bitmap_filter] = it->second->second;
         use_packs |= result.first;
         *bitmap_filter |= *result.second;
+        bitmap_filter->runOptimize();
         return;
     }
 

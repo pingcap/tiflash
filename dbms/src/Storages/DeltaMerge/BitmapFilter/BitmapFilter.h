@@ -40,7 +40,7 @@ public:
     // filter & f -> f
     void rangeAnd(BitmapFilterPtr & f) const;
     // filter | f -> filter
-    BitmapFilter& operator|=(const BitmapFilter& b);
+    BitmapFilter & operator|=(const BitmapFilter & b);
 
     void runOptimize();
 

@@ -360,12 +360,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            size_t use_packs_count = 0;
-            for (auto is_used : use_packs)
-            {
-                if (is_used)
-                    use_packs_count += 1;
-            }
+            size_t use_packs_count = use_packs.count();
             if (unlikely((size_t)new_pack_properties.property_size() != use_packs_count))
             {
                 throw Exception(

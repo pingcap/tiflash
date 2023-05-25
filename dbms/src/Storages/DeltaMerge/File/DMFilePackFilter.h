@@ -26,6 +26,8 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <boost/dynamic_bitset.hpp>
+
 namespace ProfileEvents
 {
 extern const Event DMFileFilterNoFilter;
@@ -62,8 +64,8 @@ public:
     }
 
     inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
-    inline const std::vector<UInt8> & getUsePacksConst() const { return use_packs; }
-    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
+    inline const boost::dynamic_bitset<> & getUsePacksConst() const { return use_packs; }
+    inline boost::dynamic_bitset<> & getUsePacks() { return use_packs; }
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -142,10 +144,7 @@ private:
             std::vector<RSOperatorPtr> handle_filters;
             for (auto & rowkey_range : rowkey_ranges)
                 handle_filters.emplace_back(toFilter(rowkey_range));
-            for (size_t i = 0; i < pack_count; ++i)
-            {
-                handle_res[i] = RSResult::None;
-            }
+            std::fill(handle_res.begin(), handle_res.end(), RSResult::None);
             for (size_t i = 0; i < pack_count; ++i)
             {
                 for (auto & handle_filter : handle_filters)
@@ -159,32 +158,25 @@ private:
 
         ProfileEvents::increment(ProfileEvents::DMFileFilterNoFilter, pack_count);
 
-        size_t after_pk = 0;
-        size_t after_read_packs = 0;
-        size_t after_filter = 0;
-
         /// Check packs by handle_res
         for (size_t i = 0; i < pack_count; ++i)
         {
-            use_packs[i] = handle_res[i] != None;
+            use_packs[i] = (handle_res[i] != RSResult::None);
         }
 
-        for (auto u : use_packs)
-            after_pk += u;
+        size_t after_pk = use_packs.count();
 
         /// Check packs by read_packs
         if (read_packs)
         {
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (static_cast<bool>(read_packs->contains(i)));
+                use_packs[i] = (use_packs[i]) && (read_packs->contains(i));
             }
         }
 
-        for (auto u : use_packs)
-            after_read_packs += u;
+        size_t after_read_packs = use_packs.count();
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
-
 
         /// Check packs by filter in where clause
         if (filter)
@@ -198,12 +190,11 @@ private:
 
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
+                use_packs[i] = (use_packs[i]) && (filter->roughCheck(i, param) != None);
             }
         }
 
-        for (auto u : use_packs)
-            after_filter += u;
+        size_t after_filter = use_packs.count();
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
         Float64 filter_rate = 0.0;
@@ -283,7 +274,7 @@ private:
 
     void tryLoadIndex(const ColId col_id)
     {
-        if (param.indexes.count(col_id))
+        if (param.indexes.contains(col_id))
             return;
 
         if (!dmfile->isColIndexExist(col_id))
@@ -307,7 +298,7 @@ private:
     RSCheckParam param;
 
     std::vector<RSResult> handle_res;
-    std::vector<UInt8> use_packs;
+    boost::dynamic_bitset<> use_packs;
 
     const ScanContextPtr scan_context;
 

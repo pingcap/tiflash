@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Segment.h>
+
 #include <functional>
 
 namespace DB::DM
@@ -120,7 +121,7 @@ void BitmapFilter::rangeAnd(BitmapFilterPtr & f) const
     }
 }
 
-BitmapFilter& BitmapFilter::operator|=(const BitmapFilter& b)
+BitmapFilter & BitmapFilter::operator|=(const BitmapFilter & b)
 {
     if (all_match)
     {
