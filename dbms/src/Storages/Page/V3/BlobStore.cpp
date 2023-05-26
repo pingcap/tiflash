@@ -993,6 +993,9 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
+                // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
+                // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
+                // TODO: avoid always truncate on empty BlobFile
                 if (unlikely(stat->sm_valid_rate != 0))
                 {
                     throw Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
