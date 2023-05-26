@@ -55,7 +55,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
-    // start mock proxy in other thread
+    // Start mock proxy in other thread
     std::atomic_bool over{false};
     auto proxy_runner = std::thread([&]() {
         proxy_instance->testRunNormal(over);

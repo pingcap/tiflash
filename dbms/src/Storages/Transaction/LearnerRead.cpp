@@ -108,8 +108,7 @@ public:
         }
         else
         {
-            regions_info = Base::RegionsQueryInfo();
-            regions_info_ptr = &*regions_info;
+            regions_info_ptr = &inner.regions_query_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
             // todo support partition table
             auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, logical_table_id);
@@ -228,6 +227,7 @@ LearnerReadSnapshot doLearnerRead(
                 }
             }
         }
+
         GET_METRIC(tiflash_stale_read_count).Increment(stats.num_stale_read);
         GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
 
@@ -457,6 +457,7 @@ void validateQueryInfo(
         if (auto iter = regions_snapshot.find(region_query_info.region_id); //
             iter == regions_snapshot.end() || iter->second != region)
         {
+            // If snapshot is applied during learner read, we should abort.
             status = RegionException::RegionReadStatus::NOT_FOUND;
         }
         else if (region->version() != region_query_info.version)

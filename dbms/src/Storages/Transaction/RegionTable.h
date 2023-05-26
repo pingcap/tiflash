@@ -204,6 +204,11 @@ public:
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
     UInt64 getSelfSafeTS(UInt64 region_id);
+    void debugSetContext(Context * new_context)
+    {
+        std::lock_guard lock(mutex);
+        context = new_context;
+    }
 
 private:
     friend class MockTiDB;
@@ -231,7 +236,7 @@ private:
 
     FlushThresholds flush_thresholds;
 
-    Context * const context;
+    Context * context;
 
     mutable std::mutex mutex;
     mutable std::shared_mutex rw_lock;

@@ -160,10 +160,12 @@ protected:
     std::string test_path;
 
     std::unique_ptr<PathPool> path_pool;
-    std::unique_ptr<KVStore> kvstore;
+    std::shared_ptr<KVStore> kvstore;
 
     std::unique_ptr<MockRaftStoreProxy> proxy_instance;
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
+
+    LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
 };
 } // namespace tests
 } // namespace DB

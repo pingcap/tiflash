@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Transaction/LearnerRead.h>
+
 #include "kvstore_helper.h"
 
 namespace DB
@@ -572,6 +574,96 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, LearnerRead)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    // ctx.getTMTContext().getRegionTable().debugSetContext(&ctx);
+    auto region_id = 1;
+    KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
+    initStorages();
+
+    ctx.getTMTContext().debugSetWaitIndexTimeout(1);
+    ctx.getTMTContext().setStatusRunning();
+    // Start mock proxy in other thread
+    std::atomic_bool over{false};
+    auto proxy_runner = std::thread([&]() {
+        proxy_instance->testRunNormal(over);
+    });
+    ASSERT_EQ(kvs.getProxyHelper(), proxy_helper.get());
+    kvs.initReadIndexWorkers(
+        []() {
+            return std::chrono::milliseconds(10);
+        },
+        1);
+    ASSERT_NE(kvs.read_index_worker_manager, nullptr);
+
+    kvs.asyncRunReadIndexWorkers();
+    SCOPE_EXIT({
+        kvs.stopReadIndexWorkers();
+    });
+
+    SCOPE_EXIT({
+        kvs.releaseReadIndexWorkers();
+        over = true;
+        proxy_instance->wakeNotifier();
+        proxy_runner.join();
+    });
+
+    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+    auto kvr1 = kvs.getRegion(region_id);
+    ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
+
+    auto [index, term] = proxy_instance->rawWrite(region_id, {RecordKVFormat::genKey(table_id, 3), RecordKVFormat::genKey(table_id, 3, 5), RecordKVFormat::genKey(table_id, 3, 8)}, {RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20), TiKVValue("value1"), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5)}, {
+                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
+                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
+                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
+                                                                                                                                                                                                                                                                                                                                                                                },
+                                                  {
+                                                      ColumnFamilyType::Lock,
+                                                      ColumnFamilyType::Default,
+                                                      ColumnFamilyType::Write,
+                                                  });
+    ASSERT_EQ(index, 6);
+    ASSERT_EQ(kvr1->appliedIndex(), 5);
+    ASSERT_EQ(term, 5);
+
+    auto mvcc_query_info = MvccQueryInfo(false, 10);
+    EXPECT_THROW([&] {
+        auto discard = doLearnerRead(
+            table_id,
+            mvcc_query_info,
+            false,
+            ctx,
+            log);
+        UNUSED(discard);
+    }(),
+                 RegionException);
+
+    // MockRaftStoreProxy::FailCond cond;
+    // proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+
+    auto r1 = proxy_instance->getRegion(region_id);
+    r1->updateAppliedIndex(index);
+    kvr1->setApplied(index, term);
+    auto regions_snapshot = doLearnerRead(
+        table_id,
+        mvcc_query_info,
+        false,
+        ctx,
+        log);
+    // 0 unavailable regions
+    ASSERT_EQ(regions_snapshot.size(), 1);
+    // validateQueryInfo(
+    //     mvcc_query_info,
+    //     regions_snapshot,
+    //     ctx.getTMTContext(),
+    //     log);
 }
 CATCH
 
