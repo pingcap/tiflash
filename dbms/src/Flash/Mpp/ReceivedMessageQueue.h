@@ -40,6 +40,7 @@ struct ReceivedMessage
     const String * resp_ptr;
     std::vector<const String *> chunks;
     /// used for fine grained shuffle
+    std::vector<std::vector<const String *>> fine_grained_chunks;
     std::shared_ptr<std::atomic<size_t>> remaining_consumer;
 
     // Constructor that move chunks.
@@ -78,14 +79,15 @@ class ReceivedMessageQueue
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumer` in msg, if `remaining_consumer` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
+    mutable std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
-    std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
+    std::mutex fine_grained_channel_mutex;
     size_t fine_grained_channel_size;
     LoggerPtr log;
 
-    bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
-    bool writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode);
+    //bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
+    //bool writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode);
 
 public:
     template <bool fine_grained_shuffle, bool need_wait>

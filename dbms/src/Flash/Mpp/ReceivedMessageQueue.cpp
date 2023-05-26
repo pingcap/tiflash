@@ -44,6 +44,7 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
 }
 } // namespace
 
+/*
 bool ReceivedMessageQueue::splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
 {
     if (packet.chunks().empty())
@@ -77,34 +78,41 @@ bool ReceivedMessageQueue::splitFineGrainedShufflePacketIntoChunks(size_t source
 bool ReceivedMessageQueue::writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode)
 {
     assert(fine_grained_channel_size > 0);
-    bool success = true;
     auto & packet = original_message->packet->packet;
     std::vector<std::vector<const String *>> chunks(msg_channels_for_fine_grained_shuffle.size());
     if (!splitFineGrainedShufflePacketIntoChunks(original_message->source_index, packet, chunks))
         return false;
     const auto * resp_ptr = original_message->resp_ptr;
     const auto * error_ptr = original_message->error_ptr;
-    for (size_t i = 0; i < fine_grained_channel_size && success; ++i)
+    std::vector<ReceivedMessagePtr> recv_msg_vector(fine_grained_channel_size, nullptr);
+    for (size_t i = 0; i < fine_grained_channel_size; ++i)
     {
-        auto recv_msg = std::make_shared<ReceivedMessage>(
+        recv_msg_vector[i] = std::make_shared<ReceivedMessage>(
             original_message->source_index,
             original_message->req_info,
             original_message->packet,
             error_ptr,
             resp_ptr,
             std::move(chunks[i]));
-        recv_msg->remaining_consumer = original_message->remaining_consumer;
-        auto push_result = msg_channels_for_fine_grained_shuffle[i]->tryPush(std::move(recv_msg));
-        /// the queue is unlimited, should never be full
-        assert(push_result != MPMCQueueResult::FULL);
-        success = push_result == MPMCQueueResult::OK;
-
-        injectFailPointReceiverPushFail(success, mode);
+        recv_msg_vector[i]->remaining_consumer = original_message->remaining_consumer;
         // Only the first ExchangeReceiverInputStream need to handle resp.
         resp_ptr = nullptr;
     }
-    return success;
+    //bool success = true;
+    ///// use lock to make sure the message sequence is
+    //std::unique_lock lock(fine_grained_channel_mutex);
+    //for (size_t i = 0; i < fine_grained_channel_size && success; ++i)
+    //{
+    //    auto push_result = msg_channels_for_fine_grained_shuffle[i]->tryPush(std::move(recv_msg_vector[i]));
+    //    /// the queue is unlimited, should never be full
+    //    assert(push_result != MPMCQueueResult::FULL);
+    //    success = push_result == MPMCQueueResult::OK;
+    //    injectFailPointReceiverPushFail(success, mode);
+    //}
+    //return success;
+    return true;
 }
+ */
 
 template <bool fine_grained_shuffle, bool need_wait>
 std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
@@ -162,11 +170,11 @@ bool ReceivedMessageQueue::pushToMessageChannel(ReceivedMessagePtr & received_me
             return msg_channel->push(recv_msg);
         };
     bool success = write_func(received_message) == MPMCQueueResult::OK;
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (success)
-            success = writeMessageToFineGrainChannels(received_message, mode);
-    }
+    //if constexpr (enable_fine_grained_shuffle)
+    //{
+    //    if (success)
+    //        success = writeMessageToFineGrainChannels(received_message, mode);
+    //}
 
     injectFailPointReceiverPushFail(success, mode);
     return success;
@@ -176,15 +184,15 @@ template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessagePtr & received_message)
 {
     auto res = grpc_recv_queue->push(received_message);
-    if constexpr (enable_fine_grained_shuffle)
-    {
-        if (res == GRPCReceiveQueueRes::OK)
-        {
-            /// if write to first queue success, then write the message to fine grain queues
-            if (!writeMessageToFineGrainChannels(received_message, ReceiverMode::Async))
-                res = GRPCReceiveQueueRes::CANCELLED;
-        }
-    }
+    //if constexpr (enable_fine_grained_shuffle)
+    //{
+    //    if (res == GRPCReceiveQueueRes::OK)
+    //    {
+    //        /// if write to first queue success, then write the message to fine grain queues
+    //        if (!writeMessageToFineGrainChannels(received_message, ReceiverMode::Async))
+    //            res = GRPCReceiveQueueRes::CANCELLED;
+    //    }
+    //}
     fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
     return res;
 }
@@ -198,14 +206,23 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     : fine_grained_channel_size(enable_fine_grained ? fine_grained_channel_size_ : 0)
     , log(log_)
 {
-    msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
-    grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
     if (enable_fine_grained)
     {
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
             msg_channels_for_fine_grained_shuffle.push_back(std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size, [this](ReceivedMessagePtr & element) {
+            for (size_t i = 0; i < fine_grained_channel_size; ++i)
+            {
+                msg_channels_for_fine_grained_shuffle[i]->tryPush(element);
+            }
+        });
     }
+    else
+    {
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
+    }
+    grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }
 
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, true>(size_t stream_id);

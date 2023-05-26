@@ -32,12 +32,20 @@ class LooseBoundedMPMCQueue
 {
 public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
+    using PushCallback = std::function<void(T & element)>;
 
     explicit LooseBoundedMPMCQueue(size_t capacity_)
         : capacity(std::max(1, capacity_))
         , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
         , get_auxiliary_memory_usage([](const T &) { return 0; })
     {}
+    LooseBoundedMPMCQueue(size_t capacity_, PushCallback && push_callback_)
+        : capacity(std::max(1, capacity_))
+        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
+        , get_auxiliary_memory_usage([](const T &) { return 0; })
+        , push_callback(std::move(push_callback_))
+    {}
+
     LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : capacity(std::max(1, capacity_))
         , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
@@ -187,6 +195,11 @@ public:
         return cancel_reason;
     }
 
+    void setPushCallback(PushCallback && push_callback_)
+    {
+        push_callback = std::move(push_callback_);
+    }
+
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
@@ -248,6 +261,8 @@ private:
         /// if we notify the writer if the queue is not full here, w3 can write immediately
         if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
             writer_head.notifyNext();
+        if (push_callback)
+            push_callback(queue.front().data);
     }
 
 private:
@@ -270,6 +285,7 @@ private:
     size_t capacity;
     const Int64 max_auxiliary_memory_usage;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
+    const PushCallback push_callback;
     Int64 current_auxiliary_memory_usage = 0;
 
     MPMCQueueDetail::WaitingNode reader_head;

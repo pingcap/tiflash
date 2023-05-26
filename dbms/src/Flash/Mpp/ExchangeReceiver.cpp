@@ -754,6 +754,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 
 template <typename RPCContext>
 DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
+    size_t stream_id,
     const ReceivedMessagePtr & recv_msg,
     std::queue<Block> & block_queue,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
@@ -761,7 +762,8 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     DecodeDetail detail;
 
-    if (recv_msg->chunks.empty())
+    auto & chunks = recv_msg->remaining_consumer == nullptr ? recv_msg->chunks : recv_msg->fine_grained_chunks[stream_id];
+    if (chunks.empty())
         return detail;
     auto & packet = recv_msg->packet->getPacket();
 
@@ -772,7 +774,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     {
     case DB::MPPDataPacketV0:
     {
-        for (const auto * chunk : recv_msg->chunks)
+        for (const auto * chunk : chunks)
         {
             auto result = decoder_ptr->decodeAndSquash(*chunk);
             if (!result)
@@ -787,7 +789,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     }
     case DB::MPPDataPacketV1:
     {
-        for (const auto * chunk : recv_msg->chunks)
+        for (const auto * chunk : chunks)
         {
             auto && result = decoder_ptr->decodeAndSquashV1(*chunk);
             if (!result || !result->rows())
@@ -857,6 +859,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
+    size_t stream_id,
     ReceiveResult & recv_result,
     std::queue<Block> & block_queue,
     const Block & header,
@@ -876,7 +879,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
         ExchangeReceiverMetric::subDataSizeMetric(
             data_size_in_queue,
             recv_result.recv_msg->packet->getPacket().ByteSizeLong());
-        return toDecodeResult(block_queue, header, recv_result.recv_msg, decoder_ptr);
+        return toDecodeResult(stream_id, block_queue, header, recv_result.recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:
         return handleUnnormalChannel(block_queue, decoder_ptr);
@@ -894,6 +897,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
 {
     auto recv_res = receive(stream_id);
     return toExchangeReceiveResult(
+        stream_id,
         recv_res,
         block_queue,
         header,
@@ -932,6 +936,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
+    size_t stream_id,
     std::queue<Block> & block_queue,
     const Block & header,
     const ReceivedMessagePtr & recv_msg,
@@ -959,7 +964,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
             }
             else if (!recv_msg->chunks.empty())
             {
-                result.decode_detail = decodeChunks(recv_msg, block_queue, decoder_ptr);
+                result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
             }
             return result;
         }
@@ -967,7 +972,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     else /// the non-last packets
     {
         auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
-        result.decode_detail = decodeChunks(recv_msg, block_queue, decoder_ptr);
+        result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
         return result;
     }
 }

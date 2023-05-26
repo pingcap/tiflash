@@ -126,6 +126,7 @@ public:
     ReceiveResult tryReceive(size_t stream_id);
 
     ExchangeReceiverResult toExchangeReceiveResult(
+        size_t stream_id,
         ReceiveResult & recv_result,
         std::queue<Block> & block_queue,
         const Block & header,
@@ -166,6 +167,7 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     DecodeDetail decodeChunks(
+        size_t stream_id,
         const ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
@@ -183,6 +185,7 @@ private:
     void cancelReceivedQueue();
 
     ExchangeReceiverResult toDecodeResult(
+        size_t stream_id,
         std::queue<Block> & block_queue,
         const Block & header,
         const ReceivedMessagePtr & recv_msg,
