@@ -1,4 +1,5 @@
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
@@ -191,7 +192,11 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
     auto res = ColumnFixedString::create(n);
 
     if (result_size_hint)
-        res->chars.reserve(result_size_hint > 0 ? result_size_hint * n : chars.size());
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res->chars.reserve(result_size_hint * n);
+    }
 
     const UInt8 * filt_pos = &filt[0];
     const UInt8 * filt_end = filt_pos + col_size;

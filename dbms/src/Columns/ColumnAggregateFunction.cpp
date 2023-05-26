@@ -1,5 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
@@ -129,7 +130,11 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     auto & res_data = res->getData();
 
     if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filter);
+        res_data.reserve(result_size_hint);
+    }
 
     for (size_t i = 0; i < size; ++i)
         if (filter[i])
