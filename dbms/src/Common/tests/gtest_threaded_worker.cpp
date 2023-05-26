@@ -121,9 +121,10 @@ TEST(ThreadedWorker, Finish2)
     Result r;
     for (int i = 0; i < 5; i++)
     {
+        w.result_queue->pop(r);
+
         ASSERT_TRUE(remainings.contains(r.first));
         remainings.erase(r.first);
-        w.result_queue->pop(r);
         ASSERT_EQ(r.first * 2, r.second);
     }
     ASSERT_TRUE(remainings.empty());
