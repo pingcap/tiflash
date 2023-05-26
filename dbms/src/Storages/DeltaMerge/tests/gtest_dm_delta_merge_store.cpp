@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+<<<<<<< HEAD
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
@@ -8,6 +9,9 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+=======
+#include <Common/SyncPoint/SyncPoint.h>
+>>>>>>> ad5201cb3e (test: Add tests case when deltaMergeBySplit + { flushCache | split } occurs simultaneously (#5454))
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -20,6 +24,8 @@
 #include <vector>
 
 #include "dm_basic_include.h"
+
+#include <future>
 
 namespace DB
 {
@@ -3293,6 +3299,123 @@ INSTANTIATE_TEST_CASE_P(TestMode, //
                         DeltaMergeStore_RWTest,
                         testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
                         testModeToString);
+
+// There is another flush cache executing for the same segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryByFlushCache)
+try
+{
+    {
+        // Write new data to segment[1] without flush.
+        auto newly_written_rows = helper->rows_by_segments[1];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a flush and suspend it before flushCommit.
+    auto th_flush = std::async([&]() {
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = segment1->flushCache(*dm_context);
+        ASSERT_TRUE(result);
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+        // There should be still rows in the delta layer.
+        ASSERT_GT(segment1->getDelta()->getRows(), 0);
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_flush_commit.waitAndPause();
+
+    // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
+    auto th_merge_delta = std::async([&]() {
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+        // All rows in the delta layer should be merged into the stable layer.
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndPause();
+
+    // Let's finish the flush.
+    sp_flush_commit.next();
+    th_flush.wait();
+
+    // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
+}
+CATCH
+
+
+// The segment is splitted during the execution.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryBySplit)
+try
+{
+    auto sp_split_prepare = SyncPointCtl::enableInScope("before_Segment::prepareSplit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a split and suspend it during prepareSplit to simulate a long-running split.
+    auto th_split = std::async([&] {
+        auto old_rows_by_segments = helper->rows_by_segments;
+        ASSERT_EQ(4, old_rows_by_segments.size());
+
+        // Split segment1 into 2.
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        ASSERT_NE(result.second, nullptr);
+
+        helper->resetExpectedRows();
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        ASSERT_EQ(old_rows_by_segments[0], helper->rows_by_segments[0]);
+        ASSERT_EQ(old_rows_by_segments[1], helper->rows_by_segments[1] + helper->rows_by_segments[2]);
+        ASSERT_EQ(old_rows_by_segments[2], helper->rows_by_segments[3]);
+        ASSERT_EQ(old_rows_by_segments[3], helper->rows_by_segments[4]);
+    });
+    sp_split_prepare.waitAndPause();
+
+    // Start a mergeDelta. As there is a split in progress, we would expect several retries.
+    auto th_merge_delta = std::async([&] {
+        // mergeDeltaBySegment for segment1
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        // Although original segment1 has been split into 2, we still expect only segment1's delta
+        // was merged.
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndPause();
+
+    // Proceed and finish the split.
+    sp_split_prepare.next();
+    th_split.wait();
+    {
+        // Write to the new segment1 + segment2 after split.
+        auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    // This time the retry should succeed without any future retries.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DM

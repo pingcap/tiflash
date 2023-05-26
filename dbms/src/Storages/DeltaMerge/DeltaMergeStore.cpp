@@ -1,6 +1,11 @@
 #include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+<<<<<<< HEAD
+=======
+#include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
+>>>>>>> ad5201cb3e (test: Add tests case when deltaMergeBySplit + { flushCache | split } occurs simultaneously (#5454))
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
@@ -907,6 +912,64 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
+<<<<<<< HEAD
+=======
+std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
+{
+    SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment");
+
+    updateGCSafePoint();
+    auto dm_context = newDMContext(context, context.getSettingsRef(),
+                                   /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
+
+    size_t sleep_ms = 50;
+
+    while (true)
+    {
+        SegmentPtr segment;
+        {
+            std::shared_lock lock(read_write_mutex);
+            const auto segment_it = segments.upper_bound(start_key.toRowKeyValueRef());
+            if (segment_it == segments.end())
+            {
+                return std::nullopt;
+            }
+            segment = segment_it->second;
+        }
+
+        if (segment->flushCache(*dm_context))
+        {
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+            if (new_segment)
+            {
+                const auto segment_end = new_segment->getRowKeyRange().end;
+                if (unlikely(*segment_end.value <= *start_key.value))
+                {
+                    // The next start key must be > current start key
+                    LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                    throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+                }
+                return new_segment->getRowKeyRange();
+            } // else: sleep and retry
+        } // else: sleep and retry
+
+        SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+        // Typical cases:
+        // #1. flushCache failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - There is another flush in progress (e.g. triggered in background)
+        // #2. segmentMergeDelta failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
+        // It could be possible to take seconds to finish the segment updating, so let's sleep for a short time
+        // (50ms ~ 1000ms) and then retry.
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        sleep_ms = std::min(sleep_ms * 2, 1000);
+    }
+}
+
+>>>>>>> ad5201cb3e (test: Add tests case when deltaMergeBySplit + { flushCache | split } occurs simultaneously (#5454))
 void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());

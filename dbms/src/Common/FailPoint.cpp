@@ -66,6 +66,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
+<<<<<<< HEAD
     M(force_context_path)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
@@ -83,6 +84,48 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_ingesting_to_dt_store)      \
     M(pause_when_altering_dt_store)          \
     M(pause_after_copr_streams_acquired)
+=======
+    M(force_context_path)                                    \
+    M(force_slow_page_storage_snapshot_release)              \
+    M(force_change_all_blobs_to_read_only)                   \
+    M(unblock_query_init_after_write)
+
+
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
+    M(pause_with_alter_locks_acquired)         \
+    M(hang_in_execution)                       \
+    M(pause_before_dt_background_delta_merge)  \
+    M(pause_until_dt_background_delta_merge)   \
+    M(pause_before_apply_raft_cmd)             \
+    M(pause_before_apply_raft_snapshot)        \
+    M(pause_until_apply_raft_snapshot)         \
+    M(pause_after_copr_streams_acquired_once)
+
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
+    M(pause_when_reading_from_dt_stream)  \
+    M(pause_when_writing_to_dt_store)     \
+    M(pause_when_ingesting_to_dt_store)   \
+    M(pause_when_altering_dt_store)       \
+    M(pause_after_copr_streams_acquired)  \
+    M(pause_query_init)
+
+
+#define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
+    M(random_tunnel_wait_timeout_failpoint)             \
+    M(random_tunnel_init_rpc_failure_failpoint)         \
+    M(random_receiver_sync_msg_push_failure_failpoint)  \
+    M(random_receiver_async_msg_push_failure_failpoint) \
+    M(random_limit_check_failpoint)                     \
+    M(random_join_build_failpoint)                      \
+    M(random_join_prob_failpoint)                       \
+    M(random_aggregate_create_state_failpoint)          \
+    M(random_aggregate_merge_failpoint)                 \
+    M(random_sharedquery_failpoint)                     \
+    M(random_interpreter_failpoint)                     \
+    M(random_task_lifecycle_failpoint)                  \
+    M(random_task_manager_find_task_failure_failpoint)  \
+    M(random_min_tso_scheduler_failpoint)
+>>>>>>> ad5201cb3e (test: Add tests case when deltaMergeBySplit + { flushCache | split } occurs simultaneously (#5454))
 
 namespace FailPoints
 {
