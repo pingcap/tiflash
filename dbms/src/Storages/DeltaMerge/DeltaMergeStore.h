@@ -46,7 +46,7 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 class StoragePathPool;
 
 class PipelineExecutorStatus;
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 namespace DM
 {
@@ -671,8 +671,8 @@ private:
 
     bool handleBackgroundTask(bool heavy);
 
-    void restoreStableFiles();
-    void restoreStableFilesFromLocal();
+    void restoreStableFiles() const;
+    void restoreStableFilesFromLocal() const;
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
