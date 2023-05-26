@@ -311,6 +311,9 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, UInt
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, UInt64 n)
 {
+    if (!partition_ended)
+        return std::make_tuple(RowNumber(), false);
+
     // Range of rows is [frame_start, frame_end),
     // and frame_end position is behind the position of the last frame row.
     // So we need to ++n.
@@ -340,8 +343,8 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     frame_end_row.row = 0;
     while (n > 0)
     {
-        auto block_rows = static_cast<Int64>(blockAt(frame_end_row).rows);
-        if (static_cast<Int64>(n) >= block_rows)
+        auto block_rows = blockAt(frame_end_row).rows;
+        if (n >= block_rows)
         {
             frame_end_row.row = 0;
             ++frame_end_row.block;
@@ -794,7 +797,7 @@ RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num)
     }
 
     --prev_row_num.block;
-    assert(static_cast<Int64>(prev_row_num.block) - static_cast<Int64>(first_block_number) < static_cast<Int64>(window_blocks.size()));
+    assert(prev_row_num.block < window_blocks.size() + first_block_number);
     const auto new_block_rows = blockAt(prev_row_num).rows;
     prev_row_num.row = new_block_rows - 1;
     return prev_row_num;
