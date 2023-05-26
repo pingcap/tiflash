@@ -82,7 +82,6 @@ class ReceivedMessageQueue
     mutable std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
-    std::mutex fine_grained_channel_mutex;
     size_t fine_grained_channel_size;
     LoggerPtr log;
 
