@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -73,9 +74,17 @@ public:
 public:
     PageStorage(String name,
                 PSDiskDelegatorPtr delegator, //
+<<<<<<< HEAD
                 const Config & config_,
                 const FileProviderPtr & file_provider_);
     ~PageStorage() = default;
+=======
+                const PageStorageConfig & config_,
+                const FileProviderPtr & file_provider_,
+                BackgroundProcessingPool & ver_compact_pool_,
+                bool no_more_insert_ = false);
+    ~PageStorage() override = default;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     void restore() override;
 
@@ -111,7 +120,13 @@ public:
 
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override; // NOLINT(google-default-arguments)
 
+<<<<<<< HEAD
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+=======
+    void shutdown() override;
+
+    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
@@ -205,6 +220,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -239,6 +258,16 @@ private:
 
     StatisticsInfo last_gc_statistics;
 
+<<<<<<< HEAD
+=======
+    // background pool for running compact on `versioned_page_entries`
+    BackgroundProcessingPool & ver_compact_pool;
+    BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
+
+    // true means this instance runs under mix mode
+    bool no_more_insert = false;
+
+>>>>>>> f248fac2bf (PageStorage: background version compact for v2 (#6446))
 private:
     WriterPtr checkAndRenewWriter(
         WritingPageFile & writing_file,
