@@ -396,8 +396,10 @@ bool FilterFileByDatetime(
     const int64_t start_time)
 {
     static const std::string date_format_example = "0000-00-00-00:00:00.000";
-    static const std::string raftstore_proxy_date_format_example = "0000-00-00-00:00:00.000000000";
     static const char * date_format = "%d-%d-%d-%d:%d:%d.%d";
+
+    static const std::string raftstore_proxy_date_format_example = "0000-00-00T00:00:00.000.log";
+    static const char * raftstore_proxy_date_format = "%d-%d-%dT%d-%d-%d.%d";
 
     for (const auto & ignore_log_file_prefix : ignore_log_file_prefixes)
     {
@@ -427,7 +429,7 @@ bool FilterFileByDatetime(
     else
     {
         // filter proxy log end datetime
-        return filterLogEndDatetime(path, raftstore_proxy_date_format_example, date_format, start_time);
+        return filterLogEndDatetime(path, raftstore_proxy_date_format_example, raftstore_proxy_date_format, start_time);
     }
 }
 
