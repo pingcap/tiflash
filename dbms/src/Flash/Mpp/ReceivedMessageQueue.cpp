@@ -106,7 +106,7 @@ bool ReceivedMessageQueue::writeMessageToFineGrainChannels(ReceivedMessagePtr or
     return success;
 }
 
-template <bool need_wait, bool fine_grained_shuffle>
+template <bool fine_grained_shuffle, bool need_wait>
 std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
 {
     MPMCQueueResult res;
@@ -125,12 +125,13 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
         {
             if (recv_msg->remaining_consumer->fetch_sub(1) == 1)
             {
-                /// if there is no consumer, then pop it from original queue
                 ReceivedMessagePtr original_msg;
                 auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
+                /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
+                /// so even use tryPop, the result must not be empty
                 assert(pop_result != MPMCQueueResult::EMPTY);
                 if (original_msg != nullptr)
-                    assert(*original_msg->remaining_consumer == 0);
+                    RUNTIME_CHECK_MSG(*original_msg->remaining_consumer == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->remaining_consumer);
             }
         }
     }
@@ -148,7 +149,7 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
     return {res, recv_msg};
 }
 
-template <bool is_force, bool enable_fine_grained_shuffle>
+template <bool enable_fine_grained_shuffle, bool is_force>
 bool ReceivedMessageQueue::pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode)
 {
     std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;

@@ -88,10 +88,10 @@ class ReceivedMessageQueue
     bool writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode);
 
 public:
-    template <bool need_wait, bool fine_grained_shuffle>
+    template <bool fine_grained_shuffle, bool need_wait>
     std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id);
 
-    template <bool is_force, bool enable_fine_grained_shuffle>
+    template <bool enable_fine_grained_shuffle, bool is_force>
     bool pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode);
 
     template <bool enable_fine_grained_shuffle>

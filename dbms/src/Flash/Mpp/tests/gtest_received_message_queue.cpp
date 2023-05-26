@@ -98,7 +98,7 @@ try
                     {
                         auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
                         /// is_force = false
-                        auto result = queue.pushToMessageChannel<false, true>(message, ReceiverMode::Async);
+                        auto result = queue.pushToMessageChannel<true, false>(message, ReceiverMode::Async);
                         ASSERT_TRUE(result);
                     }
                     ASSERT_TRUE(!queue.isWritable());
@@ -111,10 +111,12 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false, true>(k);
+                            auto pop_result = queue.pop<true, false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            else
+                                ASSERT_TRUE(pop_result.second->resp_ptr == nullptr);
                         }
                     }
                     ASSERT_TRUE(queue.isWritable());
@@ -178,10 +180,12 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false, true>(k);
+                            auto pop_result = queue.pop<true, false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            else
+                                ASSERT_TRUE(pop_result.second->resp_ptr == nullptr);
                         }
                     }
                     ASSERT_TRUE(queue.isWritable());

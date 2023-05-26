@@ -841,7 +841,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
     if (enable_fine_grained_shuffle_flag)
         return toReceiveResult(received_message_queue->pop<true, true>(stream_id));
     else
-        return toReceiveResult(received_message_queue->pop<true, false>(stream_id));
+        return toReceiveResult(received_message_queue->pop<false, true>(stream_id));
 }
 
 template <typename RPCContext>
@@ -850,7 +850,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
     assert(received_message_queue != nullptr);
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
     if (enable_fine_grained_shuffle_flag)
-        return toReceiveResult(received_message_queue->pop<false, true>(stream_id));
+        return toReceiveResult(received_message_queue->pop<true, false>(stream_id));
     else
         return toReceiveResult(received_message_queue->pop<false, false>(stream_id));
 }
