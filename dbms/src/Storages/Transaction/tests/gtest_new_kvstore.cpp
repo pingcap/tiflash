@@ -588,30 +588,10 @@ try
     initStorages();
 
     ctx.getTMTContext().debugSetWaitIndexTimeout(1);
-    ctx.getTMTContext().setStatusRunning();
-    // Start mock proxy in other thread
-    std::atomic_bool over{false};
-    auto proxy_runner = std::thread([&]() {
-        proxy_instance->testRunNormal(over);
-    });
-    ASSERT_EQ(kvs.getProxyHelper(), proxy_helper.get());
-    kvs.initReadIndexWorkers(
-        []() {
-            return std::chrono::milliseconds(10);
-        },
-        1);
-    ASSERT_NE(kvs.read_index_worker_manager, nullptr);
 
-    kvs.asyncRunReadIndexWorkers();
+    startReadIndexUtils(ctx);
     SCOPE_EXIT({
-        kvs.stopReadIndexWorkers();
-    });
-
-    SCOPE_EXIT({
-        kvs.releaseReadIndexWorkers();
-        over = true;
-        proxy_instance->wakeNotifier();
-        proxy_runner.join();
+        stopReadIndexUtils();
     });
 
     auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
@@ -645,9 +625,7 @@ try
     }(),
                  RegionException);
 
-    // MockRaftStoreProxy::FailCond cond;
-    // proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-
+    // We can't `doApply`, since the TiKVValue is not valid.
     auto r1 = proxy_instance->getRegion(region_id);
     r1->updateAppliedIndex(index);
     kvr1->setApplied(index, term);
@@ -659,11 +637,11 @@ try
         log);
     // 0 unavailable regions
     ASSERT_EQ(regions_snapshot.size(), 1);
-    // validateQueryInfo(
-    //     mvcc_query_info,
-    //     regions_snapshot,
-    //     ctx.getTMTContext(),
-    //     log);
+    validateQueryInfo(
+        mvcc_query_info,
+        regions_snapshot,
+        ctx.getTMTContext(),
+        log);
 }
 CATCH
 

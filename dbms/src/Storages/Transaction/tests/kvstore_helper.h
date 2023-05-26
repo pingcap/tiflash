@@ -133,6 +133,35 @@ protected:
         p = path + "/data/";
         TiFlashTestEnv::tryCreatePath(p);
     }
+    void startReadIndexUtils(Context & ctx)
+    {
+        if (proxy_runner)
+        {
+            return;
+        }
+        over.store(false);
+        ctx.getTMTContext().setStatusRunning();
+        // Start mock proxy in other thread
+        proxy_runner.reset(new std::thread([&]() {
+            proxy_instance->testRunNormal(over);
+        }));
+        ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
+        kvstore->initReadIndexWorkers(
+            []() {
+                return std::chrono::milliseconds(10);
+            },
+            1);
+        ASSERT_NE(kvstore->read_index_worker_manager, nullptr);
+        kvstore->asyncRunReadIndexWorkers();
+    }
+    void stopReadIndexUtils()
+    {
+        kvstore->stopReadIndexWorkers();
+        kvstore->releaseReadIndexWorkers();
+        over = true;
+        proxy_instance->wakeNotifier();
+        proxy_runner->join();
+    }
 
 protected:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
@@ -164,8 +193,10 @@ protected:
 
     std::unique_ptr<MockRaftStoreProxy> proxy_instance;
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
+    std::unique_ptr<std::thread> proxy_runner;
 
     LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
+    std::atomic_bool over{false};
 };
 } // namespace tests
 } // namespace DB
