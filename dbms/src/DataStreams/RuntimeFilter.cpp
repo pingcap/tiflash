@@ -88,7 +88,6 @@ void RuntimeFilter::updateValues(const ColumnWithTypeAndName & values, const Log
     case tipb::IN:
         try
         {
-            LOG_DEBUG(log, "update values in rf, data size:{}", data.rows());
             in_values_set->insertFromBlock(data, false);
         }
         catch (Exception & e)

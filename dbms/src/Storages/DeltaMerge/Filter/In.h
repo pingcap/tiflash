@@ -57,17 +57,6 @@ public:
             res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
         return res;
     }
-
-    RSResult roughCheckWithLog(size_t pack_id, const RSCheckParam & param, LoggerPtr & log) override
-    {
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        // TODO optimize for IN
-        LOG_DEBUG(log, "in rs operator, pack id:{}, min value:{}, max value:{}", pack_id, rsindex.minmax->getIntMinMaxOrNull(pack_id).first, rsindex.minmax->getIntMinMaxOrNull(pack_id).second);
-        RSResult res = rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
-        for (size_t i = 1; i < values.size(); ++i)
-            res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
-        return res;
-    }
 };
 
 

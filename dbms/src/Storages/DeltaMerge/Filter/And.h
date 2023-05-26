@@ -46,20 +46,6 @@ public:
         return res;
     }
 
-    RSResult roughCheckWithLog(size_t pack_id, const RSCheckParam & param, LoggerPtr & log) override
-    {
-        auto res = children[0]->roughCheckWithLog(pack_id, param, log);
-        if (res == None)
-            return res;
-        for (size_t i = 1; i < children.size(); ++i)
-        {
-            res = res && children[i]->roughCheckWithLog(pack_id, param, log);
-            if (res == None)
-                return res;
-        }
-        return res;
-    }
-
     // TODO: override applyOptimize()
 };
 

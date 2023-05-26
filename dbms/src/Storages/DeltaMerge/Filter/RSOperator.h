@@ -56,12 +56,6 @@ public:
 
     virtual RSResult roughCheck(size_t pack_id, const RSCheckParam & param) = 0;
 
-    virtual RSResult roughCheckWithLog(size_t pack_id, const RSCheckParam & param, LoggerPtr & log)
-    {
-        LOG_DEBUG(log, "base class , pack id:{}, param:{}", pack_id, param.indexes.size());
-        return RSResult::All;
-    };
-
     virtual Attrs getAttrs() = 0;
 
     virtual RSOperatorPtr optimize() { return shared_from_this(); };
