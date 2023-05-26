@@ -145,7 +145,12 @@ public:
     MPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : capacity(capacity_)
         , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
-        , get_auxiliary_memory_usage(std::move(get_auxiliary_memory_usage_))
+        , get_auxiliary_memory_usage(
+              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+                  ? [](const T &) {
+                        return 0;
+                    }
+                  : std::move(get_auxiliary_memory_usage_))
         , element_auxiliary_memory(capacity, 0)
         , data(capacity * sizeof(T))
     {
@@ -409,6 +414,8 @@ private:
 
             /// See comments in `popObj`.
             reader_head.notifyNext();
+            if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && current_auxiliary_memory_usage < max_auxiliary_memory_usage && write_pos - read_pos < capacity)
+                writer_head.notifyNext();
             return Result::OK;
         }
         if constexpr (need_wait)
