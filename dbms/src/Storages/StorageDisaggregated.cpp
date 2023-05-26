@@ -44,7 +44,7 @@ StorageDisaggregated::StorageDisaggregated(
 
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
-    const SelectQueryInfo & query_info,
+    const SelectQueryInfo & /*query_info*/,
     const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
@@ -53,7 +53,7 @@ BlockInputStreams StorageDisaggregated::read(
     /// S3 config is enabled on the TiFlash compute node, let's read data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readThroughS3(db_context, query_info, num_streams);
+        return readThroughS3(db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
     return readThroughExchange(num_streams);
@@ -64,12 +64,13 @@ void StorageDisaggregated::read(
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
-    const Context & /*context*/,
+    const Context & db_context,
     size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    // TODO support S3
-    RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readThroughS3(exec_status, group_builder, db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
     readThroughExchange(exec_status, group_builder, num_streams);

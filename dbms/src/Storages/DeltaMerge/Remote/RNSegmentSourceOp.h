@@ -15,58 +15,58 @@
 #pragma once
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Operators/Operator.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 
 namespace DB::DM::Remote
 {
 
-class RNSegmentInputStream : public IProfilingBlockInputStream
+class RNSegmentSourceOp : public SourceOp
 {
     static constexpr auto NAME = "RNSegment";
-
-public:
-    ~RNSegmentInputStream() override;
-
-    String getName() const override { return NAME; }
-
-    Block getHeader() const override { return action.getHeader(); }
-
-protected:
-    Block readImpl() override
-    {
-        FilterPtr filter_ignored;
-        return readImpl(filter_ignored, false);
-    }
-
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 public:
     struct Options
     {
         std::string_view debug_tag;
+        PipelineExecutorStatus & exec_status;
         const RNWorkersPtr & workers;
         const ColumnDefines & columns_to_read;
         int extra_table_id_index;
     };
 
-    explicit RNSegmentInputStream(const Options & options)
-        : log(Logger::get(options.debug_tag))
+    explicit RNSegmentSourceOp(const Options & options)
+        : SourceOp(options.exec_status, String(options.debug_tag))
+        , log(Logger::get(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
-    {}
-
-    static BlockInputStreamPtr create(const Options & options)
     {
-        return std::make_shared<RNSegmentInputStream>(options);
+        setHeader(action.getHeader());
     }
+
+    static SourceOpPtr create(const Options & options)
+    {
+        return std::make_unique<RNSegmentSourceOp>(options);
+    }
+
+    String getName() const override { return NAME; }
+
+    void operateSuffix() override;
+
+    void operatePrefix() override;
+
+protected:
+    OperatorStatus readImpl(Block & block) override;
+
+    OperatorStatus executeIOImpl() override;
 
 private:
     const LoggerPtr log;
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
+    std::optional<Block> t_block = std::nullopt;
     RNReadSegmentTaskPtr current_seg_task = nullptr;
     bool done = false;
     size_t processed_seg_tasks = 0;

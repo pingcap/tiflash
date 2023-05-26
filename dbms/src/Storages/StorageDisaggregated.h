@@ -22,6 +22,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -96,12 +97,22 @@ private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readThroughS3(
         const Context & db_context,
-        const SelectQueryInfo & query_info,
+        unsigned num_streams);
+    void readThroughS3(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
         unsigned num_streams);
 
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
+    void readThroughExchange(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        unsigned num_streams);
+
+    DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(
+        const Context & db_context);
 
     DM::Remote::RNReadTaskPtr buildReadTask(
         const Context & db_context,
@@ -130,12 +141,21 @@ private:
     DM::RSOperatorPtr buildRSOperator(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);
+    DM::Remote::RNWorkersPtr buildRNWorkers(
+        const Context & db_context,
+        const DM::Remote::RNReadTaskPtr & read_task,
+        const DM::ColumnDefinesPtr & column_defines);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
-        const SelectQueryInfo &,
         size_t num_streams,
         DAGPipeline & pipeline);
+    void buildRemoteSegmentSourceOps(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        const DM::Remote::RNReadTaskPtr & read_task,
+        size_t num_streams);
 
 private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
