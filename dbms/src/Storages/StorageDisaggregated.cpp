@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
+#include <Operators/ExpressionTransformOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -412,4 +413,30 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
         }
     }
 }
+
+void StorageDisaggregated::extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+{
+    // If the column is not in the columns of pushed down filter, append a cast to the column.
+    std::vector<UInt8> may_need_add_cast_column;
+    may_need_add_cast_column.reserve(table_scan.getColumnSize());
+    std::unordered_set<ColumnID> filter_col_id_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+    {
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+    }
+    for (const auto & col : table_scan.getColumns())
+        may_need_add_cast_column.push_back(!col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
+    bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true) != may_need_add_cast_column.end();
+    ExpressionActionsChain chain;
+    if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+        });
+    }
+}
+
 } // namespace DB

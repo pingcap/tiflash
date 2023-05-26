@@ -170,6 +170,7 @@ private:
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     void filterConditions(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

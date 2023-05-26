@@ -120,7 +120,7 @@ void StorageDisaggregated::readThroughS3(
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
-    // extraCast(*analyzer, pipeline);
+    extraCast(exec_status, group_builder, *analyzer);
     // Handle filter
     filterConditions(exec_status, group_builder, *analyzer);
 }
