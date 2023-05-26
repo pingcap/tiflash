@@ -581,7 +581,6 @@ TEST_F(RegionKVStoreTest, LearnerRead)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    // ctx.getTMTContext().getRegionTable().debugSetContext(&ctx);
     auto region_id = 1;
     KVStore & kvs = getKVS();
     ctx.getTMTContext().debugSetKVStore(kvstore);
