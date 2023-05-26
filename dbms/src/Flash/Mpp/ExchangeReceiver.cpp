@@ -155,8 +155,8 @@ public:
 
             if (auto error_message = getErrorFromPackets(); !error_message.empty())
                 setDone(fmt::format("Exchange receiver meet error : {}", error_message));
-            else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail");
+            else if (auto send_result = sendPackets(); !send_result.first)
+                setDone(fmt::format("Exchange receiver meet error : {}", send_result.second));
             else if (read_packet_index < batch_packet_count_v1)
             {
                 stage = AsyncRequestStagev1::WAIT_FINISH;
@@ -261,21 +261,28 @@ private:
         }
     }
 
-    bool sendPackets()
+    std::pair<bool,String> sendPackets()
     {
         // note: no exception should be thrown rudely, since it's called by a GRPC poller.
-        for (size_t i = 0; i < read_packet_index; ++i)
+        try
         {
-            auto & packet = packets[i];
-            if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
+            for (size_t i = 0; i < read_packet_index; ++i)
             {
-                return false;
-            }
+                auto & packet = packets[i];
+                if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
+                {
+                    return {false, "channel write fails"};
+                }
 
-            // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                // can't reuse packet since it is sent to readers.
+                packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+            }
+            return {true, ""};
         }
-        return true;
+        catch (...)
+        {
+            return {false, getCurrentExceptionMessage(false)};
+        }
     }
 
     // in case of potential multiple inheritances.
