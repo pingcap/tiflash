@@ -39,12 +39,16 @@ namespace
 // Print log for MPPTask which hasn't been removed for over 5 minutes.
 void checkMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
 {
+    String log_info;
     for (const auto & iter : monitored_tasks)
     {
         auto alive_time = iter.second.elapsedSeconds();
         if (alive_time >= 300)
-            LOG_INFO(log, fmt::format("MPPTask is alive for {} secs, {}", alive_time, iter.first));
+            log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
     }
+
+    if (!log_info.empty())
+        LOG_INFO(log, log_info);
 }
 } // namespace
 
@@ -52,15 +56,23 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , log(Logger::get())
     , is_shutdown(false)
-{
-    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [self = shared_from_this()] { self->monitorMPPTasks(); });
-}
+{}
 
 MPPTaskManager::~MPPTaskManager()
 {
     std::lock_guard lock(mu);
     is_shutdown = true;
-    cv.notify_all();
+    monitor_cv.notify_all();
+}
+
+void MPPTaskManager::startMonitorMPPTaskThread()
+{
+    std::lock_guard lock(mu);
+    if (!is_monitor_task_started)
+    {
+        newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [self = shared_from_this()] { self->monitorMPPTasks(); });
+        is_monitor_task_started = true;
+    }
 }
 
 MPPQueryTaskSetPtr MPPTaskManager::addMPPQueryTaskSet(const MPPQueryId & query_id)
@@ -344,7 +356,7 @@ void MPPTaskManager::monitorMPPTasks()
         lock.lock();
 
         // Check MPPTasks every 5 minutes
-        cv.wait_for(lock, std::chrono::seconds(30)); // TODO change it to 300
+        monitor_cv.wait_for(lock, std::chrono::seconds(300));
 
         if (is_shutdown)
             return;

@@ -81,6 +81,10 @@ class MPPTaskManager : public std::enable_shared_from_this<MPPTaskManager>
     // Only when the MPPTask is completed destructed, the task can be removed from it.
     std::unordered_map<String, Stopwatch> monitored_tasks;
 
+    std::condition_variable monitor_cv;
+
+    bool is_monitor_task_started = false;
+
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
@@ -109,6 +113,9 @@ public:
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
 
     String toString();
+
+    // We can't start this thread in constructor as we inherit the `enable_shared_from_this`
+    void startMonitorMPPTaskThread();
 
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
