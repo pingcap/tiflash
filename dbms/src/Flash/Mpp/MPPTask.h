@@ -51,13 +51,16 @@ enum class AbortType
 class MPPTaskMonitorHelper
 {
 public:
-    MPPTaskMonitorHelper(MPPTaskManager * manager_, const String & task_unique_id);
+    MPPTaskMonitorHelper() = default;
 
     ~MPPTaskMonitorHelper();
 
+    void initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_);
+
 private:
-    MPPTaskManager * manager;
-    const String task_unique_id;
+    MPPTaskManager * manager = nullptr;
+    String task_unique_id;
+    bool initialized = false;
 };
 
 class MPPTask : public std::enable_shared_from_this<MPPTask>
@@ -126,6 +129,9 @@ private:
     void setErrString(const String & message);
 
 private:
+    // We must ensure this member variable is put at this place to be destructed at proper time
+    MPPTaskMonitorHelper mpp_task_monitor_helper;
+
     // To make sure dag_req is not destroyed before the mpp task ends.
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
@@ -136,9 +142,6 @@ private:
 
     MPPTaskManager * manager;
     std::atomic<bool> registered{false};
-
-    // We must ensure this member variable is put at this place to be destructed at proper time
-    MPPTaskMonitorHelper mpp_task_monitor_helper;
 
     MPPTaskScheduleEntry schedule_entry;
 
