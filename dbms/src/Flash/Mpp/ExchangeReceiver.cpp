@@ -943,7 +943,17 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
-    if (recv_msg->resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+    bool handle_resp = false;
+    if (recv_msg->remaining_consumer != nullptr)
+    {
+        /// fine grained shuffle
+        handle_resp = stream_id == 0 && recv_msg->resp_ptr != nullptr;
+    }
+    else
+    {
+        handle_resp = recv_msg->resp_ptr != nullptr;
+    }
+    if (handle_resp) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
     {
         auto select_resp = std::make_shared<tipb::SelectResponse>();
         if (unlikely(!select_resp->ParseFromString(*(recv_msg->resp_ptr))))

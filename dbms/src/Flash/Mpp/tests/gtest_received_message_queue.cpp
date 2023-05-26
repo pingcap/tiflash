@@ -115,8 +115,6 @@ try
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
-                            else
-                                ASSERT_TRUE(pop_result.second->resp_ptr == nullptr);
                         }
                     }
                     ASSERT_TRUE(queue.isWritable());
@@ -184,8 +182,6 @@ try
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
-                            else
-                                ASSERT_TRUE(pop_result.second->resp_ptr == nullptr);
                         }
                     }
                     ASSERT_TRUE(queue.isWritable());
