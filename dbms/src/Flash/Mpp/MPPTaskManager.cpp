@@ -359,7 +359,10 @@ void MPPTaskManager::monitorMPPTasks()
         monitor_cv.wait_for(lock, std::chrono::seconds(300));
 
         if (is_shutdown)
+        {
+            lock.unlock();
             return;
+        }
 
         checkMPPTasks(monitored_tasks, log);
         lock.unlock();
