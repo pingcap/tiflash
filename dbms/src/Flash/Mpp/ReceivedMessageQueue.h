@@ -102,7 +102,7 @@ public:
         const LoggerPtr & log_,
         size_t max_buffer_size,
         bool enable_fine_grained,
-        size_t fine_grained_stream_size);
+        size_t fine_grained_channel_size_);
 
     void finish()
     {
