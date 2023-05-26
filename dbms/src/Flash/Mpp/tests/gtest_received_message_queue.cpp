@@ -133,7 +133,7 @@ try
                     ASSERT_TRUE(!queue.isWritable());
                     auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
                     /// is_force = true
-                    auto result = queue.pushToMessageChannel<true, false>(message, ReceiverMode::Async);
+                    auto result = queue.pushToMessageChannel<false, true>(message, ReceiverMode::Async);
                     ASSERT_TRUE(result);
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {

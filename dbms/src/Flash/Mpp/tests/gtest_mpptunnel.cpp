@@ -149,7 +149,8 @@ public:
     explicit MockExchangeReceiver(Int32 conn_num)
         : live_connections(conn_num)
         , live_local_connections(0)
-        , received_message_queue(static_cast<AsyncRequestHandlerWaitQueuePtr>(nullptr), Logger::get(), 10, false, 0)
+        , mock_async_request_handler_wait_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
+        , received_message_queue(mock_async_request_handler_wait_queue, Logger::get(), 10, false, 0)
         , data_size_in_queue(0)
         , log(Logger::get())
     {
@@ -167,7 +168,7 @@ public:
         }
 
         if (meet_error || copy_connection == 0)
-            msg_channels[0]->finish();
+            received_message_queue.finish();
     }
 
     void addLocalConnectionNum()
@@ -207,11 +208,11 @@ public:
     {
         while (true)
         {
-            std::shared_ptr<ReceivedMessage> recv_msg;
-            switch (msg_channels[0]->pop(recv_msg))
+            auto pop_result = received_message_queue.pop<false, true>(0);
+            switch (pop_result.first)
             {
             case DB::MPMCQueueResult::OK:
-                received_msgs.push_back(recv_msg);
+                received_msgs.push_back(pop_result.second);
                 break;
             default:
                 return;
@@ -232,7 +233,7 @@ private:
     std::condition_variable cv;
     Int32 live_connections;
     Int32 live_local_connections;
-    std::vector<MsgChannelPtr> msg_channels;
+    AsyncRequestHandlerWaitQueuePtr mock_async_request_handler_wait_queue;
     ReceivedMessageQueue received_message_queue;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
@@ -654,7 +655,7 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
-    AsyncRequestHandlerWaitQueuePtr mock_ptr = nullptr;
+    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
     ReceivedMessageQueue received_message_queue(mock_ptr, Logger::get(), 1, false, 0);
 
     LocalRequestHandler local_req_handler(
@@ -676,7 +677,8 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
-    ReceivedMessageQueue queue(static_cast<AsyncRequestHandlerWaitQueuePtr>(nullptr), Logger::get(), 1, false, 0);
+    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
+    ReceivedMessageQueue queue(mock_ptr, Logger::get(), 1, false, 0);
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
