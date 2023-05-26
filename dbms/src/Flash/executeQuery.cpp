@@ -165,16 +165,12 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     if (context.getSettingsRef().enforce_enable_pipeline)
     {
-        RUNTIME_CHECK_MSG(
-            context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
-            "The pipeline model does not support storage-computing separation with S3 mode, and an error is reported because the setting enforce_enable_pipeline is true.");
         auto res = executeAsPipeline(context, internal);
         RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
         return std::move(*res);
     }
     if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline
-        && (context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled()))
+        && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
