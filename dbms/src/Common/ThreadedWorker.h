@@ -112,7 +112,7 @@ protected:
     virtual Dest doWork(const Src & task) = 0;
 
 private:
-    void handleWorkerFinished()
+    void handleWorkerFinished() noexcept
     {
         active_workers--;
         if (active_workers == 0)
@@ -134,7 +134,7 @@ private:
         }
     }
 
-    void workerLoop(size_t thread_idx)
+    void workerLoop(size_t thread_idx) noexcept
     {
         try
         {
