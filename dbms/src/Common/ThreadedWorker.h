@@ -36,10 +36,16 @@ template <typename Src, typename Dest>
 class ThreadedWorker
 {
 public:
-    virtual ~ThreadedWorker()
-    {
-        wait();
-    }
+    /// WARNING: As Base class destructors always run AFTER the derived class destructors,
+    /// derived workers must implement its own destructors, like:
+    ///
+    /// ```c++
+    /// ~MyWorker() override { wait(); }
+    /// ```
+    ///
+    /// Otherwise, the `doWork()` may be still running and accessing derived class
+    /// members, while derived class is already destructed.
+    virtual ~ThreadedWorker() = default;
 
     void startInBackground() noexcept
     {

@@ -75,6 +75,8 @@ public:
         , push_down_filter(options.push_down_filter)
         , read_mode(options.read_mode)
     {}
+
+    ~RNWorkerPrepareStreams() override { wait(); }
 };
 
 } // namespace DB::DM::Remote
