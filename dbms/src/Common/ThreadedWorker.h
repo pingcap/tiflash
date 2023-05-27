@@ -94,7 +94,7 @@ public:
         , log(log_)
         , thread_manager(newThreadManager())
     {
-        RUNTIME_CHECK(concurrency > 0);
+        RUNTIME_CHECK(concurrency > 0, concurrency);
     }
 
 public:
@@ -120,7 +120,7 @@ private:
             std::call_once(finish_flag, [this] {
                 LOG_DEBUG(
                     log,
-                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.2f}s total_wait_schedule={:.2f}s total_wait_upstream={:.2f}s total_wait_downstream={:.2f}s",
+                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s total_wait_downstream={:.3f}s",
                     getName(),
                     total_processed_tasks,
                     concurrency,

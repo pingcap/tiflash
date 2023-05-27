@@ -21,7 +21,7 @@ namespace DB::DM::Remote
 RNWorkers::RNWorkers(const Options & options)
 {
     size_t n = options.read_task->segment_read_tasks.size();
-    RUNTIME_CHECK(n > 0);
+    RUNTIME_CHECK(n > 0, n);
 
     worker_fetch_pages = RNWorkerFetchPages::create({
         .source_queue = std::make_shared<Channel>(n),
@@ -45,7 +45,7 @@ RNWorkers::RNWorkers(const Options & options)
     for (auto const & seg_task : options.read_task->segment_read_tasks)
     {
         auto push_result = worker_fetch_pages->source_queue->tryPush(seg_task);
-        RUNTIME_CHECK(push_result == MPMCQueueResult::OK);
+        RUNTIME_CHECK(push_result == MPMCQueueResult::OK, magic_enum::enum_name(push_result));
     }
     worker_fetch_pages->source_queue->finish();
 }
