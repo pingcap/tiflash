@@ -43,12 +43,12 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
     if (done)
         return {};
 
+    workers->startInBackground();
+
     while (true)
     {
         if (!current_seg_task)
         {
-            workers->startInBackground();
-
             Stopwatch w{CLOCK_MONOTONIC_COARSE};
             auto pop_result = workers->getReadyChannel()->pop(current_seg_task);
             duration_wait_ready_task_sec += w.elapsedSeconds();

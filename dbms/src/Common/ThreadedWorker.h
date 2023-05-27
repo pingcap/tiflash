@@ -36,10 +36,16 @@ template <typename Src, typename Dest>
 class ThreadedWorker
 {
 public:
-    virtual ~ThreadedWorker()
-    {
-        wait();
-    }
+    /// WARNING: As Base class destructors always run AFTER the derived class destructors,
+    /// derived workers must implement its own destructors, like:
+    ///
+    /// ```c++
+    /// ~MyWorker() override { wait(); }
+    /// ```
+    ///
+    /// Otherwise, the `doWork()` may be still running and accessing derived class
+    /// members, while derived class is already destructed.
+    virtual ~ThreadedWorker() = default;
 
     void startInBackground() noexcept
     {
@@ -88,7 +94,7 @@ public:
         , log(log_)
         , thread_manager(newThreadManager())
     {
-        RUNTIME_CHECK(concurrency > 0);
+        RUNTIME_CHECK(concurrency > 0, concurrency);
     }
 
 public:
@@ -106,7 +112,7 @@ protected:
     virtual Dest doWork(const Src & task) = 0;
 
 private:
-    void handleWorkerFinished()
+    void handleWorkerFinished() noexcept
     {
         active_workers--;
         if (active_workers == 0)
@@ -114,7 +120,7 @@ private:
             std::call_once(finish_flag, [this] {
                 LOG_DEBUG(
                     log,
-                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.2f}s total_wait_schedule={:.2f}s total_wait_upstream={:.2f}s total_wait_downstream={:.2f}s",
+                    "{} workers finished, total_processed_tasks={} concurrency={} elapsed={:.3f}s total_wait_schedule={:.3f}s total_wait_upstream={:.3f}s total_wait_downstream={:.3f}s",
                     getName(),
                     total_processed_tasks,
                     concurrency,
@@ -128,7 +134,7 @@ private:
         }
     }
 
-    void workerLoop(size_t thread_idx)
+    void workerLoop(size_t thread_idx) noexcept
     {
         try
         {

@@ -67,6 +67,8 @@ public:
     {
         return std::make_shared<RNWorkerFetchPages>(options);
     }
+
+    ~RNWorkerFetchPages() override { wait(); }
 };
 
 } // namespace DB::DM::Remote
