@@ -44,13 +44,13 @@ namespace DB::DM::Remote
 struct RNReadSegmentMeta
 {
     // ======== Fields below uniquely identify a remote segment ========
+    const KeyspaceID keyspace_id;
     const TableID physical_table_id;
     const UInt64 segment_id;
     const StoreID store_id;
     // =================================================================
 
     // ======== Fields below are other supplementary information about the remote segment ========
-    const KeyspaceID keyspace_id;
     const std::vector<UInt64> delta_tinycf_page_ids;
     const std::vector<size_t> delta_tinycf_page_sizes;
     const SegmentPtr segment;

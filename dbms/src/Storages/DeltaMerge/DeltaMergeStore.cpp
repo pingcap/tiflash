@@ -1692,7 +1692,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1711,7 +1711,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal()
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 
