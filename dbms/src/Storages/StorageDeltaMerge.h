@@ -235,7 +235,7 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
-    DM::RSOperatorPtr buildRSOperator(const SelectQueryInfo & query_info,
+    DM::RSOperatorPtr buildRSOperator(const std::unique_ptr<DAGQueryInfo> & dag_query,
                                       const DM::ColumnDefines & columns_to_read,
                                       const Context & context,
                                       const LoggerPtr & tracing_logger);
