@@ -105,11 +105,11 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
 
     return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(
         RNReadSegmentMeta{
+            .keyspace_id = keyspace_id,
             .physical_table_id = physical_table_id,
             .segment_id = proto.segment_id(),
             .store_id = store_id,
 
-            .keyspace_id = keyspace_id,
             .delta_tinycf_page_ids = delta_tinycf_ids,
             .delta_tinycf_page_sizes = delta_tinycf_sizes,
             .segment = segment,
