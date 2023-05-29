@@ -19,7 +19,14 @@ namespace DB::PS::V3
 
 Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & page_id_and_entry)
 {
-    return blob_store.read(page_id_and_entry);
+    if (page_id_and_entry.second.checkpoint_info.has_value() && page_id_and_entry.second.checkpoint_info.is_local_data_reclaimed)
+    {
+        return remote_reader->read(page_id_and_entry);
+    }
+    else
+    {
+        return blob_store.read(page_id_and_entry);
+    }
 }
 
 Page CPWriteDataSourceFixture::read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & id_and_entry)
@@ -32,7 +39,7 @@ Page CPWriteDataSourceFixture::read(const BlobStore<universal::BlobStoreTrait>::
 
     Page page(1);
     page.mem_holder = nullptr;
-    page.data = ByteBuffer(value.data(), value.data() + value.size());
+    page.data = std::string_view(value);
     return page;
 }
 

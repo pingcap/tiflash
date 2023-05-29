@@ -20,6 +20,7 @@
 #include <Core/SortDescription.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>
@@ -46,6 +47,7 @@ String getFieldTypeName(Int32 tp);
 String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+void getColumnIDsFromExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col, std::unordered_set<ColumnID> & col_id_set);
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);

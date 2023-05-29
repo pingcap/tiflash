@@ -19,17 +19,27 @@
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalGetResultSink::build(
-    ResultHandler && result_handler,
+    const ResultQueuePtr & result_queue,
+    const LoggerPtr & log,
     const PhysicalPlanNodePtr & child)
 {
-    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler));
+    return std::make_shared<PhysicalGetResultSink>(
+        "get_result_sink",
+        child->getSchema(),
+        child->getFineGrainedShuffle(),
+        log->identifier(),
+        child,
+        result_queue);
 }
 
-void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalGetResultSink::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
-    auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, this_shared_ptr));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), result_queue));
     });
 }
 } // namespace DB

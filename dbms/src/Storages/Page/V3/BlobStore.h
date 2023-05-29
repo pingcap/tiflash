@@ -71,7 +71,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntries & del_entries);
 
@@ -98,7 +98,7 @@ public:
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(const PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
@@ -121,6 +121,7 @@ private:
 
     template <typename>
     friend class PageDirectoryFactory;
+    template <typename>
     friend class PageStorageControlV3;
 
 #ifndef DBMS_PUBLIC_GTEST

@@ -24,6 +24,7 @@ class PipelineTask : public EventTask
 public:
     PipelineTask(
         MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         PipelineExecPtr && pipeline_exec_);
@@ -31,9 +32,11 @@ public:
 protected:
     ExecTaskStatus doExecuteImpl() override;
 
+    ExecTaskStatus doExecuteIOImpl() override;
+
     ExecTaskStatus doAwaitImpl() override;
 
-    void finalizeImpl() override;
+    void doFinalizeImpl() override;
 
 private:
     PipelineExecPtr pipeline_exec;

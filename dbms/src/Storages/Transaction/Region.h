@@ -121,8 +121,8 @@ public:
     explicit Region(RegionMeta && meta_);
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
-    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
+    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
@@ -190,10 +190,13 @@ public:
     void tryCompactionFilter(const Timestamp safe_point);
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
-    metapb::Region getMetaRegion() const;
-    raft_serverpb::MergeState getMergeState() const;
+    metapb::Region cloneMetaRegion() const;
+    const metapb::Region & getMetaRegion() const;
+    raft_serverpb::MergeState cloneMergeState() const;
+    const raft_serverpb::MergeState & getMergeState() const;
 
     TableID getMappedTableID() const;
+    KeyspaceID getKeyspaceID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
@@ -212,6 +215,7 @@ public:
     {
         return flushed_state;
     }
+    RegionMeta & mutMeta() { return meta; }
 
 private:
     Region() = delete;
@@ -221,7 +225,7 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
+    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
@@ -242,6 +246,7 @@ private:
     LoggerPtr log;
 
     const TableID mapped_table_id;
+    const KeyspaceID keyspace_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};

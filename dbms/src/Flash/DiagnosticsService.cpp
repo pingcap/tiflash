@@ -15,6 +15,8 @@
 #include <Common/Exception.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Path.h>
 #include <Storages/Transaction/KVStore.h>
@@ -38,7 +40,7 @@ using diagnosticspb::SearchLogResponse;
     ::diagnosticspb::ServerInfoResponse * response)
 try
 {
-    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
     {
         String err_msg = "tiflash compute node should be managed by AutoScaler instead of PD, this grpc should not be called be AutoScaler for now";
         LOG_ERROR(log, err_msg);

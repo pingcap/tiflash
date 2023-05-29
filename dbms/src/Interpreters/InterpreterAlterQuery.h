@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Storages/AlterCommands.h>

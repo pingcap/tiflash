@@ -38,11 +38,12 @@ using PipelineIdGeneratorPtr = std::shared_ptr<PipelineIdGenerator>;
 class PipelineBuilder
 {
 public:
-    PipelineBuilder()
-        : id_generator(std::make_shared<PipelineIdGenerator>())
+    explicit PipelineBuilder(const String & req_id)
+        : log(Logger::get(req_id))
+        , id_generator(std::make_shared<PipelineIdGenerator>())
         , pipeline_breaker(std::nullopt)
     {
-        pipeline = std::make_shared<Pipeline>(id_generator->nextID());
+        pipeline = std::make_shared<Pipeline>(id_generator->nextID(), req_id);
     }
 
 private:
@@ -52,8 +53,8 @@ private:
             : pipeline(pipeline_)
             , breaker_node(breaker_node_)
         {
-            assert(pipeline);
-            assert(breaker_node);
+            RUNTIME_CHECK(pipeline);
+            RUNTIME_CHECK(breaker_node);
         }
 
         // the broken pipeline.
@@ -61,11 +62,15 @@ private:
         const PhysicalPlanNodePtr breaker_node;
     };
 
-    PipelineBuilder(const PipelineIdGeneratorPtr & id_generator_, PipelineBreaker && pipeline_breaker_)
-        : id_generator(id_generator_)
+    PipelineBuilder(
+        const PipelineIdGeneratorPtr & id_generator_,
+        PipelineBreaker && pipeline_breaker_,
+        const String & req_id)
+        : log(Logger::get(req_id))
+        , id_generator(id_generator_)
         , pipeline_breaker(std::move(pipeline_breaker_))
     {
-        pipeline = std::make_shared<Pipeline>(id_generator->nextID());
+        pipeline = std::make_shared<Pipeline>(id_generator->nextID(), req_id);
     }
 
 public:
@@ -77,12 +82,12 @@ public:
     /// Break the current pipeline and return a new builder for the broken pipeline.
     PipelineBuilder breakPipeline(const PhysicalPlanNodePtr & breaker_node)
     {
-        return PipelineBuilder(id_generator, PipelineBreaker{pipeline, breaker_node});
+        return PipelineBuilder(id_generator, PipelineBreaker{pipeline, breaker_node}, log->identifier());
     }
 
     PipelinePtr build()
     {
-        assert(pipeline);
+        RUNTIME_CHECK(pipeline);
         if (pipeline_breaker)
         {
             // First add the breaker node as the last node in this pipeline.
@@ -95,6 +100,7 @@ public:
     }
 
 private:
+    LoggerPtr log;
     PipelineIdGeneratorPtr id_generator;
     PipelinePtr pipeline;
     std::optional<PipelineBreaker> pipeline_breaker;

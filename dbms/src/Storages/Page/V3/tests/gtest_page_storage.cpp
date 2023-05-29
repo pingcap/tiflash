@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Interpreters/Context.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
@@ -32,9 +32,9 @@
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/MockReadLimiter.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 
@@ -434,6 +434,13 @@ try
         ASSERT_EQ(page_4.getFieldData(1).size(), 20);
         ASSERT_EQ(page_4.getFieldData(2).size(), 30);
         ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
     }
     {
         // Read with ids can also fetch the fieldOffsets
@@ -447,6 +454,13 @@ try
         ASSERT_EQ(page_4.getFieldData(1).size(), 20);
         ASSERT_EQ(page_4.getFieldData(2).size(), 30);
         ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+
+        auto page_field_sizes = PageUtil::getFieldSizes(page_4.field_offsets, page_4.data.size());
+        ASSERT_EQ(page_field_sizes.size(), 4);
+        ASSERT_EQ(page_field_sizes[0], 20);
+        ASSERT_EQ(page_field_sizes[1], 20);
+        ASSERT_EQ(page_field_sizes[2], 30);
+        ASSERT_EQ(page_field_sizes[3], 30);
     }
 }
 CATCH
@@ -1265,8 +1279,8 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
-    NamespaceId ns_id1 = TEST_NAMESPACE_ID;
-    NamespaceId ns_id2 = TEST_NAMESPACE_ID + 1;
+    NamespaceID ns_id1 = TEST_NAMESPACE_ID;
+    NamespaceID ns_id2 = TEST_NAMESPACE_ID + 1;
     {
         WriteBatch wb(ns_id1);
         wb.putExternal(20, 0);
@@ -1485,9 +1499,9 @@ CATCH
 TEST_F(PageStorageTest, GetMaxId)
 try
 {
-    NamespaceId small = 20;
-    NamespaceId medium = 50;
-    NamespaceId large = 100;
+    NamespaceID small = 20;
+    NamespaceID medium = 50;
+    NamespaceID large = 100;
 
     {
         WriteBatch batch{small};
@@ -1787,7 +1801,7 @@ CATCH
 TEST_F(PageStorageTest, ReloadConfig)
 try
 {
-    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext()->getGlobalContext();
     auto & settings = global_context.getSettingsRef();
     auto old_dt_page_gc_threshold = settings.dt_page_gc_threshold;
 

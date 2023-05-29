@@ -30,6 +30,7 @@ constexpr const char * str_col_name = "a";
 class DebugBlockInputStream : public IProfilingBlockInputStream
 {
 public:
+    static constexpr ColumnID extra_column_id = 100;
     DebugBlockInputStream(const BlocksList & blocks, bool is_common_handle_)
         : begin(blocks.begin())
         , end(blocks.end())
@@ -41,7 +42,7 @@ public:
     Block getHeader() const override
     {
         auto cds = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
+        cds->push_back(ColumnDefine(extra_column_id, str_col_name, DataTypeFactory::instance().get("String")));
         return toEmptyBlock(*cds);
     }
 
@@ -103,10 +104,10 @@ TEST(VersionFilterTest, MVCC)
 
     {
         Int64 pk_value = 4;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1, DebugBlockInputStream::extra_column_id));
     }
 
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
@@ -139,23 +140,23 @@ TEST(VersionFilterTest, RangesMVCC)
 
     {
         Int64 pk_value = 4;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 45;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 100;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1, DebugBlockInputStream::extra_column_id));
     }
 
     RowKeyRanges ranges;
@@ -237,10 +238,10 @@ TEST(VersionFilterTest, MVCCCommonHandle)
 
     {
         Int64 pk_value = 4;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", true, 2));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", true, 2, DebugBlockInputStream::extra_column_id));
     }
 
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
@@ -274,20 +275,20 @@ TEST(VersionFilterTest, Compact)
 
     {
         Int64 pk_value = 4;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 5;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 6;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 1, str_col_name, "hello", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 1, str_col_name, "hello", false, 1, DebugBlockInputStream::extra_column_id));
     }
 
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
@@ -381,20 +382,20 @@ TEST(VersionFilterTest, CompactCommonHandle)
 
     {
         Int64 pk_value = 4;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", true, 2));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", true, 2, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 5;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2));
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", true, 2, DebugBlockInputStream::extra_column_id));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", true, 2, DebugBlockInputStream::extra_column_id));
     }
     {
         Int64 pk_value = 6;
-        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 1, str_col_name, "hello", true, 2));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 1, str_col_name, "hello", true, 2, DebugBlockInputStream::extra_column_id));
     }
 
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());

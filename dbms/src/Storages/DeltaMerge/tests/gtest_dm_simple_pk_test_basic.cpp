@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/OneBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -48,6 +49,7 @@ void SimplePKTestBasic::reload()
                                               false,
                                               "test",
                                               DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                              NullspaceID,
                                               101,
                                               true,
                                               *cols,
@@ -358,6 +360,8 @@ size_t SimplePKTestBasic::getRowsN() const
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
         "",
         /* keep_order= */ false,
         /* is_fast_scan= */ false,
@@ -375,6 +379,8 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>{},
+        0,
         "",
         /* keep_order= */ false,
         /* is_fast_scan= */ false,

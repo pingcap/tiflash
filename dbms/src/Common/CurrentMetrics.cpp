@@ -35,6 +35,7 @@
     M(StoreSizeCapacity)                        \
     M(StoreSizeAvailable)                       \
     M(StoreSizeUsed)                            \
+    M(StoreSizeUsedRemote)                      \
     M(DT_DeltaMerge)                            \
     M(DT_DeltaCompact)                          \
     M(DT_DeltaFlush)                            \
@@ -56,6 +57,7 @@
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
     M(DT_SnapshotOfBitmapFilter)                \
+    M(DT_SnapshotOfDisaggReadNodeRead)          \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
@@ -65,7 +67,17 @@
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
-    M(GlobalStorageRunMode)
+    M(S3Requests)                               \
+    M(GlobalStorageRunMode)                     \
+    M(GlobalThread)                             \
+    M(GlobalThreadActive)                       \
+    M(LocalThread)                              \
+    M(LocalThreadActive)                        \
+    M(DTFileCacheCapacity)                      \
+    M(DTFileCacheUsed)                          \
+    M(PageCacheCapacity)                        \
+    M(PageCacheUsed)                            \
+    M(ConnectionPoolSize)
 
 namespace CurrentMetrics
 {

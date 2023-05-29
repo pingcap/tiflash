@@ -83,7 +83,6 @@ void WindowTransformAction::initialWorkspaces()
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-    only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
 bool WindowBlockInputStream::returnIfCancelledOrKilled()
@@ -122,9 +121,14 @@ Block WindowBlockInputStream::readImpl()
 }
 
 // Judge whether current_partition_row is end row of partition in current block
+// How to judge?
+// Compare data in previous partition with the new scanned data.
 bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partition_row)
 {
+    // prev_frame_start refers to the data in previous partition
     const Columns & reference_columns = inputAt(prev_frame_start);
+
+    // partition_end refers to the new scanned data
     const Columns & compared_columns = inputAt(partition_end);
 
     for (size_t i = 0; i < partition_column_indices.size(); ++i)
@@ -283,9 +287,6 @@ void WindowTransformAction::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
-        RUNTIME_CHECK_MSG(
-            only_have_pure_window,
-            "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
         frame_start = current_row;
         frame_started = true;
         break;
@@ -299,9 +300,9 @@ void WindowTransformAction::advanceFrameStart()
     }
 }
 
-bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) const
+bool WindowTransformAction::arePeers(const RowNumber & peer_group_last_row, const RowNumber & current_row) const
 {
-    if (x == y)
+    if (peer_group_last_row == current_row)
     {
         // For convenience, a row is always its own peer.
         return true;
@@ -324,18 +325,18 @@ bool WindowTransformAction::arePeers(const RowNumber & x, const RowNumber & y) c
 
         for (size_t i = 0; i < n; ++i)
         {
-            const auto * column_x = inputAt(x)[order_column_indices[i]].get();
-            const auto * column_y = inputAt(y)[order_column_indices[i]].get();
+            const auto * column_peer_last = inputAt(peer_group_last_row)[order_column_indices[i]].get();
+            const auto * column_current = inputAt(current_row)[order_column_indices[i]].get();
             if (window_description.order_by[i].collator)
             {
-                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
+                if (column_peer_last->compareAt(peer_group_last_row.row, current_row.row, *column_current, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
                 {
                     return false;
                 }
             }
             else
             {
-                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */) != 0)
+                if (column_peer_last->compareAt(peer_group_last_row.row, current_row.row, *column_current, 1 /* nan_direction_hint */) != 0)
                 {
                     return false;
                 }
@@ -355,10 +356,6 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
     assert(frame_end.block == partition_end.block
            || frame_end.block + 1 == partition_end.block);
 
-    // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    RUNTIME_CHECK_MSG(
-        only_have_pure_window,
-        "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
     frame_end = current_row;
     advanceRowNumber(frame_end);
     frame_ended = true;
@@ -442,16 +439,6 @@ bool WindowTransformAction::onlyHaveRowNumber()
     for (const auto & workspace : workspaces)
     {
         if (workspace.window_function->getName() != "row_number")
-            return false;
-    }
-    return true;
-}
-
-bool WindowTransformAction::onlyHaveRowNumberAndRank()
-{
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
             return false;
     }
     return true;
@@ -607,8 +594,8 @@ void WindowTransformAction::tryCalculate()
         partition_start = partition_end;
         advanceRowNumber(partition_end);
         partition_ended = false;
-        // We have to reset the frame and other pointers when the new partition
-        // starts.
+
+        // We have to reset the frame and other pointers when the new partition starts.
         frame_start = partition_start;
         frame_end = partition_start;
         prev_frame_start = partition_start;
@@ -642,22 +629,41 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
     action.appendInfo(buffer);
 }
 
-void WindowTransformAction::advanceRowNumber(RowNumber & x) const
+void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 {
-    assert(x.block >= first_block_number);
-    assert(x.block - first_block_number < window_blocks.size());
+    assert(row_num.block >= first_block_number);
+    assert(row_num.block - first_block_number < window_blocks.size());
 
-    const auto block_rows = blockAt(x).rows;
-    assert(x.row < block_rows);
+    const auto block_rows = blockAt(row_num).rows;
+    assert(row_num.row < block_rows);
 
-    ++x.row;
-    if (x.row < block_rows)
+    ++row_num.row;
+    if (row_num.row < block_rows)
     {
         return;
     }
 
-    x.row = 0;
-    ++x.block;
+    row_num.row = 0;
+    ++row_num.block;
+}
+
+RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num) const
+{
+    assert(row_num.block >= first_block_number);
+    assert(!(row_num.block == 0 && row_num.row == 0));
+
+    RowNumber prev_row_num = row_num;
+    if (row_num.row > 0)
+    {
+        --prev_row_num.row;
+        return prev_row_num;
+    }
+
+    --prev_row_num.block;
+    assert(prev_row_num.block - first_block_number < window_blocks.size());
+    const auto new_block_rows = blockAt(prev_row_num).rows;
+    prev_row_num.row = new_block_rows - 1;
+    return prev_row_num;
 }
 
 bool WindowTransformAction::lead(RowNumber & x, size_t offset) const

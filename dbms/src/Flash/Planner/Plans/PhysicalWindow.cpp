@@ -18,10 +18,12 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalWindow.h>
 #include <Interpreters/Context.h>
+#include <Operators/WindowTransformOp.h>
 
 namespace DB
 {
@@ -33,7 +35,7 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
     /// The plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- ... <-- PhysicalSort`.
     /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
@@ -54,10 +56,10 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     auto physical_window = std::make_shared<PhysicalWindow>(
         executor_id,
         schema,
+        fine_grained_shuffle,
         log->identifier(),
         child,
-        window_description,
-        fine_grained_shuffle);
+        window_description);
     return physical_window;
 }
 
@@ -80,11 +82,34 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     {
         /// If there are several streams, we merge them into one.
         executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
-        assert(pipeline.streams.size() == 1);
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
+}
+
+void PhysicalWindow::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t concurrency)
+{
+    executeExpression(exec_status, group_builder, window_description.before_window, log);
+    window_description.fillArgColumnNumbers();
+
+    if (!fine_grained_shuffle.enable())
+        executeUnion(exec_status, group_builder, log);
+
+    /// Window function can be multiple threaded when fine grained shuffle is enabled.
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
+    });
+
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
+        restoreConcurrency(exec_status, group_builder, concurrency, log);
+
+    executeExpression(exec_status, group_builder, window_description.after_window, log);
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

@@ -15,7 +15,9 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -24,7 +26,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 

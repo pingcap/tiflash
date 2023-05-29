@@ -66,6 +66,17 @@ struct WorkloadOptions
 
     bool enable_read_thread;
 
+    String s3_bucket;
+    String s3_endpoint;
+    String s3_access_key_id;
+    String s3_secret_access_key;
+    String s3_root;
+    UInt64 s3_put_concurrency;
+    UInt64 s3_get_concurrency;
+    UInt64 s3_put_count_per_thread;
+    UInt64 s3_get_count_per_thread;
+    String s3_temp_dir;
+
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;

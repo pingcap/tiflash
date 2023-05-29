@@ -122,7 +122,6 @@ private:
 
     void prepare(Block & sample_block);
     void execute(Block & block) const;
-    void executeOnTotals(Block & block) const;
 };
 
 
@@ -195,19 +194,12 @@ public:
     /// Execute the expression on the block. The block must contain all the columns returned by getRequiredColumns.
     void execute(Block & block) const;
 
-    /** Execute the expression on the block of total values.
-      * Almost the same as `execute`. The difference is only when JOIN is executed.
-      */
-    void executeOnTotals(Block & block) const;
-
     /// Obtain a sample block that contains the names and types of result columns.
     const Block & getSampleBlock() const { return sample_block; }
 
     std::string dumpActions() const;
 
     static std::string getSmallestColumn(const NamesAndTypesList & columns);
-
-    BlockInputStreamPtr createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const;
 
 private:
     NamesAndTypesList input_columns;

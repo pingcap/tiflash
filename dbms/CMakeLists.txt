@@ -70,6 +70,7 @@ add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
+add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/S3)
@@ -89,6 +90,7 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnsCommon.cpp
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
+    src/Interpreters/Join.cpp
 )
 
 list (APPEND tiflash_common_io_sources ${CONFIG_BUILD})
@@ -118,7 +120,8 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
-target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
+target_link_libraries(tiflash_common_io PUBLIC process_metrics)
+target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
 
 if (OS_FREEBSD)
     target_compile_definitions (tiflash_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
@@ -180,13 +183,13 @@ target_link_libraries (tiflash_common_io
     cpptoml
     magic_enum
     libsymbolization
+    ${RE2_LIBRARY}
+    ${RE2_ST_LIBRARY}
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
-    ${RE2_LIBRARY}
-    ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
@@ -201,6 +204,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    RemoteTaskProto
     PSCheckpointProto
 )
 
@@ -211,6 +215,7 @@ if (USE_GM_SSL)
 endif ()
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
+    target_include_directories (tiflash_common_io BEFORE PRIVATE ${RE2_INCLUDE_DIR})
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
 
@@ -225,6 +230,7 @@ endif()
 # We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
     target_link_libraries (tiflash_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
+    target_no_warning (tiflash_common_io deprecated-enum-enum-conversion)
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
@@ -301,6 +307,7 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
+    target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge)

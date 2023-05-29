@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgQueryCompiler.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -58,12 +59,12 @@ public:
         : log(Logger::get())
         , ctx(TiFlashTestEnv::getContext())
     {
-        default_timezone_info = ctx.getTimezoneInfo();
+        default_timezone_info = ctx->getTimezoneInfo();
     }
 
 protected:
     LoggerPtr log;
-    Context ctx;
+    ContextPtr ctx;
     static TimezoneInfo default_timezone_info;
     DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query, TimezoneInfo & timezone_info);
 };
@@ -72,40 +73,39 @@ TimezoneInfo FilterParserTest::default_timezone_info;
 
 DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query, TimezoneInfo & timezone_info = default_timezone_info)
 {
-    const TiDB::TableInfo table_info(table_info_json);
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
-        ctx,
+        *ctx,
         query,
         [&](const String &, const String &) {
             return table_info;
         },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, "", false, log);
-    ctx.setDAGContext(&dag_context);
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", false, log);
+    ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(ctx);
+    DAGQuerySource dag(*ctx);
     auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
 
-    std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
+    columns_to_read.reserve(table_info.columns.size());
+    for (const auto & column : table_info.columns)
     {
-        NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            DAGPreparedSets(),
-            source_columns,
-            timezone_info);
-        for (const auto & column : table_info.columns)
-        {
-            columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
-        }
+        columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
+    std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
+        conditions,
+        pushed_down_filters,
+        table_info.columns,
+        std::vector<int>(), // don't care runtime filter
+        0,
+        timezone_info);
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
             columns_to_read.begin(),
@@ -426,10 +426,10 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
-        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"));
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
@@ -440,7 +440,7 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
@@ -455,7 +455,7 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 

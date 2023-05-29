@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
@@ -37,6 +37,9 @@ namespace DB
 class DAGQueryBlock;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
+struct SubqueryForSet;
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
@@ -92,10 +95,7 @@ private:
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
-    DAGContext & dagContext() const
-    {
-        return *context.getDAGContext();
-    }
+    DAGContext & dagContext() const;
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;

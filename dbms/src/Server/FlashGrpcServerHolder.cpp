@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
+#include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
 
 // In order to include grpc::SecureServerCredentials which used in
@@ -127,7 +129,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
-    background_task.begin();
     grpc::ServerBuilder builder;
 
     if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
@@ -235,7 +236,6 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-        background_task.end();
     }
     catch (...)
     {

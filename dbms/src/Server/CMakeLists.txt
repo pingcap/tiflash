@@ -35,17 +35,15 @@ target_link_libraries (server_for_test PUBLIC tiflash_common_io tiflash_storages
 target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
 
 add_library (tiflash-server-lib
-    HTTPHandler.cpp
     CertificateReloader.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
-    NotFoundHandler.cpp
-    PingRequestHandler.cpp
-    RootRequestHandler.cpp
     ServerInfo.cpp
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    BgStorageInit.cpp
+    Bootstrap.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
     RaftConfigParser.cpp)
@@ -126,7 +124,9 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
-    install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
+    if (NOT (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG))
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
+    endif()
 elseif(APPLE)
     # set build rpaths, so that executables can be directly called in build tree (easy to debug)
     set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")

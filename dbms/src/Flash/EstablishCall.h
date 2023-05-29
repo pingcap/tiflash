@@ -17,7 +17,9 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
@@ -36,9 +38,11 @@ public:
     /// Attach async sender in order to notify consumer finish msg directly.
     virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
 
-    /// The default `GRPCKickFunc` implementation is to push tag into completion queue.
-    /// Here return a user-defined `GRPCKickFunc` only for test.
-    virtual std::optional<GRPCKickFunc> getKickFuncForTest() { return std::nullopt; }
+    /// The default `GRPCSendKickFunc` implementation is to push tag into completion queue.
+    /// Here return a user-defined `GRPCSendKickFunc` only for test.
+    virtual std::optional<GRPCSendKickFunc> getGRPCSendKickFuncForTest() { return std::nullopt; }
+
+    virtual std::optional<GRPCReceiveKickFunc> getGRPCReceiveKickFuncForTest() { return std::nullopt; }
 };
 
 class EstablishCallData : public IAsyncCallData
@@ -81,6 +85,9 @@ public:
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
     void tryConnectTunnel();
+
+    const mpp::EstablishMPPConnectionRequest & getRequest() const { return request; }
+    grpc::ServerContext * getGrpcContext() { return &ctx; }
 
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
@@ -133,6 +140,8 @@ private:
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
+    String query_id;
+    String connection_id;
     double waiting_task_time_ms = 0;
 };
 } // namespace DB

@@ -40,7 +40,6 @@ public:
         const String & req_id);
 
     String getName() const override { return NAME; }
-    Block getTotals() override;
     Block getHeader() const override;
 
 protected:
@@ -50,6 +49,8 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
+    // Note: When return_filter is true, res_filter will be point to the filter column of the returned block.
+    // If res_filter is nullptr, it means the filter conditions are always true.
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:

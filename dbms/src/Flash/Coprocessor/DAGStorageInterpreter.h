@@ -20,6 +20,8 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -51,6 +53,8 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
+    void execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -70,16 +74,32 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    void buildLocalStreamsForPhysicalTable(
+
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
+
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    buildLocalExecForPhysicalTable(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        size_t max_block_size);
+
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
+
+    void buildLocalExec(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
+    std::pair<Names, std::vector<UInt8>> getColumnsForTableScan();
 
     std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
@@ -94,16 +114,30 @@ private:
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
+    void buildRemoteExec(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        const std::vector<RemoteRequest> & remote_requests);
+
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
+
+    void executeCastAfterTableScan(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        size_t remote_read_start_index);
 
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
 
+    void executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
+
 private:
-    std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
+    /// Normally, time and timestamp(when timezone is not UTC) type columns need to be casted after table scan.
+    /// But handle column and virtual column needn't to be casted, we use may_need_add_cast_column to record them.
+    std::vector<UInt8> may_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
 
@@ -133,7 +167,6 @@ private:
     std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
-    NamesAndTypes source_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };

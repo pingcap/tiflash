@@ -12,53 +12,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
 PipelineExecutor::PipelineExecutor(
-    const ProcessListEntryPtr & process_list_entry_,
+    const MemoryTrackerPtr & memory_tracker_,
     Context & context_,
-    const PipelinePtr & root_pipeline_)
-    : QueryExecutor(process_list_entry_, context_)
-    , root_pipeline(root_pipeline_)
+    const String & req_id)
+    : QueryExecutor(memory_tracker_, context_, req_id)
+    , status(req_id)
 {
-    assert(root_pipeline);
+    PhysicalPlan physical_plan{context, log->identifier()};
+    physical_plan.build(context.getDAGContext()->dag_request());
+    physical_plan.outputAndOptimize();
+    root_pipeline = physical_plan.toPipeline(status, context);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    // TODO Now the result handler for batch cop introduces io blocking, we should find a better implementation of get result sink.
-    if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(std::move(result_handler));
-
+    auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+    Events sources;
+    for (const auto & event : events)
     {
-        auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-        Events without_input_events;
-        for (const auto & event : events)
-        {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
-        }
-        for (const auto & event : without_input_events)
-            event->schedule();
+        if (event->prepare())
+            sources.push_back(event);
     }
+    for (const auto & event : sources)
+        event->schedule();
+}
 
+void PipelineExecutor::wait()
+{
     if (unlikely(context.isTest()))
     {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        std::chrono::seconds timeout(15);
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
         status.waitFor(timeout);
     }
     else
     {
         status.wait();
     }
+}
+
+void PipelineExecutor::consume(ResultHandler & result_handler)
+{
+    assert(result_handler);
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+        status.consumeFor(result_handler, timeout);
+    }
+    else
+    {
+        status.consume(result_handler);
+    }
+}
+
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+{
+    if (result_handler)
+    {
+        ///                                 ┌──get_result_sink
+        /// result_handler◄──result_queue◄──┼──get_result_sink
+        ///                                 └──get_result_sink
+
+        // The queue size is same as UnionBlockInputStream = concurrency * 5.
+        assert(root_pipeline);
+        root_pipeline->addGetResultSink(status.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
+        scheduleEvents();
+        consume(result_handler);
+    }
+    else
+    {
+        scheduleEvents();
+        wait();
+    }
+    LOG_TRACE(log, "query finish with {}", status.getQueryProfileInfo().toJson());
     return status.toExecutionResult();
 }
 
@@ -82,8 +120,16 @@ int PipelineExecutor::estimateNewThreadCount()
 
 RU PipelineExecutor::collectRequestUnit()
 {
-    // TODO support collectRequestUnit
-    return 0;
+    // TODO Get cputime more accurately.
+    // Currently, it is assumed that
+    // - The size of the CPU task thread pool is equal to the number of CPU cores.
+    // - Most of the CPU computations are executed in the CPU task thread pool.
+    // Therefore, `query_profile_info.getCPUExecuteTimeNs()` is approximately equal to the actual CPU time of the query.
+    // However, once these two assumptions are broken, it will lead to inaccurate acquisition of CPU time.
+    // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
+    const auto & query_profile_info = status.getQueryProfileInfo();
+    auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
+    return toRU(ceil(cpu_time_ns));
 }
 
 Block PipelineExecutor::getSampleBlock() const

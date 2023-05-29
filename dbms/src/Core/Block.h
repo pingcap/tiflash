@@ -172,10 +172,22 @@ using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
-/// join blocks by columns
+/// Join blocks by columns
+/// The schema of the output block is the same as the header block.
+/// The columns not in the header block will be ignored.
+/// For example:
+/// header: (a UInt32, b UInt32, c UInt32, d UInt32)
+/// block1: (a UInt32, b UInt32, c UInt32, e UInt32), rows: 3
+/// block2: (d UInt32), rows: 3
+/// result: (a UInt32, b UInt32, c UInt32, d UInt32), rows: 3
 Block hstackBlocks(Blocks && blocks, const Block & header);
 
-/// join blocks by rows
+/// Join blocks by rows
+/// For example:
+/// block1: (a UInt32, b UInt32, c UInt32), rows: 2
+/// block2: (a UInt32, b UInt32, c UInt32), rows: 3
+/// result: (a UInt32, b UInt32, c UInt32), rows: 5
+template <bool check_reserve = false>
 Block vstackBlocks(Blocks && blocks);
 
 Block popBlocksListFront(BlocksList & blocks);

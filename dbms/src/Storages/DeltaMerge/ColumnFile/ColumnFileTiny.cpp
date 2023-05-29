@@ -13,12 +13,15 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 #include <memory>
 
@@ -56,17 +59,17 @@ Columns ColumnFileTiny::readFromCache(const ColumnDefines & column_defines, size
     return columns;
 }
 
-Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
-                                     const ColumnDefines & column_defines,
-                                     size_t col_start,
-                                     size_t col_end) const
+Columns ColumnFileTiny::readFromDisk(
+    const IColumnFileDataProviderPtr & data_provider, //
+    const ColumnDefines & column_defines,
+    size_t col_start,
+    size_t col_end) const
 {
     const size_t num_columns_read = col_end - col_start;
 
     Columns columns(num_columns_read); // allocate empty columns
 
-    PageStorage::PageReadFields fields;
-    fields.first = data_page_id;
+    std::vector<size_t> fields;
     const auto & colid_to_offset = schema->getColIdToOffset();
     for (size_t index = col_start; index < col_end; ++index)
     {
@@ -74,7 +77,7 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
         if (auto it = colid_to_offset.find(cd.id); it != colid_to_offset.end())
         {
             auto col_index = it->second;
-            fields.second.push_back(col_index);
+            fields.emplace_back(col_index);
         }
         else
         {
@@ -85,12 +88,11 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
 
     // All columns to be read are not exist in this CFTiny and filled with default value,
     // we can skip reading from disk
-    if (fields.second.empty())
+    if (fields.empty())
         return columns;
 
     // Read the columns from disk and apply DDL cast if need
-    auto page_map = page_reader.read({fields});
-    Page page = page_map.at(data_page_id);
+    Page page = data_provider->readTinyData(data_page_id, fields);
     for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;
@@ -115,7 +117,7 @@ Columns ColumnFileTiny::readFromDisk(const PageReader & page_reader, //
     return columns;
 }
 
-void ColumnFileTiny::fillColumns(const PageReader & page_reader, const ColumnDefines & col_defs, size_t col_count, Columns & result) const
+void ColumnFileTiny::fillColumns(const IColumnFileDataProviderPtr & data_provider, const ColumnDefines & col_defs, size_t col_count, Columns & result) const
 {
     if (result.size() >= col_count)
         return;
@@ -125,15 +127,17 @@ void ColumnFileTiny::fillColumns(const PageReader & page_reader, const ColumnDef
 
     Columns read_cols = readFromCache(col_defs, col_start, col_end);
     if (read_cols.empty())
-        read_cols = readFromDisk(page_reader, col_defs, col_start, col_end);
+        read_cols = readFromDisk(data_provider, col_defs, col_start, col_end);
 
     result.insert(result.end(), read_cols.begin(), read_cols.end());
 }
 
-ColumnFileReaderPtr
-ColumnFileTiny::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr ColumnFileTiny::getReader(
+    const DMContext &,
+    const IColumnFileDataProviderPtr & data_provider,
+    const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnFileTinyReader>(*this, storage_snap, col_defs);
+    return std::make_shared<ColumnFileTinyReader>(*this, data_provider, col_defs);
 }
 
 void ColumnFileTiny::serializeMetadata(WriteBuffer & buf, bool save_schema) const
@@ -169,6 +173,39 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & con
     readIntBinary(bytes, buf);
 
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
+}
+
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, WriteBatches & wbs)
+{
+    auto schema = deserializeSchema(buf);
+    if (!schema)
+        schema = last_schema;
+    RUNTIME_CHECK(schema != nullptr);
+
+    PageIdU64 data_page_id;
+    size_t rows, bytes;
+
+    readIntBinary(data_page_id, buf);
+    readIntBinary(rows, buf);
+    readIntBinary(bytes, buf);
+    auto new_cf_id = context.storage_pool->newLogPageId();
+    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id), data_page_id);
+    // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
+    auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
+    RUNTIME_CHECK(remote_data_location.has_value());
+    auto remote_data_file_lock_key_view = S3::S3FilenameView::fromKey(*remote_data_location->data_file_id);
+    RUNTIME_CHECK(remote_data_file_lock_key_view.isLockFile());
+    auto remote_data_file_key = remote_data_file_lock_key_view.asDataFile().toFullKey();
+    PS::V3::CheckpointLocation new_remote_data_location{
+        .data_file_id = std::make_shared<String>(remote_data_file_key),
+        .offset_in_file = remote_data_location->offset_in_file,
+        .size_in_file = remote_data_location->size_in_file};
+    auto entry = temp_ps->getEntry(remote_page_id);
+    LOG_DEBUG(Logger::get(), "Write remote page[page_id={} remote_location={}] using local page id {}", remote_page_id, new_remote_data_location.toDebugString(), new_cf_id);
+    wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
+
+    auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
+    return {std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id), std::move(schema)};
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader) const
@@ -216,7 +253,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, con
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
-    auto page_id = context.storage_pool.newLogPageId();
+    auto page_id = context.storage_pool->newLogPageId();
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;
@@ -243,19 +280,19 @@ void ColumnFileTiny::removeData(WriteBatches & wbs) const
 
 ColumnPtr ColumnFileTinyReader::getPKColumn()
 {
-    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, 1, cols_data_cache);
+    tiny_file.fillColumns(data_provider, *col_defs, 1, cols_data_cache);
     return cols_data_cache[0];
 }
 
 ColumnPtr ColumnFileTinyReader::getVersionColumn()
 {
-    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, 2, cols_data_cache);
+    tiny_file.fillColumns(data_provider, *col_defs, 2, cols_data_cache);
     return cols_data_cache[1];
 }
 
 std::pair<size_t, size_t> ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
-    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
+    tiny_file.fillColumns(data_provider, *col_defs, output_cols.size(), cols_data_cache);
 
     auto & pk_col = cols_data_cache[0];
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
@@ -267,7 +304,7 @@ Block ColumnFileTinyReader::readNextBlock()
         return {};
 
     Columns columns;
-    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, col_defs->size(), columns);
+    tiny_file.fillColumns(data_provider, *col_defs, col_defs->size(), columns);
 
     read_done = true;
 
@@ -286,7 +323,7 @@ size_t ColumnFileTinyReader::skipNextBlock()
 ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.
-    return std::make_shared<ColumnFileTinyReader>(tiny_file, storage_snap, new_col_defs, cols_data_cache);
+    return std::make_shared<ColumnFileTinyReader>(tiny_file, data_provider, new_col_defs, cols_data_cache);
 }
 
 } // namespace DM

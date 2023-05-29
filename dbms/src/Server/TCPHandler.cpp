@@ -30,6 +30,7 @@
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/WriteBufferFromPocoSocket.h>
 #include <IO/copyData.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/TablesStatus.h>
@@ -199,7 +200,7 @@ void TCPHandler::runImpl()
         catch (LockException & e)
         {
             state.io.onException();
-            lock_info = std::move(e.lock_info);
+            lock_info = std::move(e.locks[0].second);
         }
         catch (RegionException & e)
         {
@@ -417,7 +418,6 @@ void TCPHandler::processOrdinaryQuery()
               */
             if (!block && !isQueryCancelled())
             {
-                sendTotals();
                 sendExtremes();
                 sendProfileInfo();
                 sendProgress();
@@ -467,28 +467,6 @@ void TCPHandler::sendProfileInfo()
         out->next();
     }
 }
-
-
-void TCPHandler::sendTotals()
-{
-    if (auto * input = dynamic_cast<IProfilingBlockInputStream *>(state.io.in.get()))
-    {
-        const Block & totals = input->getTotals();
-
-        if (totals)
-        {
-            initBlockOutput(totals);
-
-            writeVarUInt(Protocol::Server::Totals, *out);
-            writeStringBinary("", *out);
-
-            state.block_out->write(totals);
-            state.maybe_compressed_out->next();
-            out->next();
-        }
-    }
-}
-
 
 void TCPHandler::sendExtremes()
 {

@@ -12,51 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_task_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
+} // namespace FailPoints
+
+#define EXECUTE(function)                                                                   \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel());    \
+    if unlikely (exec_status.isCancelled())                                                 \
+        return ExecTaskStatus::CANCELLED;                                                   \
+    try                                                                                     \
+    {                                                                                       \
+        auto status = (function());                                                         \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
+        return status;                                                                      \
+    }                                                                                       \
+    catch (...)                                                                             \
+    {                                                                                       \
+        LOG_WARNING(log, "error occurred and cancel the query");                            \
+        exec_status.onErrorOccurred(std::current_exception());                              \
+        return ExecTaskStatus::ERROR;                                                       \
+    }
+
 EventTask::EventTask(
-    MemoryTrackerPtr mem_tracker_,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_)
-    : Task(std::move(mem_tracker_))
+    : exec_status(exec_status_)
+    , event(event_)
+{
+    RUNTIME_CHECK(event);
+}
+
+EventTask::EventTask(
+    MemoryTrackerPtr mem_tracker_,
+    const String & req_id,
+    PipelineExecutorStatus & exec_status_,
+    const EventPtr & event_)
+    : Task(std::move(mem_tracker_), req_id)
     , exec_status(exec_status_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
-EventTask::~EventTask()
-{
-    assert(event);
-    event->onTaskFinish();
-    event.reset();
-}
-
-void EventTask::finalize()
+void EventTask::finalizeImpl()
 {
     try
     {
-        bool tmp = false;
-        if (finalized.compare_exchange_strong(tmp, true))
-            finalizeImpl();
+        doFinalizeImpl();
     }
     catch (...)
     {
-        // ignore exception from finalizeImpl.
-        // TODO add log here.
+        exec_status.onErrorOccurred(std::current_exception());
     }
+    event->onTaskFinish(profile_info);
+    event.reset();
 }
 
 ExecTaskStatus EventTask::executeImpl()
 {
-    return doTaskAction([&] { return doExecuteImpl(); });
+    EXECUTE(doExecuteImpl);
+}
+
+ExecTaskStatus EventTask::executeIOImpl()
+{
+    EXECUTE(doExecuteIOImpl);
 }
 
 ExecTaskStatus EventTask::awaitImpl()
 {
-    return doTaskAction([&] { return doAwaitImpl(); });
+    EXECUTE(doAwaitImpl);
 }
+
+#undef EXECUTE
 
 } // namespace DB

@@ -18,19 +18,19 @@ namespace DB
 {
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
-    assert(!source_op && source_op_);
+    RUNTIME_CHECK(!source_op && source_op_);
     source_op = std::move(source_op_);
 }
 void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
-    assert(source_op && transform_op);
+    RUNTIME_CHECK(source_op && transform_op);
     Block header = getCurrentHeader();
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
 }
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
-    assert(!sink_op && sink_op_);
+    RUNTIME_CHECK(!sink_op && sink_op_);
     Block header = getCurrentHeader();
     sink_op_->setHeader(header);
     sink_op = std::move(sink_op_);
@@ -38,7 +38,7 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 
 PipelineExecPtr PipelineExecBuilder::build()
 {
-    assert(source_op && sink_op);
+    RUNTIME_CHECK(source_op && sink_op);
     return std::make_unique<PipelineExec>(
         std::move(source_op),
         std::move(transform_ops),
@@ -53,31 +53,46 @@ Block PipelineExecBuilder::getCurrentHeader() const
         return transform_ops.back()->getHeader();
     else
     {
-        assert(source_op);
+        RUNTIME_CHECK(source_op);
         return source_op->getHeader();
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    assert(concurrency == 0);
-    assert(init_concurrency > 0);
-    concurrency = init_concurrency;
-    group.resize(concurrency);
+    getCurGroup().emplace_back();
+    getCurGroup().back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::reset()
+{
+    groups.clear();
+}
+
+void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
+{
+    RUNTIME_CHECK(groups.size() == other.groups.size());
+    size_t group_num = groups.size();
+    for (size_t i = 0; i < group_num; ++i)
+        groups[i].insert(groups[i].end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    assert(concurrency > 0);
+    RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
-    for (auto & builder : group)
-        pipeline_exec_group.push_back(builder.build());
+    for (auto & group : groups)
+    {
+        RUNTIME_CHECK(!group.empty());
+        for (auto & builder : group)
+            pipeline_exec_group.push_back(builder.build());
+    }
     return pipeline_exec_group;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    assert(!group.empty());
-    return group.back().getCurrentHeader();
+    RUNTIME_CHECK(!getCurGroup().empty());
+    return getCurGroup().back().getCurrentHeader();
 }
 } // namespace DB

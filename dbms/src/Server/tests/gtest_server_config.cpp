@@ -23,6 +23,7 @@
 #endif
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
@@ -458,7 +459,7 @@ dt_page_gc_low_write_prob = 0.2
         return;
     }
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(global_ctx, /*ns_id*/ 100, *path_pool, "test.t1");
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(global_ctx, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
 
     auto verify_storage_pool_reload_config = [&](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();

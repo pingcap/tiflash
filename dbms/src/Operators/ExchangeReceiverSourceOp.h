@@ -26,15 +26,14 @@ class ExchangeReceiverSourceOp : public SourceOp
 public:
     ExchangeReceiverSourceOp(
         PipelineExecutorStatus & exec_status_,
-        const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
-        size_t stream_id_,
         const String & req_id,
-        const String & executor_id)
-        : SourceOp(exec_status_)
+        const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
+        size_t stream_id_)
+        : SourceOp(exec_status_, req_id)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
-        , log(Logger::get(req_id, executor_id))
     {
+        exchange_receiver->verifyStreamId(stream_id);
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }
@@ -44,12 +43,14 @@ public:
         return "ExchangeReceiverSourceOp";
     }
 
+    void operateSuffix() override;
+
 protected:
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
 
-    void operateSuffix() override;
+    bool isAwaitable() const override { return true; }
 
 private:
     Block popFromBlockQueue();
@@ -64,6 +65,5 @@ private:
     std::optional<ReceiveResult> recv_res;
 
     size_t stream_id;
-    const LoggerPtr log;
 };
 } // namespace DB

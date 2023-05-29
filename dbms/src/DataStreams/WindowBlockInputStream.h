@@ -78,7 +78,7 @@ struct WindowTransformAction
     void advancePartitionEnd();
     bool isDifferentFromPrevPartition(UInt64 current_partition_row);
 
-    bool arePeers(const RowNumber & x, const RowNumber & y) const;
+    bool arePeers(const RowNumber & peer_group_last_row, const RowNumber & current_row) const;
 
     void advanceFrameStart();
     void advanceFrameEndCurrentRow();
@@ -138,7 +138,9 @@ struct WindowTransformAction
         return window_blocks[x.block - first_block_number].output_columns;
     }
 
-    void advanceRowNumber(RowNumber & x) const;
+    void advanceRowNumber(RowNumber & row_num) const;
+
+    RowNumber getPreviousRowNumber(const RowNumber & row_num) const;
 
     bool lead(RowNumber & x, size_t offset) const;
 
@@ -154,8 +156,6 @@ struct WindowTransformAction
     void tryCalculate();
 
     bool onlyHaveRowNumber();
-
-    bool onlyHaveRowNumberAndRank();
 
     Int64 getPartitionEndRow(size_t block_rows);
 
@@ -202,6 +202,7 @@ struct WindowTransformAction
 
     // The row for which we are now computing the window functions.
     RowNumber current_row;
+
     // The start of current peer group, needed for CURRENT ROW frame start.
     // For ROWS frame, always equal to the current row, and for RANGE and GROUP
     // frames may be earlier.
@@ -233,7 +234,6 @@ struct WindowTransformAction
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
-    bool only_have_pure_window = false;
 };
 
 class WindowBlockInputStream : public IProfilingBlockInputStream

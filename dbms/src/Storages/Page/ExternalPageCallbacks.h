@@ -35,6 +35,6 @@ struct ExternalPageCallbacksT
     Prefix prefix{};
 };
 
-using ExternalPageCallbacks = ExternalPageCallbacksT<NamespaceId>;
+using ExternalPageCallbacks = ExternalPageCallbacksT<NamespaceID>;
 using UniversalExternalPageCallbacks = ExternalPageCallbacksT<String>;
 } // namespace DB

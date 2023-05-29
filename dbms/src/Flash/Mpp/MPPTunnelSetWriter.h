@@ -32,7 +32,11 @@ public:
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
     // data codec version V0
-    void broadcastOrPassThroughWrite(Blocks & blocks);
+    void broadcastWrite(Blocks & blocks);
+    void passThroughWrite(Blocks & blocks);
+    // data codec version > V0
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
     // this is a partition writing.
     // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);
@@ -59,7 +63,7 @@ public:
 
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
-    virtual bool isReadyForWrite() const = 0;
+    virtual bool isWritable() const = 0;
 
 protected:
     virtual void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) = 0;
@@ -81,8 +85,8 @@ public:
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
 
-    // For sync writer, `isReadyForWrite` will not be called, so an exception is thrown here.
-    bool isReadyForWrite() const override { throw Exception("Unsupport sync writer"); }
+    // For sync writer, `isWritable` will not be called, so an exception is thrown here.
+    bool isWritable() const override { throw Exception("Unsupport sync writer"); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
@@ -100,7 +104,7 @@ public:
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
 
-    bool isReadyForWrite() const override { return mpp_tunnel_set->isReadyForWrite(); }
+    bool isWritable() const override { return mpp_tunnel_set->isWritable(); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;

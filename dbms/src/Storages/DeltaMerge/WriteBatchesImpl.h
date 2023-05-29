@@ -25,7 +25,8 @@ namespace DM
 {
 struct WriteBatches : private boost::noncopyable
 {
-    NamespaceId ns_id;
+    KeyspaceID keyspace_id;
+    NamespaceID ns_id;
     PageStorageRunMode run_mode;
     WriteBatchWrapper log;
     WriteBatchWrapper data;
@@ -44,14 +45,15 @@ struct WriteBatches : private boost::noncopyable
     WriteLimiterPtr write_limiter;
 
     explicit WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : ns_id(storage_pool_.getNamespaceId())
+        : keyspace_id(storage_pool_.getKeyspaceID())
+        , ns_id(storage_pool_.getNamespaceID())
         , run_mode(storage_pool_.getPageStorageRunMode())
-        , log(run_mode, StorageType::Log, ns_id)
-        , data(run_mode, StorageType::Data, ns_id)
-        , meta(run_mode, StorageType::Meta, ns_id)
-        , removed_log(run_mode, StorageType::Log, ns_id)
-        , removed_data(run_mode, StorageType::Data, ns_id)
-        , removed_meta(run_mode, StorageType::Meta, ns_id)
+        , log(run_mode, keyspace_id, StorageType::Log, ns_id)
+        , data(run_mode, keyspace_id, StorageType::Data, ns_id)
+        , meta(run_mode, keyspace_id, StorageType::Meta, ns_id)
+        , removed_log(run_mode, keyspace_id, StorageType::Log, ns_id)
+        , removed_data(run_mode, keyspace_id, StorageType::Data, ns_id)
+        , removed_meta(run_mode, keyspace_id, StorageType::Meta, ns_id)
         , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {}
@@ -152,10 +154,10 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        WriteBatchWrapper log_wb(run_mode, StorageType::Log, ns_id);
+        WriteBatchWrapper log_wb(run_mode, keyspace_id, StorageType::Log, ns_id);
         for (auto p : written_log)
             log_wb.delPage(p);
-        WriteBatchWrapper data_wb(run_mode, StorageType::Data, ns_id);
+        WriteBatchWrapper data_wb(run_mode, keyspace_id, StorageType::Data, ns_id);
         for (auto p : written_data)
             data_wb.delPage(p);
 

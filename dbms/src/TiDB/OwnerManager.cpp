@@ -51,6 +51,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_owner_mgr_state[];
+extern const char force_fail_to_create_etcd_session[];
 } // namespace FailPoints
 
 static constexpr std::string_view S3GCOwnerKey = "/tiflash/s3gc/owner";
@@ -247,6 +248,7 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
 
             const auto lease_id = session->leaseID();
             LOG_DEBUG(log, "new campaign loop with lease_id={:x}", lease_id);
+            // Let this thread blocks until becone owner or error occurs
             auto && [new_leader, status] = client->campaign(campaign_name, id, lease_id);
             if (!status.ok())
             {
@@ -258,6 +260,8 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                     lease_id,
                     status.error_code(),
                     status.error_message());
+                static constexpr std::chrono::milliseconds CampaignRetryInterval(200);
+                std::this_thread::sleep_for(CampaignRetryInterval);
                 continue;
             }
 
@@ -454,6 +458,13 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
 
     keep_alive_ctx = std::make_unique<grpc::ClientContext>();
     auto session = client->createSession(keep_alive_ctx.get(), leader_ttl);
+    fiu_do_on(FailPoints::force_fail_to_create_etcd_session, { session = nullptr; });
+    if (!session)
+    {
+        // create failed, skip adding keep alive tasks
+        return {};
+    }
+
     keep_alive_handle = bkg_pool.addTask(
         [this, s = session] {
             if (!s->keepAliveOne())

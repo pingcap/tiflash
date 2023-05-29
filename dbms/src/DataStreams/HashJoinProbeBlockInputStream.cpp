@@ -12,162 +12,174 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
+#include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
-    size_t probe_index_,
+    size_t scan_hash_map_after_probe_stream_index,
     const String & req_id,
-    UInt64 max_block_size)
+    UInt64 max_block_size_)
     : log(Logger::get(req_id))
-    , join(join_)
-    , probe_index(probe_index_)
-    , probe_process_info(max_block_size)
+    , original_join(join_)
 {
     children.push_back(input);
 
-    RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
-    RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
-    if (join->needReturnNonJoinedData())
-        non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
+    RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
+    RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+
+    probe_exec.set(HashJoinProbeExec::build(original_join, input, scan_hash_map_after_probe_stream_index, max_block_size_));
+    probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
+
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.resetBlock(input->getHeader());
+    header = original_join->joinBlock(header_probe_process_info, true);
 }
 
-Block HashJoinProbeBlockInputStream::getTotals()
+void HashJoinProbeBlockInputStream::readSuffixImpl()
 {
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
-    {
-        totals = child->getTotals();
-        if (!totals)
-        {
-            if (join->hasTotals())
-            {
-                for (const auto & name_and_type : child->getHeader().getColumnsWithTypeAndName())
-                {
-                    auto column = name_and_type.type->createColumn();
-                    column->insertDefault();
-                    totals.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-                }
-            }
-            else
-                return totals; /// There's nothing to JOIN.
-        }
-        join->joinTotals(totals);
-    }
-
-    return totals;
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
-    Block res = children.back()->getHeader();
-    assert(res.rows() == 0);
-    ProbeProcessInfo header_probe_process_info(0);
-    header_probe_process_info.resetBlock(std::move(res));
-    return join->joinBlock(header_probe_process_info);
-}
-
-void HashJoinProbeBlockInputStream::finishOneProbe()
-{
-    bool expect = false;
-    if likely (probe_finished.compare_exchange_strong(expect, true))
-        join->finishOneProbe();
+    return header;
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
-    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
-    /// and expects these meaningless blocks won't be used to produce meaningful result.
-    try
-    {
-        finishOneProbe();
-    }
-    catch (...)
-    {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        LOG_WARNING(log, error_message);
-        join->meetError(error_message);
-    }
-    if (non_joined_stream != nullptr)
-    {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
-        if (p_stream != nullptr)
-            p_stream->cancel(kill);
-    }
+
+    probe_exec->cancel();
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    try
+    return getOutputBlock();
+}
+
+void HashJoinProbeBlockInputStream::switchStatus(ProbeStatus to)
+{
+    LOG_TRACE(log, fmt::format("{} -> {}", magic_enum::enum_name(status), magic_enum::enum_name(to)));
+    status = to;
+}
+
+void HashJoinProbeBlockInputStream::onCurrentProbeDone()
+{
+    switchStatus(probe_exec->onProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::WAIT_PROBE_FINISH);
+}
+
+void HashJoinProbeBlockInputStream::onCurrentScanHashMapDone()
+{
+    switchStatus(probe_exec->onScanHashMapAfterProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN);
+}
+
+void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
+{
+    if (auto restore_probe_exec = probe_exec->tryGetRestoreExec(); restore_probe_exec && unlikely(!isCancelledOrThrowIfKilled()))
     {
-        Block ret = getOutputBlock();
-        return ret;
+        probe_exec.set(std::move(restore_probe_exec));
+        switchStatus(ProbeStatus::RESTORE_BUILD);
     }
-    catch (...)
+    else
     {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        join->meetError(error_message);
-        throw Exception(error_message);
+        switchStatus(ProbeStatus::FINISHED);
     }
 }
 
-void HashJoinProbeBlockInputStream::readSuffixImpl()
+void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
+    auto & cur_probe_exec = *probe_exec;
+    if (cur_probe_exec.needScanHashMap())
+    {
+        cur_probe_exec.onScanHashMapAfterProbeStart();
+        switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
+    }
+    else
+    {
+        switchStatus(ProbeStatus::GET_RESTORE_JOIN);
+    }
 }
 
 Block HashJoinProbeBlockInputStream::getOutputBlock()
 {
-    while (true)
+    try
     {
-        switch (status)
+        while (true)
         {
-        case ProbeStatus::PROBE:
-        {
-            if (probe_process_info.all_rows_joined_finish)
+            if unlikely (isCancelledOrThrowIfKilled())
+                return {};
+
+            switch (status)
             {
-                Block block = children.back()->read();
-                if (!block)
+            case ProbeStatus::WAIT_BUILD_FINISH:
+            {
+                auto & cur_probe_exec = *probe_exec;
+                cur_probe_exec.waitUntilAllBuildFinished();
+                /// after Build finish, always go to Probe stage
+                cur_probe_exec.onProbeStart();
+                switchStatus(ProbeStatus::PROBE);
+                break;
+            }
+            case ProbeStatus::PROBE:
+            {
+                auto ret = probe_exec->probe();
+                if (!ret)
                 {
-                    finishOneProbe();
-                    if (join->needReturnNonJoinedData())
-                        status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
-                    else
-                        status = ProbeStatus::FINISHED;
+                    onCurrentProbeDone();
                     break;
                 }
                 else
                 {
-                    join->checkTypes(block);
-                    probe_process_info.resetBlock(std::move(block));
+                    joined_rows += ret.rows();
+                    return ret;
                 }
             }
-            auto ret = join->joinBlock(probe_process_info);
-            joined_rows += ret.rows();
-            return ret;
-        }
-        case ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA:
-            join->waitUntilAllProbeFinished();
-            status = ProbeStatus::READ_NON_JOINED_DATA;
-            non_joined_stream->readPrefix();
-            break;
-        case ProbeStatus::READ_NON_JOINED_DATA:
-        {
-            auto block = non_joined_stream->read();
-            non_joined_rows += block.rows();
-            if (!block)
+            case ProbeStatus::WAIT_PROBE_FINISH:
             {
-                non_joined_stream->readSuffix();
-                status = ProbeStatus::FINISHED;
+                probe_exec->waitUntilAllProbeFinished();
+                onAllProbeDone();
+                break;
             }
-            return block;
+            case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
+            {
+                auto block = probe_exec->fetchScanHashMapData();
+                scan_hash_map_rows += block.rows();
+                if (!block)
+                {
+                    onCurrentScanHashMapDone();
+                    break;
+                }
+                return block;
+            }
+            case ProbeStatus::GET_RESTORE_JOIN:
+            {
+                tryGetRestoreJoin();
+                break;
+            }
+            case ProbeStatus::RESTORE_BUILD:
+            {
+                probe_exec->restoreBuild();
+                switchStatus(ProbeStatus::WAIT_BUILD_FINISH);
+                break;
+            }
+            case ProbeStatus::FINISHED:
+                return {};
+            }
         }
-        case ProbeStatus::FINISHED:
-            return {};
-        }
+    }
+    catch (...)
+    {
+        auto error_message = getCurrentExceptionMessage(true, true);
+        probe_exec->meetError(error_message);
+        switchStatus(ProbeStatus::FINISHED);
+        throw Exception(error_message);
     }
 }
 

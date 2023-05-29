@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 
 namespace DB
@@ -48,7 +49,7 @@ void SharedBlockSchemas::removeOverflow()
         const auto & digest = lru_queue.front();
 
         auto iter = column_file_schemas.find(digest);
-        RUNTIME_CHECK_MSG(iter != column_file_schemas.end(), String(__FUNCTION__) + " inconsistent");
+        RUNTIME_CHECK_MSG(iter != column_file_schemas.end(), "{} inconsistent", __FUNCTION__);
 
         const Holder & holder = iter->second;
         if (auto p = holder.column_file_schema.lock(); p)
@@ -64,7 +65,7 @@ void SharedBlockSchemas::removeOverflow()
         GET_METRIC(tiflash_shared_block_schemas, type_current_size).Decrement();
     }
 
-    RUNTIME_CHECK_MSG(current_size <= (1ull << 63), String(__FUNCTION__) + " inconsistent, current_size < 0");
+    RUNTIME_CHECK_MSG(current_size <= (1ull << 63), "{} inconsistent, current_size < 0", __FUNCTION__);
 }
 
 

@@ -26,8 +26,8 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
@@ -67,6 +67,7 @@ public:
                                                                  false,
                                                                  "test",
                                                                  "t_100",
+                                                                 NullspaceID,
                                                                  100,
                                                                  true,
                                                                  *cols,
@@ -142,6 +143,7 @@ public:
                                                                  false,
                                                                  "test",
                                                                  "t_101",
+                                                                 NullspaceID,
                                                                  101,
                                                                  true,
                                                                  *cols,

@@ -253,7 +253,7 @@ public:
 
     template <typename... Args>
     TiFlashException(const TiFlashError & _error, const std::string & fmt, Args &&... args)
-        : Exception(FmtBuffer().fmtAppend(fmt, std::forward<Args>(args)...).toString())
+        : Exception(FmtBuffer().fmtAppend(fmt::runtime(fmt), std::forward<Args>(args)...).toString())
         , error(_error)
     {}
 

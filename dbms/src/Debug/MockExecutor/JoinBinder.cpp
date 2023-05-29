@@ -24,6 +24,12 @@
 
 namespace DB::mock
 {
+
+void JoinBinder::addRuntimeFilter(MockRuntimeFilter & rf)
+{
+    rf_list.push_back(std::make_shared<MockRuntimeFilter>(rf));
+}
+
 void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
 {
     std::unordered_set<String> left_columns;
@@ -146,7 +152,8 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
 
     join->set_join_type(tp);
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
-    join->set_inner_idx(1);
+    join->set_inner_idx(inner_index);
+    join->set_is_null_aware_semi_join(is_null_aware_semi_join);
 
     for (const auto & key : join_cols)
     {
@@ -179,6 +186,12 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     {
         tipb::Expr * cond = join->add_other_eq_conditions_from_in();
         astToPB(merged_children_schema, expr, cond, collator_id, context);
+    }
+
+    // add runtime filter
+    for (const auto & rf : rf_list)
+    {
+        rf->toPB(children[1]->output_schema, children[0]->output_schema, collator_id, context, join->add_runtime_filter_list());
     }
 
     auto * left_child_executor = join->add_children();
@@ -290,14 +303,16 @@ ExecutorBinderPtr compileJoin(size_t & executor_index,
                               const ASTs & right_conds,
                               const ASTs & other_conds,
                               const ASTs & other_eq_conds_from_in,
-                              uint64_t fine_grained_shuffle_stream_count)
+                              uint64_t fine_grained_shuffle_stream_count,
+                              bool is_null_aware_semi_join,
+                              int64_t inner_index)
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
-    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
+    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join, inner_index);
     join->children.push_back(left);
     join->children.push_back(right);
 
@@ -320,10 +335,10 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
     case ASTTableJoin::Kind::Inner:
         tp = tipb::JoinType::TypeInnerJoin;
         break;
-    case ASTTableJoin::Kind::Left:
+    case ASTTableJoin::Kind::LeftOuter:
         tp = tipb::JoinType::TypeLeftOuterJoin;
         break;
-    case ASTTableJoin::Kind::Right:
+    case ASTTableJoin::Kind::RightOuter:
         tp = tipb::JoinType::TypeRightOuterJoin;
         break;
     default:

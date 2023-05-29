@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Core/Spiller.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -51,13 +53,13 @@ protected:
         if (spiller_dir.exists())
             spiller_dir.remove(true);
     }
-    Blocks generateBlocks(size_t block_num)
+    Blocks generateBlocks(size_t block_num, const Block & schema)
     {
         Blocks ret;
         for (size_t i = 0; i < block_num; ++i)
         {
             ColumnsWithTypeAndName data;
-            for (const auto & type_and_name : spiller_test_header)
+            for (const auto & type_and_name : schema)
             {
                 auto column = type_and_name.type->createColumn();
                 for (size_t k = 0; k < 100; ++k)
@@ -67,6 +69,10 @@ protected:
             ret.emplace_back(data);
         }
         return ret;
+    }
+    Blocks generateBlocks(size_t block_num)
+    {
+        return generateBlocks(block_num, spiller_test_header);
     }
     Blocks generateSortedBlocks(size_t block_num)
     {
@@ -205,7 +211,7 @@ try
         auto blocks = generateBlocks(3);
         for (const auto & block : blocks)
             ref += block.rows();
-        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(std::move(blocks), 0);
     }
     spiller.finishSpill();
     GTEST_ASSERT_EQ(ref, spiller.spilledRows(0));
@@ -225,7 +231,7 @@ try
         {
             auto blocks = generateBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-            spiller.spillBlocks(blocks, partition_id);
+            spiller.spillBlocks(std::move(blocks), partition_id);
         }
     }
     spiller.finishSpill();
@@ -260,7 +266,7 @@ try
                 BlocksList block_list;
                 block_list.insert(block_list.end(), blocks.begin(), blocks.end());
                 all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-                BlocksListBlockInputStream block_input_stream(std::move(block_list));
+                auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
                 spiller->spillBlocksUsingBlockInputStream(block_input_stream, partition_id, []() { return false; });
             }
         }
@@ -292,7 +298,8 @@ try
     Blocks blocks = generateBlocks(50);
     for (auto & spiller : spillers)
     {
-        spiller->spillBlocks(blocks, 0);
+        auto blocks_to_spill = blocks;
+        spiller->spillBlocks(std::move(blocks_to_spill), 0);
         spiller->finishSpill();
         verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
         if (!spiller->releaseSpilledFileOnRestore())
@@ -320,7 +327,7 @@ try
         {
             auto blocks = generateSortedBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-            spiller.spillBlocks(blocks, partition_id);
+            spiller.spillBlocks(std::move(blocks), partition_id);
         }
     }
     spiller.finishSpill();
@@ -355,7 +362,7 @@ try
                 BlocksList block_list;
                 block_list.insert(block_list.end(), blocks.begin(), blocks.end());
                 all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-                BlocksListBlockInputStream block_input_stream(std::move(block_list));
+                auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
                 spiller->spillBlocksUsingBlockInputStream(block_input_stream, partition_id, []() { return false; });
             }
         }
@@ -382,11 +389,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(20);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
     }
     /// append_dummy_read = true
@@ -395,11 +403,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(20);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
     }
 }
@@ -416,11 +425,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(50);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
     }
     /// case 2, one spill write to multiple files
@@ -428,32 +438,34 @@ try
         spiller_config_for_append_write.max_spilled_rows_per_file = 1;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         auto all_blocks = generateBlocks(20);
-        spiller.spillBlocks(all_blocks, 0);
+        auto reference = all_blocks;
+        spiller.spillBlocks(std::move(all_blocks), 0);
         spiller.finishSpill();
-        verifyRestoreBlocks(spiller, 0, 0, 20, all_blocks);
+        verifyRestoreBlocks(spiller, 0, 0, 20, reference);
     }
     /// case 3, spill empty blocks to existing spilled file
     {
         spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks = generateBlocks(20);
-        spiller.spillBlocks(all_blocks, 0);
+        auto reference = all_blocks;
+        spiller.spillBlocks(std::move(all_blocks), 0);
         Blocks empty_blocks;
-        spiller.spillBlocks(empty_blocks, 0);
+        spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
-        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
-        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+        verifyRestoreBlocks(spiller, 0, 2, 1, reference);
     }
     /// case 4, spill empty blocks to new spilled file
     {
         spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks empty_blocks;
-        spiller.spillBlocks(empty_blocks, 0);
+        spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
-        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
         ASSERT_TRUE(spiller.hasSpilledData() == false);
@@ -474,7 +486,7 @@ try
     Spiller spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
     BlocksList block_list;
     block_list.insert(block_list.end(), blocks.begin(), blocks.end());
-    BlocksListBlockInputStream block_input_stream(std::move(block_list));
+    auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
     spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() {
         static Int64 i = 0;
         return i++ >= 10;
@@ -483,32 +495,136 @@ try
 }
 CATCH
 
+TEST_F(SpillerTest, SpillAllConstantBlock)
+try
+{
+    auto constant_header = spiller_test_header;
+    for (auto & type_and_name : constant_header)
+        type_and_name.column = type_and_name.type->createColumnConst(1, Field(static_cast<Int64>(1)));
+
+    Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "Check const_column_indexes.size() < input_schema.columns() failed: Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+}
+
+TEST_F(SpillerTest, SpillWithConstantSchemaAndNonConstantData)
+try
+{
+    NamesAndTypes names_and_types;
+    names_and_types.emplace_back("col0", DataTypeFactory::instance().get("Int64"));
+    names_and_types.emplace_back("col1", DataTypeFactory::instance().get("UInt64"));
+
+    std::vector<bool> const_columns_flag = {
+        true,
+        false,
+    };
+
+
+    ColumnsWithTypeAndName columns;
+    for (size_t i = 0; i < names_and_types.size(); i++)
+    {
+        if (const_columns_flag[i])
+        {
+            /// const column
+            columns.emplace_back(names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
+                                 names_and_types[i].type,
+                                 names_and_types[i].name);
+        }
+        else
+        {
+            /// normal column
+            columns.emplace_back(names_and_types[i].type->createColumn(),
+                                 names_and_types[i].type,
+                                 names_and_types[i].name);
+        }
+    }
+    Block header(columns);
+    Spiller spiller(*spill_config_ptr, false, 1, header, logger);
+    auto all_blocks = generateBlocks(20, header);
+    spiller.spillBlocks(std::move(all_blocks), 0);
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message().find("Check block.getByPosition(*it).column->isColumnConst() failed: The 0-th column in block must be constant column") != std::string::npos, true);
+}
+
 TEST_F(SpillerTest, SpillAndRestoreConstantData)
 try
 {
-    Spiller spiller(*spill_config_ptr, false, 1, spiller_test_header, logger);
-    Blocks ret;
-    ColumnsWithTypeAndName data;
-    for (const auto & type_and_name : spiller_test_header)
+    NamesAndTypes names_and_types;
+    names_and_types.emplace_back("col0", DataTypeFactory::instance().get("Int64"));
+    names_and_types.emplace_back("col1", DataTypeFactory::instance().get("UInt64"));
+    names_and_types.emplace_back("col2", DataTypeFactory::instance().get("Nullable(Int64)"));
+    names_and_types.emplace_back("col3", DataTypeFactory::instance().get("Nullable(UInt64)"));
+    names_and_types.emplace_back("col4", DataTypeFactory::instance().get("Int64"));
+    names_and_types.emplace_back("col5", DataTypeFactory::instance().get("UInt64"));
+
+    std::vector<std::vector<bool>> const_columns_flags = {
+        {false, false, false, false, false, true},
+        {false, true, true, true, true, true},
+        {true, false, false, false, false, false},
+        {true, true, true, true, true, false},
+        {true, false, true, false, true, false},
+        {false, true, false, true, false, true},
+        {false, true, false, true, false, false},
+        {true, false, true, false, true, true},
+    };
+
+    for (const auto & const_columns_flag : const_columns_flags)
     {
-        auto column = type_and_name.type->createColumnConst(100, Field(static_cast<Int64>(1)));
-        data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
-    }
-    ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
-    spiller.finishSpill();
-    auto block_streams = spiller.restoreBlocks(0, 2);
-    GTEST_ASSERT_EQ(block_streams.size(), 1);
-    Blocks restored_blocks;
-    for (auto & block_stream : block_streams)
-    {
-        for (Block block = block_stream->read(); block; block = block_stream->read())
-            restored_blocks.push_back(block);
-    }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
-    {
-        blockEqual(materializeBlock(ret[i]), restored_blocks[i]);
+        ColumnsWithTypeAndName columns;
+        for (size_t i = 0; i < names_and_types.size(); i++)
+        {
+            if (const_columns_flag[i])
+            {
+                /// const column
+                columns.emplace_back(names_and_types[i].type->createColumnConst(1, Field(static_cast<Int64>(1))),
+                                     names_and_types[i].type,
+                                     names_and_types[i].name);
+            }
+            else
+            {
+                /// normal column
+                columns.emplace_back(names_and_types[i].type->createColumn(),
+                                     names_and_types[i].type,
+                                     names_and_types[i].name);
+            }
+        }
+        Block header(columns);
+        Spiller spiller(*spill_config_ptr, false, 1, header, logger);
+        auto all_blocks = generateBlocks(20, header);
+        for (auto & block : all_blocks)
+        {
+            for (size_t i = 0; i < const_columns_flag.size(); i++)
+            {
+                if (header.getByPosition(i).column->isColumnConst())
+                {
+                    Field constant_field;
+                    header.getByPosition(i).column->get(0, constant_field);
+                    block.getByPosition(i).column = header.getByPosition(i).type->createColumnConst(block.rows(), constant_field);
+                }
+            }
+        }
+        auto reference = all_blocks;
+        spiller.spillBlocks(std::move(all_blocks), 0);
+        spiller.finishSpill();
+        auto block_streams = spiller.restoreBlocks(0, 1);
+        GTEST_ASSERT_EQ(block_streams.size(), 1);
+        Blocks restored_blocks;
+        for (auto & block_stream : block_streams)
+        {
+            for (Block block = block_stream->read(); block; block = block_stream->read())
+                restored_blocks.push_back(block);
+        }
+        GTEST_ASSERT_EQ(reference.size(), restored_blocks.size());
+        for (size_t i = 0; i < reference.size(); ++i)
+        {
+            blockEqual(materializeBlock(reference[i]), restored_blocks[i]);
+        }
     }
 }
 CATCH
@@ -550,9 +666,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -586,9 +703,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -620,9 +738,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -650,9 +769,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 

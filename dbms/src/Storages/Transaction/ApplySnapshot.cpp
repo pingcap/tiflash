@@ -84,9 +84,9 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryFlushRegion(old_region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(old_region, false);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, region_lock, "save previous region before apply");
+            persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
     }
 
@@ -119,7 +119,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     {
         auto table_id = new_region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        auto keyspace_id = new_region->getKeyspaceID();
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             switch (storage->engineType())
             {
@@ -142,10 +143,11 @@ template <typename RegionPtrWrap>
 void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
+    auto keyspace_id = new_region_wrap->getKeyspaceID();
 
     {
         auto table_id = new_region_wrap->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
         {
             try
             {
@@ -178,6 +180,10 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
                     dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
+                else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+                {
+                    dm_storage->ingestSegmentsFromCheckpointInfo(new_key_range, new_region_wrap.checkpoint_info, context.getSettingsRef());
+                }
                 else
                 {
                     // Call `deleteRange` to delete data for range
@@ -203,7 +209,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         {
             try
             {
-                auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
+                auto tmp = region_table.tryWriteBlockByRegionAndFlush(new_region_wrap, false);
                 {
                     std::lock_guard lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
@@ -255,7 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, region_lock, "save current region after apply");
+        persistRegion(*new_region, &region_lock, "save current region after apply");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -282,7 +288,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
-/// return the ids of DTFile(s), the uncommited data will be inserted to `new_region`
+/// return the ids of DTFile(s), the uncommitted data will be inserted to `new_region`
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
@@ -292,6 +298,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     TMTContext & tmt)
 {
     auto context = tmt.getContext();
+    auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
@@ -311,7 +318,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         try
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
-            // Will return the storage even if it is tombstoned.
+            // Will return the storage even if it is tombstone.
             const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
             if (unlikely(storage == nullptr))
             {
@@ -383,7 +390,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context);
+                tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
                 // Next time should force_decode
                 force_decode = true;
 
@@ -475,6 +482,11 @@ void KVStore::handleApplySnapshot(
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+{
+    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
+}
+
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
@@ -494,7 +506,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
             return;
         try
         {
-            tmt.getRegionTable().tryFlushRegion(region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region, false);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
@@ -521,7 +533,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
     else
     {
-        persistRegion(*region, region_task_lock, __FUNCTION__);
+        persistRegion(*region, &region_task_lock, __FUNCTION__);
         return EngineStoreApplyRes::Persist;
     }
 }
@@ -534,7 +546,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     // Create a tmp region to store uncommitted data
     RegionPtr tmp_region;
     {
-        auto meta_region = region->getMetaRegion();
+        auto meta_region = region->cloneMetaRegion();
         auto meta_snap = region->dumpRegionMetaSnapshot();
         auto peer_id = meta_snap.peer.id();
         tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
@@ -557,7 +569,8 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     if (!external_files.empty())
     {
         auto table_id = region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        auto keyspace_id = region->getKeyspaceID();
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             // Ingest DTFiles into DeltaMerge storage
             auto & context = tmt.getContext();

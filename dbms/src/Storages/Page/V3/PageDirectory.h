@@ -19,9 +19,9 @@
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
@@ -45,6 +45,7 @@ extern const Metric PSMVCCNumSnapshots;
 
 namespace DB::PS::V3
 {
+
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
@@ -171,9 +172,13 @@ public:
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver);
+    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver, const PageEntryV3 & entry);
 
     void createDelete(const PageVersion & ver);
+
+    // Update the local cache info for remote page,
+    // Must a hold snap to prevent the page being deleted.
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 
@@ -185,6 +190,8 @@ public:
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
     std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
+
+    void copyCheckpointInfoFromEdit(const typename PageEntriesEdit::EditRecord & edit);
 
     bool isVisible(UInt64 seq) const;
 
@@ -214,6 +221,7 @@ public:
         UInt64 lowest_seq,
         std::map<PageId, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
+        RemoteFileValidSizes * remote_file_sizes,
         const PageLock & page_lock);
     /**
      * Decrease the ref-count of entry with given `deref_ver`.
@@ -252,6 +260,7 @@ public:
             being_ref_count,
             entries.size());
     }
+    template <typename T>
     friend class PageStorageControlV3;
 
 private:
@@ -341,7 +350,13 @@ public:
 
     std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
 
-    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+    // Apply the edit into PageDirectory.
+    // If there are CheckpointInfo along with the applied edit, this function will
+    // returns the applied data file ids.
+    std::unordered_set<String> apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+    // return ignored entries, and the corresponding space in BlobFile should be reclaimed
+    PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
@@ -353,9 +368,18 @@ public:
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
+    size_t copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
+
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    PageEntries gcInMemEntries(bool return_removed_entries = true);
+    struct InMemGCOption
+    {
+        // if true collect the removed entries and return
+        bool need_removed_entries = true;
+        // collect the valid size of remote ids if not nullptr
+        RemoteFileValidSizes * remote_valid_sizes = nullptr;
+    };
+    PageEntries gcInMemEntries(const InMemGCOption & options);
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.
@@ -395,6 +419,7 @@ public:
 
     template <typename>
     friend class PageDirectoryFactory;
+    template <typename>
     friend class PageStorageControlV3;
 
 private:
@@ -421,6 +446,18 @@ private:
         return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
 
+    struct Writer
+    {
+        PageEntriesEdit * edit;
+        bool done = false; // The work has been performed by other thread
+        bool success = false; // The work complete successfully
+        std::unique_ptr<DB::Exception> exception;
+        std::condition_variable cv;
+    };
+
+    // return the last writer in the group
+    Writer * buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/);
+
 private:
     // max page id after restart(just used for table storage).
     // it may be for the whole instance or just for some specific prefix which is depending on the Trait passed.
@@ -430,7 +467,22 @@ private:
     std::atomic<UInt64> sequence;
 
     // Used for avoid concurrently apply edits to wal and mvcc_table_directory.
-    mutable std::shared_mutex apply_mutex;
+    mutable std::mutex apply_mutex;
+    // This is a queue of Writers to PageDirectory and is protected by apply_mutex.
+    // Every writer enqueue itself to this queue before writing.
+    // And the head writer of the queue will become the leader and is responsible to write and sync the WAL.
+    // The write process of the leader:
+    //   1. scan the queue to find all available writers and merge their edits to the leader's edit;
+    //   2. unlock the apply_mutex;
+    //   3. write the edits to the WAL and sync it;
+    //   4. apply the edit to mvcc_table_directory;
+    //   5. lock the apply_mutex;
+    //   6. dequeue the writers found in step 1 and notify them that their write work has completed;
+    //   7. if the writer queue is not empty, notify the head writer to become the leader of next write;
+    // Other writers in the queue just wait the leader to wake them up and one of the two conditions must be true:
+    //   1. its work has been finished by the leader, and they can just return;
+    //   2. it becomes the head of the queue, so it continue to finish the write process of the leader;
+    std::deque<Writer *> writers;
 
     // Used to protect mvcc_table_directory between apply threads and read threads
     mutable std::shared_mutex table_rw_mutex;

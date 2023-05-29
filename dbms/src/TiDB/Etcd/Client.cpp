@@ -165,7 +165,7 @@ SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
     {
         return session;
     }
-    return nullptr;
+    return {};
 }
 
 grpc::Status Client::leaseRevoke(LeaseID lease_id)
@@ -189,7 +189,8 @@ Client::campaign(const String & name, const String & value, LeaseID lease_id)
     req.set_lease(lease_id);
 
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + timeout);
+    // usually use `campaign` blocks until become leader or error happens,
+    // don't set timeout.
 
     v3electionpb::CampaignResponse resp;
     auto status = leaderClient()->election_stub->Campaign(&context, req, &resp);
@@ -237,6 +238,12 @@ bool Session::isValid() const
 
 bool Session::keepAliveOne()
 {
+    if (finished)
+    {
+        // The `writer` has been finished, can not be called again
+        return false;
+    }
+
     etcdserverpb::LeaseKeepAliveRequest req;
     req.set_id(lease_id);
     bool ok = writer->Write(req);
@@ -244,6 +251,7 @@ bool Session::keepAliveOne()
     {
         auto status = writer->Finish();
         LOG_INFO(log, "keep alive write fail, code={} msg={}", status.error_code(), status.error_message());
+        finished = true;
         return false;
     }
     etcdserverpb::LeaseKeepAliveResponse resp;
@@ -253,6 +261,7 @@ bool Session::keepAliveOne()
     {
         auto status = writer->Finish();
         LOG_INFO(log, "keep alive read fail, code={} msg={}", status.error_code(), status.error_message());
+        finished = true;
         return false;
     }
 

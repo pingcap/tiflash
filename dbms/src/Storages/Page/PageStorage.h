@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
@@ -25,6 +26,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WALRecoveryMode.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -45,8 +47,6 @@ class WriteBatch;
 class WriteBatchWrapper;
 class UniversalWriteBatch;
 
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
@@ -132,7 +132,7 @@ public:
 
     virtual size_t getNumberOfPages() = 0;
 
-    virtual std::set<PageIdU64> getAliveExternalPageIds(NamespaceId ns_id) = 0;
+    virtual std::set<PageIdU64> getAliveExternalPageIds(NamespaceID ns_id) = 0;
 
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
@@ -141,17 +141,17 @@ public:
 
     // If we can't get the entry.
     // Then the null entry will be return
-    PageEntry getEntry(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot = {})
+    PageEntry getEntry(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot = {})
     {
         return getEntryImpl(ns_id, page_id, snapshot);
     }
 
-    Page read(NamespaceId ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    Page read(NamespaceID ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
         return readImpl(ns_id, page_id, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    PageMapU64 read(NamespaceId ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    PageMapU64 read(NamespaceID ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
         return readImpl(ns_id, page_ids, read_limiter, snapshot, throw_on_not_exist);
     }
@@ -159,12 +159,12 @@ public:
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageIdU64, FieldIndices>;
 
-    PageMapU64 read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    PageMapU64 read(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
         return readImpl(ns_id, page_fields, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    Page read(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    Page read(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
         return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
@@ -174,7 +174,7 @@ public:
         traverseImpl(acceptor, snapshot);
     }
 
-    PageIdU64 getNormalPageId(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    PageIdU64 getNormalPageId(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
         return getNormalPageIdImpl(ns_id, page_id, snapshot, throw_on_not_exist);
     }
@@ -190,26 +190,26 @@ public:
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
-    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
+    virtual void unregisterExternalPagesCallbacks(NamespaceID /*ns_id*/){};
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
     virtual void writeImpl(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) = 0;
 
-    virtual PageEntry getEntryImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot) = 0;
+    virtual PageEntry getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot) = 0;
 
-    virtual Page readImpl(NamespaceId ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+    virtual Page readImpl(NamespaceID ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMapU64 readImpl(NamespaceId ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+    virtual PageMapU64 readImpl(NamespaceID ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMapU64 readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+    virtual PageMapU64 readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+    virtual Page readImpl(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
-    virtual PageIdU64 getNormalPageIdImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+    virtual PageIdU64 getNormalPageIdImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
 
@@ -230,8 +230,9 @@ public:
     /// Not snapshot read.
     explicit PageReader(
         const PageStorageRunMode & run_mode_,
+        KeyspaceID keyspace_id_,
         StorageType tag_,
-        NamespaceId ns_id_,
+        NamespaceID ns_id_,
         PageStoragePtr storage_v2_,
         PageStoragePtr storage_v3_,
         UniversalPageStoragePtr uni_ps_,
@@ -240,8 +241,9 @@ public:
     /// Snapshot read.
     PageReader(
         const PageStorageRunMode & run_mode_,
+        KeyspaceID keyspace_id_,
         StorageType tag_,
-        NamespaceId ns_id_,
+        NamespaceID ns_id_,
         PageStoragePtr storage_v2_,
         PageStoragePtr storage_v3_,
         UniversalPageStoragePtr uni_ps_,

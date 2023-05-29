@@ -15,7 +15,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -71,20 +70,20 @@ DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) con
     return data.getLockInfo(query);
 }
 
-void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    return insert(NameToCF(cf), std::move(key), std::move(value));
+    return insert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(type, std::move(key), std::move(value));
+    return doInsert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    data.insert(type, std::move(key), std::move(value));
+    data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -644,7 +643,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     {
         return EngineStoreApplyRes::None;
     }
-
     auto & context = tmt.getContext();
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
@@ -791,12 +789,18 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     : meta(std::move(meta_))
     , log(Logger::get())
     , mapped_table_id(meta.getRange()->getMappedTableID())
+    , keyspace_id(meta.getRange()->getKeyspaceID())
     , proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const
 {
     return mapped_table_id;
+}
+
+KeyspaceID Region::getKeyspaceID() const
+{
+    return keyspace_id;
 }
 
 void Region::setPeerState(raft_serverpb::PeerState state)
@@ -813,11 +817,19 @@ UInt64 RegionRaftCommandDelegate::appliedIndex()
 {
     return meta.makeRaftCommandDelegate().applyState().applied_index();
 }
-metapb::Region Region::getMetaRegion() const
+metapb::Region Region::cloneMetaRegion() const
+{
+    return meta.cloneMetaRegion();
+}
+const metapb::Region & Region::getMetaRegion() const
 {
     return meta.getMetaRegion();
 }
-raft_serverpb::MergeState Region::getMergeState() const
+raft_serverpb::MergeState Region::cloneMergeState() const
+{
+    return meta.cloneMergeState();
+}
+const raft_serverpb::MergeState & Region::getMergeState() const
 {
     return meta.getMergeState();
 }

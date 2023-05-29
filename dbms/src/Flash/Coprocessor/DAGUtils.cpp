@@ -23,8 +23,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 namespace DB
@@ -41,6 +39,8 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::RowNumber, "row_number"},
     {tipb::ExprType::Lead, "lead"},
     {tipb::ExprType::Lag, "lag"},
+    {tipb::ExprType::FirstValue, "first_value"},
+    {tipb::ExprType::LastValue, "last_value"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -682,6 +682,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
+
+    {tipb::ScalarFuncSig::GroupingSig, "grouping"},
 });
 
 template <typename GetColumnsFunc, typename GetDataTypeFunc>
@@ -1030,11 +1032,11 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::DenseRank:
     case tipb::ExprType::Lead:
     case tipb::ExprType::Lag:
+    case tipb::ExprType::FirstValue:
+    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::CumeDist:
         //    case tipb::ExprType::PercentRank:
         //    case tipb::ExprType::Ntile:
-        //    case tipb::ExprType::FirstValue:
-        //    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::NthValue:
         return true;
     default:
@@ -1096,7 +1098,7 @@ Field decodeLiteral(const tipb::Expr & expr)
     case tipb::ExprType::Uint64:
         return decodeDAGUInt64(expr.val());
     case tipb::ExprType::Float32:
-        return Float64(decodeDAGFloat32(expr.val()));
+        return static_cast<Float64>(decodeDAGFloat32(expr.val()));
     case tipb::ExprType::Float64:
         return decodeDAGFloat64(expr.val());
     case tipb::ExprType::String:
@@ -1136,9 +1138,37 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
-        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
     }
     return input_col[column_index].name;
+}
+
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col)
+{
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
+    {
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Column index out of bound, expr: {}, size of input columns: {}", expr.DebugString(), input_col.size());
+    }
+    return input_col[column_index].id;
+}
+
+void getColumnIDsFromExpr(const tipb::Expr & expr, const std::vector<ColumnInfo> & input_col, std::unordered_set<ColumnID> & col_id_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (isColumnExpr(expr))
+        {
+            col_id_set.insert(getColumnIDForColumnExpr(expr, input_col));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            getColumnIDsFromExpr(child, input_col, col_id_set);
+        }
+    }
 }
 
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
@@ -1160,8 +1190,8 @@ NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
-        && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
-             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0 || expr.field_type().flen() == -1));
+        && (expr.field_type().tp() != TiDB::TP::TypeNewDecimal
+            || (expr.field_type().decimal() != -1 && expr.field_type().flen() != 0 && expr.field_type().flen() != -1));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)

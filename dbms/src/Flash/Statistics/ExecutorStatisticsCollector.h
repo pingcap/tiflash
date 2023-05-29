@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 #include <map>
 
@@ -26,37 +29,62 @@ class DAGContext;
 class ExecutorStatisticsCollector
 {
 public:
+    explicit ExecutorStatisticsCollector(const String & req_id,
+                                         bool force_fill_executor_id_ = false)
+        : log(Logger::get(req_id))
+        , force_fill_executor_id(force_fill_executor_id_)
+    {}
+
     void initialize(DAGContext * dag_context_);
 
-    void collectRuntimeDetails();
+    String profilesToJson() const;
 
-    const std::map<String, ExecutorStatisticsPtr> & getResult() const { return res; }
+    void fillExecuteSummaries(tipb::SelectResponse & response);
 
-    String resToJson() const;
+    tipb::SelectResponse genExecutionSummaryResponse();
 
-    DAGContext & getDAGContext() const;
+    const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
 private:
-    DAGContext * dag_context = nullptr;
+    void collectRuntimeDetails();
 
-    std::map<String, ExecutorStatisticsPtr> res;
+    void fillLocalExecutionSummaries(tipb::SelectResponse & response);
+
+    void fillRemoteExecutionSummaries(tipb::SelectResponse & response);
+
+    void fillExecutionSummary(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const BaseRuntimeStatistics & statistic,
+        UInt64 join_build_time,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
+
+    void fillChildren();
 
     template <typename T>
-    bool doAppend(const String & executor_id, const tipb::Executor * executor)
+    bool appendImpl(const tipb::Executor * executor)
     {
         if (T::isMatch(executor))
         {
-            res[executor_id] = std::make_shared<T>(executor, *dag_context);
+            profiles[executor->executor_id()] = std::make_shared<T>(executor, *dag_context);
             return true;
         }
         return false;
     }
 
     template <typename... Ts>
-    bool append(const String & executor_id, const tipb::Executor * executor)
+    bool append(const tipb::Executor * executor)
     {
-        RUNTIME_CHECK(res.find(executor_id) == res.end());
-        return (doAppend<Ts>(executor_id, executor) || ...);
+        assert(executor->has_executor_id());
+        assert(profiles.find(executor->executor_id()) == profiles.end());
+        return (appendImpl<Ts>(executor) || ...);
     }
+
+private:
+    DAGContext * dag_context = nullptr;
+    std::map<String, ExecutorStatisticsPtr> profiles;
+    const LoggerPtr log;
+    bool force_fill_executor_id; // for testing list based executors
 };
+using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

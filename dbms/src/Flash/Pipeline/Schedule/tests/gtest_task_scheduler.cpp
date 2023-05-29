@@ -55,8 +55,7 @@ class SimpleTask : public Task
 {
 public:
     explicit SimpleTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleTask()
@@ -65,7 +64,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -81,8 +80,7 @@ class SimpleWaitingTask : public Task
 {
 public:
     explicit SimpleWaitingTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleWaitingTask()
@@ -91,7 +89,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -106,7 +104,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -126,17 +124,66 @@ private:
     Waiter & waiter;
 };
 
+class SimpleBlockedTask : public Task
+{
+public:
+    explicit SimpleBlockedTask(Waiter & waiter_)
+        : waiter(waiter_)
+    {}
+
+    ~SimpleBlockedTask()
+    {
+        waiter.notify();
+    }
+
+protected:
+    ExecTaskStatus executeImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::IO;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::IO;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
+    Waiter & waiter;
+};
+
 enum class TraceTaskStatus
 {
     initing,
     running,
+    io,
     waiting,
 };
 class MemoryTraceTask : public Task
 {
 public:
     MemoryTraceTask(MemoryTrackerPtr mem_tracker_, Waiter & waiter_)
-        : Task(std::move(mem_tracker_))
+        : Task(std::move(mem_tracker_), "")
         , waiter(waiter_)
     {}
 
@@ -149,11 +196,14 @@ public:
     static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         switch (status)
         {
         case TraceTaskStatus::initing:
+            status = TraceTaskStatus::io;
+            return ExecTaskStatus::IO;
+        case TraceTaskStatus::io:
             status = TraceTaskStatus::waiting;
             return ExecTaskStatus::WAITING;
         case TraceTaskStatus::waiting:
@@ -165,6 +215,13 @@ protected:
         default:
             __builtin_unreachable();
         }
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        assert(status == TraceTaskStatus::io);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
+        return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() override
@@ -181,11 +238,6 @@ private:
 
 class DeadLoopTask : public Task
 {
-public:
-    DeadLoopTask()
-        : Task(nullptr)
-    {}
-
 protected:
     ExecTaskStatus executeImpl() override
     {
@@ -193,6 +245,11 @@ protected:
     }
 
     ExecTaskStatus awaitImpl() override
+    {
+        return ExecTaskStatus::IO;
+    }
+
+    ExecTaskStatus executeIOImpl() override
     {
         return ExecTaskStatus::RUNNING;
     }
@@ -206,7 +263,7 @@ public:
 
     void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
-        TaskSchedulerConfig config{thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
@@ -262,7 +319,7 @@ TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
     auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
-        TaskSchedulerConfig config{task_thread_pool_size};
+        TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
         TaskScheduler task_scheduler{config};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)

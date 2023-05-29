@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/BlockUtils.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -19,7 +22,6 @@ namespace DB
 {
 namespace tests
 {
-
 #define DT DecimalField<Decimal32>
 #define COL_GROUP2(a, b)                               \
     {                                                  \
@@ -555,13 +557,13 @@ try
         for (const auto & request : requests)
         {
             auto expect = executeStreams(request, 1);
-            context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
             // 0: use one level merge
             // 1: use two level merge
             std::vector<UInt64> two_level_thresholds{0, 1};
             for (auto two_level_threshold : two_level_thresholds)
             {
-                context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
                 executeAndAssertColumnsEqual(request, expect);
             }
         }
@@ -582,7 +584,7 @@ try
                            .scan("test_db", tables[i])
                            .aggregation({Max(col("value"))}, {col("key")})
                            .build(context);
-        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
         // 0: use one level
         // 1: use two level
         std::vector<UInt64> two_level_thresholds{0, 1};
@@ -592,8 +594,8 @@ try
             {
                 for (auto concurrency : concurrences)
                 {
-                    context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     size_t actual_row = 0;
                     for (auto & block : blocks)
@@ -609,6 +611,125 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, SplitAggOutputWithSpecialGroupKey)
+try
+{
+    /// prepare data
+    size_t unique_rows = 3000;
+    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny, false}, {"key_16", TiDB::TP::TypeShort, false}, {"key_32", TiDB::TP::TypeLong, false}, {"key_64", TiDB::TP::TypeLongLong, false}, {"key_string_1", TiDB::TP::TypeString, false}, {"key_string_2", TiDB::TP::TypeString, false}, {"value", TiDB::TP::TypeLong, false}};
+    ColumnsWithTypeAndName table_column_data;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
+    {
+        ColumnGeneratorOpts opts{unique_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+    for (auto & table_column : table_column_data)
+    {
+        table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows / 2);
+    }
+    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
+    IColumn::Permutation perm;
+    shuffle_column.column->getPermutation(false, 0, -1, perm);
+    for (auto & column : table_column_data)
+    {
+        column.column = column.column->permute(perm, 0);
+    }
+
+    context.addMockTable("test_db", "agg_table_with_special_key", table_column_infos, table_column_data);
+
+    std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> concurrences{1, 8};
+    // 0: use one level
+    // 1: use two level
+    std::vector<UInt64> two_level_thresholds{0, 1};
+    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
+    std::vector<std::vector<String>> group_by_keys{
+        /// fast path with one int and one string
+        {"key_64", "key_string_1"},
+        /// fast path with two string
+        {"key_string_1", "key_string_2"},
+        /// fast path with one string
+        {"key_string_1"},
+        /// keys need to be shuffled
+        {"key_8", "key_16", "key_32", "key_64"},
+    };
+    for (auto collator_id : collators)
+    {
+        for (const auto & keys : group_by_keys)
+        {
+            context.setCollation(collator_id);
+            const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
+            ASSERT_TRUE(current_collator != nullptr);
+            SortDescription sd;
+            bool has_string_key = false;
+            MockAstVec key_vec;
+            for (const auto & key : keys)
+                key_vec.push_back(col(key));
+            auto request = context
+                               .scan("test_db", "agg_table_with_special_key")
+                               .aggregation({Max(col("value"))}, key_vec)
+                               .build(context);
+            /// use one level, no block split, no spill as the reference
+            context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+            auto reference = executeStreams(request);
+            if (current_collator->isCI())
+            {
+                /// for ci collation, need to sort and compare the result manually
+                for (const auto & result_col : reference)
+                {
+                    if (!removeNullable(result_col.type)->isString())
+                    {
+                        sd.push_back(SortColumnDescription(result_col.name, 1, 1, nullptr));
+                    }
+                    else
+                    {
+                        sd.push_back(SortColumnDescription(result_col.name, 1, 1, current_collator));
+                        has_string_key = true;
+                    }
+                }
+                /// don't run ci test if there is no string key
+                if (!has_string_key)
+                    continue;
+                Block tmp_block(reference);
+                sortBlock(tmp_block, sd);
+                reference = tmp_block.getColumnsWithTypeAndName();
+            }
+            for (auto two_level_threshold : two_level_thresholds)
+            {
+                for (auto block_size : max_block_sizes)
+                {
+                    for (auto concurrency : concurrences)
+                    {
+                        context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                        auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+                        for (auto & block : blocks)
+                        {
+                            block.checkNumberOfRows();
+                            ASSERT(block.rows() <= block_size);
+                        }
+                        if (current_collator->isCI())
+                        {
+                            auto merged_block = vstackBlocks(std::move(blocks));
+                            sortBlock(merged_block, sd);
+                            auto merged_columns = merged_block.getColumnsWithTypeAndName();
+                            for (size_t col_index = 0; col_index < reference.size(); col_index++)
+                                ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
+                        }
+                        else
+                        {
+                            ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+CATCH
+
 TEST_F(AggExecutorTestRunner, Empty)
 try
 {
@@ -616,12 +737,70 @@ try
                          {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
                          {toVec<Int64>("s1", {}),
                           toVec<Int64>("s2", {})});
+    context.addExchangeReceiver("empty_recv",
+                                {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                                {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})},
+                                5,
+                                {{"s2", TiDB::TP::TypeLongLong}});
 
     auto request = context
                        .scan("test_db", "empty_table")
                        .aggregation({Max(col("s1"))}, {col("s2")})
                        .build(context);
     executeAndAssertColumnsEqual(request, {});
+
+    request = context
+                  .receive("empty_recv", 5)
+                  .aggregation({Max(col("s1"))}, {col("s2")}, 5)
+                  .build(context);
+    executeAndAssertColumnsEqual(request, {});
+
+    request = context.scan("test_db", "empty_table")
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, FineGrainedShuffle)
+try
+{
+    DB::MockColumnInfoVec column_infos{{"partition", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLong}};
+    ColumnsWithTypeAndName column_data;
+    ColumnsWithTypeAndName common_column_data;
+    size_t table_rows = 1024;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
+    IColumn::Permutation perm;
+    shuffle_column.column->getPermutation(false, 0, -1, perm);
+    for (auto & column : column_data)
+    {
+        column.column = column.column->permute(perm, 0);
+    }
+
+    context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_data, 1, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_data, 3, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_data, 5, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_data, 10, partition_column_infos);
+    std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
+
+    auto gen_request = [&](size_t exchange_concurrency) {
+        return context
+            .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+            .aggregation({Max(col("value"))}, {col("partition")}, exchange_concurrency)
+            .build(context);
+    };
+
+    auto baseline = executeStreams(gen_request(1), 1);
+    for (size_t exchange_concurrency : exchange_receiver_concurrency)
+    {
+        executeAndAssertColumnsEqual(gen_request(exchange_concurrency), baseline);
+    }
 }
 CATCH
 

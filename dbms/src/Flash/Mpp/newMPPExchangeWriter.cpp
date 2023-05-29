@@ -54,13 +54,16 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     }
     else
     {
+        auto mpp_version = dag_context.getMPPTaskMeta().mpp_version();
+        auto data_codec_version = mpp_version == MppVersionV0
+            ? MPPDataPacketV0
+            : MPPDataPacketV1;
+        auto chosen_batch_send_min_limit = mpp_version == MppVersionV0
+            ? batch_send_min_limit
+            : batch_send_min_limit_compression;
+
         if (exchange_type == tipb::ExchangeType::Hash)
         {
-            auto mpp_version = dag_context.getMPPTaskMeta().mpp_version();
-            auto data_codec_version = mpp_version == MppVersionV0
-                ? MPPDataPacketV0
-                : MPPDataPacketV1;
-
             if (enable_fine_grained_shuffle)
             {
                 return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
@@ -75,10 +78,6 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
             }
             else
             {
-                auto chosen_batch_send_min_limit = mpp_version == MppVersionV0
-                    ? batch_send_min_limit
-                    : batch_send_min_limit_compression;
-
                 return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
@@ -91,14 +90,14 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
         }
         else
         {
-            // TODO: support data compression if necessary
-            RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
-
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
-                batch_send_min_limit,
-                dag_context);
+                chosen_batch_send_min_limit,
+                dag_context,
+                data_codec_version,
+                compression_mode,
+                exchange_type);
         }
     }
 }

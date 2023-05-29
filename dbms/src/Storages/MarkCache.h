@@ -36,8 +36,7 @@ struct MarksWeightFunction
 {
     size_t operator()(const MarksInCompressedFile & marks) const
     {
-        /// NOTE Could add extra 100 bytes for overhead of std::vector, cache structures and allocator.
-        return marks.size() * sizeof(MarkInCompressedFile);
+        return marks.allocated_bytes();
     }
 };
 

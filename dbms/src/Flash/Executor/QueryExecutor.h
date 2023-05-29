@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/MemoryTracker.h>
+#include <Common/PtrHolder.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/toRU.h>
@@ -24,18 +26,19 @@
 
 namespace DB
 {
-class ProcessListEntry;
-using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
-
 class Context;
 class DAGContext;
 
 class QueryExecutor
 {
 public:
-    QueryExecutor(const ProcessListEntryPtr & process_list_entry_, Context & context_)
-        : process_list_entry(process_list_entry_)
+    QueryExecutor(
+        const MemoryTrackerPtr & memory_tracker_,
+        Context & context_,
+        const String & req_id)
+        : memory_tracker(memory_tracker_)
         , context(context_)
+        , log(Logger::get(req_id))
     {}
 
     virtual ~QueryExecutor() = default;
@@ -61,9 +64,11 @@ protected:
     DAGContext & dagContext() const;
 
 protected:
-    ProcessListEntryPtr process_list_entry;
+    MemoryTrackerPtr memory_tracker;
     Context & context;
+    LoggerPtr log;
 };
 
 using QueryExecutorPtr = std::unique_ptr<QueryExecutor>;
+using QueryExecutorHolder = PtrHolder<QueryExecutorPtr>;
 } // namespace DB

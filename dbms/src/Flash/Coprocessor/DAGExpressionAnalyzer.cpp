@@ -40,6 +40,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -898,13 +899,14 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
+std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
-
+    std::vector<String> casted_columns;
+    casted_columns.reserve(may_need_add_cast_column.size());
     // For TimeZone
     tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
     String tz_col = getActions(tz_expr, actions);
@@ -915,49 +917,62 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     // For Duration
     String fsp_col;
     static const String dur_func_name = "FunctionConvertDurationFromNanos";
-    for (size_t i = 0; i < need_cast_column.size(); ++i)
+    for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
     {
-        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
+        String casted_name = source_columns[i].name;
+        if (!context.getTimezoneInfo().is_utc_timezone && may_need_add_cast_column[i] && table_scan_columns[i].tp == TiDB::TypeTimestamp)
         {
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
-            source_columns[i].name = casted_name;
+            casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             has_cast = true;
         }
 
-        if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
+        if (may_need_add_cast_column[i] && table_scan_columns[i].tp == TiDB::TypeTime)
         {
             if (table_scan_columns[i].decimal > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
             const auto fsp = table_scan_columns[i].decimal < 0 ? 0 : table_scan_columns[i].decimal;
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
             fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
-            source_columns[i].name = casted_name;
+            casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
+            // We will replace the source_columns[i] with the casted column later
+            // so we need to update the type of the source_column[i]
             source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
             has_cast = true;
         }
-    }
-    NamesWithAliases project_cols;
-    for (auto & col : source_columns)
-        project_cols.emplace_back(col.name, col.name);
-    actions->add(ExpressionAction::project(project_cols));
 
-    return has_cast;
+        casted_columns.emplace_back(std::move(casted_name));
+    }
+
+    return {has_cast, casted_columns};
 }
 
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const std::vector<UInt8> & may_need_add_cast_column,
     const TiDBTableScan & table_scan)
 {
     auto & step = initAndGetLastStep(chain);
+    auto & actions = step.actions;
 
-    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.getColumns());
+    auto [has_cast, casted_columns] = buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan.getColumns());
+
+    if (!has_cast)
+        return false;
+
+    // Add a projection to replace the original columns with the casted columns.
+    // For example:
+    // we have a block with columns (a int64, b float, c int64)
+    // after the cast, the block will be (a int64, b float, c int64, casted_c MyDuration)
+    // After this projection, the block will be (a int64, b float, c MyDuration)
+    NamesWithAliases project_cols;
+    for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
+        project_cols.emplace_back(casted_columns[i], source_columns[i].name);
+    actions->add(ExpressionAction::project(project_cols));
 
     for (auto & col : source_columns)
         step.required_output.push_back(col.name);
 
-    return has_cast;
+    return true;
 }
 
 String DAGExpressionAnalyzer::appendDurationCast(
@@ -969,7 +984,7 @@ String DAGExpressionAnalyzer::appendDurationCast(
     return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
 }
 
-std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
+std::tuple<bool, Names, Names> DAGExpressionAnalyzer::buildJoinKey(
     const ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
@@ -979,6 +994,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
     bool has_actions_of_keys = false;
 
     Names key_names;
+    Names original_key_names;
 
     UniqueNameGenerator unique_name_generator;
     for (int i = 0; i < keys.size(); ++i)
@@ -987,6 +1003,8 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
 
         String key_name = getActions(key, actions);
+        original_key_names.push_back(key_name);
+
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
         const auto & join_key_type = join_key_types[i];
         if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
@@ -1032,7 +1050,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         has_actions_of_keys |= has_actions;
     }
 
-    return std::make_pair(has_actions_of_keys, std::move(key_names));
+    return {has_actions_of_keys, std::move(key_names), std::move(original_key_names)};
 }
 
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
@@ -1040,6 +1058,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
     Names & key_names,
+    Names & original_key_names,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -1049,7 +1068,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
+    std::tie(ret, key_names, original_key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
 
     if (!filters.empty())
     {
@@ -1089,6 +1108,55 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         }
     }
     return ret;
+}
+
+String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
+    ExpressionActionsChain & chain,
+    const Names & probe_key_names,
+    const Names & build_key_names,
+    const TiDB::TiDBCollators & collators)
+{
+    RUNTIME_ASSERT(probe_key_names.size() == build_key_names.size());
+    if (probe_key_names.empty())
+        return "";
+
+    auto & last_step = initAndGetLastStep(chain);
+
+    Names and_arg_names(probe_key_names.size());
+    for (size_t i = 0; i < probe_key_names.size(); ++i)
+    {
+        Names arg_names;
+        arg_names.emplace_back(probe_key_names[i]);
+        arg_names.emplace_back(build_key_names[i]);
+        const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
+        and_arg_names[i] = applyFunction("equals", arg_names, last_step.actions, collator);
+    }
+    return and_arg_names.size() == 1 ? and_arg_names[0] : applyFunction("and", and_arg_names, last_step.actions, nullptr);
+}
+
+void DAGExpressionAnalyzer::appendRuntimeFilterProperties(RuntimeFilterPtr & runtime_filter)
+{
+    NameAndTypePair name_and_type;
+    name_and_type = getColumnNameAndTypeForColumnExpr(runtime_filter->getSourceExpr(), getCurrentInputColumns());
+    runtime_filter->setSourceColumnName(name_and_type.name);
+    Block header;
+    std::shared_ptr<Set> in_values_set;
+    const auto & settings = context.getSettingsRef();
+    switch (runtime_filter->getRFType())
+    {
+    case tipb::IN:
+        in_values_set = std::make_shared<Set>(
+            SizeLimits(settings.rf_max_in_value_set, settings.max_bytes_in_set, settings.set_overflow_mode),
+            TiDB::TiDBCollators{getCollatorFromExpr(runtime_filter->getSourceExpr())});
+        header.insert(ColumnWithTypeAndName(name_and_type.type->createColumn(), name_and_type.type, "_" + toString(1)));
+        in_values_set->setHeader(header);
+        runtime_filter->setINValuesSet(in_values_set);
+        break;
+    case tipb::MIN_MAX:
+    case tipb::BLOOM_FILTER:
+        // todo
+        break;
+    }
 }
 
 void DAGExpressionAnalyzer::appendCastAfterWindow(

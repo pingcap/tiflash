@@ -17,8 +17,8 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
@@ -63,13 +63,13 @@ public:
 
     virtual void initializeContext();
 
-    void initializeClientInfo();
+    void initializeClientInfo() const;
 
     DAGContext & getDAGContext();
 
-    void enablePlanner(bool is_enable);
+    void enablePlanner(bool is_enable) const;
 
-    void enablePipeline(bool is_enable);
+    void enablePipeline(bool is_enable) const;
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
@@ -113,17 +113,28 @@ public:
         }
     }
 
-    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enable_memory_tracker = false);
+    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context);
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1,
-        bool enable_memory_tracker = false);
+        size_t concurrency = 1);
 
     Blocks getExecuteStreamsReturnBlocks(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1,
-        bool enable_memory_tracker = false);
+        size_t concurrency = 1);
+
+    /// test execution summary
+    // <rows, concurrency>
+    using ProfileInfo = std::pair<int, size_t>;
+    using Expect = std::unordered_map<String, ProfileInfo>;
+    static constexpr int not_check_rows = -1;
+    static constexpr UInt64 not_check_concurrency = -1;
+
+
+    void testForExecutionSummary(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const Expect & expect,
+        size_t concurrency = 10);
 
 private:
     void executeExecutor(

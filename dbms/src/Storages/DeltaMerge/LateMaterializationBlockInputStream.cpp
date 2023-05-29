@@ -24,11 +24,13 @@ namespace DB::DM
 
 LateMaterializationBlockInputStream::LateMaterializationBlockInputStream(
     const ColumnDefines & columns_to_read,
+    const String & filter_column_name_,
     BlockInputStreamPtr filter_column_stream_,
     SkippableBlockInputStreamPtr rest_column_stream_,
     const BitmapFilterPtr & bitmap_filter_,
     const String & req_id_)
     : header(toEmptyBlock(columns_to_read))
+    , filter_column_name(filter_column_name_)
     , filter_column_stream(filter_column_stream_)
     , rest_column_stream(rest_column_stream_)
     , bitmap_filter(bitmap_filter_)
@@ -50,23 +52,40 @@ Block LateMaterializationBlockInputStream::readImpl()
         if (!filter_column_block)
             return filter_column_block;
 
-        RUNTIME_CHECK_MSG(filter, "Late materialization meets unexpected null filter");
-
-        // Get mvcc-filter
-        size_t rows = filter_column_block.rows();
-        mvcc_filter.resize(rows);
-        bool all_match = bitmap_filter->get(mvcc_filter, filter_column_block.startOffset(), rows);
-        if (!all_match)
+        // If filter is nullptr, it means that these push down filters are always true.
+        if (!filter)
         {
-            // if mvcc-filter is all match, use filter directly
-            // else use `mvcc-filter & filter` to get the final filter
-            std::transform(mvcc_filter.cbegin(), mvcc_filter.cend(), filter->cbegin(), filter->begin(), [](const UInt8 a, const UInt8 b) { return a != 0 && b != 0; });
+            IColumn::Filter col_filter;
+            col_filter.resize(filter_column_block.rows());
+            Block rest_column_block;
+            if (bitmap_filter->get(col_filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            {
+                rest_column_block = rest_column_stream->read();
+            }
+            else
+            {
+                rest_column_block = rest_column_stream->read();
+                size_t passed_count = countBytesInFilter(col_filter);
+                for (auto & col : rest_column_block)
+                {
+                    col.column = col.column->filter(col_filter, passed_count);
+                }
+                for (auto & col : filter_column_block)
+                {
+                    col.column = col.column->filter(col_filter, passed_count);
+                }
+            }
+            return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
+
+        size_t rows = filter_column_block.rows();
+        // bitmap_filter[start_offset, start_offset + rows] & filter -> filter
+        bitmap_filter->rangeAnd(*filter, filter_column_block.startOffset(), rows);
 
         if (size_t passed_count = countBytesInFilter(*filter); passed_count == 0)
         {
             // if all rows are filtered, skip the next block of rest_column_stream
-            if (rest_column_stream->skipNextBlock() == 0)
+            if (size_t skipped_rows = rest_column_stream->skipNextBlock(); skipped_rows == 0)
             {
                 // if we fail to skip, we need to call read() of rest_column_stream, but ignore the result
                 // NOTE: skipNextBlock() return 0 only if failed to skip or meets the end of stream,
@@ -74,10 +93,6 @@ Block LateMaterializationBlockInputStream::readImpl()
                 //       so it is an unexpected behavior.
                 rest_column_stream->read();
                 LOG_ERROR(log, "Late materialization skip block failed, at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
-            }
-            else
-            {
-                LOG_DEBUG(log, "Late materialization skip read block at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
             }
         }
         else
@@ -94,6 +109,8 @@ Block LateMaterializationBlockInputStream::readImpl()
                 rest_column_block = rest_column_stream->readWithFilter(*filter);
                 for (auto & col : filter_column_block)
                 {
+                    if (col.name == filter_column_name)
+                        continue;
                     col.column = col.column->filter(*filter, passed_count);
                 }
             }
@@ -102,12 +119,14 @@ Block LateMaterializationBlockInputStream::readImpl()
                 // if the number of rows left after filtering out is small, we can't skip any packs of the next block
                 // so we call read() to get the next block, and then filter it.
                 rest_column_block = rest_column_stream->read();
-                for (auto & col : filter_column_block)
+                for (auto & col : rest_column_block)
                 {
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                for (auto & col : rest_column_block)
+                for (auto & col : filter_column_block)
                 {
+                    if (col.name == filter_column_name)
+                        continue;
                     col.column = col.column->filter(*filter, passed_count);
                 }
             }
@@ -118,15 +137,15 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
 
             // make sure the position and size of filter_column_block and rest_column_block are the same
-            RUNTIME_CHECK_MSG(rest_column_block.rows() == filter_column_block.rows() && rest_column_block.startOffset() == filter_column_block.startOffset(),
-                              "Late materialization meets unexpected size of block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
+            RUNTIME_CHECK_MSG(rest_column_block.startOffset() == filter_column_block.startOffset(),
+                              "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
                               filter_column_block.startOffset(),
                               filter_column_block.rows(),
                               rest_column_block.startOffset(),
                               rest_column_block.rows(),
                               passed_count);
-
-            // TODO: remove tmp filter column in filter_column_block
+            // join filter_column_block and rest_column_block by columns,
+            // the tmp column added by FilterBlockInputStream will be removed.
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
     }

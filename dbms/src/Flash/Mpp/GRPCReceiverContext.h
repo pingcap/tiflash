@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -34,6 +33,8 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
+using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+
 
 class ExchangePacketReader
 {
@@ -43,7 +44,7 @@ public:
     virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
 };
-using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
+using ExchangePacketReaderPtr = std::unique_ptr<ExchangePacketReader>;
 
 class AsyncExchangePacketReader
 {
@@ -52,8 +53,9 @@ public:
     virtual void init(UnaryCallback<bool> * callback) = 0;
     virtual void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
     virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+    virtual grpc::ClientContext * getClientContext() = 0;
 };
-using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
+using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
 
 struct ExchangeRecvRequest
 {
@@ -90,9 +92,8 @@ public:
 
     ExchangePacketReaderPtr makeSyncReader(const ExchangeRecvRequest & request) const;
 
-    void makeAsyncReader(
+    AsyncExchangePacketReaderPtr makeAsyncReader(
         const ExchangeRecvRequest & request,
-        AsyncExchangePacketReaderPtr & reader,
         grpc::CompletionQueue * cq,
         UnaryCallback<bool> * callback) const;
 
@@ -103,14 +104,19 @@ public:
 
     void fillSchema(DAGSchema & schema) const;
 
-    void establishMPPConnectionLocalV2(const ExchangeRecvRequest & request, size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void establishMPPConnectionLocalV2(
+        const ExchangeRecvRequest & request,
+        size_t source_index,
+        LocalRequestHandler & local_request_handler,
+        bool is_fine_grained,
+        bool has_remote_conn);
 
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager);
 
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(
         LoggerPtr log,
-        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs);
+        const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs);
 
     // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
     // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),

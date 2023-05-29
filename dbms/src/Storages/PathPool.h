@@ -17,8 +17,10 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool_fwd.h>
+#include <Storages/Transaction/Types.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -27,8 +29,6 @@ namespace DB
 {
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
@@ -59,6 +59,8 @@ public:
     PSDiskDelegatorPtr getPSDiskDelegatorGlobalMulti(const String & prefix) const;
     PSDiskDelegatorPtr getPSDiskDelegatorGlobalSingle(const String & prefix) const;
 
+    PSDiskDelegatorPtr getPSDiskDelegatorFixedDirectory(const String & dir) const;
+
 public:
     /// Methods for the root PathPool ///
     Strings listPaths() const;
@@ -72,6 +74,7 @@ public:
     static const String meta_path_prefix;
     static const String kvstore_path_prefix;
     static const String write_uni_path_prefix;
+    static const String read_node_cache_path_prefix;
 
 public:
     // A thread safe wrapper for storing a map of <page data file id, path index>
@@ -118,6 +121,7 @@ public:
     friend class PSDiskDelegatorRaft;
     friend class PSDiskDelegatorGlobalSingle;
     friend class PSDiskDelegatorGlobalMulti;
+    friend class PSDiskDelegatorFixedDirectory;
 
 private:
     Strings main_data_paths;
@@ -149,7 +153,29 @@ public:
 
     void addDTFile(UInt64 file_id, size_t file_size, std::string_view path);
 
+    // Update the file size of the DTFile with file_id.
+    // Return true if the file size is updated.
+    // Return false if the file size is not updated because the file_id is not in StableDiskDelegator.
+    bool updateDTFileSize(UInt64 file_id, size_t file_size);
+
     void removeDTFile(UInt64 file_id);
+
+    // Used to add reference to remote DTFile at restart or after the local_page_id is applied to PageDirectory.
+    void addRemoteDTFileIfNotExists(UInt64 local_external_id, size_t file_size);
+
+    // The following two methods is for adding new reference to remote DTFile.
+    // Main usage is following:
+    //   addRemoteDTFileWithGCDisabled
+    //   apply local_page_id to PageDirectory
+    //   enableGCForRemoteDTFile
+    void addRemoteDTFileWithGCDisabled(UInt64 local_external_id, size_t file_size);
+    // local_page_id may be an external id or a ref id, and ref id will just be ignored.
+    void enableGCForRemoteDTFile(UInt64 local_page_id);
+
+    void removeRemoteDTFile(UInt64 local_external_id);
+
+    // Return all remote DTFiles that can be GCed.
+    std::set<UInt64> getAllRemoteDTFilesForGC();
 
     DISALLOW_COPY_AND_MOVE(StableDiskDelegator);
 
@@ -469,6 +495,9 @@ private:
     };
     using LatestPathInfos = std::vector<LatestPathInfo>;
 
+    // A map of DMFileID -> { isGCEnabled, FileSize }
+    using RemoteDMFileSizeMap = std::unordered_map<UInt64, std::pair<bool, UInt64>>;
+
     friend class StableDiskDelegator;
     friend class PSDiskDelegatorMulti;
     friend class PSDiskDelegatorSingle;
@@ -483,10 +512,14 @@ private:
     String database;
     String table;
 
-    // This mutex mainly used to protect the `dt_file_path_map`
+    KeyspaceID keyspace_id = NullspaceID;
+
+    // This mutex mainly used to protect the `dt_file_path_map` and `remote_dt_file_size_map`.
     mutable std::mutex mutex;
     // DMFileID -> path index
     DMFilePathMap dt_file_path_map;
+    // local page id -> std::pair<can_gc, file_size>
+    RemoteDMFileSizeMap remote_dt_file_size_map;
 
     bool path_need_database_name = false;
 
@@ -498,5 +531,42 @@ private:
 
     LoggerPtr log;
 };
+
+class PSDiskDelegatorFixedDirectory : public PSDiskDelegator
+{
+public:
+    explicit PSDiskDelegatorFixedDirectory(const PathPool & pool_, const String & path_);
+
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override;
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
+
+    void freePageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_free,
+        const String & pf_parent_path) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
+
+private:
+    String path;
+    const PathPool & pool;
+    PathPool::PageFilePathMap page_path_map;
+};
+
 
 } // namespace DB

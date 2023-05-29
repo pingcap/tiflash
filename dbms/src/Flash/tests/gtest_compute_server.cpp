@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -123,7 +125,7 @@ try
         {{"s1", TiDB::TP::TypeLong}},
         expected_cols);
 
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(100)));
 
     WRAP_FOR_SERVER_TEST_BEGIN
     // For PassThrough and Broadcast, use only one server for testing, as multiple servers will double the result size.
@@ -197,14 +199,18 @@ exchange_sender_4 | type:PassThrough, {<0, Long>}
 exchange_sender_4 | type:PassThrough, {<0, Long>}
  project_3 | {<0, Long>}
   exchange_receiver_2 | type:Hash, {<0, Long>})"};
-        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context
-                .scan("test_db", "big_table")
-                .exchangeSender(tipb::ExchangeType::Hash)
-                .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
-                .project({"s1"}),
-            expected_strings,
-            expected_cols);
+        std::vector<uint64_t> fine_grained_shuffle_stream_count{8, 0};
+        for (uint64_t stream_count : fine_grained_shuffle_stream_count)
+        {
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .exchangeSender(tipb::ExchangeType::Hash, {"test_db.big_table.s1"}, stream_count)
+                    .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}}, stream_count)
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
     }
     WRAP_FOR_SERVER_TEST_END
 }
@@ -691,6 +697,47 @@ try
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
     WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
+TEST_F(ComputeServerRunner, randomFailpointForPipeline)
+try
+{
+    enablePipeline(true);
+    startServers(3);
+    std::vector<String> failpoints{
+        "random_pipeline_model_task_run_failpoint-0.8",
+        "random_pipeline_model_task_construct_failpoint-1.0",
+        "random_pipeline_model_event_schedule_failpoint-1.0",
+        // Because the mock table scan will always output data, there will be no event triggering onEventFinish, so the query will not terminate.
+        // "random_pipeline_model_event_finish_failpoint-0.99",
+        "random_pipeline_model_operator_run_failpoint-0.8",
+        "random_pipeline_model_cancel_failpoint-0.8",
+        "random_pipeline_model_execute_prefix_failpoint-1.0",
+        "random_pipeline_model_execute_suffix_failpoint-1.0"};
+    for (const auto & failpoint : failpoints)
+    {
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
+        initRandomFailPoint(config_str);
+        MPPQueryId query_id{0, 0, 0, 0};
+        try
+        {
+            std::vector<BlockInputStreamPtr> tmp;
+            std::tie(query_id, tmp) = prepareMPPStreams(context
+                                                            .scan("test_db", "l_table")
+                                                            .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                            .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                            .project({col("max(l_table.s)"), col("l_table.s")}));
+        }
+        catch (...)
+        {
+            // Only consider whether a crash occurs
+            ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+        // Check if the query is stuck
+        EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+        disableRandomFailPoint(config_str);
+    }
 }
 CATCH
 

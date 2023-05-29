@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,14 +17,23 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
+#include <DataStreams/LimitTransformAction.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
+#include <DataStreams/SortHelper.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
-
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/FilterTransformOp.h>
+#include <Operators/GeneratedColumnPlaceHolderTransformOp.h>
+#include <Operators/LimitTransformOp.h>
+#include <Operators/MergeSortTransformOp.h>
+#include <Operators/PartialSortTransformOp.h>
+#include <Operators/SharedQueue.h>
 
 namespace DB
 {
@@ -69,6 +78,43 @@ void executeUnion(
     }
 }
 
+void restoreConcurrency(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t concurrency,
+    const LoggerPtr & log)
+{
+    if (concurrency > 1 && group_builder.concurrency() == 1)
+    {
+        auto shared_queue = SharedQueue::build(1, concurrency);
+        // sink op of builder must be empty.
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+        });
+        auto cur_header = group_builder.getCurrentHeader();
+        group_builder.addGroup();
+        for (size_t i = 0; i < concurrency; ++i)
+            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
+    }
+}
+
+void executeUnion(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const LoggerPtr & log)
+{
+    if (group_builder.concurrency() > 1)
+    {
+        auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+        });
+        auto cur_header = group_builder.getCurrentHeader();
+        group_builder.addGroup();
+        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
+    }
+}
+
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
     const NamesWithAliases & project_cols)
@@ -92,6 +138,20 @@ void executeExpression(
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
             stream->setExtraInfo(extra_info);
+        });
+    }
+}
+
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log)
+{
+    if (expr_actions && !expr_actions->getActions().empty())
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
         });
     }
 }
@@ -147,6 +207,113 @@ void orderStreams(
     }
 }
 
+void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    if (SortHelper::isSortByConstants(input_header, order_descr))
+    {
+        // For order by const col and has limit, we will generate LimitOperator directly.
+        if (limit)
+        {
+            group_builder.transform([&](auto & builder) {
+                auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
+            });
+        }
+        // For order by const and doesn't has limit, do nothing here.
+    }
+    else
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
+        });
+        const Settings & settings = context.getSettingsRef();
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency());
+        SpillConfig spill_config{
+            context.getTemporaryPath(),
+            fmt::format("{}_sort", log->identifier()),
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
+            context.getFileProvider()};
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
+                settings.max_block_size,
+                max_bytes_before_external_sort,
+                spill_config));
+        });
+    }
+}
+
+void executeFinalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    if (SortHelper::isSortByConstants(input_header, order_descr))
+    {
+        // For order by const col and has limit, we will generate LimitOperator directly.
+        if (limit)
+        {
+            auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_status, log->identifier(), global_limit));
+            });
+        }
+        // For order by const and doesn't has limit, do nothing here.
+    }
+    else
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
+        });
+
+        executeUnion(exec_status, group_builder, log);
+
+        const Settings & settings = context.getSettingsRef();
+        size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
+        SpillConfig spill_config{
+            context.getTemporaryPath(),
+            fmt::format("{}_sort", log->identifier()),
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
+            context.getFileProvider()};
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
+                settings.max_block_size,
+                max_bytes_before_external_sort,
+                spill_config));
+        });
+    }
+}
+
 void executeCreatingSets(
     DAGPipeline & pipeline,
     const Context & context,
@@ -176,14 +343,14 @@ void executeCreatingSets(
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer)
 {
-    assert(filter_conditions.hasValue());
+    assert(!conditions.empty());
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, filter_conditions.conditions);
+    String filter_column_name = analyzer.appendWhere(chain, conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -207,7 +374,7 @@ void executePushedDownFilter(
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
     assert(remote_read_streams_start_index <= pipeline.streams.size());
     // for remote read, filter had been pushed down, don't need to execute again.
@@ -215,10 +382,34 @@ void executePushedDownFilter(
     {
         auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+        // todo link runtime filter
         stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
+    }
+}
+
+void executePushedDownFilter(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log)
+{
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
+
+    assert(remote_read_sources_start_index <= group_builder.concurrency());
+    auto input_header = group_builder.getCurrentHeader();
+
+    // for remote read, filter had been pushed down, don't need to execute again.
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & group = group_builder.getCurGroup()[i];
+        group.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        // after filter, do project action to keep the schema of local transforms and remote transforms the same.
+        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
     }
 }
 
@@ -238,4 +429,45 @@ void executeGeneratedColumnPlaceholder(
         stream->setExtraInfo("generated column placeholder above table scan");
     }
 }
+
+NamesWithAliases buildTableScanProjectionCols(const NamesAndTypes & schema,
+                                              const NamesAndTypes & storage_schema)
+{
+    RUNTIME_CHECK(
+        storage_schema.size() == schema.size(),
+        storage_schema.size(),
+        schema.size());
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type),
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
+        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
+        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
+    }
+    return schema_project_cols;
+}
+
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_sources_start_index <= group_builder.concurrency());
+
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & group = group_builder.getCurGroup()[i];
+        group.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
+    }
+}
+
 } // namespace DB

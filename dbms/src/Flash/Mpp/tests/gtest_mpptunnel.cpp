@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -80,9 +80,9 @@ public:
         return nullptr;
     }
 
-    std::optional<GRPCKickFunc> getKickFuncForTest() override
+    std::optional<GRPCSendKickFunc> getGRPCSendKickFuncForTest() override
     {
-        return [&](KickTag * tag) {
+        return [&](KickSendTag * tag) {
             {
                 void * t;
                 bool s;
@@ -152,7 +152,7 @@ public:
         , data_size_in_queue(0)
         , log(Logger::get())
     {
-        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(10));
+        msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
     }
 
     void connectionDone(bool meet_error, const String & local_err_msg)
@@ -199,7 +199,7 @@ public:
                 },
                 []() {},
                 ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false);
+            tunnel->connectLocalV2(0, local_request_handler, false, true);
         }
     }
 
@@ -281,10 +281,14 @@ public:
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_sender_v2)
-            tunnel->local_tunnel_sender_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_sender_v2)
-            tunnel->local_tunnel_fine_grained_sender_v2->is_done.store(true);
+        if (tunnel->local_tunnel_v2)
+            tunnel->local_tunnel_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_v2)
+            tunnel->local_tunnel_fine_grained_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_local_only_v2)
+            tunnel->local_tunnel_local_only_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_local_only_v2)
+            tunnel->local_tunnel_fine_grained_local_only_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -588,7 +592,8 @@ try
     std::vector<std::thread> threads;
     for (size_t i = 0; i < tunnels.size(); ++i)
     {
-        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSender(), send_data_packet_num]() {
+        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSenderV2(), send_data_packet_num]() {
+            ASSERT_TRUE(sender_tunnel.get() != nullptr);
             for (size_t i = 0; i < send_data_packet_num; ++i)
                 sender_tunnel->push(newDataPacket("111"));
             sender_tunnel->finish();
@@ -632,8 +637,8 @@ try
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
-    tunnels[0]->getLocalTunnelSender()->consumerFinish("");
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getTunnelSender()), true);
+    tunnels[0]->getLocalTunnelSenderV2()->consumerFinish("");
+    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getLocalTunnelSenderV2()), true);
 
     t.join();
     auto result_size = receiver->getReceivedMsgs().size();
@@ -648,14 +653,16 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
+    std::vector<MsgChannelPtr> msg_channels;
+    msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(1));
 
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false);
+        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
+    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -668,13 +675,15 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
+    std::vector<MsgChannelPtr> msg_channels;
+    msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(1));
     LocalRequestHandler local_req_handler(
         nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false);
+        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
+    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -781,15 +790,15 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
         tunnel->waitForFinish();
 }
 
-TEST_F(TestMPPTunnel, SyncTunnelNonBlockingWrite)
+TEST_F(TestMPPTunnel, SyncTunnelForceWrite)
 {
     auto writer_ptr = std::make_unique<MockPacketWriter>();
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 
@@ -797,7 +806,7 @@ TEST_F(TestMPPTunnel, SyncTunnelNonBlockingWrite)
     GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.back(), "First");
 }
 
-TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
+TEST_F(TestMPPTunnel, AsyncTunnelForceWrite)
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
@@ -805,8 +814,8 @@ TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockAsyncCallData::run, call_data.get());
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
@@ -815,15 +824,15 @@ TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
     GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
 }
 
-TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
+TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
 {
     auto [receiver, tunnels] = prepareLocal(1);
     const auto & mpp_tunnel_ptr = tunnels.back();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
-    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
@@ -832,7 +841,7 @@ TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
 }
 
-TEST_F(TestMPPTunnel, isReadyForWriteTimeout)
+TEST_F(TestMPPTunnel, isWritableTimeout)
 try
 {
     timeout = std::chrono::seconds(1);
@@ -840,7 +849,7 @@ try
     Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     while (stop_watch.elapsedSeconds() < 3 * timeout.count())
     {
-        ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
+        ASSERT_FALSE(mpp_tunnel_ptr->isWritable());
     }
     GTEST_FAIL();
 }

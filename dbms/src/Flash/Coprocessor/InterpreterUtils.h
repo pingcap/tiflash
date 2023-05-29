@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,22 +19,20 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
 class Context;
 
+class PipelineExecutorStatus;
+class PipelineExecGroupBuilder;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
     const LoggerPtr & log);
-
-BlockInputStreamPtr combinedNonJoinedDataStream(
-    DAGPipeline & pipeline,
-    size_t max_threads,
-    const LoggerPtr & log,
-    bool ignore_block = false);
 
 void executeUnion(
     DAGPipeline & pipeline,
@@ -42,6 +40,17 @@ void executeUnion(
     const LoggerPtr & log,
     bool ignore_block = false,
     const String & extra_info = "");
+
+void restoreConcurrency(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t concurrency,
+    const LoggerPtr & log);
+
+void executeUnion(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const LoggerPtr & log);
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
@@ -53,12 +62,34 @@ void executeExpression(
     const LoggerPtr & log,
     const String & extra_info = "");
 
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log);
+
 void orderStreams(
     DAGPipeline & pipeline,
     size_t max_streams,
     const SortDescription & order_descr,
     Int64 limit,
     bool enable_fine_grained_shuffle,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeFinalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
     const Context & context,
     const LoggerPtr & log);
 
@@ -69,7 +100,7 @@ void executeCreatingSets(
     const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
@@ -79,9 +110,28 @@ void executePushedDownFilter(
     LoggerPtr log,
     DAGPipeline & pipeline);
 
+void executePushedDownFilter(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log);
+
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline);
+
+NamesWithAliases buildTableScanProjectionCols(
+    const NamesAndTypes & schema,
+    const NamesAndTypes & storage_schema);
+
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log);
 } // namespace DB

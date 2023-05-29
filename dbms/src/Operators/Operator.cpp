@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
@@ -19,18 +20,40 @@
 
 namespace DB
 {
-#define CHECK_IS_CANCELLED                   \
-    if (unlikely(exec_status.isCancelled())) \
+namespace FailPoints
+{
+extern const char random_pipeline_model_operator_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
+} // namespace FailPoints
+
+#define CHECK_IS_CANCELLED                                                               \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel()); \
+    if (unlikely(exec_status.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
 OperatorStatus Operator::await()
 {
-    CHECK_IS_CANCELLED
+    // `exec_status.is_cancelled` has been checked by `EventTask`.
+    // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
+
     // TODO collect operator profile info here.
     auto op_status = awaitImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
+    return op_status;
+}
+
+OperatorStatus Operator::executeIO()
+{
+    CHECK_IS_CANCELLED
+    // TODO collect operator profile info here.
+    auto op_status = executeIOImpl();
+#ifndef NDEBUG
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
+#endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -48,6 +71,7 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -64,6 +88,7 @@ OperatorStatus TransformOp::transform(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -81,6 +106,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -92,6 +118,7 @@ OperatorStatus SinkOp::prepare()
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -110,6 +137,7 @@ OperatorStatus SinkOp::write(Block && block)
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 

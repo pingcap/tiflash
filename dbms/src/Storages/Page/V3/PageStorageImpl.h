@@ -47,7 +47,7 @@ public:
 
     PageIdU64 getMaxId() override;
 
-    PageIdU64 getNormalPageIdImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageIdU64 getNormalPageIdImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
@@ -57,19 +57,19 @@ public:
 
     size_t getNumberOfPages() override;
 
-    std::set<PageIdU64> getAliveExternalPageIds(NamespaceId ns_id) override;
+    std::set<PageIdU64> getAliveExternalPageIds(NamespaceID ns_id) override;
 
     void writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
-    DB::PageEntry getEntryImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot) override;
+    DB::PageEntry getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot) override;
 
-    DB::Page readImpl(NamespaceId ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(NamespaceID ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageMapU64 readImpl(NamespaceId ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMapU64 readImpl(NamespaceID ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageMapU64 readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMapU64 readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    Page readImpl(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
@@ -77,7 +77,7 @@ public:
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
-    void unregisterExternalPagesCallbacks(NamespaceId ns_id) override;
+    void unregisterExternalPagesCallbacks(NamespaceID ns_id) override;
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
@@ -92,6 +92,7 @@ public:
 
     template <typename>
     friend class PageDirectoryFactory;
+    template <typename>
     friend class PageStorageControlV3;
 #ifndef DBMS_PUBLIC_GTEST
 private:

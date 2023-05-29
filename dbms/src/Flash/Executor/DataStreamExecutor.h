@@ -21,12 +21,14 @@ namespace DB
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
-struct BlockIO;
-
 class DataStreamExecutor : public QueryExecutor
 {
 public:
-    DataStreamExecutor(Context & context_, const BlockIO & block_io);
+    DataStreamExecutor(
+        const MemoryTrackerPtr & memory_tracker_,
+        Context & context_,
+        const String & req_id,
+        const BlockInputStreamPtr & data_stream_);
 
     String toString() const override;
 

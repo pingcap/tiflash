@@ -40,13 +40,18 @@ public:
     /**
      * Get current version of CH schema.
      */
-    virtual Int64 getCurrentVersion() = 0;
+    virtual Int64 getCurrentVersion(KeyspaceID keyspace_id) = 0;
 
     /**
      * Synchronize all schemas between TiDB and CH.
      * @param context
      */
-    virtual bool syncSchemas(Context & context) = 0;
+    virtual bool syncSchemas(Context & context, KeyspaceID keyspace_id) = 0;
+
+    /**
+     *  Remove current version of CH schema.
+    */
+    virtual void removeCurrentVersion(KeyspaceID keyspace_id) = 0;
 
     virtual void reset() = 0;
 
@@ -54,7 +59,7 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
-    virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
+    virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs(KeyspaceID keyspace_id) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

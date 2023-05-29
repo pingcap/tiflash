@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
@@ -49,6 +50,11 @@ void MockStorage::addTableScanConcurrencyHint(const String & name, size_t concur
     table_scan_concurrency_hint[getTableId(name)] = concurrency_hint;
 }
 
+void MockStorage::addDeltaMergeTableConcurrencyHint(const String & name, size_t concurrency_hint)
+{
+    delta_merge_table_id_to_concurrency_hint[getTableIdForDeltaMerge(name)] = concurrency_hint;
+}
+
 Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
@@ -77,6 +83,15 @@ size_t MockStorage::getScanConcurrencyHint(Int64 table_id)
     if (tableExists(table_id))
     {
         return table_scan_concurrency_hint[table_id];
+    }
+    return 0;
+}
+
+size_t MockStorage::getDelatMergeTableConcurrencyHint(Int64 table_id)
+{
+    if (tableExistsForDeltaMerge(table_id))
+    {
+        return delta_merge_table_id_to_concurrency_hint[table_id];
     }
     return 0;
 }
@@ -141,31 +156,42 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
     return table_id;
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions)
+std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareForRead(Context & context, Int64 table_id, bool keep_order)
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
-    auto column_infos = table_schema_for_delta_merge[table_id];
+    auto & column_infos = table_schema_for_delta_merge[table_id];
     assert(storage);
     assert(!column_infos.empty());
     Names column_names;
+    column_names.reserve(column_infos.size());
     for (const auto & column_info : column_infos)
-        column_names.push_back(column_info.first);
+        column_names.push_back(column_info.name);
 
     auto scan_context = std::make_shared<DM::ScanContext>();
-    QueryProcessingStage::Enum stage;
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
+    query_info.keep_order = keep_order;
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    return {storage, column_names, query_info};
+}
+
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order, std::vector<int> runtime_filter_ids, int rf_max_wait_time_ms)
+{
+    QueryProcessingStage::Enum stage;
+    auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
-            analyzer->getPreparedSets(),
-            analyzer->getCurrentInputColumns(),
+            pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*filter_conditions, *analyzer);
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];
@@ -177,10 +203,39 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
     else
     {
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1);
         BlockInputStreamPtr in = ins[0];
         return in;
     }
+}
+
+
+void MockStorage::buildExecFromDeltaMerge(
+    PipelineExecutorStatus & exec_status_,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    Int64 table_id,
+    size_t concurrency,
+    bool keep_order)
+{
+    auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
+    // Currently don't support test for late materialization
+    storage->read(
+        exec_status_,
+        group_builder,
+        column_names,
+        query_info,
+        context,
+        context.getSettingsRef().max_block_size,
+        concurrency);
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
@@ -192,7 +247,11 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
-        std::tie(ret.name, ret.tp) = column;
+        ret.name = column.name;
+        ret.tp = column.type;
+
+        if (!column.nullable)
+            ret.setNotNullFlag();
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
@@ -448,11 +507,14 @@ ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_colu
     for (const auto & mock_column_info : mock_column_infos)
     {
         TiDB::ColumnInfo column_info;
-        std::tie(column_info.name, column_info.tp) = mock_column_info;
+        column_info.name = mock_column_info.name;
+        column_info.tp = mock_column_info.type;
         column_info.id = col_id++;
         // TODO: find a way to assign decimal field's flen.
         if (column_info.tp == TiDB::TP::TypeNewDecimal)
             column_info.flen = 65;
+        if (!mock_column_info.nullable)
+            column_info.setNotNullFlag();
         ret.push_back(std::move(column_info));
     }
     return ret;

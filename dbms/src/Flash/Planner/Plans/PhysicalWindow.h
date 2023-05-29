@@ -35,24 +35,28 @@ public:
     PhysicalWindow(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const WindowDescription & window_description_,
-        const FineGrainedShuffle & fine_grained_shuffle_)
-        : PhysicalUnary(executor_id_, PlanType::Window, schema_, req_id, child_)
+        const WindowDescription & window_description_)
+        : PhysicalUnary(executor_id_, PlanType::Window, schema_, fine_grained_shuffle_, req_id, child_)
         , window_description(window_description_)
-        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t concurrency) override;
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
 private:
     WindowDescription window_description;
-    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

@@ -165,12 +165,12 @@ public:
         return mock_data->read();
     }
 
-    std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const
+    static std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics()
     {
         return {};
     }
 
-    SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const
+    static SSTFilesToBlockInputStream::ProcessKeys getProcessKeys()
     {
         return {};
     }

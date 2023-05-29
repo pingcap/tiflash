@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/ColumnsDescription.h>
 
-
-class ThreadPool;
 
 namespace DB
 {

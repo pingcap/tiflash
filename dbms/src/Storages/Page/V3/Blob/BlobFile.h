@@ -19,7 +19,6 @@
 #include <Encryption/WriteReadableFile.h>
 #include <Poco/Logger.h>
 #include <Storages/FormatVersion.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/PathPool_fwd.h>
 

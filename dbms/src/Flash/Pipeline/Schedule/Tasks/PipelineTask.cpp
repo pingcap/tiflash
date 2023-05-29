@@ -21,17 +21,18 @@ namespace DB
 {
 PipelineTask::PipelineTask(
     MemoryTrackerPtr mem_tracker_,
+    const String & req_id,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), exec_status_, event_)
+    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     , pipeline_exec(std::move(pipeline_exec_))
 {
-    assert(pipeline_exec);
+    RUNTIME_CHECK(pipeline_exec);
     pipeline_exec->executePrefix();
 }
 
-void PipelineTask::finalizeImpl()
+void PipelineTask::doFinalizeImpl()
 {
     assert(pipeline_exec);
     pipeline_exec->executeSuffix();
@@ -46,6 +47,10 @@ void PipelineTask::finalizeImpl()
     case OperatorStatus::CANCELLED:       \
     {                                     \
         return ExecTaskStatus::CANCELLED; \
+    }                                     \
+    case OperatorStatus::IO:              \
+    {                                     \
+        return ExecTaskStatus::IO;        \
     }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \
@@ -65,6 +70,25 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
     // After `pipeline_exec->execute`, `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
     case OperatorStatus::NEED_INPUT:
+        return ExecTaskStatus::RUNNING;
+    default:
+        UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");
+    }
+}
+
+ExecTaskStatus PipelineTask::doExecuteIOImpl()
+{
+    assert(pipeline_exec);
+    auto op_status = pipeline_exec->executeIO();
+    switch (op_status)
+    {
+        HANDLE_NOT_RUNNING_STATUS
+    // After `pipeline_exec->executeIO`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
+    case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:
         UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");

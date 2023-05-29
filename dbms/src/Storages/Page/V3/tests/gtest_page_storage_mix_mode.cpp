@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
@@ -19,8 +20,8 @@
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <fmt/ranges.h>
@@ -66,10 +67,11 @@ public:
         storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
-        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
+        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, NullspaceID, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
         storage_pool_mix = std::make_unique<DM::StoragePool>(*db_context,
+                                                             NullspaceID,
                                                              TEST_NAMESPACE_ID,
                                                              *storage_path_pool_v2,
                                                              "test.t1");

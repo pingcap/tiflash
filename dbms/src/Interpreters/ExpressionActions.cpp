@@ -213,7 +213,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::RightOuter)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
@@ -386,14 +386,6 @@ void ExpressionAction::execute(Block & block) const
 }
 
 
-void ExpressionAction::executeOnTotals(Block & block) const
-{
-    if (type != JOIN)
-        execute(block);
-    else
-        join->joinTotals(block);
-}
-
 String ExpressionAction::toString() const
 {
     std::stringstream ss;
@@ -511,38 +503,6 @@ void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
         action.execute(block);
-}
-
-void ExpressionActions::executeOnTotals(Block & block) const
-{
-    /// If there is `totals` in the subquery for JOIN, but we do not have totals, then take the block with the default values instead of `totals`.
-    if (!block)
-    {
-        bool has_totals_in_join = false;
-        for (const auto & action : actions)
-        {
-            if (action.join && action.join->hasTotals())
-            {
-                has_totals_in_join = true;
-                break;
-            }
-        }
-
-        if (has_totals_in_join)
-        {
-            for (const auto & name_and_type : input_columns)
-            {
-                auto column = name_and_type.type->createColumn();
-                column->insertDefault();
-                block.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-            }
-        }
-        else
-            return; /// There's nothing to JOIN.
-    }
-
-    for (const auto & action : actions)
-        action.executeOnTotals(block);
 }
 
 std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns)
@@ -741,15 +701,6 @@ std::string ExpressionActions::dumpActions() const
         ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
-}
-
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
-{
-    for (const auto & action : actions)
-        if (action.join && (action.join->needReturnNonJoinedData()))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
-
-    return {};
 }
 
 void ExpressionActionsChain::addStep()

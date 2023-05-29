@@ -23,38 +23,53 @@ namespace DB
 // The executor for push model operator.
 // A pipeline will generate multiple pipeline_execs.
 // data flow: source --> transform --> .. --> transform --> sink
-class PipelineExec
+class PipelineExec : private boost::noncopyable
 {
 public:
     PipelineExec(
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
-        SinkOpPtr && sink_op_)
-        : source_op(std::move(source_op_))
-        , transform_ops(std::move(transform_ops_))
-        , sink_op(std::move(sink_op_))
-    {}
+        SinkOpPtr && sink_op_);
 
     void executePrefix();
     void executeSuffix();
 
     OperatorStatus execute();
 
+    OperatorStatus executeIO();
+
     OperatorStatus await();
 
 private:
-    OperatorStatus executeImpl();
+    inline OperatorStatus executeImpl();
 
-    OperatorStatus awaitImpl();
+    inline OperatorStatus executeIOImpl();
 
-    OperatorStatus fetchBlock(
-        Block & block,
-        size_t & start_transform_op_index);
+    inline OperatorStatus awaitImpl();
+
+    inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
+
+    // Put the operator that has implemented the `awaitImpl` into the awaitables.
+    // In order to avoid calling the virtual function Operator::await too much in await,
+    // only the operator that needs await will implement `awaitImpl` and `isAwaitable`,
+    // and then it will be called in PipelineExec::await.
+    template <typename OperatorPtr>
+    inline void addOperatorIfAwaitable(const OperatorPtr & op)
+    {
+        if (op->isAwaitable())
+            awaitables.push_back(op.get());
+    }
 
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+
+    // hold the operators that awaitable.
+    std::vector<Operator *> awaitables;
+
+    // hold the operator which is ready for executing io.
+    std::optional<Operator *> io_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.

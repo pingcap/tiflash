@@ -12,23 +12,75 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/OperatorHelper.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_execute_prefix_failpoint[];
+extern const char random_pipeline_model_execute_suffix_failpoint[];
+} // namespace FailPoints
+
+#define HANDLE_OP_STATUS(op, op_status, expect_status)                                            \
+    switch (op_status)                                                                            \
+    {                                                                                             \
+    case (expect_status):                                                                         \
+        break;                                                                                    \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
+    case OperatorStatus::IO:                                                                      \
+        assert(!io_op);                                                                           \
+        assert(op);                                                                               \
+        io_op.emplace((op).get());                                                                \
+    /* For unexpected status, an immediate return is required. */                                 \
+    default:                                                                                      \
+        return (op_status);                                                                       \
+    }
+
+#define HANDLE_LAST_OP_STATUS(op, op_status)                                                      \
+    assert(op);                                                                                   \
+    switch (op_status)                                                                            \
+    {                                                                                             \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
+    case OperatorStatus::IO:                                                                      \
+        assert(!io_op);                                                                           \
+        assert(op);                                                                               \
+        io_op.emplace((op).get());                                                                \
+    /* For the last operator, the status will always be returned. */                              \
+    default:                                                                                      \
+        return (op_status);                                                                       \
+    }
+
+PipelineExec::PipelineExec(
+    SourceOpPtr && source_op_,
+    TransformOps && transform_ops_,
+    SinkOpPtr && sink_op_)
+    : source_op(std::move(source_op_))
+    , transform_ops(std::move(transform_ops_))
+    , sink_op(std::move(sink_op_))
+{
+    addOperatorIfAwaitable(sink_op);
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
+        addOperatorIfAwaitable(*it);
+    addOperatorIfAwaitable(source_op);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
+}
+
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operatePrefix();
     source_op->operatePrefix();
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_suffix_failpoint);
 }
 
 void PipelineExec::executeSuffix()
 {
     sink_op->operateSuffix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
     source_op->operateSuffix();
 }
@@ -63,34 +115,46 @@ OperatorStatus PipelineExec::executeImpl()
     {
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
-        if (op_status != OperatorStatus::HAS_OUTPUT)
-            return op_status;
+        HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::HAS_OUTPUT);
     }
     op_status = sink_op->write(std::move(block));
-    return op_status;
+    HANDLE_LAST_OP_STATUS(sink_op, op_status);
 }
 
 // try fetch block from transform_ops and source_op.
-OperatorStatus PipelineExec::fetchBlock(
-    Block & block,
-    size_t & start_transform_op_index)
+OperatorStatus PipelineExec::fetchBlock(Block & block, size_t & start_transform_op_index)
 {
     auto op_status = sink_op->prepare();
-    if (op_status != OperatorStatus::NEED_INPUT)
-        return op_status;
+    HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         const auto & transform_op = transform_ops[index];
         op_status = transform_op->tryOutput(block);
-        if (op_status != OperatorStatus::NEED_INPUT)
-        {
-            // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
-            start_transform_op_index = index + 1;
-            return op_status;
-        }
+        // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
+        start_transform_op_index = index + 1;
+        HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::NEED_INPUT);
     }
     start_transform_op_index = 0;
     op_status = source_op->read(block);
+    HANDLE_LAST_OP_STATUS(source_op, op_status);
+}
+
+OperatorStatus PipelineExec::executeIO()
+{
+    auto op_status = executeIOImpl();
+#ifndef NDEBUG
+    // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
+    // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
+}
+OperatorStatus PipelineExec::executeIOImpl()
+{
+    assert(io_op && *io_op);
+    auto op_status = (*io_op)->executeIO();
+    if (op_status != OperatorStatus::IO)
+        io_op.reset();
     return op_status;
 }
 
@@ -105,18 +169,29 @@ OperatorStatus PipelineExec::await()
 }
 OperatorStatus PipelineExec::awaitImpl()
 {
-    auto op_status = sink_op->await();
-    if (op_status != OperatorStatus::NEED_INPUT)
-        return op_status;
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto & awaitable : awaitables)
     {
-        // If the transform_op returns `NEED_INPUT`,
-        // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
-        op_status = (*it)->await();
-        if (op_status != OperatorStatus::NEED_INPUT)
+        auto op_status = awaitable->await();
+        switch (op_status)
+        {
+        // If NEED_INPUT is returned, continue checking the next operator.
+        case OperatorStatus::NEED_INPUT:
+            break;
+        // For the io status, the operator needs to be filled in io_op for later use in executeIO.
+        case OperatorStatus::IO:
+            assert(!io_op);
+            assert(awaitable);
+            io_op.emplace(awaitable);
+        // For unexpected status, an immediate return is required.
+        default:
             return op_status;
+        }
     }
-    op_status = source_op->await();
-    return op_status;
+    // await must eventually return HAS_OUTPUT.
+    return OperatorStatus::HAS_OUTPUT;
 }
+
+#undef HANDLE_OP_STATUS
+#undef HANDLE_LAST_OP_STATUS
+
 } // namespace DB

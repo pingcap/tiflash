@@ -70,7 +70,8 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
-    M(exception_during_spill)
+    M(exception_during_spill)                                     \
+    M(force_fail_to_create_etcd_session)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -95,8 +96,12 @@ namespace DB
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
     M(invalid_mpp_version)                                   \
-    M(force_fail_in_flush_region_data)
-
+    M(force_fail_in_flush_region_data)                       \
+    M(force_use_dmfile_format_v3)                            \
+    M(force_set_mocked_s3_object_mtime)                      \
+    M(force_stop_background_checkpoint_upload)               \
+    M(skip_seek_before_read_dmfile)                          \
+    M(exception_after_large_write_exceed)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -120,6 +125,7 @@ namespace DB
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
+    M(random_tunnel_write_failpoint)                    \
     M(random_tunnel_init_rpc_failure_failpoint)         \
     M(random_receiver_local_msg_push_failure_failpoint) \
     M(random_receiver_sync_msg_push_failure_failpoint)  \
@@ -132,8 +138,19 @@ namespace DB
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
     M(random_task_manager_find_task_failure_failpoint)  \
-    M(random_min_tso_scheduler_failpoint)
-
+    M(random_min_tso_scheduler_failpoint)               \
+    M(random_pipeline_model_task_run_failpoint)         \
+    M(random_pipeline_model_task_construct_failpoint)   \
+    M(random_pipeline_model_event_schedule_failpoint)   \
+    M(random_pipeline_model_event_finish_failpoint)     \
+    M(random_pipeline_model_operator_run_failpoint)     \
+    M(random_pipeline_model_cancel_failpoint)           \
+    M(random_pipeline_model_execute_prefix_failpoint)   \
+    M(random_pipeline_model_execute_suffix_failpoint)   \
+    M(random_spill_to_disk_failpoint)                   \
+    M(random_restore_from_disk_failpoint)               \
+    M(random_exception_when_connect_local_tunnel)       \
+    M(random_exception_when_construct_async_request_handler)
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";
@@ -257,9 +274,7 @@ FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
-        auto v = iter->second;
-        fail_point_val.erase(iter);
-        return v;
+        return iter->second;
     }
     return std::nullopt;
 }
@@ -272,8 +287,8 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         /// if someone wait on this, the deconstruct will never be called.
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
-        fail_point_val.erase(fail_point_name);
     }
+    fail_point_val.erase(fail_point_name);
     fiu_disable(fail_point_name.c_str());
 }
 
@@ -304,6 +319,22 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         enableRandomFailPoint(pair_tokens[0], rate);
     }
     LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+}
+
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+{
+    String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
+    if (random_fail_point_cfg.empty())
+        return;
+
+    Poco::StringTokenizer string_tokens(random_fail_point_cfg, ",");
+    for (const auto & string_token : string_tokens)
+    {
+        Poco::StringTokenizer pair_tokens(string_token, "-");
+        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        disableFailPoint(pair_tokens[0]);
+    }
+    LOG_INFO(log, "Disable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)

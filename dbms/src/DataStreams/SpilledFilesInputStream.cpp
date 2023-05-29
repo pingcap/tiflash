@@ -12,25 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 
 namespace DB
 {
-SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
+namespace FailPoints
+{
+extern const char random_restore_from_disk_failpoint[];
+} // namespace FailPoints
+
+SpilledFilesInputStream::SpilledFilesInputStream(
+    std::vector<SpilledFileInfo> && spilled_file_infos_,
+    const Block & header_,
+    const Block & header_without_constants_,
+    const std::vector<size_t> & const_column_indexes_,
+    const FileProviderPtr & file_provider_,
+    Int64 max_supported_spill_version_)
     : spilled_file_infos(std::move(spilled_file_infos_))
     , header(header_)
+    , header_without_constants(header_without_constants_)
+    , const_column_indexes(const_column_indexes_)
     , file_provider(file_provider_)
     , max_supported_spill_version(max_supported_spill_version_)
 {
     RUNTIME_CHECK_MSG(!spilled_file_infos.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
+    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header_without_constants, file_provider, max_supported_spill_version);
 }
 
 Block SpilledFilesInputStream::readImpl()
 {
+    auto ret = readInternal();
+    if likely (ret)
+    {
+        assert(ret.columns() != 0);
+        size_t rows = ret.rows();
+        for (const auto index : const_column_indexes)
+        {
+            const auto & col_type_name = header.getByPosition(index);
+            assert(col_type_name.column->isColumnConst());
+            ret.insert(index, {col_type_name.column->cloneResized(rows), col_type_name.type, col_type_name.name});
+        }
+    }
+    return ret;
+}
+
+Block SpilledFilesInputStream::readInternal()
+{
     if (unlikely(current_file_stream == nullptr))
         return {};
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_restore_from_disk_failpoint);
     Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;

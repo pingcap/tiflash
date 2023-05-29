@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,27 +14,29 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 #include <kvproto/mpp.pb.h>
-#include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
-
 namespace DB
 {
 class Context;
@@ -54,7 +56,6 @@ struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
     JoinPtr join_ptr;
-    BlockInputStreams non_joined_streams;
     BlockInputStreams join_build_streams;
 };
 
@@ -127,16 +128,19 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+    DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+
+    // for disaggregated task on write node
+    DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
 
     // for tests need to run query tasks.
-    DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
+    DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
@@ -187,6 +191,10 @@ public:
     const MPPTaskId & getMPPTaskId() const
     {
         return mpp_task_id;
+    }
+    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const
+    {
+        return disaggregated_id;
     }
 
     std::pair<bool, double> getTableScanThroughput();
@@ -264,9 +272,11 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    String getRootExecutorId();
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    const tipb::DAGRequest * dag_request;
+    RU getReadRU() const;
+
+    DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
     String dummy_query_string;
@@ -278,13 +288,15 @@ public:
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id;
+
+    // For mpp/cop/batchcop this is the host of tidb
+    // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    bool return_executor_id{};
-    String root_executor_id = "";
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
+    /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -301,15 +313,13 @@ public:
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
-    /// Hold the order of list based executors.
-    /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
-    std::vector<String> list_based_executors_order;
-
     /// executor_id, ScanContextPtr
     /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+
+    RuntimeFilterMgr runtime_filter_mgr;
 
 private:
     void initExecutorIdToJoinIdMap();
@@ -334,6 +344,8 @@ private:
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
+    // The task id for disaggregated read
+    const std::unique_ptr<DM::DisaggTaskId> disaggregated_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;
@@ -348,6 +360,9 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
+
+    // The keyspace that the DAG request from
+    const KeyspaceID keyspace_id = NullspaceID;
 };
 
 } // namespace DB

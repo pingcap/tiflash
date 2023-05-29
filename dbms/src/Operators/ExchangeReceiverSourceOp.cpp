@@ -18,7 +18,7 @@ namespace DB
 {
 void ExchangeReceiverSourceOp::operateSuffix()
 {
-    LOG_INFO(log, "finish read {} rows from exchange", total_rows);
+    LOG_DEBUG(log, "finish read {} rows from exchange", total_rows);
 }
 
 Block ExchangeReceiverSourceOp::popFromBlockQueue()
@@ -92,7 +92,7 @@ OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
 {
     if (!block_queue.empty() || recv_res)
         return OperatorStatus::HAS_OUTPUT;
-    recv_res.emplace(exchange_receiver->nonBlockingReceive(stream_id));
+    recv_res.emplace(exchange_receiver->tryReceive(stream_id));
     switch (recv_res->recv_status)
     {
     case ReceiveStatus::ok:

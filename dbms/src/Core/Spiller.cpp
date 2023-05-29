@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Core/CachedSpillHandler.h>
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
-
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_spill_to_disk_failpoint[];
+} // namespace FailPoints
+
 SpilledFile::SpilledFile(const String & file_name_, const FileProviderPtr & file_provider_)
     : Poco::File(file_name_)
     , details(0, 0, 0)
@@ -94,50 +101,46 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     {
         RUNTIME_CHECK_MSG(spill_dir.isDirectory(), "Spill dir {} is a file", spill_dir.path());
     }
+    for (size_t i = 0; i < input_schema.columns(); ++i)
+    {
+        if (input_schema.getByPosition(i).column != nullptr && input_schema.getByPosition(i).column->isColumnConst())
+            const_column_indexes.push_back(i);
+    }
+    RUNTIME_CHECK_MSG(const_column_indexes.size() < input_schema.columns(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+    header_without_constants = input_schema;
+    removeConstantColumns(header_without_constants);
 }
 
-namespace
+void Spiller::removeConstantColumns(Block & block) const
 {
-/// bytes_threshold == 0 means no limit, and will read all data
-std::vector<Block> readDataForSpill(IBlockInputStream & from, size_t bytes_threshold, const std::function<bool()> & is_cancelled)
-{
-    std::vector<Block> ret;
-    size_t current_return_size = 0;
-
-    while (Block block = from.read())
+    /// note must erase the constant column in reverse order because the index stored in const_column_indexes is based on
+    /// the original Block, if the column before the index is removed, the index has to be updated or it becomes invalid index
+    for (auto it = const_column_indexes.rbegin(); it != const_column_indexes.rend(); ++it) // NOLINT
     {
-        if unlikely (is_cancelled())
-            return {};
-        ret.push_back(std::move(block));
-        current_return_size += ret.back().estimateBytesForSpill();
-        if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
-            break;
+        RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
+        block.erase(*it);
     }
-
-    if unlikely (is_cancelled())
-        return {};
-
-    return ret;
 }
-} // namespace
 
-void Spiller::spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
+CachedSpillHandlerPtr Spiller::createCachedSpillHandler(
+    const BlockInputStreamPtr & from,
+    UInt64 partition_id,
+    const std::function<bool()> & is_cancelled)
 {
-    auto spill_handler = createSpillHandler(partition_id);
-    block_in.readPrefix();
-    Blocks spill_blocks;
-    while (true)
-    {
-        spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
-        if (spill_blocks.empty())
-            break;
-        spill_handler.spillBlocks(spill_blocks);
-    }
-    if (is_cancelled())
-        return;
-    block_in.readSuffix();
-    /// submit the spilled data
-    spill_handler.finish();
+    return std::make_shared<CachedSpillHandler>(
+        this,
+        partition_id,
+        from,
+        config.max_cached_data_bytes_in_spiller,
+        is_cancelled);
+}
+
+void Spiller::spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
+{
+    assert(block_in);
+    auto cached_handler = createCachedSpillHandler(block_in, partition_id, is_cancelled);
+    while (cached_handler->batchRead())
+        cached_handler->spill();
 }
 
 std::pair<std::unique_ptr<SpilledFile>, bool> Spiller::getOrCreateSpilledFile(UInt64 partition_id)
@@ -175,12 +178,13 @@ SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
     return SpillHandler(this, partition_id);
 }
 
-void Spiller::spillBlocks(const Blocks & blocks, UInt64 partition_id)
+void Spiller::spillBlocks(Blocks && blocks, UInt64 partition_id)
 {
     if (blocks.empty())
         return;
     auto spiller_handler = createSpillHandler(partition_id);
-    spiller_handler.spillBlocks(blocks);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_spill_to_disk_failpoint);
+    spiller_handler.spillBlocks(std::move(blocks));
     spiller_handler.finish();
 }
 
@@ -215,7 +219,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
             restore_stream_read_rows.push_back(file->getSpillDetails().rows);
             if (release_spilled_file_on_restore)
                 file_infos.back().file = std::move(file);
-            ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, config.file_provider, spill_version));
+            ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
         }
     }
     else
@@ -236,7 +240,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         for (UInt64 i = 0; i < spill_file_read_stream_num; ++i)
         {
             if (likely(!file_infos[i].empty()))
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
+                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, header_without_constants, const_column_indexes, config.file_provider, spill_version));
         }
     }
     for (size_t i = 0; i < spill_file_read_stream_num; ++i)

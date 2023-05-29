@@ -23,17 +23,20 @@
 namespace DB
 {
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
-    : task_thread_pool(*this, config.task_thread_pool_size)
+    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config)
+    , io_task_thread_pool(*this, config.io_task_thread_pool_config)
     , wait_reactor(*this)
 {
 }
 
 TaskScheduler::~TaskScheduler()
 {
-    task_thread_pool.close();
-    wait_reactor.close();
+    cpu_task_thread_pool.finish();
+    io_task_thread_pool.finish();
+    wait_reactor.finish();
 
-    task_thread_pool.waitForStop();
+    cpu_task_thread_pool.waitForStop();
+    io_task_thread_pool.waitForStop();
     wait_reactor.waitForStop();
 }
 
@@ -44,31 +47,64 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 
     // The memory tracker is set by the caller.
     std::vector<TaskPtr> running_tasks;
+    std::vector<TaskPtr> io_tasks;
     std::list<TaskPtr> waiting_tasks;
     for (auto & task : tasks)
     {
         assert(task);
+        task->profile_info.startTimer();
         // A quick check to avoid an unnecessary round into `running_tasks` then being scheduled out immediately.
+        // Skip `task->profile_info.elapsedAwaitTime()` here because the `await` will end instantly.
         auto status = task->await();
         switch (status)
         {
         case ExecTaskStatus::RUNNING:
             running_tasks.push_back(std::move(task));
             break;
+        case ExecTaskStatus::IO:
+            io_tasks.push_back(std::move(task));
+            break;
         case ExecTaskStatus::WAITING:
             waiting_tasks.push_back(std::move(task));
             break;
         case FINISH_STATUS:
-            task.reset();
+            FINALIZE_TASK(task);
             break;
         default:
             UNEXPECTED_STATUS(logger, status);
         }
     }
     tasks.clear();
-    task_thread_pool.submit(running_tasks);
+    cpu_task_thread_pool.submit(running_tasks);
+    io_task_thread_pool.submit(io_tasks);
     wait_reactor.submit(waiting_tasks);
 }
 
+void TaskScheduler::submitToWaitReactor(TaskPtr && task)
+{
+    wait_reactor.submit(std::move(task));
+}
+
+void TaskScheduler::submitToCPUTaskThreadPool(TaskPtr && task)
+{
+    cpu_task_thread_pool.submit(std::move(task));
+}
+
+void TaskScheduler::submitToCPUTaskThreadPool(std::vector<TaskPtr> & tasks)
+{
+    cpu_task_thread_pool.submit(tasks);
+}
+
+void TaskScheduler::submitToIOTaskThreadPool(TaskPtr && task)
+{
+    io_task_thread_pool.submit(std::move(task));
+}
+
+void TaskScheduler::submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks)
+{
+    io_task_thread_pool.submit(tasks);
+}
+
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;
+
 } // namespace DB

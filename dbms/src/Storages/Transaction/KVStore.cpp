@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -46,7 +47,7 @@ extern const char force_fail_in_flush_region_data[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
-    : region_persister(std::make_unique<RegionPersister>(context, region_manager))
+    : region_persister(context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr : std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
     , region_compact_log_period(120)
@@ -58,6 +59,9 @@ KVStore::KVStore(Context & context)
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
+    if (!region_persister)
+        return;
+
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionWriteLock(task_lock);
 
@@ -139,8 +143,9 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed)
 {
     fiu_do_on(FailPoints::force_fail_in_flush_region_data, { return false; });
+    auto keyspace_id = region.getKeyspaceID();
     auto table_id = region.getMappedTableID();
-    auto storage = tmt.getStorages().get(table_id);
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
@@ -170,14 +175,12 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     return true;
 }
 
-void KVStore::tryPersist(RegionID region_id)
+void KVStore::tryPersistRegion(RegionID region_id)
 {
     auto region = getRegion(region_id);
     if (region)
     {
-        LOG_INFO(log, "Try to persist {}", region->toString(false));
-        region_persister->persist(*region);
-        LOG_INFO(log, "After persisted {}, cache {} bytes", region->toString(false), region->dataSize());
+        persistRegion(*region, std::nullopt, "");
     }
 }
 
@@ -192,6 +195,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
     if (now < (last_gc_time.load() + gc_persist_period))
         return;
     last_gc_time = now;
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->gc();
 }
 
@@ -213,6 +217,7 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
         }
     }
 
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->drop(region_id, region_lock);
     LOG_INFO(log, "Persisted [region {}] deleted", region_id);
 
@@ -241,7 +246,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TMTContext & tmt) const
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -282,7 +287,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
         tmt);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -328,11 +333,21 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
         bytes);
 }
 
-void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
+void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
 {
-    LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
-    region_persister->persist(region, region_task_lock);
-    LOG_DEBUG(log, "Persist {} done", region.toString(false));
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
+    if (region_task_lock.has_value())
+    {
+        LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
+        region_persister->persist(region, *region_task_lock.value());
+        LOG_DEBUG(log, "Persist {} done", region.toString(false));
+    }
+    else
+    {
+        LOG_INFO(log, "Try to persist {}", region.toString(false));
+        region_persister->persist(region);
+        LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
+    }
 }
 
 bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
@@ -397,7 +412,7 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
     }
     if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
-        persistRegion(curr_region, region_task_lock, "tryFlushRegionData");
+        persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
@@ -444,10 +459,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback)
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "admin cmd flashback");
+        persistRegion(curr_region, &region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -473,6 +490,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::ComputeHash:
     case raft_cmdpb::AdminCmdType::PrepareFlashback:
     case raft_cmdpb::AdminCmdType::FinishFlashback:
+    case raft_cmdpb::AdminCmdType::BatchSwitchWitness:
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
@@ -511,7 +529,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             try
             {
-                tmt.getRegionTable().tryFlushRegion(region, false);
+                tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region, false);
             }
             catch (...)
             {
@@ -521,11 +539,12 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, region_task_lock, "admin raft cmd");
+            persistRegion(region, &region_task_lock, "admin raft cmd");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
             {
+                // `split_regions` doesn't include the derived region.
                 auto manage_lock = genRegionWriteLock(task_lock);
 
                 for (auto & new_region : split_regions)
@@ -817,6 +836,17 @@ StoreID KVStore::getStoreID(std::memory_order memory_order) const
     return getStore().store_id.load(memory_order);
 }
 
+KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
+{
+    std::lock_guard lock(mu);
+    return base;
+}
+
+metapb::Store KVStore::getStoreMeta() const
+{
+    return getStore().getMeta();
+}
+
 KVStore::StoreMeta & KVStore::getStore()
 {
     return this->store;
@@ -829,6 +859,7 @@ const KVStore::StoreMeta & KVStore::getStore() const
 
 void KVStore::StoreMeta::update(Base && base_)
 {
+    std::lock_guard lock(mu);
     base = std::move(base_);
     store_id = base.id();
 }
@@ -840,6 +871,11 @@ KVStore::~KVStore()
 
 FileUsageStatistics KVStore::getFileUsageStatistics() const
 {
+    if (!region_persister)
+    {
+        return {};
+    }
+
     return region_persister->getFileUsageStatistics();
 }
 

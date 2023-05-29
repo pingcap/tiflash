@@ -55,7 +55,7 @@ struct StreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
+    bool isWritable() const { throw Exception("Unsupport async write"); }
 };
 
 using StreamWriterPtr = std::shared_ptr<StreamWriter>;

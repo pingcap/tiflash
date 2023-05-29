@@ -12,16 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## The listening host for supporting services such as TPC/HTTP. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
+## The listening host for supporting TCP service. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
 # listen_host = "0.0.0.0"
 ## The TiFlash TCP service port.
 # tcp_port = 9000
-## The TiFlash HTTP service port.
-# http_port = 8123
 ## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
-# mark_cache_size = 5368709120
+# mark_cache_size = 1073741824
 ## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
-# minmax_index_cache_size = 5368709120
+# minmax_index_cache_size = 1073741824
 ## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
 # tmp_path = "/tidb-data/tiflash-9000/tmp"
 
@@ -107,9 +105,9 @@
 # read_index_runner_count = 1
 ## The minimum duration to handle read-index tasks in each worker.
 # read_index_worker_tick_ms = 10
-# disaggregated_mode = "tiflash_storage" or "tiflash_compute"
-# Means whether we use AutoScaler or PD for tiflash_compute nodes. Default use AutoScaler. Will remove this after AutoScaler is stable.
-# use_autoscaler = true
+# disaggregated_mode = "tiflash_write" or "tiflash_compute"
+## Means whether we use AutoScaler or PD for tiflash_compute nodes. Default is false.
+# use_autoscaler = false
 
 [flash.proxy]
 # addr = "0.0.0.0:20170"

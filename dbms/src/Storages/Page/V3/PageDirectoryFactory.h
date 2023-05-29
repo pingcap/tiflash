@@ -55,8 +55,11 @@ public:
 
     PageDirectoryPtr createFromReader(const String & storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
+    // create a PageDirectory which can only be manipulated with memory-only operations
+    PageDirectoryPtr dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit);
+
     // just for test
-    PageDirectoryPtr createFromEdit(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
 
     // just for test
     PageDirectoryFactory<Trait> & setBlobStats(BlobStats & blob_stats_)
@@ -75,6 +78,7 @@ private:
     BlobStats * blob_stats = nullptr;
 
     // For debug tool
+    template <typename T>
     friend class PageStorageControlV3;
     bool dump_entries = false;
 };

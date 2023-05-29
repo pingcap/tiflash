@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,20 +18,66 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
-#include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/RuntimeFilter.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinHashMap.h>
+#include <Interpreters/JoinPartition.h>
+#include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <common/ThreadPool.h>
 
 #include <shared_mutex>
 
 namespace DB
 {
-struct ProbeProcessInfo;
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+
+struct RestoreInfo
+{
+    JoinPtr join;
+    BlockInputStreamPtr scan_hash_map_stream;
+    BlockInputStreamPtr build_stream;
+    BlockInputStreamPtr probe_stream;
+
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+        : join(join_)
+        , scan_hash_map_stream(std::move(scan_hash_map_stream_))
+        , build_stream(std::move(build_stream_))
+        , probe_stream(std::move(probe_stream_))
+    {}
+};
+
+struct PartitionBlock
+{
+    size_t partition_index;
+    Block block;
+
+    PartitionBlock()
+        : partition_index(0)
+        , block({})
+    {}
+
+    explicit PartitionBlock(Block && block_)
+        : partition_index(0)
+        , block(std::move(block_))
+    {}
+
+    PartitionBlock(size_t partition_index_, Block && block_)
+        : partition_index(partition_index_)
+        , block(std::move(block_))
+    {}
+
+    explicit operator bool() const { return static_cast<bool>(block); }
+    bool operator!() const { return !block; }
+};
+using PartitionBlocks = std::list<PartitionBlock>;
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -85,6 +131,7 @@ struct ProbeProcessInfo;
   * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
+
 class Join
 {
 public:
@@ -95,58 +142,71 @@ public:
          const String & req_id,
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
+         size_t max_bytes_before_external_join_,
+         const SpillConfig & build_spill_config_,
+         const SpillConfig & probe_spill_config_,
+         Int64 join_restore_concurrency_,
+         const Names & tidb_output_column_names_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
+         const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
-         const String & match_helper_name = "");
+         size_t shallow_copy_cross_probe_threshold_ = 0,
+         const String & match_helper_name_ = "",
+         const String & flag_mapped_entry_helper_name_ = "",
+         size_t restore_round = 0,
+         bool is_test = true,
+         const std::vector<RuntimeFilterPtr> runtime_filter_list_ = dummy_runtime_filter_list);
 
-    /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
+    size_t restore_round;
+
+    /** Call `setBuildConcurrencyAndInitJoinPartition` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void init(const Block & sample_block, size_t build_concurrency_ = 1);
+    void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
-    void insertFromBlock(const Block & block);
+    void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
 
     void checkTypes(const Block & block) const;
 
-    /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
-      */
-    void setTotals(const Block & block)
-    {
-        std::unique_lock lock(rwlock);
-        totals = block;
-    }
-    bool hasTotals() const
-    {
-        std::shared_lock lock(rwlock);
-        return static_cast<bool>(totals);
-    };
-
-    void joinTotals(Block & block) const;
-
-    bool needReturnNonJoinedData() const;
-
-    /** For RIGHT and FULL JOINs.
-      * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
+    /**
+      * A stream that will scan and output rows from right table, might contain default values from left table
       * Use only after all calls to joinBlock was done.
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createScanHashMapAfterProbeStream(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+
+    bool isEnableSpill() const;
+
+    bool isRestoreJoin() const;
+
+    bool getPartitionSpilled(size_t partition_index);
+
+    bool hasPartitionSpilledWithLock();
+
+    bool hasPartitionSpilled();
+
+    bool isSpilled() const { return is_spilled; }
+
+    std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
+
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
+
+    Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
+
+    void finalizeRuntimeFilter();
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
-    size_t getTotalByteCount() const;
+    size_t getTotalByteCount();
+    /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
+    size_t getPeakBuildBytesUsage();
 
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
@@ -154,13 +214,11 @@ public:
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
-    void setInitActiveBuildConcurrency()
+    void setInitActiveBuildThreads()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrencyInternal();
+        active_build_threads = getBuildConcurrency();
     }
-    void finishOneBuild();
-    void waitUntilAllBuildFinished() const;
 
     size_t getProbeConcurrency() const
     {
@@ -171,130 +229,62 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        active_probe_concurrency = probe_concurrency;
+        active_probe_threads = probe_concurrency;
     }
+
+    void wakeUpAllWaitingThreads()
+    {
+        std::unique_lock lk(build_probe_mutex);
+        skip_wait = true;
+        probe_cv.notify_all();
+        build_cv.notify_all();
+        for (const auto & rf : runtime_filter_list)
+        {
+            rf->cancel(log, "Join has been cancelled.");
+        }
+    }
+
+    void finishOneBuild();
+    void waitUntilAllBuildFinished() const;
+
     void finishOneProbe();
     void waitUntilAllProbeFinished() const;
+    bool isAllProbeFinished() const;
+
+    void finishOneNonJoin(size_t partition_index);
 
     size_t getBuildConcurrency() const
     {
-        std::shared_lock lock(rwlock);
-        return getBuildConcurrencyInternal();
+        if (unlikely(build_concurrency == 0))
+            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+        return build_concurrency;
     }
 
     void meetError(const String & error_message);
-
-    /// Reference to the row in block.
-    struct RowRef
-    {
-        const Block * block;
-        size_t row_num;
-
-        RowRef() = default;
-        RowRef(const Block * block_, size_t row_num_)
-            : block(block_)
-            , row_num(row_num_)
-        {}
-    };
-
-    /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
-    struct RowRefList : RowRef
-    {
-        RowRefList * next = nullptr;
-
-        RowRefList() = default;
-        RowRefList(const Block * block_, size_t row_num_)
-            : RowRef(block_, row_num_)
-        {}
-    };
-
-    /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
-      * For implementation of RIGHT and FULL JOINs.
-      * NOTE: It is possible to store the flag in one bit of pointer to block or row_num. It seems not reasonable, because memory saving is minimal.
-      */
-    template <bool enable, typename Base>
-    struct WithUsedFlag;
-
-    template <typename Base>
-    struct WithUsedFlag<true, Base> : Base
-    {
-        mutable std::atomic<bool> used{};
-        using Base::Base;
-        using Base_t = Base;
-        void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
-        bool getUsed() const { return used; }
-    };
-
-    template <typename Base>
-    struct WithUsedFlag<false, Base> : Base
-    {
-        using Base::Base;
-        using Base_t = Base;
-        void setUsed() const {}
-        bool getUsed() const { return true; }
-    };
-
-
-/// Different types of keys for maps.
-#define APPLY_FOR_JOIN_VARIANTS(M) \
-    M(key8)                        \
-    M(key16)                       \
-    M(key32)                       \
-    M(key64)                       \
-    M(key_string)                  \
-    M(key_strbinpadding)           \
-    M(key_strbin)                  \
-    M(key_fixed_string)            \
-    M(keys128)                     \
-    M(keys256)                     \
-    M(serialized)
-
-    enum class Type
-    {
-        EMPTY,
-        CROSS,
-#define M(NAME) NAME,
-        APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-    };
-
-
-    /** Different data structures, that are used to perform JOIN.
-      */
-    template <typename Mapped>
-    struct MapsTemplate
-    {
-        std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>> key8;
-        std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
-        std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
-        std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbinpadding;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbin;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
-        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> serialized;
-        // TODO: add more cases like Aggregator
-    };
-
-    using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
-    using MapsAll = MapsTemplate<WithUsedFlag<false, RowRefList>>;
-    using MapsAnyFull = MapsTemplate<WithUsedFlag<true, RowRef>>;
-    using MapsAllFull = MapsTemplate<WithUsedFlag<true, RowRefList>>;
+    void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
+    static const String flag_mapped_entry_helper_prefix;
+    static const DataTypePtr flag_mapped_entry_helper_type;
 
-    // only use for left semi joins.
+    // only use for left outer semi joins.
     const String match_helper_name;
+    // only use for right semi, right anti joins with other conditions,
+    // used to name the column that records matched map entry before other conditions filter
+    const String flag_mapped_entry_helper_name;
 
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
 
 private:
-    friend class NonJoinedBlockInputStream;
+    friend class ScanHashMapAfterProbeBlockInputStream;
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    bool has_other_condition;
+    ASTTableJoin::Strictness original_strictness;
+    const bool may_probe_side_expanded_after_join;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     const Names key_names_left;
@@ -305,52 +295,68 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    size_t active_build_concurrency;
+    std::atomic<size_t> active_build_threads;
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    size_t active_probe_concurrency;
+    std::atomic<size_t> active_probe_threads;
 
+    bool skip_wait = false;
     bool meet_error = false;
     String error_message;
 
-private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
-    String left_filter_column;
-    String right_filter_column;
-    String other_filter_column;
-    String other_eq_filter_from_in_column;
-    ExpressionActionsPtr other_condition_ptr;
-    ASTTableJoin::Strictness original_strictness;
-    size_t max_block_size_for_cross_join;
+    const JoinNonEqualConditions non_equal_conditions;
+
+    size_t max_block_size;
+    /// Runtime Filter, optional
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+
     /** Blocks of "right" table.
       */
     BlocksList blocks;
+    Blocks original_blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
-    /// keep original block for concurrent build
-    Blocks original_blocks;
 
-    MapsAny maps_any; /// For ANY LEFT|INNER JOIN
-    MapsAll maps_all; /// For ALL LEFT|INNER JOIN
-    MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
-    MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
+    JoinPartitions partitions;
 
-    /// For right/full join, including
-    /// 1. Rows with NULL join keys
-    /// 2. Rows that are filtered by right join conditions
-    std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
+    std::list<size_t> spilled_partition_indexes;
 
-    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arenas pools;
+    size_t max_bytes_before_external_join;
+    SpillConfig build_spill_config;
+    SpillConfig probe_spill_config;
+    Int64 join_restore_concurrency;
+    bool is_spilled = false;
+    bool disable_spill = false;
+    std::atomic<size_t> peak_build_bytes_usage{0};
 
+    BlockInputStreams restore_build_streams;
+    BlockInputStreams restore_probe_streams;
+    BlockInputStreams restore_scan_hash_map_streams;
+    Int64 restore_join_build_concurrency = -1;
+
+    JoinPtr restore_join;
+
+    /// Whether to directly check all blocks for row with null key.
+    bool null_key_check_all_blocks_directly = false;
+
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
+
+    bool has_build_data_in_memory = false;
+
+    CrossProbeMode cross_probe_mode = CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+    size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
+    size_t shallow_copy_cross_probe_threshold;
 
 private:
-    Type type = Type::EMPTY;
-
-    Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
+    JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
 
@@ -359,10 +365,17 @@ private:
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
 
+    Names tidb_output_column_names;
+
+    bool is_test;
+
+    Block build_sample_block;
+    Block probe_sample_block;
+
     const LoggerPtr log;
 
-    Block totals;
     std::atomic<size_t> total_input_build_rows{0};
+
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
@@ -374,16 +387,6 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
-    size_t getBuildConcurrencyInternal() const
-    {
-        if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
-        return build_concurrency;
-    }
-
-    /// Initialize map implementations for various join types.
-    void initMapImpl(Type type_);
-
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
@@ -392,7 +395,7 @@ private:
     /** Set Join build concurrency and init hash map.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setBuildConcurrencyAndInitPool(size_t build_concurrency_);
+    void setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_);
 
     /// Throw an exception if blocks have different types of key columns.
     void checkTypesOfKeys(const Block & block_left, const Block & block_right) const;
@@ -402,8 +405,14 @@ private:
       */
     void insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & probe_process_info) const;
+    Block joinBlockHash(ProbeProcessInfo & probe_process_info) const;
+    Block doJoinBlockHash(ProbeProcessInfo & probe_process_info) const;
+
+    Block joinBlockNullAware(ProbeProcessInfo & probe_process_info) const;
+
+    Block joinBlockCross(ProbeProcessInfo & probe_process_info) const;
+
+    Block removeUselessColumn(Block & block) const;
 
     /** Handle non-equal join conditions
       *
@@ -411,33 +420,35 @@ private:
       */
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
+    void handleOtherConditionsForOneProbeRow(Block & block, ProbeProcessInfo & probe_process_info) const;
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-    void joinBlockImplCross(Block & block) const;
+    Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockNullAwareImpl(
+        Block & block,
+        size_t left_columns,
+        const ColumnRawPtrs & key_columns,
+        const ConstNullMapPtr & null_map,
+        const ConstNullMapPtr & filter_map,
+        const ConstNullMapPtr & all_key_null_map) const;
+
+    IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
+    IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
+
+    void spillAllBuildPartitions();
+    void spillAllProbePartitions();
+    /// use lock as the argument to force the caller acquire the lock before call them
+    void releaseAllPartitions();
+
+
+    void spillMostMemoryUsedPartitionIfNeed();
+    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
+
+    void workAfterBuildFinish();
+    void workAfterProbeFinish();
+
+    void generateRuntimeFilterValues(const Block & block);
 };
-
-using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
-
-struct ProbeProcessInfo
-{
-    Block block;
-    UInt64 max_block_size;
-    size_t start_row;
-    size_t end_row;
-    bool all_rows_joined_finish;
-
-    ProbeProcessInfo(UInt64 max_block_size_)
-        : max_block_size(max_block_size_)
-        , all_rows_joined_finish(true){};
-
-    void resetBlock(Block && block_);
-    void updateStartRow();
-};
-
-void convertColumnToNullable(ColumnWithTypeAndName & column);
 
 } // namespace DB

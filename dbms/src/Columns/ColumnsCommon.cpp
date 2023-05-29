@@ -16,6 +16,8 @@
 #include <Columns/IColumn.h>
 #include <common/memcpy.h>
 
+#include <bit>
+
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
 #endif
@@ -106,7 +108,7 @@ static inline size_t CountBytesInFilterWithNull(const IColumn::Filter & filt, co
 #if defined(__SSE2__) || defined(__AVX2__)
     for (; size >= 64;)
     {
-        count += __builtin_popcountll(ToBits64(p1) & ~ToBits64(p2));
+        count += std::popcount(ToBits64(p1) & ~ToBits64(p2));
         p1 += 64, p2 += 64;
         size -= 64;
     }
@@ -278,7 +280,7 @@ void filterArraysImplGeneric(
         {
             while (mask)
             {
-                size_t index = __builtin_ctz(mask);
+                size_t index = std::countr_zero(mask);
                 copy_array(offsets_pos + index);
                 mask = mask & (mask - 1);
             }

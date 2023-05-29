@@ -40,18 +40,6 @@ FilterBlockInputStream::FilterBlockInputStream(
     children.push_back(input);
 }
 
-Block FilterBlockInputStream::getTotals()
-{
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
-    {
-        totals = child->getTotals();
-        filter_transform_action.getExperssion()->executeOnTotals(totals);
-    }
-
-    return totals;
-}
-
-
 Block FilterBlockInputStream::getHeader() const
 {
     return filter_transform_action.getHeader();

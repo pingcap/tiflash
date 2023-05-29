@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
@@ -32,6 +30,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
+#include <memory>
 #include <utility>
 
 
@@ -86,17 +85,48 @@ struct MockWriter
         return summary;
     }
 
-    void broadcastOrPassThroughWrite(Blocks & blocks)
+    void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
         auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
         if (!packet)
             return;
 
-        if (!packet->packet.chunks().empty())
-            total_bytes += packet->packet.ByteSizeLong();
+        total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
     }
+
+    void broadcastWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void passThroughWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        if (version == MPPDataPacketV0)
+            return broadcastOrPassThroughWriteV0(blocks);
+
+        size_t original_size{};
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        ++total_packets;
+        if (!packet)
+            return;
+
+        total_bytes += packet->packet.ByteSizeLong();
+        queue->push(std::move(packet));
+    }
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+
     void write(tipb::SelectResponse & response)
     {
         if (add_summary)
@@ -118,12 +148,8 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
-    uint16_t getPartitionNum() const { return 1; }
-    bool isLocal(size_t index) const
-    {
-        return index == 0;
-    }
-    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
+    static uint16_t getPartitionNum() { return 1; }
+    static bool isWritable() { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -139,7 +165,7 @@ struct MockReceiverContext
     using Status = ::grpc::Status;
     struct Request
     {
-        String debugString() const
+        static String debugString()
         {
             return "{Request}";
         }
@@ -148,6 +174,11 @@ struct MockReceiverContext
         int send_task_id = 0;
         int recv_task_id = -1;
         bool is_local = false;
+    };
+
+    struct MockClientContext
+    {
+        static grpc_call * c_call() { return nullptr; }
     };
 
     struct Reader
@@ -171,7 +202,7 @@ struct MockReceiverContext
             return false;
         }
 
-        Status finish() const
+        static Status finish()
         {
             return ::grpc::Status();
         }
@@ -186,9 +217,13 @@ struct MockReceiverContext
     struct MockAsyncGrpcExchangePacketReader
     {
         // Not implement benchmark for Async GRPC for now.
-        void init(UnaryCallback<bool> *) { assert(0); }
-        void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
-        void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        static void init(UnaryCallback<bool> *) { assert(0); }
+        static void read(TrackedMppDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
+        static void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+        static std::shared_ptr<MockClientContext> getClientContext()
+        {
+            return std::make_shared<MockClientContext>();
+        }
     };
 
     using AsyncReader = MockAsyncGrpcExchangePacketReader;
@@ -217,9 +252,9 @@ struct MockReceiverContext
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeSyncReader(const Request &)
+    std::unique_ptr<Reader> makeSyncReader(const Request &)
     {
-        return std::make_shared<Reader>(queue);
+        return std::make_unique<Reader>(queue);
     }
 
     static void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr)
@@ -227,7 +262,7 @@ struct MockReceiverContext
         throw Exception("cancelMPPTaskOnTiFlashStorageNode not implemented for MockReceiverContext");
     }
 
-    static void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<StorageDisaggregated::RequestAndRegionIDs> &)
+    static void sendMPPTaskToTiFlashStorageNode(LoggerPtr, const std::vector<RequestAndRegionIDs> &)
     {
         throw Exception("sendMPPTaskToTiFlashStorageNode not implemented for MockReceiverContext");
     }
@@ -239,11 +274,13 @@ struct MockReceiverContext
 
     static bool supportAsync(const Request &) { return false; }
 
-    void makeAsyncReader(
+    static std::unique_ptr<AsyncReader> makeAsyncReader(
         const Request &,
-        std::shared_ptr<AsyncReader> &,
         grpc::CompletionQueue *,
-        UnaryCallback<bool> *) const {}
+        UnaryCallback<bool> *)
+    {
+        return nullptr;
+    }
 
     std::shared_ptr<Reader> makeReader(const Request &)
     {
@@ -256,7 +293,7 @@ struct MockReceiverContext
         return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
     }
 
-    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
@@ -275,13 +312,10 @@ protected:
         dag_context_ptr->is_root_mpp_task = true;
         dag_context_ptr->result_field_types = makeFields();
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        context.setDAGContext(dag_context_ptr.get());
     }
 
 public:
-    TestTiRemoteBlockInputStream()
-        : context(TiFlashTestEnv::getContext())
-    {}
+    TestTiRemoteBlockInputStream() = default;
 
     static Block squashBlocks(std::vector<Block> & blocks)
     {
@@ -349,7 +383,7 @@ public:
     void prepareQueue(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet)
+        bool empty_last_packet) const
     {
         prepareBlocks(source_blocks, empty_last_packet);
 
@@ -357,7 +391,10 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            *dag_context_ptr);
+            *dag_context_ptr,
+            MPPDataPacketVersion::MPPDataPacketV1,
+            tipb::CompressionMode::FAST,
+            tipb::ExchangeType::Broadcast);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
@@ -366,15 +403,14 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
-        auto summary_response = summary_collector.genExecutionSummaryResponse();
+        tipb::SelectResponse summary_response;
         writer->write(summary_response);
     }
 
     void prepareQueueV2(
         std::shared_ptr<MockWriter> & writer,
         std::vector<Block> & source_blocks,
-        bool empty_last_packet)
+        bool empty_last_packet) const
     {
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
         prepareBlocks(source_blocks, empty_last_packet);
@@ -393,12 +429,11 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
-        auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+        tipb::SelectResponse execution_summary_response;
         writer->write(execution_summary_response);
     }
 
-    void checkChunkInResponse(
+    static void checkChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -416,7 +451,7 @@ public:
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
     }
 
-    void checkNoChunkInResponse(
+    static void checkNoChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -441,7 +476,7 @@ public:
         ASSERT_EQ(receiver_stream->getTotalRows(), reference_block.rows());
     }
 
-    std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
+    static std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
         PacketQueuePtr queue_ptr)
     {
         auto receiver = std::make_shared<MockExchangeReceiver>(
@@ -451,7 +486,9 @@ public:
             "mock_req_id",
             "mock_exchange_receiver_id",
             0,
-            2);
+            2,
+            1,
+            0);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",
@@ -460,7 +497,7 @@ public:
         return receiver_stream;
     }
 
-    void doTestNoChunkInResponse(bool empty_last_packet)
+    void doTestNoChunkInResponse(bool empty_last_packet) const
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -477,7 +514,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    void doTestChunkInResponse(bool empty_last_packet)
+    void doTestChunkInResponse(bool empty_last_packet) const
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -493,7 +530,6 @@ public:
         checkChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    Context context;
     std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 

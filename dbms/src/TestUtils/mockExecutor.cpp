@@ -108,7 +108,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
-    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, *mock_context.context);
     root.reset();
     executor_index = 0;
 
@@ -145,8 +145,8 @@ void columnPrune(mock::ExecutorBinderPtr executor)
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties)
 {
     columnPrune(root);
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
@@ -158,23 +158,23 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     DAGProperties properties;
     properties.is_mpp_query = true;
     properties.mpp_partition_num = 1;
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns [[maybe_unused]])
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns [[maybe_unused]], bool keep_order)
 {
     assert(!columns.empty());
-    root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false);
+    root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false, keep_order);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns, bool keep_order)
 {
-    return mockTable(name.first, name.second, table_info, columns);
+    return mockTable(name.first, name.second, table_info, columns, keep_order);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count)
@@ -188,9 +188,9 @@ DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const String & exch
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo info;
-        info.tp = column.second;
-        info.name = column.first;
-        schema.push_back({exchange_name + "." + column.first, info});
+        info.name = column.name;
+        info.tp = column.type;
+        schema.push_back({exchange_name + "." + info.name, info});
     }
 
     root = mock::compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count, std::static_pointer_cast<mock::ExchangeSenderBinder>(root));
@@ -268,10 +268,15 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNameVec col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type);
+    auto partition_key_list = std::make_shared<ASTExpressionList>();
+    for (const auto & part_key : part_keys)
+    {
+        partition_key_list->children.push_back(col(part_key));
+    }
+    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type, partition_key_list, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -283,11 +288,13 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec right_conds,
     MockAstVec other_conds,
     MockAstVec other_eq_conds_from_in,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    bool is_null_aware_semi_join,
+    int64_t inner_index)
 {
     assert(root);
     assert(right.root);
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join, inner_index);
     return *this;
 }
 
@@ -387,25 +394,36 @@ DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+DAGRequestBuilder & DAGRequestBuilder::appendRuntimeFilter(mock::MockRuntimeFilter & rf)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(db, table, mock_column_infos, columns, concurrency_hint);
+    mock::JoinBinder * join = dynamic_cast<mock::JoinBinder *>(root.get());
+    if (join)
+    {
+        join->addRuntimeFilter(rf);
+    }
+    return *this;
+}
+
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
+{
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(db, table, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
+
 void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(name, mock_column_infos, columns, concurrency_hint);
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(name, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)
@@ -416,6 +434,11 @@ void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const
 void MockDAGRequestContext::addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint)
 {
     mock_storage->addTableScanConcurrencyHint(name.first + "." + name.second, concurrency_hint);
+}
+
+void MockDAGRequestContext::addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint)
+{
+    mock_storage->addDeltaMergeTableConcurrencyHint(name.first + "." + name.second, concurrency_hint);
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
@@ -438,7 +461,7 @@ void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const Strin
     for (const auto & column : columns)
         RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
 
-    mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
+    mock_storage->addTableDataForDeltaMerge(*context, db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
@@ -487,6 +510,16 @@ void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const 
     addMockDeltaMergeData(name.first, name.second, columns);
 }
 
+void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
+{
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
+    addMockDeltaMergeSchema(name.first, name.second, columnInfos);
+    addMockDeltaMergeData(name.first, name.second, columns);
+    addMockDeltaMergeTableConcurrencyHint(name, concurrency_hint);
+}
+
 void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count, const MockColumnInfoVec & partition_column_infos)
 {
     auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_exchange_receiver"));
@@ -506,7 +539,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
         {
             for (size_t col_index = 0; col_index < columns.size(); col_index++)
             {
-                if (columns[col_index].name == mock_column_info.first)
+                if (columns[col_index].name == mock_column_info.name)
                 {
                     partition_column_ids.push_back(col_index);
                     break;
@@ -550,23 +583,51 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
     }
 }
 
-DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
+DAGRequestBuilder MockDAGRequestContext::scan(
+    const String & db_name,
+    const String & table_name,
+    bool keep_order)
 {
     if (!mock_storage->useDeltaMerge())
     {
         auto table_info = mock_storage->getTableInfo(db_name + "." + table_name);
-        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchema(db_name + "." + table_name));
+        return DAGRequestBuilder(index, collation)
+            .mockTable(
+                {db_name, table_name},
+                table_info,
+                mock_storage->getTableSchema(db_name + "." + table_name),
+                keep_order);
     }
     else
     {
         auto table_info = mock_storage->getTableInfoForDeltaMerge(db_name + "." + table_name);
-        return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name));
+        return DAGRequestBuilder(index, collation)
+            .mockTable(
+                {db_name, table_name},
+                table_info,
+                mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name),
+                keep_order);
     }
+}
+
+DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids)
+{
+    auto dagRequestBuilder = scan(db_name, table_name);
+    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dagRequestBuilder.getRoot().get());
+    if (table_scan)
+    {
+        table_scan->setRuntimeFilterIds(rf_ids);
+    }
+    return dagRequestBuilder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_name, mock_storage->getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation)
+                       .exchangeReceiver(
+                           exchange_name,
+                           mock_storage->getExchangeSchema(exchange_name),
+                           fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     mock_storage->addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;
@@ -581,7 +642,7 @@ void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfo
 {
     assert(columnInfos.size() == columns.size());
     for (size_t i = 0; i < columns.size(); ++i)
-        assert(columnInfos[i].first == columns[i].name);
+        assert(columnInfos[i].name == columns[i].name);
 }
 
 } // namespace DB::tests
