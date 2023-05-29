@@ -48,7 +48,7 @@ public:
     {}
 
     // Rough set operator
-    const RSOperatorPtr rs_operator;
+    RSOperatorPtr rs_operator;
     // Filter expression actions and the name of the tmp filter column
     // Used construct the FilterBlockInputStream
     const ExpressionActionsPtr before_where;

@@ -18,6 +18,7 @@
 #include <Common/UniThreadPool.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -250,6 +251,9 @@ private:
                                         const Context & context,
                                         const String & req_id,
                                         const LoggerPtr & tracing_logger);
+
+    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

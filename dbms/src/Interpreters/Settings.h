@@ -241,6 +241,7 @@ struct Settings
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 60, "The max time wait for a usable checkpoint for FAP. Unit is second.")                                                                                                      \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
+    M(SettingUInt64, rf_max_in_value_set, 1024, "Maximum size of the set (in number of elements) resulting from the execution of the RF IN Predicate.")                                                                                 \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.")                                                                                               \
     M(SettingOverflowMode<false>, set_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.")                                                                                                                     \
                                                                                                                                                                                                                                         \

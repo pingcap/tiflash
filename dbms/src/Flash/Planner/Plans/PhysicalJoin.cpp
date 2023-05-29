@@ -137,6 +137,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     Names join_output_column_names;
     for (const auto & col : join_output_schema)
         join_output_column_names.emplace_back(col.name);
+
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
+    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
+
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -157,7 +162,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
-        context.isTest());
+        context.isTest(),
+        runtime_filter_list);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
