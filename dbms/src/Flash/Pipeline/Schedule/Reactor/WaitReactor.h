@@ -48,11 +48,11 @@ private:
 
     // Get the incremental tasks from waiting_task_list.
     // return false if waiting_task_list is empty and has finished.
-    inline bool takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks);
+    inline bool takeFromWaitingTaskList(std::list<std::pair<TaskPtr, Task *>> & local_waiting_tasks);
 
-    inline void react(std::list<TaskPtr> & local_waiting_tasks);
+    inline void react(std::list<std::pair<TaskPtr, Task *>> & local_waiting_tasks);
 
-    inline bool awaitAndCollectReadyTask(TaskPtr && task);
+    inline bool awaitAndCollectReadyTask(std::pair<TaskPtr, Task *> && task);
 
     inline void submitReadyTasks();
 
