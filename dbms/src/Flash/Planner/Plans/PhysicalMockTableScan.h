@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
