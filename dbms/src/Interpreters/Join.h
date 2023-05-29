@@ -21,7 +21,10 @@
 #include <Common/Logger.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/RuntimeFilter.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
+#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
@@ -151,7 +154,8 @@ public:
          const String & match_helper_name_ = "",
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
-         bool is_test = true);
+         bool is_test = true,
+         const std::vector<RuntimeFilterPtr> runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 
@@ -195,6 +199,8 @@ public:
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
+    void finalizeRuntimeFilter();
+
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
@@ -232,6 +238,10 @@ public:
         skip_wait = true;
         probe_cv.notify_all();
         build_cv.notify_all();
+        for (const auto & rf : runtime_filter_list)
+        {
+            rf->cancel(log, "Join has been cancelled.");
+        }
     }
 
     void finishOneBuild();
@@ -301,6 +311,9 @@ private:
     const JoinNonEqualConditions non_equal_conditions;
 
     size_t max_block_size;
+    /// Runtime Filter, optional
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -434,6 +447,8 @@ private:
 
     void workAfterBuildFinish();
     void workAfterProbeFinish();
+
+    void generateRuntimeFilterValues(const Block & block);
 };
 
 } // namespace DB

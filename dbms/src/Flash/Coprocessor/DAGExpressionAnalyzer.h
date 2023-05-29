@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -162,6 +163,8 @@ public:
         const Names & probe_key_names,
         const Names & build_key_names,
         const TiDB::TiDBCollators & collators);
+
+    void appendRuntimeFilterProperties(RuntimeFilterPtr & runtime_filter);
 
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
