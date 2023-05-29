@@ -30,7 +30,7 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     thread = std::thread(&WaitReactor::loop, this);
 }
 
-bool WaitReactor::awaitAndCollectReadyTask(std::pair<TaskPtr, Task *> && task)
+bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
     assert(task.first);
     auto * task_ptr = task.second;
@@ -119,7 +119,7 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     waiting_task_list.submit(tasks);
 }
 
-bool WaitReactor::takeFromWaitingTaskList(std::list<std::pair<TaskPtr, Task *>> & local_waiting_tasks)
+bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting_tasks)
 {
     std::list<TaskPtr> tmp_list;
     bool ret = local_waiting_tasks.empty()
@@ -138,7 +138,7 @@ bool WaitReactor::takeFromWaitingTaskList(std::list<std::pair<TaskPtr, Task *>> 
     return true;
 }
 
-void WaitReactor::react(std::list<std::pair<TaskPtr, Task *>> & local_waiting_tasks)
+void WaitReactor::react(std::list<WaitingTask> & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
@@ -166,7 +166,7 @@ void WaitReactor::doLoop()
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
 
-    std::list<std::pair<TaskPtr, Task *>> local_waiting_tasks;
+    std::list<WaitingTask> local_waiting_tasks;
     while (takeFromWaitingTaskList(local_waiting_tasks))
         react(local_waiting_tasks);
     // Handle remaining tasks.
