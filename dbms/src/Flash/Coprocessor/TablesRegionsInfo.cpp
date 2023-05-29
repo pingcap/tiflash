@@ -60,7 +60,12 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     return meta_snap.ver != region_info.region_version;
 }
 
-static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, std::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
+static void insertRegionInfoToTablesRegionInfo(
+    const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
+    Int64 table_id,
+    TablesRegionsInfo & tables_region_infos,
+    std::unordered_set<RegionID> & local_region_id_set,
+    const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
@@ -81,7 +86,7 @@ static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedP
         /// 3. TiFlash will pick the right version of region for local read and others for remote read.
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
-        bool duplicated_region = local_region_id_set.count(region_info.region_id) > 0;
+        bool duplicated_region = local_region_id_set.contains(region_info.region_id);
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
             table_region_info.remote_regions.push_back(region_info);

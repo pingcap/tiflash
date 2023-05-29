@@ -125,7 +125,7 @@ private:
         DAGPipeline & pipeline);
 
 private:
-    using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
+    using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
