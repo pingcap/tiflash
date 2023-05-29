@@ -37,17 +37,17 @@ extern const char pause_before_register_non_root_mpp_task[];
 namespace
 {
 // Print log for MPPTask which hasn't been removed for over 5 minutes.
-String getLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks)
+std::vector<std::pair<String, double>> getLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks)
 {
-    String log_info;
+    std::vector<std::pair<String, double>> long_live_tasks;
     for (const auto & iter : monitored_tasks)
     {
         auto alive_time = iter.second.elapsedSeconds();
         if (alive_time >= 300)
-            log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
+            long_live_tasks.push_back(std::make_pair(iter.first, alive_time));
     }
 
-    return log_info;
+    return long_live_tasks;
 }
 } // namespace
 
@@ -363,9 +363,15 @@ void MPPTaskManager::monitorMPPTasks()
             return;
         }
 
-        String log_info = getLongLiveMPPTasks(monitored_tasks);
+        auto long_live_tasks = getLongLiveMPPTasks(monitored_tasks);
         lock.unlock();
-        LOG_INFO(log, log_info);
+        if (!long_live_tasks.empty())
+        {
+            String log_info;
+            for (const auto & task : long_live_tasks)
+                log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, task.second, task.first);
+            LOG_INFO(log, log_info);
+        }
     }
 }
 
