@@ -33,7 +33,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     case OperatorStatus::IO:                                                                      \
         assert(!io_op);                                                                           \
         assert(op);                                                                               \
-        io_op.emplace((op).get());                                                                \
+        io_op = (op).get();                                                                       \
     /* For unexpected status, an immediate return is required. */                                 \
     default:                                                                                      \
         return (op_status);                                                                       \
@@ -47,7 +47,7 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     case OperatorStatus::IO:                                                                      \
         assert(!io_op);                                                                           \
         assert(op);                                                                               \
-        io_op.emplace((op).get());                                                                \
+        io_op = (op).get();                                                                       \
     /* For the last operator, the status will always be returned. */                              \
     default:                                                                                      \
         return (op_status);                                                                       \
@@ -151,10 +151,10 @@ OperatorStatus PipelineExec::executeIO()
 }
 OperatorStatus PipelineExec::executeIOImpl()
 {
-    assert(io_op && *io_op);
-    auto op_status = (*io_op)->executeIO();
+    assert(io_op);
+    auto op_status = io_op->executeIO();
     if (op_status != OperatorStatus::IO)
-        io_op.reset();
+        io_op = nullptr;
     return op_status;
 }
 
@@ -181,7 +181,7 @@ OperatorStatus PipelineExec::awaitImpl()
         case OperatorStatus::IO:
             assert(!io_op);
             assert(awaitable);
-            io_op.emplace(awaitable);
+            io_op = awaitable;
         // For unexpected status, an immediate return is required.
         default:
             return op_status;

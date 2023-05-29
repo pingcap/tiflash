@@ -71,7 +71,7 @@ private:
     std::vector<Operator *> awaitables;
 
     // hold the operator which is ready for executing io.
-    std::optional<Operator *> io_op;
+    Operator * io_op = nullptr;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.
