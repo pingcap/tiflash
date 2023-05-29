@@ -198,7 +198,7 @@ OperatorStatus PipelineExec::awaitImpl()
 
 void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
 {
-    // `extra_time` usually includes  and pipeline waiting time to be scheduled.
+    // `extra_time` usually includes pipeline waiting time to be scheduled and task queuing time.
     //
     // The waiting scheduling time of the pipeline should be added to the pipeline breaker,
     // but for simple implementation, it is directly added to the source operator.
@@ -206,7 +206,7 @@ void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
     // ditto for task queuing time.
     //
     // TODO Refining execution summary, excluding extra time from execution time.
-    // [total_time:6s, execution_time:1s, pending_time:2s, pipeline_waiting_time:3s]
+    // For example: [total_time:6s, execution_time:1s, pending_time:2s, pipeline_waiting_time:3s]
 
     source_op->getProfileInfo()->execution_time += extra_time;
     extra_time = source_op->getProfileInfo()->execution_time;
