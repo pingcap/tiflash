@@ -44,7 +44,6 @@ void UnorderedInputStream::pushDownReadyRFList(std::vector<RuntimeFilterPtr> rea
     for (const RuntimeFilterPtr & rf : readyRFList)
     {
         auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
-        LOG_DEBUG(log, "rf_operator in unordered input stream is :{}", rs_operator->toDebugString());
         task_pool->appendRSOperator(rs_operator);
     }
 }
