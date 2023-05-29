@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context_fwd.h>
 #include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
@@ -353,6 +354,8 @@ public:
                            size_t num_streams,
                            UInt64 max_version,
                            const PushDownFilterPtr & filter,
+                           const RuntimeFilteList & runtime_filter_list,
+                           const int rf_max_wait_time_ms,
                            const String & tracing_id,
                            bool keep_order,
                            bool is_fast_scan = false,

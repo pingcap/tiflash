@@ -17,6 +17,7 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -36,13 +37,16 @@ public:
         const SegmentReadTaskPoolPtr & task_pool_,
         const ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
-        const String & req_id)
+        const String & req_id,
+        const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
+        int max_wait_time_ms_ = 0)
         : task_pool(task_pool_)
         , header(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_))
         , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
-
+        , runtime_filter_list(runtime_filter_list_)
+        , max_wait_time_ms(max_wait_time_ms_)
     {
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
@@ -57,6 +61,16 @@ public:
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
+
+    // only for unit test
+    // The logic order of unit test is error, it will build input stream firstly and register rf secondly.
+    // It causes input stream could not get RF list in constructor.
+    // So, for unit test, it should call this function separated.
+    void setRuntimeFilterInfo(const RuntimeFilteList & runtime_filter_list_, int max_wait_time_ms_)
+    {
+        runtime_filter_list = runtime_filter_list_;
+        max_wait_time_ms = max_wait_time_ms_;
+    }
 
 protected:
     Block readImpl() override
@@ -109,11 +123,17 @@ protected:
         {
             return;
         }
-        std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
+        std::call_once(task_pool->addToSchedulerFlag(), [&]() {
+            prepareRuntimeFilter();
+            SegmentReadTaskScheduler::instance().add(task_pool); });
         task_pool_added = true;
     }
 
 private:
+    void prepareRuntimeFilter();
+
+    void pushDownReadyRFList(std::vector<RuntimeFilterPtr> readyRFList);
+
     SegmentReadTaskPoolPtr task_pool;
     Block header;
 
@@ -123,5 +143,9 @@ private:
     bool task_pool_added;
 
     size_t total_rows = 0;
+
+    // runtime filter
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+    int max_wait_time_ms;
 };
 } // namespace DB::DM

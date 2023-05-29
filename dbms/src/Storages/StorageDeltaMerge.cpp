@@ -26,6 +26,7 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -910,6 +911,8 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+
     const auto & scan_context = mvcc_query_info.scan_context;
 
     auto streams = store->read(
@@ -920,6 +923,8 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+        runtime_filter_list,
+        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -934,6 +939,18 @@ BlockInputStreams StorageDeltaMerge::read(
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
+}
+
+RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context)
+{
+    if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
+    {
+        return std::vector<RuntimeFilterPtr>{};
+    }
+    auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
+        query_info.dag_query->runtime_filter_ids);
+    LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+    return runtime_filter_list;
 }
 
 void StorageDeltaMerge::read(
@@ -1111,6 +1128,8 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         1,
         std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
+        std::vector<RuntimeFilterPtr>(),
+        0,
         /*tracing_id*/ "getRows",
         /*keep_order*/ false)[0];
     stream->readPrefix();
@@ -1137,6 +1156,8 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             1,
             std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>(),
+            0,
             /*tracing_id*/ "getRange",
             /*keep_order*/ false)[0];
         stream->readPrefix();

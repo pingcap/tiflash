@@ -447,6 +447,8 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         filter_conditions.conditions,
         table_scan.getPushedDownFilters(),
         table_scan.getColumns(),
+        std::vector<int>{},
+        0,
         db_context.getTimezoneInfo());
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
