@@ -883,9 +883,9 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 // 1. store applied index and applied term,
 // 2. flush cache,
 // 3. notify regions to compact log and store fushed state with applied index/term before flushing cache.
-void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, TableID table_id, bool is_background)
+void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
-    auto storage = tmt.getStorages().get(table_id);
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
@@ -895,7 +895,8 @@ void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
     auto range = std::make_pair(TiKVRangeKey::makeTiKVRangeKey<true>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.start.toRegionKey(table_id))),
                                 TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
-    std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange>> region_copmact_indexes;
+    LOG_DEBUG(log, "!!!! range {} {}", range.first.toDebugString(), range.second.toDebugString());
+    std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange>> region_compact_indexes;
     {
         auto task_lock = genTaskLock();
         auto region_map = getRegionsByRangeOverlap(range);
@@ -907,18 +908,23 @@ void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
                 storage->isCommonHandle(),
                 storage->getRowKeyColumnSize());
             auto region_task_lock = region_manager.genRegionTaskLock(overlapped_region.first);
-            region_copmact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range};
-            persistRegion(*overlapped_region.second, region_task_lock, "triggerCompactLog");
+            region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range};
+            persistRegion(*overlapped_region.second, std::make_optional(&region_task_lock), "triggerCompactLog");
         }
     }
-    storage->flushCache(tmt.getContext(), rowkey_range);
     // flush all segments in the range of regions.
     // TODO: combine continues range to do one flush.
-    for (const auto & region : region_copmact_indexes)
+    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 1");
+    for (const auto & region : region_compact_indexes)
     {
         auto region_rowkey_range = std::get<2>(region.second);
-        if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() < rowkey_range.getEnd())
+
+        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange cmp {} {}", rowkey_range.getStart() <= region_rowkey_range.getStart(), region_rowkey_range.getEnd() < rowkey_range.getEnd());
+        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange end {} {}", region_rowkey_range.getEnd().toDebugString(), rowkey_range.getEnd().toDebugString());
+        if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
         {
+            // region_rowkey_range belongs to rowkey_range.
+            // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
             // This segment has flushed, skip it.
             LOG_DEBUG(log, "flushed segment of region {}", region.first);
             continue;
@@ -926,18 +932,24 @@ void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         LOG_DEBUG(log, "flush extra segment of region {}, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
         storage->flushCache(tmt.getContext(), std::get<2>(region.second));
     }
+    // Flush the segments that isn't related to any region.
+    storage->flushCache(tmt.getContext(), rowkey_range);
+    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 2");
     // forbid regions being removed.
     auto task_lock = genTaskLock();
-    for (const auto & region : region_copmact_indexes)
+    for (const auto & region : region_compact_indexes)
     {
-        auto reion_ptr = getRegion(region.first);
-        if (!reion_ptr)
+        auto region_ptr = getRegion(region.first);
+        if (!region_ptr)
         {
             LOG_INFO(log, "region {} has been removed, ignore", region.first);
             continue;
         }
+        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 3");
         notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
+        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 4");
     }
+    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 5");
 }
 
 // the caller guarantee that delta cache has been flushed. This function need to persiste region cache before trigger proxy to compact log.
@@ -962,10 +974,13 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
     }
     auto f = [&]() {
+        LOG_DEBUG(log, "!!!! notifyCompactLog 1");
         region->setFlushedState(compact_index, compact_term);
         region->markCompactLog();
         region->cleanApproxMemCacheInfo();
+        LOG_DEBUG(log, "!!!! notifyCompactLog 2");
         getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
+        LOG_DEBUG(log, "!!!! notifyCompactLog 3");
     };
     if (lock_held)
     {

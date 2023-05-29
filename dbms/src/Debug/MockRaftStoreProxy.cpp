@@ -134,6 +134,11 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
+void fn_notify_compact_log(RaftStoreProxyPtr, uint64_t, uint64_t, uint64_t, uint64_t)
+{
+    // Do nothing
+}
+
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
     TiFlashRaftProxyHelper res{};
@@ -143,6 +148,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_make_async_waker = fn_make_async_waker;
     res.fn_handle_batch_read_index = fn_handle_batch_read_index;
     res.fn_get_region_local_state = fn_get_region_local_state;
+    res.fn_notify_compact_log = fn_notify_compact_log;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;

@@ -947,7 +947,7 @@ void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const S
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(watch.elapsedSeconds());
         }
     });
-    kv_store->copmactLogByRowKeyRange(tmt, segment->getRowKeyRange(), physical_table_id, is_background);
+    kv_store->compactLogByRowKeyRange(tmt, segment->getRowKeyRange(), keyspace_id, physical_table_id, is_background);
 }
 } // namespace DM
 } // namespace DB
