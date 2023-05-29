@@ -173,7 +173,7 @@ OperatorStatus PipelineExec::await()
 #ifndef NDEBUG
     // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }
@@ -198,19 +198,24 @@ OperatorStatus PipelineExec::awaitImpl()
 
 void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
 {
-    // `extra_time` should be evenly distributed among each operator.
-    // source + transform_ops + sink.
-    auto op_extra_time = extra_time / (2 + transform_ops.size());
-    source_op->getProfileInfo()->execution_time += op_extra_time;
-    auto pre_op_time = source_op->getProfileInfo()->execution_time;
+    // `extra_time` usually includes  and pipeline waiting time to be scheduled.
+    //
+    // The waiting scheduling time of the pipeline should be added to the pipeline breaker,
+    // but for simple implementation, it is directly added to the source operator.
+    //
+    // ditto for task queuing time.
+    //
+    // TODO Refining execution summary, excluding extra time from execution time.
+    // [total_time:6s, execution_time:1s, pending_time:2s, pipeline_waiting_time:3s]
+
+    source_op->getProfileInfo()->execution_time += extra_time;
+    extra_time = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
     {
-        transform_op->getProfileInfo()->execution_time += op_extra_time;
-        transform_op->getProfileInfo()->execution_time += pre_op_time;
-        pre_op_time = transform_op->getProfileInfo()->execution_time;
+        transform_op->getProfileInfo()->execution_time += extra_time;
+        extra_time = transform_op->getProfileInfo()->execution_time;
     }
-    sink_op->getProfileInfo()->execution_time += op_extra_time;
-    sink_op->getProfileInfo()->execution_time += pre_op_time;
+    sink_op->getProfileInfo()->execution_time += extra_time;
 }
 
 } // namespace DB
