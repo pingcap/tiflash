@@ -26,11 +26,6 @@ extern const char random_pipeline_model_operator_run_failpoint[];
 extern const char random_pipeline_model_cancel_failpoint[];
 } // namespace FailPoints
 
-void Operator::switchStatus(OperatorStatus to)
-{
-    op_status = to;
-}
-
 void Operator::operatePrefix()
 {
     profile_info.anchor();
@@ -52,13 +47,10 @@ void Operator::operateSuffix()
 
 OperatorStatus Operator::await()
 {
-    if (op_status != OperatorStatus::WAITING)
-        return op_status;
-
     // `exec_status.is_cancelled` has been checked by `EventTask`.
     // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
 
-    switchStatus(awaitImpl());
+    auto op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -74,7 +66,7 @@ OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    switchStatus(executeIOImpl());
+    auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
@@ -88,7 +80,7 @@ OperatorStatus SourceOp::read(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    switchStatus(readImpl(block));
+    auto op_status = readImpl(block);
 #ifndef NDEBUG
     if (block)
     {
@@ -109,7 +101,7 @@ OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    switchStatus(transformImpl(block));
+    auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
     {
@@ -131,7 +123,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     CHECK_IS_CANCELLED
     profile_info.anchor();
     assert(!block);
-    switchStatus(tryOutputImpl(block));
+    auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (block)
     {
@@ -152,7 +144,7 @@ OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
     profile_info.anchor();
-    switchStatus(prepareImpl());
+    auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
@@ -172,7 +164,7 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    switchStatus(writeImpl(std::move(block)));
+    auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif

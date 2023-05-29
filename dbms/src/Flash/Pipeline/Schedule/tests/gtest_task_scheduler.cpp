@@ -219,15 +219,13 @@ protected:
 
     ExecTaskStatus executeIOImpl() override
     {
-        assert(status == TraceTaskStatus::io);
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
         return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() override
     {
-        if (status == TraceTaskStatus::waiting)
-            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
         return ExecTaskStatus::RUNNING;
     }
 

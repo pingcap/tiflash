@@ -103,8 +103,11 @@ ExecTaskStatus PipelineTask::doAwaitImpl()
     switch (op_status)
     {
         HANDLE_NOT_RUNNING_STATUS
-    // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // After `pipeline_exec->await`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
     case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:

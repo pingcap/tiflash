@@ -62,7 +62,6 @@ public:
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
-    virtual bool isAwaitable() const { return false; }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     void operatePrefix();
@@ -94,8 +93,6 @@ protected:
 
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
-    inline void switchStatus(OperatorStatus to);
-
 protected:
     PipelineExecutorStatus & exec_status;
     const LoggerPtr log;
@@ -104,8 +101,6 @@ protected:
     OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
     // To reduce the overheads of `profile_info_ptr.get()`
     OperatorProfileInfo & profile_info = *profile_info_ptr;
-
-    OperatorStatus op_status{OperatorStatus::WAITING};
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.

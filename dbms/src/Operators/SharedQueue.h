@@ -73,8 +73,6 @@ public:
 
     OperatorStatus awaitImpl() override;
 
-    bool isAwaitable() const override { return true; }
-
 private:
     std::optional<Block> res;
     SharedQueuePtr shared_queue;
@@ -102,8 +100,6 @@ public:
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
-
-    bool isAwaitable() const override { return true; }
 
 private:
     std::optional<Block> res;
