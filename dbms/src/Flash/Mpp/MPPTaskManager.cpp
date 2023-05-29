@@ -34,44 +34,17 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
-namespace
-{
-// Print log for MPPTask which hasn't been removed for over 5 minutes.
-std::vector<std::pair<String, double>> getLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks)
-{
-    std::vector<std::pair<String, double>> long_live_tasks;
-    for (const auto & iter : monitored_tasks)
-    {
-        auto alive_time = iter.second.elapsedSeconds();
-        if (alive_time >= 300)
-            long_live_tasks.push_back(std::make_pair(iter.first, alive_time));
-    }
-
-    return long_live_tasks;
-}
-} // namespace
-
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , log(Logger::get())
-    , is_shutdown(false)
+    , monitor(std::make_shared<MPPTaskMonitor>(log))
 {}
 
 MPPTaskManager::~MPPTaskManager()
 {
-    std::lock_guard lock(mu);
-    is_shutdown = true;
-    monitor_cv.notify_all();
-}
-
-void MPPTaskManager::startMonitorMPPTaskThread()
-{
-    std::lock_guard lock(mu);
-    if (!is_monitor_task_started)
-    {
-        newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [self = shared_from_this()] { self->monitorMPPTasks(); });
-        is_monitor_task_started = true;
-    }
+    std::lock_guard lock(monitor->mu);
+    monitor->is_shutdown = true;
+    monitor->cv.notify_all();
 }
 
 MPPQueryTaskSetPtr MPPTaskManager::addMPPQueryTaskSet(const MPPQueryId & query_id)
@@ -346,59 +319,4 @@ void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
     std::lock_guard lock(mu);
     scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
-
-void MPPTaskManager::monitorMPPTasks()
-{
-    std::unique_lock lock(mu, std::defer_lock);
-    while (true)
-    {
-        lock.lock();
-
-        // Check MPPTasks every 5 minutes
-        monitor_cv.wait_for(lock, std::chrono::seconds(300));
-
-        if (is_shutdown)
-        {
-            lock.unlock();
-            return;
-        }
-
-        auto long_live_tasks = getLongLiveMPPTasks(monitored_tasks);
-        lock.unlock();
-        if (!long_live_tasks.empty())
-        {
-            String log_info;
-            for (const auto & task : long_live_tasks)
-                log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, task.second, task.first);
-            LOG_INFO(log, log_info);
-        }
-    }
-}
-
-void MPPTaskManager::addMonitoredTask(const String & task_unique_id)
-{
-    std::lock_guard lock(mu);
-    auto iter = monitored_tasks.find(task_unique_id);
-    if (iter != monitored_tasks.end())
-    {
-        LOG_INFO(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
-        return;
-    }
-
-    monitored_tasks.insert(std::make_pair(task_unique_id, Stopwatch()));
-}
-
-void MPPTaskManager::removeMonitoredTask(const String & task_unique_id)
-{
-    std::lock_guard lock(mu);
-    auto iter = monitored_tasks.find(task_unique_id);
-    if (iter == monitored_tasks.end())
-    {
-        LOG_INFO(log, "Unexpected behavior! task {} is not found in monitored_task.");
-        return;
-    }
-
-    monitored_tasks.erase(iter);
-}
-
 } // namespace DB

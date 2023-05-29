@@ -136,7 +136,6 @@ private:
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
-    const LoggerPtr log;
 
     ContextPtr context;
 
@@ -165,6 +164,8 @@ private:
     MPPReceiverSetPtr receiver_set;
 
     int new_thread_count_of_mpp_receiver = 0;
+
+    const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 

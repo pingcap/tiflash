@@ -102,10 +102,10 @@ MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
-    , log(Logger::get(id.toString()))
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)
+    , log(Logger::get(id.toString()))
     , mpp_task_statistics(id, meta.address())
 {
     current_memory_tracker = nullptr;

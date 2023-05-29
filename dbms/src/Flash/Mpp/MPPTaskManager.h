@@ -61,6 +61,49 @@ using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 /// the uniqueness of the start ts when stale read or set snapshot
 using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryTaskSetPtr, MPPQueryIdHash>;
 
+struct MPPTaskMonitor
+{
+public:
+    explicit MPPTaskMonitor(const LoggerPtr & log_)
+        : log(log_)
+    {}
+
+    void addMonitoredTask(const String & task_unique_id)
+    {
+        std::lock_guard lock(mu);
+        auto iter = monitored_tasks.find(task_unique_id);
+        if (iter != monitored_tasks.end())
+        {
+            LOG_WARNING(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
+            return;
+        }
+
+        monitored_tasks.insert(std::make_pair(task_unique_id, Stopwatch()));
+    }
+
+    void removeMonitoredTask(const String & task_unique_id)
+    {
+        std::lock_guard lock(mu);
+        auto iter = monitored_tasks.find(task_unique_id);
+        if (iter == monitored_tasks.end())
+        {
+            LOG_WARNING(log, "Unexpected behavior! task {} is not found in monitored_task.");
+            return;
+        }
+
+        monitored_tasks.erase(iter);
+    }
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool is_shutdown = false;
+    const LoggerPtr log;
+
+    // All created MPPTasks should be put into this variable.
+    // Only when the MPPTask is completed destructed, the task can be removed from it.
+    std::unordered_map<String, Stopwatch> monitored_tasks;
+};
+
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : public std::enable_shared_from_this<MPPTaskManager>
     , private boost::noncopyable
@@ -75,24 +118,18 @@ class MPPTaskManager : public std::enable_shared_from_this<MPPTaskManager>
 
     std::condition_variable cv;
 
-    bool is_shutdown;
-
-    // All created MPPTasks should be put into this variable.
-    // Only when the MPPTask is completed destructed, the task can be removed from it.
-    std::unordered_map<String, Stopwatch> monitored_tasks;
-
-    std::condition_variable monitor_cv;
-
-    bool is_monitor_task_started = false;
+    std::shared_ptr<MPPTaskMonitor> monitor;
 
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
     ~MPPTaskManager();
 
-    void addMonitoredTask(const String & task_unique_id);
+    std::shared_ptr<MPPTaskMonitor> getMPPTaskMonitor() const { return monitor; }
 
-    void removeMonitoredTask(const String & task_unique_id);
+    void addMonitoredTask(const String & task_unique_id) { monitor->addMonitoredTask(task_unique_id); }
+
+    void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
 
