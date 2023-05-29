@@ -196,14 +196,19 @@ OperatorStatus PipelineExec::awaitImpl()
 
 void PipelineExec::finalizeProfileInfo(UInt64 extra_time)
 {
-    source_op->getProfileInfo()->execution_time += extra_time;
-    extra_time = source_op->getProfileInfo()->execution_time;
+    // `extra_time` should be evenly distributed among each operator.
+    // source + transform_ops + sink.
+    auto op_extra_time = extra_time / (2 + transform_ops.size());
+    source_op->getProfileInfo()->execution_time += op_extra_time;
+    auto pre_op_time = source_op->getProfileInfo()->execution_time;
     for (const auto & transform_op : transform_ops)
     {
-        transform_op->getProfileInfo()->execution_time += extra_time;
-        extra_time = transform_op->getProfileInfo()->execution_time;
+        transform_op->getProfileInfo()->execution_time += op_extra_time;
+        transform_op->getProfileInfo()->execution_time += pre_op_time;
+        pre_op_time = transform_op->getProfileInfo()->execution_time;
     }
-    sink_op->getProfileInfo()->execution_time += extra_time;
+    sink_op->getProfileInfo()->execution_time += op_extra_time;
+    sink_op->getProfileInfo()->execution_time += pre_op_time;
 }
 
 } // namespace DB
