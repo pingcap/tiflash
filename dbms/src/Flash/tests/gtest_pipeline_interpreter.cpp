@@ -33,7 +33,7 @@ public:
         // 1. manually delete the gtest_pipeline_interpreter.out
         // 2. call setRecord()
         // 3. ./gtests_dbms --gtest_filter=PipelineInterpreterExecuteTest.*
-        setRecord();
+        // setRecord();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
