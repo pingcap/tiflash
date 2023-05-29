@@ -394,6 +394,16 @@ DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set
     return *this;
 }
 
+DAGRequestBuilder & DAGRequestBuilder::appendRuntimeFilter(mock::MockRuntimeFilter & rf)
+{
+    mock::JoinBinder * join = dynamic_cast<mock::JoinBinder *>(root.get());
+    if (join)
+    {
+        join->addRuntimeFilter(rf);
+    }
+    return *this;
+}
+
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
     auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
@@ -424,6 +434,11 @@ void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const
 void MockDAGRequestContext::addMockTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint)
 {
     mock_storage->addTableScanConcurrencyHint(name.first + "." + name.second, concurrency_hint);
+}
+
+void MockDAGRequestContext::addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint)
+{
+    mock_storage->addDeltaMergeTableConcurrencyHint(name.first + "." + name.second, concurrency_hint);
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
@@ -493,6 +508,16 @@ void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const 
 
     addMockDeltaMergeSchema(name.first, name.second, columnInfos);
     addMockDeltaMergeData(name.first, name.second, columns);
+}
+
+void MockDAGRequestContext::addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
+{
+    assert(mock_storage->useDeltaMerge());
+    assertMockInput(columnInfos, columns);
+
+    addMockDeltaMergeSchema(name.first, name.second, columnInfos);
+    addMockDeltaMergeData(name.first, name.second, columns);
+    addMockDeltaMergeTableConcurrencyHint(name, concurrency_hint);
 }
 
 void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count, const MockColumnInfoVec & partition_column_infos)
@@ -583,6 +608,17 @@ DAGRequestBuilder MockDAGRequestContext::scan(
                 mock_storage->getTableSchemaForDeltaMerge(db_name + "." + table_name),
                 keep_order);
     }
+}
+
+DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids)
+{
+    auto dagRequestBuilder = scan(db_name, table_name);
+    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dagRequestBuilder.getRoot().get());
+    if (table_scan)
+    {
+        table_scan->setRuntimeFilterIds(rf_ids);
+    }
+    return dagRequestBuilder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)

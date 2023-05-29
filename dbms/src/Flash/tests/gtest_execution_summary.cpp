@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -25,6 +26,7 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
@@ -291,7 +293,6 @@ try
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
 }
 CATCH
-
 
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_END
