@@ -613,7 +613,7 @@ try
     ASSERT_EQ(term, 5);
 
     auto mvcc_query_info = MvccQueryInfo(false, 10);
-    EXPECT_THROW([&] {
+    auto f = [&] {
         auto discard = doLearnerRead(
             table_id,
             mvcc_query_info,
@@ -621,8 +621,8 @@ try
             ctx,
             log);
         UNUSED(discard);
-    }(),
-                 RegionException);
+    };
+    EXPECT_THROW(f(), RegionException);
 
     // We can't `doApply`, since the TiKVValue is not valid.
     auto r1 = proxy_instance->getRegion(region_id);

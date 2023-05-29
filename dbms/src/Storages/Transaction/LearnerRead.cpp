@@ -96,7 +96,8 @@ class MvccQueryInfoWrap
     using Base = MvccQueryInfo;
     Base & inner;
     std::optional<Base::RegionsQueryInfo> regions_info;
-    Base::RegionsQueryInfo * regions_info_ptr;
+    // Points to either `regions_info` or `mvcc_query_info.regions_query_info`.
+    Base::RegionsQueryInfo * regions_query_info_ptr;
 
 public:
     MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID logical_table_id)
@@ -104,28 +105,28 @@ public:
     {
         if (likely(!inner.regions_query_info.empty()))
         {
-            regions_info_ptr = &inner.regions_query_info;
+            regions_query_info_ptr = &inner.regions_query_info;
         }
         else
         {
             regions_info = Base::RegionsQueryInfo();
-            regions_info_ptr = &*regions_info;
-            // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
+            regions_query_info_ptr = &*regions_info;
+            // Only for (integration) test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
             // todo support partition table
             auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, logical_table_id);
-            regions_info_ptr->reserve(regions.size());
+            regions_query_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
                 if (region == nullptr)
                     continue;
-                regions_info_ptr->emplace_back(
+                regions_query_info_ptr->emplace_back(
                     RegionQueryInfo{id, region->version(), region->confVer(), logical_table_id, region->getRange()->rawKeys(), {}});
             }
         }
     }
     Base * operator->() { return &inner; }
 
-    const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_info_ptr; }
+    const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_query_info_ptr; }
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
         inner.read_index_res[region_id] = read_index;
