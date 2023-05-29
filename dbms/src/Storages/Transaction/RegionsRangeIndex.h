@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
@@ -55,9 +54,10 @@ public:
 
     void clear();
 
+    RootMap::iterator split(const TiKVRangeKey & new_start);
+
 private:
     void tryMergeEmpty(RootMap::iterator remove_it);
-    RootMap::iterator split(const TiKVRangeKey & new_start);
 
 private:
     RootMap root;

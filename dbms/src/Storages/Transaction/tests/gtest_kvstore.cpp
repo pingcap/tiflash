@@ -1165,6 +1165,12 @@ TEST_F(RegionKVStoreTest, Restore)
 TEST_F(RegionKVStoreTest, RegionRange)
 {
     {
+        // Test util functions.
+        RegionsRangeIndex region_index;
+        region_index.split(TiKVRangeKey::makeTiKVRangeKey<true>(TiKVKey()));
+        region_index.split(TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey()));
+    }
+    {
         // Test findByRangeOverlap.
         RegionsRangeIndex region_index;
         const auto & root_map = region_index.getRoot();
