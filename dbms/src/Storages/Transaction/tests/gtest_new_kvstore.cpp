@@ -598,16 +598,14 @@ try
     auto kvr1 = kvs.getRegion(region_id);
     ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
 
-    auto [index, term] = proxy_instance->rawWrite(region_id, {RecordKVFormat::genKey(table_id, 3), RecordKVFormat::genKey(table_id, 3, 5), RecordKVFormat::genKey(table_id, 3, 8)}, {RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20), TiKVValue("value1"), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5)}, {
-                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
-                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
-                                                                                                                                                                                                                                                                                                                                                                                    WriteCmdType::Put,
-                                                                                                                                                                                                                                                                                                                                                                                },
-                                                  {
-                                                      ColumnFamilyType::Lock,
-                                                      ColumnFamilyType::Default,
-                                                      ColumnFamilyType::Write,
-                                                  });
+    std::vector<std::string> keys{RecordKVFormat::genKey(table_id, 3).toString(), RecordKVFormat::genKey(table_id, 3, 5).toString(), RecordKVFormat::genKey(table_id, 3, 8).toString()};
+    std::vector<std::string> vals({RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20).toString(), TiKVValue("value1").toString(), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5).toString()});
+    auto ops = std::vector<ColumnFamilyType>{
+        ColumnFamilyType::Lock,
+        ColumnFamilyType::Default,
+        ColumnFamilyType::Write,
+    };
+    auto [index, term] = proxy_instance->rawWrite(region_id, std::move(keys), std::move(vals), {WriteCmdType::Put, WriteCmdType::Put, WriteCmdType::Put}, std::move(ops));
     ASSERT_EQ(index, 6);
     ASSERT_EQ(kvr1->appliedIndex(), 5);
     ASSERT_EQ(term, 5);
@@ -636,11 +634,11 @@ try
         log);
     // 0 unavailable regions
     ASSERT_EQ(regions_snapshot.size(), 1);
-    // validateQueryInfo(
-    //     mvcc_query_info,
-    //     regions_snapshot,
-    //     ctx.getTMTContext(),
-    //     log);
+
+    // No throw
+    auto mvcc_query_info2 = MvccQueryInfo(false, 10);
+    mvcc_query_info2.regions_query_info.emplace_back(1, kvr1->version(), kvr1->confVer(), table_id, kvr1->getRange()->rawKeys());
+    validateQueryInfo(mvcc_query_info2, regions_snapshot, ctx.getTMTContext(), log);
 }
 CATCH
 
