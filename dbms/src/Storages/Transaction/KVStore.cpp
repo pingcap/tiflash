@@ -900,12 +900,12 @@ void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             LOG_INFO(log, "region {} has been removed, ignore", region.first);
             continue;
         }
-        notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background);
+        notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
     }
 }
 
 // the caller guarantee that delta cache has been flushed. This function need to persiste region cache before trigger proxy to compact log.
-void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background)
+void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held)
 {
     auto region = getRegion(region_id);
     if (!region)
@@ -925,10 +925,20 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
     {
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
     }
-    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-    region->setFlushedState(compact_index, compact_term);
-    region->markCompactLog();
-    region->cleanApproxMemCacheInfo();
-    getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
+    auto f = [&]() {
+        region->setFlushedState(compact_index, compact_term);
+        region->markCompactLog();
+        region->cleanApproxMemCacheInfo();
+        getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
+    };
+    if (lock_held)
+    {
+        f();
+    }
+    else
+    {
+        auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+        f();
+    }
 }
 } // namespace DB
