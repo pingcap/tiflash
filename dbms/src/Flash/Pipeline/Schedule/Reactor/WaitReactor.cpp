@@ -30,31 +30,32 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     thread = std::thread(&WaitReactor::loop, this);
 }
 
-bool WaitReactor::awaitAndCollectReadyTask(TaskPtr && task)
+bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
-    assert(task);
-    task->startTraceMemory();
-    auto status = task->await();
+    assert(task.first);
+    auto * task_ptr = task.second;
+    task_ptr->startTraceMemory();
+    auto status = task_ptr->await();
     switch (status)
     {
     case ExecTaskStatus::WAITING:
-        task->endTraceMemory();
+        task_ptr->endTraceMemory();
         return false;
     case ExecTaskStatus::RUNNING:
-        task->profile_info.elapsedAwaitTime();
-        task->endTraceMemory();
-        cpu_tasks.push_back(std::move(task));
+        task_ptr->profile_info.elapsedAwaitTime();
+        task_ptr->endTraceMemory();
+        cpu_tasks.push_back(std::move(task.first));
         return true;
     case ExecTaskStatus::IO:
-        task->profile_info.elapsedAwaitTime();
-        task->endTraceMemory();
-        io_tasks.push_back(std::move(task));
+        task_ptr->profile_info.elapsedAwaitTime();
+        task_ptr->endTraceMemory();
+        io_tasks.push_back(std::move(task.first));
         return true;
     case FINISH_STATUS:
-        task->profile_info.elapsedAwaitTime();
-        task->finalize();
-        task->endTraceMemory();
-        task.reset();
+        task_ptr->profile_info.elapsedAwaitTime();
+        task_ptr->finalize();
+        task_ptr->endTraceMemory();
+        task.first.reset();
         return true;
     default:
         UNEXPECTED_STATUS(logger, status);
@@ -118,16 +119,26 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     waiting_task_list.submit(tasks);
 }
 
-bool WaitReactor::takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks)
+bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting_tasks)
 {
-    return local_waiting_tasks.empty()
-        ? waiting_task_list.take(local_waiting_tasks)
+    std::list<TaskPtr> tmp_list;
+    bool ret = local_waiting_tasks.empty()
+        ? waiting_task_list.take(tmp_list)
         // If the local waiting tasks are not empty, there is no need to be blocked here
         // and we can continue to process the leftover tasks in the local waiting tasks
-        : waiting_task_list.tryTake(local_waiting_tasks);
+        : waiting_task_list.tryTake(tmp_list);
+    if unlikely (!ret)
+        return false;
+
+    for (auto & task : tmp_list)
+    {
+        auto * task_ptr = task.get();
+        local_waiting_tasks.emplace_back(std::move(task), std::move(task_ptr));
+    }
+    return true;
 }
 
-void WaitReactor::react(std::list<TaskPtr> & local_waiting_tasks)
+void WaitReactor::react(std::list<WaitingTask> & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
@@ -155,7 +166,15 @@ void WaitReactor::doLoop()
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
 
-    std::list<TaskPtr> local_waiting_tasks;
+    // Because WaitReactor is only responsible for polling the status of waiting tasks,
+    // lowering the thread priority here can avoid excessive CPU usage.
+#ifdef __linux__
+    struct sched_param param{};
+    param.__sched_priority = sched_get_priority_min(sched_getscheduler(0));
+    sched_setparam(0, &param);
+#endif
+
+    std::list<WaitingTask> local_waiting_tasks;
     while (takeFromWaitingTaskList(local_waiting_tasks))
         react(local_waiting_tasks);
     // Handle remaining tasks.

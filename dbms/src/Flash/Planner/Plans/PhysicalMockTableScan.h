@@ -81,12 +81,9 @@ private:
 
     BlockInputStreams mock_streams;
 
-
     const Int64 table_id;
 
     const bool keep_order;
-
-    SourceOps source_ops;
 
     std::vector<Int32> runtime_filter_ids;
 
