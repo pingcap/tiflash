@@ -297,6 +297,11 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
+    // 空 snapshot 就不用转了呀，直接返回空
+    // TODO:不确定对后面有什么影响
+    if (snaps.len == 0) {
+        return {};
+    }
     auto context = tmt.getContext();
     auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;

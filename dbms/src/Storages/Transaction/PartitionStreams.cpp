@@ -59,6 +59,7 @@ static void writeRegionDataToStorage(
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log)
 {
+    LOG_INFO(log, "hyy into writeRegionDataToStorage with table_id is {}", region->getMappedTableID());
     constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
     auto keyspace_id = region->getKeyspaceID();
@@ -402,6 +403,8 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 {
+    // StackTrace stack_trace;
+    // LOG_INFO(Logger::get("hyy"), "stack trace is {}", stack_trace.toString());
     TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;

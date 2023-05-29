@@ -119,7 +119,12 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
+        LOG_INFO(log, "into getDBInfoByName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+
+        for (auto & database : databases) {
+            LOG_INFO(log, "database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
+        }
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
         if (it == databases.end())
@@ -129,7 +134,12 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
+        LOG_INFO(log, "into getDBInfoByMappedName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+
+        for (auto database : databases) {
+            LOG_INFO(log, "database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
+        }
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())

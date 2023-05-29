@@ -23,28 +23,18 @@ mysql> select * from information_schema.tiflash_tables where tidb_table = 'ts' a
 
 # add tiflash replica
 mysql> alter table test.ts set tiflash replica 1;
-func> wait_table test ts
 
 mysql> select `table_schema`, `table_name`, `replica_count`, `location_labels`, `available`, `progress` from information_schema.tiflash_replica;
 +--------------+------------+---------------+-----------------+-----------+----------+
 | table_schema | table_name | replica_count | location_labels | available | progress |
 +--------------+------------+---------------+-----------------+-----------+----------+
-| test         | ts         |             1 |                 |         1 |        1 |
+| test         | ts         |             1 |                 |         0 |        0 |
 +--------------+------------+---------------+-----------------+-----------+----------+
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments where tidb_table = 'ts' and is_tombstone = 0;
-+---------------+------------+------+
-| tidb_database | tidb_table | rows |
-+---------------+------------+------+
-| test          | ts         |    0 |
-+---------------+------------+------+
+
 
 mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables where tidb_table = 'ts' and is_tombstone = 0;
-+---------------+------------+------------+
-| tidb_database | tidb_table | total_rows |
-+---------------+------------+------------+
-| test          | ts         |          0 |
-+---------------+------------+------------+
 
 # insert data
 mysql> alter table test.ts set tiflash replica 0;

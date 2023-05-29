@@ -16,9 +16,9 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int)
 mysql> alter table test.t set tiflash replica 1
 
-func> wait_table test t
-
 mysql> insert into test.t values(1);
+
+func> wait_table test t
 
 mysql> alter table test.t add column b1 binary(8) not null;
 mysql> alter table test.t add column b2 binary(8) default X'3132';

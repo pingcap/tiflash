@@ -59,15 +59,6 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char exception_after_step_1_in_exchange_partition[];
-extern const char exception_before_step_2_rename_in_exchange_partition[];
-extern const char exception_after_step_2_in_exchange_partition[];
-extern const char exception_before_step_3_rename_in_exchange_partition[];
-extern const char exception_after_step_3_in_exchange_partition[];
-extern const char exception_between_schema_change_in_the_same_diff[];
-} // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
@@ -90,6 +81,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    // 其实我不用管 createtables？所有的真实 create 都要等到 set tiflash replica 的操作呀
+    /*
     if (diff.type == SchemaActionType::CreateTables) // createTables 不实际 apply schema，但是更新 table_id_to_database_id 和 partition_id_with_table_id
     {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
@@ -127,6 +120,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         }
         return;
     }
+    */
 
     if (diff.type == SchemaActionType::RenameTables)
     {
@@ -146,6 +140,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     switch (diff.type)
     {
+    /*
     case SchemaActionType::CreateTable:
     {
         
@@ -180,6 +175,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         LOG_INFO(log, "Finish Create Table");
         break;   
     }
+    */
     case SchemaActionType::RecoverTable: // recover 不能拖时间，不然就直接失效了....
     {
         // 更新 table_id_to_database_id, 并且执行 recover
@@ -209,22 +205,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::DropTable:
     case SchemaActionType::DropView:
     {
-        auto db_info = getter.getDatabase(diff.schema_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "miss database: {}", diff.schema_id);
-            db_info = std::make_shared<TiDB::DBInfo>();
-            db_info->keyspace_id = keyspace_id;
-            db_info->id = diff.schema_id;
-            db_info->name = "db_" + std::to_string(diff.schema_id);
-        }
-        applyDropTable(db_info, diff.table_id);
+        applyDropTable(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::TruncateTable:
     {
-        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
-
         auto table_info = getter.getTableInfo(diff.schema_id, diff.table_id);
         if (table_info == nullptr)
         {
@@ -232,6 +217,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             LOG_DEBUG(log, "Table {} not found, may have been dropped.", diff.table_id);
             return;
         }
+        
+        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
 
         table_id_to_database_id.emplace(diff.table_id, diff.schema_id);
         if (table_info->isLogicalPartitionTable())
@@ -251,16 +238,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             }
         }
 
-        auto db_info = getter.getDatabase(diff.schema_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "miss database: {}", diff.schema_id);
-            db_info = std::make_shared<TiDB::DBInfo>();
-            db_info->keyspace_id = keyspace_id;
-            db_info->id = diff.schema_id;
-            db_info->name = "db_" + std::to_string(diff.schema_id);
-        }
-        applyDropTable(db_info, diff.old_table_id);
+        applyDropTable(diff.schema_id, diff.old_table_id);
         break;
     }
     case SchemaActionType::RenameTable:
@@ -362,8 +340,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         
         break;
     }
-    // 感觉可以类似 tomstone 处理
-    case SchemaActionType::SetTiFlashReplica: // TODO:改为0的是不是要处理一下，删除表等等？
+    case SchemaActionType::SetTiFlashReplica:
     {
         auto db_info = getter.getDatabase(diff.schema_id);
         if (db_info == nullptr)
@@ -412,7 +389,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
         }
 
         // 直接当作 drop table 来处理
-        applyDropTable(db_info, table_id);
+        applyDropTable(db_info->id, table_id);
     } else {
         // 2. set 非 0
         // 我们其实也不在乎他到底有几个 replica 对吧，有就可以了。并且真的要插入数据了， create table 已经把基础打好了，所以不用处理
@@ -564,7 +541,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     }
 
     auto alter_lock = storage->lockForAlter(getThreadNameAndID()); // 真实的拿 storage 的锁
-    storage->updateTableInfo(alter_lock, updated_table_info, context);
+    storage->updateTableInfo(alter_lock, updated_table_info, context, 
+                             name_mapper.mapDatabaseName(db_info->id, keyspace_id), 
+                             name_mapper.mapTableName(updated_table_info));
+
+    
     /// TODO:需要什么 log 比较合适
     LOG_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
@@ -816,14 +797,15 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
-
     shared_mutex_for_databases.lock();
+    LOG_INFO(log, "emplace databases with db id: {}", db_info->id);
     databases.emplace(db_info->id, db_info);
     shared_mutex_for_databases.unlock();
 
     LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
 }
 
+// TODO:要先把没删掉的表给删了
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 {   
@@ -839,6 +821,26 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
         return;
     }
     shared_mutex_for_databases.unlock_shared();
+
+    // 检查数据库对应的表是否都已经被删除
+    // 先用一个非常离谱的手法，后面在看看真的难到要再加一个 map 么
+    // TODO:优化这段逻辑，不然耗时太长了。
+    shared_mutex_for_table_id_map.lock_shared();
+    for (const auto & pair : table_id_to_database_id) {
+        if (pair.second == schema_id) {
+            // 还要处理 分区表，因为你也拉不到 tableInfo了，不过这边完全可以扔给后台做
+            // alter a add column , insert data, drop database 这个场景要能 cover
+            applyDropTable(schema_id, pair.first);
+
+            for (const auto & parition_pair : partition_id_to_logical_id) {
+                if (parition_pair.second == pair.first) {
+                    applyDropTable(schema_id, parition_pair.first);
+                }
+            }
+        }
+    }
+    shared_mutex_for_table_id_map.unlock_shared();
+
     applyDropSchema(name_mapper.mapDatabaseName(*it->second));
     shared_mutex_for_databases.lock();
     databases.erase(schema_id);
@@ -1039,7 +1041,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
     auto * storage = tmt_context.getStorages().get(keyspace_id, table_id).get();
@@ -1053,13 +1055,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info
     {
         for (const auto & part_def : table_info.partition.definitions)
         {
-            applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id);
+            applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), part_def.id);
         }
     }
 
     // Drop logical table at last, only logical table drop will be treated as "complete".
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
-    applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id);
+    applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), table_info.id);
 }
 
 
@@ -1141,8 +1143,14 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
             LOG_ERROR(log, "new table in TiKV is not partition table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));
             return;
         }
-
-        table_info = table_info->producePartitionTableInfo(partition_table_id, name_mapper);
+        try {
+            table_info = table_info->producePartitionTableInfo(partition_table_id, name_mapper);
+        } catch (const Exception & e) {
+            // TODO:目前唯一会遇到这个问题的在于，先 DDL，insert，然后 organize partition。并且让 organize 先到 tiflash。这样就 insert 到的时候，老的 partition_id 已经不在了，所以生成不了，直接让他不插入应该就可以了。
+            LOG_ERROR(log, "producePartitionTableInfo meet exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            return;
+        }
+        
     }
 
     auto & tmt_context = context.getTMTContext();

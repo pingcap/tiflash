@@ -257,7 +257,8 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        throw Exception();
+        LOG_ERROR(log, "The database {} does not exist.", db_id);
+        return nullptr;
     }
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
@@ -291,7 +292,9 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
+        // throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
+        LOG_ERROR(log, "DB {} Not Exists!", db_id);
+        return {};
     }
 
     std::vector<TiDB::TableInfoPtr> res;

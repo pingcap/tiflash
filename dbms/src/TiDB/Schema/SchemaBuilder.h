@@ -78,7 +78,7 @@ private:
 
     void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
-    void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applyDropTable(DatabaseID database_id, TableID table_id);
 
     void applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id);
 

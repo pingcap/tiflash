@@ -51,7 +51,7 @@ std::optional<QualifiedName> mappedTable(Context & context, const String & datab
 {
     auto mapped_db = mappedDatabase(context, database_name);
     if (mapped_db == std::nullopt){
-        //std::cout << "mapped_db is null" << std::endl;
+        LOG_INFO(Logger::get("hyy"), "mapped_db is null");
         return std::nullopt;
     }
 
@@ -97,6 +97,33 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
         output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
         output(mapped->second);
+}
+
+void dbgFuncTableExists(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.empty() || args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    auto mapped = mappedTable(context, database_name, table_name); 
+    if (mapped == std::nullopt)
+        output("false");
+    else
+        output("true");  
+}
+
+void dbgFuncDatabaseExists(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.empty() || args.size() != 1)
+        throw Exception("Args not matched, should be: database-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    auto mapped = mappedDatabase(context, database_name); 
+    if (mapped == std::nullopt)
+        output("false");
+    else
+        output("true");  
 }
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
@@ -146,6 +173,10 @@ void dbgFuncGetTiflashReplicaCount(Context & context, const ASTs & args, DBGInvo
 
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     auto mapped = mappedTable(context, database_name, table_name);
+    if (!mapped.has_value()){
+        output("0");
+        return;
+    }
     auto storage = context.getTable(mapped->first, mapped->second);
     auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
     if (!managed_storage)
@@ -166,6 +197,11 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
 
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     auto mapped = mappedTable(context, database_name, table_name);
+
+    if (!mapped.has_value()){
+        output("not find the table");
+        return;
+    }
     auto storage = context.getTable(mapped->first, mapped->second);
     auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
     if (!managed_storage)
@@ -181,8 +217,10 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
     {
         auto paritition_table_info = table_info.producePartitionTableInfo(part_def.id, name_mapper);
         auto partition_storage = context.getTMTContext().getStorages().get(NullspaceID, paritition_table_info->id);
-        fmt_buf.append((std::to_string(partition_storage->getTableInfo().replica_info.count)));
-        fmt_buf.append("/");
+        if (partition_storage && partition_storage->getTombstone() == 0) {
+            fmt_buf.append((std::to_string(partition_storage->getTableInfo().replica_info.count)));
+            fmt_buf.append("/");
+        }
     }
 
     output(fmt_buf.toString());

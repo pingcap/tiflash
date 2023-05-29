@@ -1430,7 +1430,9 @@ ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info){
 void StorageDeltaMerge::updateTableInfo(
     const TableLockHolder &,
     TiDB::TableInfo & table_info,
-    const Context & context) {
+    const Context & context,
+    const String & database_name,
+    const String & table_name) {
 
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
     if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
@@ -1438,6 +1440,16 @@ void StorageDeltaMerge::updateTableInfo(
         auto & tmt_context = context.getTMTContext();
         tidb_table_info.engine_type = tmt_context.getEngineType();
     }
+
+    updateDeltaMergeTableCreateStatement(
+        database_name,
+        table_name,
+        getPrimarySortDescription(),
+        getColumns(),
+        hidden_columns,
+        table_info,
+        0,
+        context);
 }
 
 void StorageDeltaMerge::alterSchemaChange(

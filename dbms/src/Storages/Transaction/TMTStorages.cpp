@@ -49,11 +49,8 @@ void ManagedStorages::put(ManageableStoragePtr storage)
 ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_id) const
 {
     //std::lock_guard lock(mutex);
-    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get");
-    //std::lock_guard lock(mutex);
     // std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     shared_mutex.lock_shared();
-    LOG_INFO(Logger::get("ManagedStorages"), "into ManagedStorages::get get lock");
 
     if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end()){
         shared_mutex.unlock_shared();
@@ -82,9 +79,9 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
     //std::lock_guard lock(mutex);
     std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     // std::cout << " into ManagedStorages::getByName " << std::endl;
-    // for (const auto & storage: storages) {
-    //     std::cout << "storage: db and table name " << storage.second->getDatabaseName() << " " << storage.second->getTableInfo().name << std::endl;
-    // }
+    for (const auto & storage: storages) {
+        LOG_INFO(Logger::get("hyy"), "storage: db and table name {}.{} ", storage.second->getDatabaseName(),storage.second->getTableInfo().name);
+    }
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {
         const auto & storage = pair.second;
