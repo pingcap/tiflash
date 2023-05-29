@@ -32,7 +32,7 @@ class LooseBoundedMPMCQueue
 {
 public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
-    using PushCallback = std::function<void(T & element)>;
+    using PushCallback = std::function<bool(const T & element)>;
 
     explicit LooseBoundedMPMCQueue(size_t capacity_)
         : capacity(std::max(1, capacity_))
@@ -67,8 +67,7 @@ public:
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && !isFullWithoutLock())
         {
-            pushFront(std::forward<U>(data));
-            return MPMCQueueResult::OK;
+            return pushFront(std::forward<U>(data));
         }
 
         switch (status)
@@ -96,8 +95,7 @@ public:
         if (isFullWithoutLock())
             return MPMCQueueResult::FULL;
 
-        pushFront(std::forward<U>(data));
-        return MPMCQueueResult::OK;
+        return pushFront(std::forward<U>(data));
     }
 
     /// Non-blocking function.
@@ -113,8 +111,7 @@ public:
         if unlikely (status == MPMCQueueStatus::FINISHED)
             return MPMCQueueResult::FINISHED;
 
-        pushFront(std::forward<U>(data));
-        return MPMCQueueResult::OK;
+        return pushFront(std::forward<U>(data));
     }
 
     MPMCQueueResult pop(T & data)
@@ -195,11 +192,6 @@ public:
         return cancel_reason;
     }
 
-    void setPushCallback(PushCallback && push_callback_)
-    {
-        push_callback = std::move(push_callback_);
-    }
-
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
@@ -243,11 +235,16 @@ private:
     }
 
     template <typename U>
-    ALWAYS_INLINE void pushFront(U && data)
+    ALWAYS_INLINE MPMCQueueResult pushFront(U && data)
     {
         Int64 memory_usage = get_auxiliary_memory_usage(data);
         queue.emplace_front(std::forward<U>(data), memory_usage);
         current_auxiliary_memory_usage += memory_usage;
+        if (push_callback)
+        {
+            if (!push_callback(queue.front().data))
+                return MPMCQueueResult::CANCELLED;
+        }
         reader_head.notifyNext();
         /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,
         /// T1: a writer write an object with size 100
@@ -261,8 +258,7 @@ private:
         /// if we notify the writer if the queue is not full here, w3 can write immediately
         if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
             writer_head.notifyNext();
-        if (push_callback)
-            push_callback(queue.front().data);
+        return MPMCQueueResult::OK;
     }
 
 private:
@@ -271,11 +267,11 @@ private:
     {
         T data;
         Int64 memory_usage;
-        DataWithMemoryUsage(T && data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T && data_, Int64 memory_usage_)
             : data(std::move(data_))
             , memory_usage(memory_usage_)
         {}
-        DataWithMemoryUsage(T & data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T & data_, Int64 memory_usage_)
             : data(data_)
             , memory_usage(memory_usage_)
         {}

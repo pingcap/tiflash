@@ -127,11 +127,16 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
             msg_channels_for_fine_grained_shuffle.push_back(std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
-        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size, [this](ReceivedMessagePtr & element) {
+        /// use pushcallback to make sure that the order of messages in msg_channels_for_fine_grained_shuffle is exactly the same as it in msg_channel,
+        /// because pop from msg_channel rely on this assumption. An alternative is to make msg_channel a set/map of messages for fine grained shuffle, but
+        /// it need many more changes
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size, [this](const ReceivedMessagePtr & element) {
             for (size_t i = 0; i < fine_grained_channel_size; ++i)
             {
-                msg_channels_for_fine_grained_shuffle[i]->tryPush(element);
+                if (msg_channels_for_fine_grained_shuffle[i]->tryPush(element) != MPMCQueueResult::OK)
+                    return false;
             }
+            return true;
         });
     }
     else
