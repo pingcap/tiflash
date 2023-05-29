@@ -78,7 +78,7 @@ private:
     std::tuple<RowNumber, bool> stepBackward(const RowNumber & current_row, UInt64 n);
 
     // distance is left - right.
-    Int64 distance(RowNumber left, RowNumber right);
+    UInt64 distance(RowNumber left, RowNumber right);
 
 public:
     WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);

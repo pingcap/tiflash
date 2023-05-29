@@ -277,8 +277,8 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
 RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, UInt64 n)
 {
     auto dist = distance(current_row, partition_start);
-    assert(dist >= 0);
-    if (dist <= static_cast<Int64>(n))
+
+    if (dist <= n)
         return partition_start;
 
     RowNumber result_row = current_row;
@@ -320,10 +320,10 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     ++n;
 
     auto dist = distance(partition_end, current_row);
-    assert(dist >= 1);
+    RUNTIME_CHECK(dist >= 1);
 
     // Offset is too large and the partition_end is the longest position we can reach
-    if (dist <= static_cast<Int64>(n))
+    if (dist <= n)
         return std::make_tuple(partition_end, partition_ended);
 
     // Now, frame_end is impossible to reach to partition_end.
@@ -359,7 +359,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     return std::make_tuple(frame_end_row, partition_ended);
 }
 
-Int64 WindowTransformAction::distance(RowNumber left, RowNumber right)
+UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
 {
     if (left.block == right.block)
         return left.row - right.row;

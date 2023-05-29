@@ -176,6 +176,8 @@ try
 
     // TODO support unsigned int.
     testInt<Int8>();
+    testInt<Int16>();
+    testInt<Int32>();
     testInt<Int64>();
 
     testFloat<Float32>();
