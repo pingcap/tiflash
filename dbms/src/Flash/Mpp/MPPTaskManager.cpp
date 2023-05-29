@@ -37,7 +37,7 @@ extern const char pause_before_register_non_root_mpp_task[];
 namespace
 {
 // Print log for MPPTask which hasn't been removed for over 5 minutes.
-void checkMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+String getLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks)
 {
     String log_info;
     for (const auto & iter : monitored_tasks)
@@ -47,8 +47,7 @@ void checkMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks
             log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
     }
 
-    if (!log_info.empty())
-        LOG_INFO(log, log_info);
+    return log_info;
 }
 } // namespace
 
@@ -364,8 +363,9 @@ void MPPTaskManager::monitorMPPTasks()
             return;
         }
 
-        checkMPPTasks(monitored_tasks, log);
+        String log_info = getLongLiveMPPTasks(monitored_tasks);
         lock.unlock();
+        LOG_INFO(log, log_info);
     }
 }
 
@@ -375,7 +375,7 @@ void MPPTaskManager::addMonitoredTask(const String & task_unique_id)
     auto iter = monitored_tasks.find(task_unique_id);
     if (iter != monitored_tasks.end())
     {
-        LOG_ERROR(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
+        LOG_INFO(log, "task {} is repeatedly added to be monitored which is not an expected behavior!");
         return;
     }
 
@@ -388,7 +388,7 @@ void MPPTaskManager::removeMonitoredTask(const String & task_unique_id)
     auto iter = monitored_tasks.find(task_unique_id);
     if (iter == monitored_tasks.end())
     {
-        LOG_ERROR(log, "Unexpected behavior! task {} is not found in monitored_task.");
+        LOG_INFO(log, "Unexpected behavior! task {} is not found in monitored_task.");
         return;
     }
 
