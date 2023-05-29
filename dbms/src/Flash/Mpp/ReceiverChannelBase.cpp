@@ -59,7 +59,7 @@ ReceivedMessagePtr toReceivedMessage(
     if (for_fine_grained_shuffle)
     {
         assert(fine_grained_consumer_size > 0);
-        ret->remaining_consumer = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
+        ret->remaining_consumers = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
         ret->fine_grained_chunks.resize(fine_grained_consumer_size);
         if (packet.chunks_size() > 0)
         {

@@ -44,76 +44,6 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
 }
 } // namespace
 
-/*
-bool ReceivedMessageQueue::splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
-{
-    if (packet.chunks().empty())
-        return true;
-
-    // Packet not empty.
-    if (unlikely(packet.stream_ids().empty()))
-    {
-        // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
-        // This can happen when there are old version nodes when upgrading.
-        LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                       "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                       "Cannot handle this.",
-                  source_index);
-        return false;
-    }
-
-    // packet.stream_ids[i] is corresponding to packet.chunks[i],
-    // indicating which stream_id this chunk belongs to.
-    RUNTIME_ASSERT(packet.chunks_size() == packet.stream_ids_size(), log, "packet's chunk size shoule be equal to it's size of streams");
-    assert(fine_grained_channel_size > 0);
-
-    for (int i = 0; i < packet.stream_ids_size(); ++i)
-    {
-        UInt64 stream_id = packet.stream_ids(i) % fine_grained_channel_size;
-        chunks[stream_id].push_back(&packet.chunks(i));
-    }
-    return true;
-}
-
-bool ReceivedMessageQueue::writeMessageToFineGrainChannels(ReceivedMessagePtr original_message, ReceiverMode mode)
-{
-    assert(fine_grained_channel_size > 0);
-    auto & packet = original_message->packet->packet;
-    std::vector<std::vector<const String *>> chunks(msg_channels_for_fine_grained_shuffle.size());
-    if (!splitFineGrainedShufflePacketIntoChunks(original_message->source_index, packet, chunks))
-        return false;
-    const auto * resp_ptr = original_message->resp_ptr;
-    const auto * error_ptr = original_message->error_ptr;
-    std::vector<ReceivedMessagePtr> recv_msg_vector(fine_grained_channel_size, nullptr);
-    for (size_t i = 0; i < fine_grained_channel_size; ++i)
-    {
-        recv_msg_vector[i] = std::make_shared<ReceivedMessage>(
-            original_message->source_index,
-            original_message->req_info,
-            original_message->packet,
-            error_ptr,
-            resp_ptr,
-            std::move(chunks[i]));
-        recv_msg_vector[i]->remaining_consumer = original_message->remaining_consumer;
-        // Only the first ExchangeReceiverInputStream need to handle resp.
-        resp_ptr = nullptr;
-    }
-    //bool success = true;
-    ///// use lock to make sure the message sequence is
-    //std::unique_lock lock(fine_grained_channel_mutex);
-    //for (size_t i = 0; i < fine_grained_channel_size && success; ++i)
-    //{
-    //    auto push_result = msg_channels_for_fine_grained_shuffle[i]->tryPush(std::move(recv_msg_vector[i]));
-    //    /// the queue is unlimited, should never be full
-    //    assert(push_result != MPMCQueueResult::FULL);
-    //    success = push_result == MPMCQueueResult::OK;
-    //    injectFailPointReceiverPushFail(success, mode);
-    //}
-    //return success;
-    return true;
-}
- */
-
 template <bool fine_grained_shuffle, bool need_wait>
 std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
 {
@@ -131,7 +61,7 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
         }
         if (recv_msg != nullptr)
         {
-            if (recv_msg->remaining_consumer->fetch_sub(1) == 1)
+            if (recv_msg->remaining_consumers->fetch_sub(1) == 1)
             {
                 ReceivedMessagePtr original_msg;
                 auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
@@ -139,7 +69,7 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
                 /// so even use tryPop, the result must not be empty
                 assert(pop_result != MPMCQueueResult::EMPTY);
                 if (original_msg != nullptr)
-                    RUNTIME_CHECK_MSG(*original_msg->remaining_consumer == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->remaining_consumer);
+                    RUNTIME_CHECK_MSG(*original_msg->remaining_consumers == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->remaining_consumers);
             }
         }
     }
@@ -170,11 +100,6 @@ bool ReceivedMessageQueue::pushToMessageChannel(ReceivedMessagePtr & received_me
             return msg_channel->push(recv_msg);
         };
     bool success = write_func(received_message) == MPMCQueueResult::OK;
-    //if constexpr (enable_fine_grained_shuffle)
-    //{
-    //    if (success)
-    //        success = writeMessageToFineGrainChannels(received_message, mode);
-    //}
 
     injectFailPointReceiverPushFail(success, mode);
     return success;
@@ -184,15 +109,6 @@ template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessagePtr & received_message)
 {
     auto res = grpc_recv_queue->push(received_message);
-    //if constexpr (enable_fine_grained_shuffle)
-    //{
-    //    if (res == GRPCReceiveQueueRes::OK)
-    //    {
-    //        /// if write to first queue success, then write the message to fine grain queues
-    //        if (!writeMessageToFineGrainChannels(received_message, ReceiverMode::Async))
-    //            res = GRPCReceiveQueueRes::CANCELLED;
-    //    }
-    //}
     fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
     return res;
 }

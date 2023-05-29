@@ -261,7 +261,7 @@ private:
         }
     }
 
-    std::pair<bool,String> sendPackets()
+    std::pair<bool, String> sendPackets()
     {
         // note: no exception should be thrown rudely, since it's called by a GRPC poller.
         try
@@ -769,7 +769,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     DecodeDetail detail;
 
-    auto & chunks = recv_msg->remaining_consumer == nullptr ? recv_msg->chunks : recv_msg->fine_grained_chunks[stream_id];
+    auto & chunks = recv_msg->remaining_consumers == nullptr ? recv_msg->chunks : recv_msg->fine_grained_chunks[stream_id];
     if (chunks.empty())
         return detail;
     auto & packet = recv_msg->packet->getPacket();
@@ -951,7 +951,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
 {
     assert(recv_msg != nullptr);
     bool handle_resp = false;
-    if (recv_msg->remaining_consumer != nullptr)
+    if (recv_msg->remaining_consumers != nullptr)
     {
         /// fine grained shuffle
         handle_resp = stream_id == 0 && recv_msg->resp_ptr != nullptr;
