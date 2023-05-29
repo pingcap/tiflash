@@ -316,15 +316,18 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
-    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, {{RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}}, old_epoch);
+    auto & ori_source_range = source_region->getRange()->comparableKeys();
+    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
+    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
+    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_source_range);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
@@ -340,7 +343,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         {
             auto task_lock = kvs.genTaskLock();
             auto lock = kvs.genRegionWriteLock(task_lock);
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
+            auto region = makeRegion(1, ori_source_range.first.key, ori_source_range.second.key);
             lock.regions.emplace(1, region);
             lock.index.add(region);
         }
@@ -357,7 +360,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     }
     {
         // Region 1 and 7 overlaps.
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 2);
@@ -365,12 +368,12 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     // Split again
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_source_range);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
@@ -1169,6 +1172,9 @@ TEST_F(RegionKVStoreTest, RegionRange)
         RegionsRangeIndex region_index;
         region_index.split(TiKVRangeKey::makeTiKVRangeKey<true>(TiKVKey()));
         region_index.split(TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey()));
+        region_index.tryMergeEmpty();
+        const auto & root_map = region_index.getRoot();
+        ASSERT_EQ(root_map.size(), 2);
     }
     {
         // Test findByRangeOverlap.

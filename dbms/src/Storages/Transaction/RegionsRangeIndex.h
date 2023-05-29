@@ -57,6 +57,7 @@ public:
 
     // TODO Used by RegionKVStoreTest, using a friend decl here.
     RootMap::iterator split(const TiKVRangeKey & new_start);
+    void tryMergeEmpty();
 
 private:
     void tryMergeEmpty(RootMap::iterator remove_it);

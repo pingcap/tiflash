@@ -90,6 +90,11 @@ void RegionsRangeIndex::clear()
     max_it = root.emplace(TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey()), IndexNode{}).first;
 }
 
+void RegionsRangeIndex::tryMergeEmpty()
+{
+    tryMergeEmpty(root.begin());
+}
+
 void RegionsRangeIndex::tryMergeEmpty(RootMap::iterator remove_it)
 {
     if (!remove_it->second.region_map.empty())
