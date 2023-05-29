@@ -231,7 +231,7 @@ private:
 
     FlushThresholds flush_thresholds;
 
-    Context * context;
+    Context * const context;
 
     mutable std::mutex mutex;
     mutable std::shared_mutex rw_lock;
