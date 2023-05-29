@@ -105,8 +105,7 @@ public:
 };
 
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
-class MPPTaskManager : public std::enable_shared_from_this<MPPTaskManager>
-    , private boost::noncopyable
+class MPPTaskManager : private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
@@ -151,13 +150,9 @@ public:
 
     String toString();
 
-    // We can't start this thread in constructor as we inherit the `enable_shared_from_this`
-    void startMonitorMPPTaskThread();
-
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
     void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
-    void monitorMPPTasks();
 };
 
 } // namespace DB
