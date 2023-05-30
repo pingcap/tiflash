@@ -152,12 +152,12 @@ struct MockRaftStoreProxy : MutexLockWrap
     }
 
     MockProxyRegionPtr getRegion(uint64_t id);
-
     MockProxyRegionPtr doGetRegion(uint64_t id);
 
     MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
 
     void init(size_t region_num);
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
 
     size_t size() const;
 
@@ -331,5 +331,19 @@ struct GCMonitor : MutexLockWrap
 
     static GCMonitor global_gc_monitor;
 };
+
+template <typename... Types>
+std::vector<std::pair<std::string, std::string>> regionRangeToEncodeKeys(Types &&... args)
+{
+    // RegionRangeKeys::RegionRange is not copy-constructible, however, initialize_list need copy construction.
+    // So we have to so this way, rather than create a composeXXX that accepts a vector of RegionRangeKeys::RegionRange.
+    std::vector<std::pair<std::string, std::string>> ranges_str;
+    ([&] {
+        auto & x = args;
+        ranges_str.emplace_back(std::make_pair(x.first.toString(), x.second.toString()));
+    }(),
+     ...);
+    return ranges_str;
+}
 
 } // namespace DB
