@@ -32,6 +32,7 @@
 #include <common/likely.h>
 
 #include <tuple>
+#include <variant>
 
 namespace DB
 {
@@ -895,11 +896,30 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
     auto range = std::make_pair(TiKVRangeKey::makeTiKVRangeKey<true>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.start.toRegionKey(table_id))),
                                 TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
-    LOG_DEBUG(log, "!!!! range {} {}", range.first.toDebugString(), range.second.toDebugString());
+    LOG_DEBUG(log, "Start proactive compact region range [{},{}]", range.first.toDebugString(), range.second.toDebugString());
     std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange>> region_compact_indexes;
     {
         auto task_lock = genTaskLock();
-        auto region_map = getRegionsByRangeOverlap(range);
+        auto maybe_region_map = [&]() {
+            auto manage_lock = genRegionReadLock();
+            return manage_lock.index.findByRangeChecked(range);
+        }();
+
+        if (std::holds_alternative<RegionsRangeIndex::OverlapInfo>(maybe_region_map))
+        {
+            auto & info = std::get<RegionsRangeIndex::OverlapInfo>(maybe_region_map);
+            FmtBuffer buffer;
+            buffer.joinStr(
+                std::get<1>(info).begin(),
+                std::get<1>(info).end(),
+                [&](const auto & e, FmtBuffer & b) { b.fmtAppend("{}", e); },
+                " ");
+            std::string fmt_error = fmt::format("Find overlapped regions at {}, regions are {}, quit", std::get<0>(info).toDebugString(), buffer.toString());
+            LOG_ERROR(log, fmt_error);
+            throw Exception(fmt_error, ErrorCodes::LOGICAL_ERROR);
+        }
+
+        RegionMap & region_map = std::get<RegionMap>(maybe_region_map);
         for (const auto & overlapped_region : region_map)
         {
             auto region_rowkey_range = DM::RowKeyRange::fromRegionRange(
@@ -914,13 +934,10 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
     // flush all segments in the range of regions.
     // TODO: combine continues range to do one flush.
-    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 1");
     for (const auto & region : region_compact_indexes)
     {
         auto region_rowkey_range = std::get<2>(region.second);
 
-        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange cmp {} {}", rowkey_range.getStart() <= region_rowkey_range.getStart(), region_rowkey_range.getEnd() < rowkey_range.getEnd());
-        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange end {} {}", region_rowkey_range.getEnd().toDebugString(), rowkey_range.getEnd().toDebugString());
         if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
         {
             // region_rowkey_range belongs to rowkey_range.
@@ -933,8 +950,8 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         storage->flushCache(tmt.getContext(), std::get<2>(region.second));
     }
     // Flush the segments that isn't related to any region.
+    // TODO Is it really necessary?
     storage->flushCache(tmt.getContext(), rowkey_range);
-    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 2");
     // forbid regions being removed.
     auto task_lock = genTaskLock();
     for (const auto & region : region_compact_indexes)
@@ -945,11 +962,8 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             LOG_INFO(log, "region {} has been removed, ignore", region.first);
             continue;
         }
-        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 3");
         notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
-        LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 4");
     }
-    LOG_DEBUG(log, "!!!! compactLogByRowKeyRange 5");
 }
 
 // the caller guarantee that delta cache has been flushed. This function need to persiste region cache before trigger proxy to compact log.
@@ -974,13 +988,10 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
     }
     auto f = [&]() {
-        LOG_DEBUG(log, "!!!! notifyCompactLog 1");
         region->setFlushedState(compact_index, compact_term);
         region->markCompactLog();
         region->cleanApproxMemCacheInfo();
-        LOG_DEBUG(log, "!!!! notifyCompactLog 2");
         getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
-        LOG_DEBUG(log, "!!!! notifyCompactLog 3");
     };
     if (lock_held)
     {
