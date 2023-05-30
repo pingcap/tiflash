@@ -324,6 +324,15 @@ void MockRaftStoreProxy::init(size_t region_num)
     }
 }
 
+std::unique_ptr<TiFlashRaftProxyHelper> MockRaftStoreProxy::generateProxyHelper()
+{
+    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
+        RaftStoreProxyPtr{this}));
+    // Bind ffi to MockSSTReader.
+    proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+    return proxy_helper;
+}
+
 size_t MockRaftStoreProxy::size() const
 {
     auto _ = genLockGuard();

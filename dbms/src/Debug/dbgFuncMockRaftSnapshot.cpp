@@ -262,6 +262,21 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
 
+class RegionMockTest final
+{
+public:
+    RegionMockTest(KVStore * kvstore_, RegionPtr region_);
+    ~RegionMockTest();
+
+    DISALLOW_COPY_AND_MOVE(RegionMockTest);
+
+private:
+    TiFlashRaftProxyHelper mock_proxy_helper{};
+    const TiFlashRaftProxyHelper * ori_proxy_helper{};
+    KVStore * kvstore;
+    RegionPtr region;
+};
+
 RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
