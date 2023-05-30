@@ -26,10 +26,10 @@ mysql> create database db_test
 mysql> create table db_test.t(a int not null, b int not null)
 mysql> alter table db_test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-func> wait_table db_test t
-
 mysql> insert into db_test.t values (1, 1)
 mysql> insert into db_test.t values (1, 2)
+
+func> wait_table db_test t
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from db_test.t;
 +---+---+

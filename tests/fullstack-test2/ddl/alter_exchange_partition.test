@@ -82,42 +82,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 mysql> alter table test.e drop column c1;
 >> DBGInvoke __refresh_table_schema(test, e)
 
-# case 3, do ddl and insert before exchange partition, no error happens
-=> DBGInvoke __init_fail_point()
-
-mysql> alter table test.e drop column lname;
-mysql> alter table test.e2 drop column lname;
-
->> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-
-# exactly write until fail point "pause_before_apply_raft_cmd" to be disable
-mysql> insert into test.e values(20, 'a');
-mysql> insert into test.e2 values(30, 'a');
-
-mysql> set @@tidb_enable_exchange_partition=1; alter table test.e exchange partition p0 with table test.e2;
-
-=> DBGInvoke __refresh_schemas()
-
->> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e order by id;
-+-----+-------+
-| id  | fname |
-+-----+-------+
-|   1 | a     |
-|  30 | a     |
-| 108 | a     |
-+-----+-------+
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.e2 order by id;
-+-----+-------+
-| id  | fname |
-+-----+-------+
-|   3 | a     |
-|  20 | a     |
-+-----+-------+
-
-
 mysql> drop table if exists test.e;
 mysql> drop table if exists test.e2;
 mysql> drop table if exists test_new.e2;

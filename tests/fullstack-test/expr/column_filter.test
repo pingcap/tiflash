@@ -16,12 +16,13 @@ mysql> drop table if exists test.t;
 mysql> create table test.t (c1 tinyint(3) unsigned, c2 int);
 mysql> alter table test.t set tiflash replica 1;
 
-func> wait_table test t
-
 mysql> insert into test.t values(1, 123);
 mysql> insert into test.t values(2, 234);
 mysql> insert into test.t values(0, 0);
 mysql> insert into test.t values(NULL, 0);
+
+func> wait_table test t
+
 ## dt does not support non-function expr as filter expr
 mysql> select /*+ read_from_storage(tiflash[t]) */ c1 from test.t where c1 + 1 > 1;
 +------+
