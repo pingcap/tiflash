@@ -51,6 +51,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
 
     key_gen = KeyGenerator::create(opts_);
     ts_gen = std::make_unique<TimestampGenerator>();
+    // max page id is only updated at restart, so we need recreate page v3 before recreate table
     context->initializeGlobalStoragePoolIfNeed(context->getPathPool());
     Stopwatch sw;
     store = std::make_unique<DeltaMergeStore>(
