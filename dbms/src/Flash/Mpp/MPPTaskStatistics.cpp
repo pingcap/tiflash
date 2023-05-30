@@ -103,7 +103,7 @@ void MPPTaskStatistics::logTracingJson()
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
         R"(,"local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{})"
-        R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+        R"(,"status":"{}","error_message":"{}","cpu_ru":{},"read_ru":{},"memory_peak":{}}})",
         id.query_id.start_ts,
         id.task_id,
         is_root,
@@ -122,13 +122,20 @@ void MPPTaskStatistics::logTracingJson()
         output_bytes,
         magic_enum::enum_name(status),
         error_message,
-        working_time,
+        cpu_ru,
+        read_ru,
         memory_peak);
 }
 
 void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
 {
     memory_peak = memory_peak_;
+}
+
+void MPPTaskStatistics::setRU(RU cpu_ru_, RU read_ru_)
+{
+    cpu_ru = cpu_ru_;
+    read_ru = read_ru_;
 }
 
 void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)

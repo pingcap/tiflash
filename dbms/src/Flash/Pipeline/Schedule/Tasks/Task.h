@@ -68,7 +68,7 @@ public:
         assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
         current_memory_tracker = mem_tracker_ptr;
     }
-    ALWAYS_INLINE void endTraceMemory()
+    ALWAYS_INLINE static void endTraceMemory()
     {
         CurrentMemoryTracker::submitLocalDeltaMemory();
         current_memory_tracker = nullptr;
