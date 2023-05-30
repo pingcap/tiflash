@@ -43,7 +43,18 @@ public:
 
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
-    BuilderGroup & getCurGroup() { return groups.back(); }
+    BuilderGroup & getCurGroup()
+    {
+        RUNTIME_CHECK(!groups.empty());
+        return groups.back();
+    }
+
+    PipelineExecBuilder & getCurBuilder(size_t index)
+    {
+        RUNTIME_CHECK(!groups.empty());
+        RUNTIME_CHECK(groups.back().size() > index);
+        return groups.back()[index];
+    }
 
     void addGroup() { groups.emplace_back(); }
 

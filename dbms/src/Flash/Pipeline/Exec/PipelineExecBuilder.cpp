@@ -67,6 +67,8 @@ void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 void PipelineExecGroupBuilder::reset()
 {
     groups.clear();
+    // Re-add an empty group to ensure that the build after reset is available.
+    groups.emplace_back();
 }
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
