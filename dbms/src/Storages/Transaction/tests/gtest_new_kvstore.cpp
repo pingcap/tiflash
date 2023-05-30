@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Transaction/LearnerRead.h>
+
 #include "kvstore_helper.h"
 
 namespace DB
@@ -305,10 +307,7 @@ static void validate(KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_
 {
     auto kvr1 = kvs.getRegion(region_id);
     auto r1 = proxy_instance->getRegion(region_id);
-    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-        RaftStoreProxyPtr{proxy_instance.get()}));
-    // Bind ffi to MockSSTReader.
-    proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+    auto proxy_helper = proxy_instance->generateProxyHelper();
     auto ssts = cf_data.ssts();
     ASSERT_EQ(ssts.size(), sst_size);
     auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap, SSTReader::RegionRangeFilter range) -> std::unique_ptr<MonoSSTReader> {
@@ -337,6 +336,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshotV1)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     {
         UInt64 region_id = 1;
         TableID table_id;
@@ -511,6 +511,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshotV2)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
     TableID table_id;
     {
@@ -573,6 +574,71 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, LearnerRead)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto region_id = 1;
+    KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
+    initStorages();
+
+    ctx.getTMTContext().debugSetWaitIndexTimeout(1);
+
+    startReadIndexUtils(ctx);
+    SCOPE_EXIT({
+        stopReadIndexUtils();
+    });
+
+    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+    auto kvr1 = kvs.getRegion(region_id);
+    ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
+
+    std::vector<std::string> keys{RecordKVFormat::genKey(table_id, 3).toString(), RecordKVFormat::genKey(table_id, 3, 5).toString(), RecordKVFormat::genKey(table_id, 3, 8).toString()};
+    std::vector<std::string> vals({RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20).toString(), TiKVValue("value1").toString(), RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5).toString()});
+    auto ops = std::vector<ColumnFamilyType>{
+        ColumnFamilyType::Lock,
+        ColumnFamilyType::Default,
+        ColumnFamilyType::Write,
+    };
+    auto [index, term] = proxy_instance->rawWrite(region_id, std::move(keys), std::move(vals), {WriteCmdType::Put, WriteCmdType::Put, WriteCmdType::Put}, std::move(ops));
+    ASSERT_EQ(index, 6);
+    ASSERT_EQ(kvr1->appliedIndex(), 5);
+    ASSERT_EQ(term, 5);
+
+    auto mvcc_query_info = MvccQueryInfo(false, 10);
+    auto f = [&] {
+        auto discard = doLearnerRead(
+            table_id,
+            mvcc_query_info,
+            false,
+            ctx,
+            log);
+        UNUSED(discard);
+    };
+    EXPECT_THROW(f(), RegionException);
+
+    // We can't `doApply`, since the TiKVValue is not valid.
+    auto r1 = proxy_instance->getRegion(region_id);
+    r1->updateAppliedIndex(index);
+    kvr1->setApplied(index, term);
+    auto regions_snapshot = doLearnerRead(
+        table_id,
+        mvcc_query_info,
+        false,
+        ctx,
+        log);
+    // 0 unavailable regions
+    ASSERT_EQ(regions_snapshot.size(), 1);
+
+    // No throw
+    auto mvcc_query_info2 = MvccQueryInfo(false, 10);
+    mvcc_query_info2.regions_query_info.emplace_back(1, kvr1->version(), kvr1->confVer(), table_id, kvr1->getRange()->rawKeys());
+    validateQueryInfo(mvcc_query_info2, regions_snapshot, ctx.getTMTContext(), log);
 }
 CATCH
 

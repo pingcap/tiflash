@@ -161,6 +161,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
+    // Check if we can read by this index.
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
@@ -178,13 +179,8 @@ public:
 
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;
 
+    // Assign data and meta by moving from `new_region`.
     void assignRegion(Region && new_region);
-
-    using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
-
-    /// Only can be used for applying snapshot. only can be called by single thread.
-    /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
-    void compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point);
 
     void tryCompactionFilter(const Timestamp safe_point);
 
