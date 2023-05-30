@@ -324,7 +324,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
 
     // Offset is too large and the partition_end is the longest position we can reach
     if (dist <= n)
-        return std::make_tuple(partition_end, partition_ended);
+        return std::make_tuple(partition_end, true);
 
     // Now, frame_end is impossible to reach to partition_end.
     RowNumber frame_end_row = current_row;
@@ -334,7 +334,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
     if ((block.rows - frame_end_row.row - 1) >= n)
     {
         frame_end_row.row += n;
-        return std::make_tuple(frame_end_row, partition_ended);
+        return std::make_tuple(frame_end_row, true);
     }
 
     // The step happens between blocks
@@ -356,7 +356,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
         n = 0;
     }
 
-    return std::make_tuple(frame_end_row, partition_ended);
+    return std::make_tuple(frame_end_row, true);
 }
 
 UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
@@ -364,14 +364,7 @@ UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
     if (left.block == right.block)
         return left.row - right.row;
 
-    Int64 negative_sign = 1;
-
-    // Ensure that left is larger than right
-    if (left.block < right.block)
-    {
-        negative_sign = -1;
-        std::swap(left, right);
-    }
+    RUNTIME_CHECK_MSG(left.block > right.block, "left should always be bigger than right");
 
     Int64 dist = left.row;
     RowNumber tmp = left;
@@ -384,7 +377,7 @@ UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
 
     dist += blockAt(right).rows - right.row;
 
-    return dist * negative_sign;
+    return dist;
 }
 
 void WindowTransformAction::advanceFrameStart()
@@ -409,7 +402,13 @@ void WindowTransformAction::advanceFrameStart()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
-        frame_start = stepForward(current_row, window_description.frame.begin_offset);
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+            frame_start = stepForward(current_row, window_description.frame.begin_offset);
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format("Frame type {}'s Offset BoundaryType is not implemented",
+                            magic_enum::enum_name(window_description.frame.type)));
         frame_started = true;
         break;
     default:
@@ -513,7 +512,13 @@ void WindowTransformAction::advanceFrameEnd()
     }
     case WindowFrame::BoundaryType::Offset:
     {
-        std::tie(frame_end, frame_ended) = stepBackward(current_row, window_description.frame.end_offset);
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+            std::tie(frame_end, frame_ended) = stepBackward(current_row, window_description.frame.end_offset);
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format("Frame type {}'s Offset BoundaryType is not implemented",
+                            magic_enum::enum_name(window_description.frame.type)));
         break;
     }
     default:
