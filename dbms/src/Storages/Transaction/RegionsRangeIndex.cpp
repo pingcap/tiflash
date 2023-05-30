@@ -90,7 +90,7 @@ std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findB
             std::vector<RegionID> v;
             for (const auto & iter : it->second.region_map)
             {
-                v.push_back(iter->first);
+                v.push_back(iter.first);
             }
             return std::make_tuple(it->first.copy(), std::move(v));
         }

@@ -966,7 +966,8 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
 }
 
-// the caller guarantee that delta cache has been flushed. This function need to persiste region cache before trigger proxy to compact log.
+// The caller will guarantee that delta cache has been flushed.
+// This function requires region cache being persisted before notifying.
 void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held)
 {
     auto region = getRegion(region_id);
