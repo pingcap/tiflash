@@ -253,7 +253,7 @@ void StorageDisaggregated::buildDisaggTask(
                 batch_cop_task.store_addr,
                 retry_regions);
 
-            dropRegionCache(cluster->region_cache, req, retry_regions);
+            dropRegionCache(cluster->region_cache, req, std::move(retry_regions));
 
             throw Exception(
                 error.msg(),

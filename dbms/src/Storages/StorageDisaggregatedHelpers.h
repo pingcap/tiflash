@@ -21,14 +21,19 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 template <typename RegionCachePtr>
 void dropRegionCache(
     const RegionCachePtr & region_cache,
     const std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> & req,
-    const std::unordered_set<RegionID> & retry_regions)
+    std::unordered_set<RegionID> && retry_regions)
 {
-    std::unordered_set<RegionID> updated_regions;
-    auto retry_from_region_infos = [&retry_regions, &region_cache, &updated_regions](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
+    std::unordered_set<RegionID> dropped_regions;
+    auto retry_from_region_infos = [&retry_regions, &region_cache, &dropped_regions](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
         for (const auto & region : region_infos)
         {
             if (retry_regions.contains(region.region_id()))
@@ -40,7 +45,7 @@ void dropRegionCache(
                 region_cache->dropRegion(region_ver_id);
                 // There could be multiple Region info in `region_cache` share the same RegionID but with different epoch,
                 // we need to drop all their cache.
-                updated_regions.insert(region.region_id());
+                dropped_regions.insert(region.region_id());
                 if (retry_regions.empty())
                     break;
             }
@@ -57,6 +62,11 @@ void dropRegionCache(
         retry_from_region_infos(table_region.regions());
     }
 
-    RUNTIME_CHECK_MSG(updated_regions.size() == retry_regions.size(), "Failed to drop regions {} from the cache", retry_regions);
+    if (unlikely(dropped_regions.size() < retry_regions.size()))
+    {
+        for (const auto & id : dropped_regions)
+            retry_regions.erase(id);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to drop regions {} from the cache", retry_regions);
+    }
 }
 } // namespace DB

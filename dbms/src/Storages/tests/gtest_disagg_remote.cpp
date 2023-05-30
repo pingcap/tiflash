@@ -89,11 +89,17 @@ TEST_F(StorageDisaggregatedHelpersTest, DropRegionCache)
     });
 
     dropRegionCache(region_cache, req, {23917});
-
     ASSERT_EQ(region_cache->dropped_id.size(), 1);
     ASSERT_EQ(region_cache->dropped_id[0].id, 23917);
     ASSERT_EQ(region_cache->dropped_id[0].conf_ver, 9);
     ASSERT_EQ(region_cache->dropped_id[0].ver, 98);
+
+    region_cache->dropped_id.clear();
+    dropRegionCache(region_cache, req, {20});
+    ASSERT_EQ(region_cache->dropped_id.size(), 1);
+    ASSERT_EQ(region_cache->dropped_id[0].id, 20);
+    ASSERT_EQ(region_cache->dropped_id[0].conf_ver, 3);
+    ASSERT_EQ(region_cache->dropped_id[0].ver, 10);
 }
 
 TEST_F(StorageDisaggregatedHelpersTest, DropRegionCacheWithDuplicateID)
