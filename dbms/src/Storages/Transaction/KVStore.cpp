@@ -919,7 +919,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             throw Exception(fmt_error, ErrorCodes::LOGICAL_ERROR);
         }
 
-        RegionMap & region_map = std::get<RegionMap>(maybe_region_map);
+        auto & region_map = std::get<RegionMap>(maybe_region_map);
         for (const auto & overlapped_region : region_map)
         {
             auto region_rowkey_range = DM::RowKeyRange::fromRegionRange(

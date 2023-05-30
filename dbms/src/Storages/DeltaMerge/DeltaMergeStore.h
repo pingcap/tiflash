@@ -687,7 +687,7 @@ private:
 private:
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);
-    void triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background);
+    void triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background) const;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

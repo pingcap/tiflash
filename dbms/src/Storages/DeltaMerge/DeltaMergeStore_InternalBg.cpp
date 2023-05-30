@@ -922,7 +922,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     return gc_segments_num;
 }
 
-void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background)
+void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background) const
 {
     auto & tmt = dm_context->db_context.getTMTContext();
     auto & kv_store = tmt.getKVStore();

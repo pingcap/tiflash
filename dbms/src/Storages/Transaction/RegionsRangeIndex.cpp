@@ -88,7 +88,7 @@ std::variant<RegionMap, RegionsRangeIndex::OverlapInfo> RegionsRangeIndex::findB
         else
         {
             std::vector<RegionID> v;
-            for (auto iter = it->second.region_map.begin(); iter != it->second.region_map.end(); iter++)
+            for (const auto & iter : it->second.region_map)
             {
                 v.push_back(iter->first);
             }
