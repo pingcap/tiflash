@@ -459,7 +459,7 @@ void validateQueryInfo(
         if (auto iter = regions_snapshot.find(region_query_info.region_id); //
             iter == regions_snapshot.end() || iter->second != region)
         {
-            // If snapshot is applied during learner read, we should abort.
+            // If snapshot is applied during learner read, we should abort with an exception later.
             status = RegionException::RegionReadStatus::NOT_FOUND;
         }
         else if (region->version() != region_query_info.version)
