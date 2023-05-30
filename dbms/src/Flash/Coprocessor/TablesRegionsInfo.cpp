@@ -43,7 +43,7 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
         return table_regions_info_map.begin()->second;
     if (table_regions_info_map.find(table_id) != table_regions_info_map.end())
         return table_regions_info_map.find(table_id)->second;
-    throw TiFlashException(fmt::format("Can't find region info for table id: {}", table_id), Errors::Coprocessor::BadRequest);
+    throw TiFlashException(Errors::Coprocessor::BadRequest, "Can't find region info for table id: {}", table_id);
 }
 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
@@ -60,6 +60,11 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     return meta_snap.ver != region_info.region_version;
 }
 
+/**
+  * Build local and remote regions info into `tables_region_infos` according to `regions`
+  * and `table_id`. It will also record the region_id into local_region_id_set` so that
+  * we can find the duplicated region_id among multiple partitions.
+  **/
 static void insertRegionInfoToTablesRegionInfo(
     const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
     Int64 table_id,
@@ -70,12 +75,17 @@ static void insertRegionInfoToTablesRegionInfo(
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
     {
-        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::genCopKeyRange(r.ranges()), nullptr);
+        RegionInfo region_info(
+            r.region_id(),
+            r.region_epoch().version(),
+            r.region_epoch().conf_ver(),
+            CoprocessorHandler::genCopKeyRange(r.ranges()),
+            nullptr);
         if (region_info.key_ranges.empty())
         {
-            throw TiFlashException(
-                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
-                Errors::Coprocessor::BadRequest);
+            throw TiFlashException(Errors::Coprocessor::BadRequest,
+                                   "Income key ranges is empty for region: {}",
+                                   region_info.region_id);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
         /// region id, only the first region will be treated as local region
