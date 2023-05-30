@@ -172,13 +172,6 @@ private:
     Waiter & waiter;
 };
 
-enum class TraceTaskStatus
-{
-    initing,
-    running,
-    io,
-    waiting,
-};
 class MemoryTraceTask : public Task
 {
 public:
@@ -198,39 +191,23 @@ public:
 protected:
     ExecTaskStatus executeImpl() noexcept override
     {
-        switch (status)
-        {
-        case TraceTaskStatus::initing:
-            status = TraceTaskStatus::io;
-            return ExecTaskStatus::IO;
-        case TraceTaskStatus::io:
-            status = TraceTaskStatus::waiting;
-            return ExecTaskStatus::WAITING;
-        case TraceTaskStatus::waiting:
-        {
-            status = TraceTaskStatus::running;
-            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
-            return ExecTaskStatus::FINISHED;
-        }
-        default:
-            __builtin_unreachable();
-        }
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
+        return ExecTaskStatus::IO;
     }
 
     ExecTaskStatus executeIOImpl() override
     {
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
-        return ExecTaskStatus::RUNNING;
+        return ExecTaskStatus::WAITING;
     }
 
     ExecTaskStatus awaitImpl() override
     {
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
-        return ExecTaskStatus::RUNNING;
+        return ExecTaskStatus::FINISHED;
     }
 
 private:
-    TraceTaskStatus status{TraceTaskStatus::initing};
     Waiter & waiter;
 };
 

@@ -329,10 +329,9 @@ public:
     {}
 
 protected:
-    // doAwaitImpl ==> doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
+    // doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
     ExecTaskStatus doExecuteImpl() override
     {
-        assert(task_status == ExecTaskStatus::RUNNING);
         if (cpu_execute_time < min_time)
         {
             std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
@@ -344,7 +343,6 @@ protected:
 
     ExecTaskStatus doExecuteIOImpl() override
     {
-        assert(task_status == ExecTaskStatus::IO);
         if (io_execute_time < min_time)
         {
             std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
@@ -356,18 +354,11 @@ protected:
 
     ExecTaskStatus doAwaitImpl() override
     {
-        if (task_status == ExecTaskStatus::WAITING)
-        {
-            if unlikely (!wait_stopwatch)
-                wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-            return wait_stopwatch->elapsed() < min_time
-                ? ExecTaskStatus::WAITING
-                : ExecTaskStatus::FINISHED;
-        }
-        else
-        {
-            return ExecTaskStatus::RUNNING;
-        }
+        if unlikely (!wait_stopwatch)
+            wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        return wait_stopwatch->elapsed() < min_time
+            ? ExecTaskStatus::WAITING
+            : ExecTaskStatus::FINISHED;
     }
 
 private:
