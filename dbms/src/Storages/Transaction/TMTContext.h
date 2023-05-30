@@ -80,6 +80,10 @@ public:
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
+    void debugSetKVStore(const KVStorePtr & new_kvstore)
+    {
+        kvstore = new_kvstore;
+    }
 
     const ManagedStorages & getStorages() const;
     ManagedStorages & getStorages();
@@ -137,6 +141,7 @@ public:
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
+    void debugSetWaitIndexTimeout(UInt64 timeout);
     Int64 waitRegionReadyTimeout() const;
     uint64_t readIndexWorkerTick() const;
 
