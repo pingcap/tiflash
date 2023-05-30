@@ -241,6 +241,7 @@ struct Settings
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 60, "The max time wait for a usable checkpoint for FAP. Unit is second.")                                                                                                      \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
+    M(SettingUInt64, rf_max_in_value_set, 1024, "Maximum size of the set (in number of elements) resulting from the execution of the RF IN Predicate.")                                                                                 \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.")                                                                                               \
     M(SettingOverflowMode<false>, set_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.")                                                                                                                     \
                                                                                                                                                                                                                                         \
@@ -296,6 +297,7 @@ struct Settings
     M(SettingTaskQueueType, pipeline_cpu_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of cpu task thread pool")                                                                                                 \
     M(SettingTaskQueueType, pipeline_io_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of io task thread pool")                                                                                                   \
     M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")                                                                                                                                                             \
+    M(SettingBool, force_push_down_all_filters_to_scan, false, "Push down all filters to scan, only used for test")                                                                                                                     \
     M(SettingUInt64, async_recv_version, 1, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
     M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")                                                                                                    \
     M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")

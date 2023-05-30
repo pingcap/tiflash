@@ -34,8 +34,6 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     UInt64 max_version_,
     size_t expected_block_size_,
     DM::ReadMode read_mode_,
-    const int extra_table_id_index,
-    const TableID physical_table_id,
     const String & req_id)
     : SourceOp(exec_status_, req_id)
     , dm_context(dm_context_)
@@ -46,9 +44,8 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , max_version(max_version_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
-    , action(columns_to_read_, extra_table_id_index, physical_table_id)
 {
-    setHeader(action.getHeader());
+    setHeader(toEmptyBlock(columns_to_read));
 }
 
 String DMSegmentThreadSourceOp::getName() const
@@ -58,7 +55,7 @@ String DMSegmentThreadSourceOp::getName() const
 
 void DMSegmentThreadSourceOp::operateSuffix()
 {
-    LOG_DEBUG(log, "Finish read {} rows from storage", action.totalRows());
+    LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
 }
 
 OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
@@ -72,10 +69,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
     {
         std::swap(block, t_block.value());
         t_block.reset();
-        if (action.transform(block))
-        {
-            return OperatorStatus::HAS_OUTPUT;
-        }
+        total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     }
     return OperatorStatus::IO;

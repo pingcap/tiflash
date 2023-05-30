@@ -228,6 +228,26 @@ public:
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
 
+    ColumnDefines & getColumnToRead()
+    {
+        return columns_to_read;
+    }
+
+    void appendRSOperator(RSOperatorPtr & new_filter)
+    {
+        if (filter->rs_operator == DM::EMPTY_RS_OPERATOR)
+        {
+            filter->rs_operator = new_filter;
+        }
+        else
+        {
+            RSOperators children;
+            children.push_back(filter->rs_operator);
+            children.push_back(new_filter);
+            filter->rs_operator = createAnd(children);
+        }
+    }
+
 private:
     Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
