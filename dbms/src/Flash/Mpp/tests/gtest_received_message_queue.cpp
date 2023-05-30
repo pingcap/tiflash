@@ -98,13 +98,13 @@ try
                     {
                         auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
                         /// is_force = false
-                        auto result = queue.pushToMessageChannel<true, false>(message, ReceiverMode::Async);
+                        auto result = queue.pushToMessageChannel<false>(message, ReceiverMode::Async);
                         ASSERT_TRUE(result);
                     }
                     ASSERT_TRUE(!queue.isWritable());
                     auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
                     /// is_force = true
-                    auto result = queue.pushToMessageChannel<true, true>(message, ReceiverMode::Async);
+                    auto result = queue.pushToMessageChannel<true>(message, ReceiverMode::Async);
                     ASSERT_TRUE(result);
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
@@ -125,13 +125,13 @@ try
                     {
                         auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
                         /// is_force = false
-                        auto result = queue.pushToMessageChannel<false, false>(message, ReceiverMode::Async);
+                        auto result = queue.pushToMessageChannel<false>(message, ReceiverMode::Async);
                         ASSERT_TRUE(result);
                     }
                     ASSERT_TRUE(!queue.isWritable());
                     auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
                     /// is_force = true
-                    auto result = queue.pushToMessageChannel<false, true>(message, ReceiverMode::Async);
+                    auto result = queue.pushToMessageChannel<true>(message, ReceiverMode::Async);
                     ASSERT_TRUE(result);
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
@@ -166,12 +166,12 @@ try
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
                         auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        auto result = queue.pushToGRPCReceiveQueue<true>(message);
+                        auto result = queue.pushToGRPCReceiveQueue(message);
                         ASSERT_TRUE(result == GRPCReceiveQueueRes::OK);
                     }
                     ASSERT_TRUE(!queue.isWritable());
                     auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    auto result = queue.pushToGRPCReceiveQueue<true>(message);
+                    auto result = queue.pushToGRPCReceiveQueue(message);
                     ASSERT_TRUE(result == GRPCReceiveQueueRes::FULL);
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
@@ -191,12 +191,12 @@ try
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
                         auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        auto result = queue.pushToGRPCReceiveQueue<false>(message);
+                        auto result = queue.pushToGRPCReceiveQueue(message);
                         ASSERT_TRUE(result == GRPCReceiveQueueRes::OK);
                     }
                     ASSERT_TRUE(!queue.isWritable());
                     auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    auto result = queue.pushToGRPCReceiveQueue<false>(message);
+                    auto result = queue.pushToGRPCReceiveQueue(message);
                     ASSERT_TRUE(result == GRPCReceiveQueueRes::FULL);
                     for (size_t i = 0; i < buffer_size; ++i)
                     {

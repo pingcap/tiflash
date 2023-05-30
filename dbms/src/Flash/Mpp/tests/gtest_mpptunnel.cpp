@@ -200,7 +200,7 @@ public:
                 },
                 []() {},
                 ReceiverChannelWriter(&received_message_queue, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false, true);
+            tunnel->connectLocalV2(0, local_request_handler, true);
         }
     }
 
@@ -664,7 +664,7 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(&received_message_queue, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -685,7 +685,7 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(&queue, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)

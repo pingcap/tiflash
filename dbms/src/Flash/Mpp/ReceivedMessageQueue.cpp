@@ -87,25 +87,19 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
     return {res, recv_msg};
 }
 
-template <bool enable_fine_grained_shuffle, bool is_force>
+template <bool is_force>
 bool ReceivedMessageQueue::pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode)
 {
-    std::function<MPMCQueueResult(ReceivedMessagePtr &)> write_func;
+    bool success = false;
     if constexpr (is_force)
-        write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return msg_channel->forcePush(recv_msg);
-        };
+        success = msg_channel->forcePush(received_message) == MPMCQueueResult::OK;
     else
-        write_func = [&](ReceivedMessagePtr & recv_msg) {
-            return msg_channel->push(recv_msg);
-        };
-    bool success = write_func(received_message) == MPMCQueueResult::OK;
+        success = msg_channel->push(received_message) == MPMCQueueResult::OK;
 
     injectFailPointReceiverPushFail(success, mode);
     return success;
 }
 
-template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessagePtr & received_message)
 {
     auto res = grpc_recv_queue->push(received_message);
@@ -150,11 +144,7 @@ template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::po
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, false>(size_t stream_id);
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, true>(size_t stream_id);
 template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, false>(size_t stream_id);
-template bool ReceivedMessageQueue::pushToMessageChannel<true, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::pushToMessageChannel<true, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::pushToMessageChannel<false, true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::pushToMessageChannel<false, false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
-template GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue<true>(ReceivedMessagePtr & received_message);
-template GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue<false>(ReceivedMessagePtr & received_message);
+template bool ReceivedMessageQueue::pushToMessageChannel<true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushToMessageChannel<false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 
 } // namespace DB

@@ -214,6 +214,12 @@ private:
     ALWAYS_INLINE bool changeStatus(FF && ff)
     {
         std::lock_guard lock(mu);
+        return changeStatusWithoutLock(std::forward<FF>(ff));
+    }
+
+    template <typename FF>
+    ALWAYS_INLINE bool changeStatusWithoutLock(FF && ff)
+    {
         if likely (status == MPMCQueueStatus::NORMAL)
         {
             ff();
@@ -242,8 +248,14 @@ private:
         current_auxiliary_memory_usage += memory_usage;
         if (push_callback)
         {
-            if (!push_callback(queue.front().data))
+            if unlikely (!push_callback(queue.front().data))
+            {
+                changeStatusWithoutLock([&] {
+                    status = MPMCQueueStatus::CANCELLED;
+                    cancel_reason = "failed in push callback";
+                });
                 return MPMCQueueResult::CANCELLED;
+            }
         }
         reader_head.notifyNext();
         /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,

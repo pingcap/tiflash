@@ -18,7 +18,7 @@
 
 namespace DB
 {
-template <bool enable_fine_grained_shuffle, bool is_force>
+template <bool is_force>
 bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
 {
     auto received_message = toReceivedMessage(tracked_packet, source_index, req_info, enable_fine_grained_shuffle, fine_grained_channel_size);
@@ -28,7 +28,7 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
         return true;
     }
 
-    auto success = received_message_queue->pushToMessageChannel<enable_fine_grained_shuffle, is_force>(received_message, mode);
+    auto success = received_message_queue->pushToMessageChannel<is_force>(received_message, mode);
 
     if (likely(success))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
@@ -41,9 +41,7 @@ bool ReceiverChannelWriter::isWritable() const
     return received_message_queue->isWritable();
 }
 
-template bool ReceiverChannelWriter::write<true, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template bool ReceiverChannelWriter::write<true, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template bool ReceiverChannelWriter::write<false, true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
-template bool ReceiverChannelWriter::write<false, false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<true>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
+template bool ReceiverChannelWriter::write<false>(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
 } // namespace DB

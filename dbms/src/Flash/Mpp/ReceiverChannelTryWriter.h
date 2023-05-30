@@ -32,16 +32,12 @@ public:
         : ReceiverChannelBase(received_message_queue, req_info_, log_, data_size_in_queue_, mode_)
     {}
 
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryReWrite();
 
 private:
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryWriteImpl(ReceivedMessagePtr & msg);
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryRewriteImpl(ReceivedMessagePtr & msg);
 
     // Push data may fail, so we need to save the message and re-push it at the proper time.

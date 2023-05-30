@@ -59,14 +59,14 @@ public:
     virtual void wait() = 0;
 };
 
-template <typename RPCContext, bool enable_fine_grained_shuffle>
+template <typename RPCContext>
 class AsyncRequestHandler : public AsyncRequestHandlerBase
 {
 public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
-    using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
+    using Self = AsyncRequestHandler<RPCContext>;
 
     AsyncRequestHandler(
         ReceivedMessageQueue * received_message_queue_,
@@ -316,7 +316,7 @@ private:
             while (received_packet_index < read_packet_index)
             {
                 auto & p = packets[received_packet_index++];
-                auto res = channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, p);
+                auto res = channel_try_writer.tryWrite(request.source_index, p);
                 if (res == GRPCReceiveQueueRes::FULL)
                 {
                     p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
@@ -339,7 +339,7 @@ private:
 
     GRPCReceiveQueueRes reSendPackets()
     {
-        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite<enable_fine_grained_shuffle>();
+        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite();
         if (res != GRPCReceiveQueueRes::OK)
             return res;
         return sendPackets();

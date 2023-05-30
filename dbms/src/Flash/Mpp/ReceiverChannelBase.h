@@ -59,6 +59,7 @@ public:
         : data_size_in_queue(data_size_in_queue_)
         , received_message_queue(received_message_queue_)
         , fine_grained_channel_size(received_message_queue->getFineGrainedStreamSize())
+        , enable_fine_grained_shuffle(fine_grained_channel_size > 0)
         , req_info(req_info_)
         , log(log_)
         , mode(mode_)
@@ -70,6 +71,7 @@ protected:
     std::atomic<Int64> * data_size_in_queue;
     ReceivedMessageQueue * received_message_queue = nullptr;
     size_t fine_grained_channel_size;
+    bool enable_fine_grained_shuffle;
     String req_info;
     const LoggerPtr log;
     ReceiverMode mode;

@@ -536,34 +536,17 @@ void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request>
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && request)
 {
-    if (enable_fine_grained_shuffle_flag)
-    {
-        async_handler_ptrs.push_back(
-            std::make_unique<AsyncRequestHandler<RPCContext, true>>(
-                received_message_queue.get(),
-                async_wait_rewrite_queue,
-                rpc_context,
-                std::move(request),
-                exc_log->identifier(),
-                &data_size_in_queue,
-                [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
-                    this->connectionDone(meet_error, local_err_msg, log);
-                }));
-    }
-    else
-    {
-        async_handler_ptrs.push_back(
-            std::make_unique<AsyncRequestHandler<RPCContext, false>>(
-                received_message_queue.get(),
-                async_wait_rewrite_queue,
-                rpc_context,
-                std::move(request),
-                exc_log->identifier(),
-                &data_size_in_queue,
-                [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
-                    this->connectionDone(meet_error, local_err_msg, log);
-                }));
-    }
+    async_handler_ptrs.push_back(
+        std::make_unique<AsyncRequestHandler<RPCContext>>(
+            received_message_queue.get(),
+            async_wait_rewrite_queue,
+            rpc_context,
+            std::move(request),
+            exc_log->identifier(),
+            &data_size_in_queue,
+            [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
+                this->connectionDone(meet_error, local_err_msg, log);
+            }));
     --connection_uncreated_num;
 }
 
@@ -599,7 +582,6 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                 req,
                 req.source_index,
                 local_request_handler,
-                enable_fine_grained_shuffle_flag,
                 has_remote_conn);
             --connection_uncreated_num;
         }
