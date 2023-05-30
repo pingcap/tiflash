@@ -73,13 +73,16 @@ Block PipelineExecBuilder::getCurrentHeader() const
 
 void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    getCurGroup().emplace_back();
-    getCurGroup().back().setSourceOp(std::move(source));
+    auto & cur_group = getCurGroup();
+    cur_group.emplace_back();
+    cur_group.back().setSourceOp(std::move(source));
 }
 
 void PipelineExecGroupBuilder::reset()
 {
     groups.clear();
+    // Re-add an empty group to ensure that the group builder after reset is available.
+    groups.emplace_back();
 }
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
@@ -105,8 +108,9 @@ PipelineExecGroup PipelineExecGroupBuilder::build()
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    RUNTIME_CHECK(!getCurGroup().empty());
-    return getCurGroup().back().getCurrentHeader();
+    auto & cur_group = getCurGroup();
+    RUNTIME_CHECK(!cur_group.empty());
+    return cur_group.back().getCurrentHeader();
 }
 
 OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const

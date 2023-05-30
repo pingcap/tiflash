@@ -522,8 +522,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         // local sources
         while (i < remote_read_start_index)
         {
-            auto & group = group_builder.getCurGroup()[i++];
-            group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            auto & builder = group_builder.getCurBuilder(i++);
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
         }
     }
 }

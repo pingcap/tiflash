@@ -533,9 +533,10 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log,
-                      "{} need to wait learner index {}",
+                      "{} need to wait learner index {} timeout {}",
                       toString(),
-                      index);
+                      index,
+                      timeout_ms);
             auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
@@ -579,7 +580,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
