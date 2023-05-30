@@ -47,21 +47,17 @@ Block AddExtraTableIDColumnTransformAction::buildHeader(
 
 AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
     const Block & inner_header_,
-    int extra_table_id_index_,
-    TableID physical_table_id_)
+    int extra_table_id_index_)
     : header(buildHeader(inner_header_, extra_table_id_index_))
     , extra_table_id_index(extra_table_id_index_)
-    , physical_table_id(physical_table_id_)
 {
 }
 
 AddExtraTableIDColumnTransformAction::AddExtraTableIDColumnTransformAction(
     const DM::ColumnDefines & columns_to_read_,
-    int extra_table_id_index_,
-    TableID physical_table_id_)
+    int extra_table_id_index_)
     : header(buildHeader(columns_to_read_, extra_table_id_index_))
     , extra_table_id_index(extra_table_id_index_)
-    , physical_table_id(physical_table_id_)
 {
 }
 
@@ -70,7 +66,7 @@ Block AddExtraTableIDColumnTransformAction::getHeader() const
     return header;
 }
 
-bool AddExtraTableIDColumnTransformAction::transform(Block & block)
+bool AddExtraTableIDColumnTransformAction::transform(Block & block, TableID physical_table_id)
 {
     if (unlikely(!block))
         return true;

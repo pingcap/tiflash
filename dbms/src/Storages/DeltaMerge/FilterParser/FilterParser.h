@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Set.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/Transaction/Types.h>
@@ -50,6 +51,11 @@ public:
         const ColumnDefines & columns_to_read,
         AttrCreatorByColumnID && creator,
         const LoggerPtr & log);
+
+    // only for runtime filter in predicate
+    static RSOperatorPtr parseRFInExpr(const tipb::RuntimeFilterType rf_type, const tipb::Expr & target_expr, const ColumnDefines & columns_to_read, const std::set<Field> & setElements);
+
+    static bool isRSFilterSupportType(const Int32 field_type);
 
     /// Some helper structure
 
