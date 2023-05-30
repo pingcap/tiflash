@@ -503,11 +503,12 @@ try
         type_and_name.column = type_and_name.type->createColumnConst(1, Field(static_cast<Int64>(1)));
 
     Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+    spiller.spillBlocks({constant_header}, 0);
     GTEST_FAIL();
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check const_column_indexes.size() < input_schema.columns() failed: Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+    GTEST_ASSERT_EQ(e.message(), "Check block.columns() > 0 failed: Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
 }
 
 TEST_F(SpillerTest, SpillWithConstantSchemaAndNonConstantData)
