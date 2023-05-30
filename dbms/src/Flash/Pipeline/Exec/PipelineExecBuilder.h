@@ -43,12 +43,6 @@ public:
 
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
-    BuilderGroup & getCurGroup()
-    {
-        RUNTIME_CHECK(!groups.empty());
-        return groups.back();
-    }
-
     PipelineExecBuilder & getCurBuilder(size_t index)
     {
         RUNTIME_CHECK(!groups.empty());
@@ -81,6 +75,13 @@ public:
     PipelineExecGroup build();
 
     Block getCurrentHeader();
+
+private:
+    BuilderGroup & getCurGroup()
+    {
+        RUNTIME_CHECK(!groups.empty());
+        return groups.back();
+    }
 
 private:
     // groups generates a set of pipeline_execs running in parallel.
