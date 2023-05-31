@@ -15,6 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -113,6 +114,33 @@ public:
         String encode_key = encodeHashDataKey(key, field);
         String value = snap.Get(encode_key);
         return value;
+    }
+
+    static String mvccGet(KeyspaceSnapshot & snap, const String & key, const String & field){
+        auto encode_key = encodeHashDataKey(key, field);
+        auto mvcc_info = snap.mvccGet(encode_key);
+        auto values = mvcc_info.values();
+        if (values.empty()) {
+            return "";
+        }
+
+        String target_value;
+        uint64_t max_ts = 0;
+        for (const auto& value_pair: values){
+            auto ts = value_pair.start_ts();
+            if (max_ts == 0 || ts > max_ts) {
+                target_value = value_pair.value();
+                max_ts = ts;
+            }
+        }
+
+        LOG_INFO(Logger::get("hyy"), "=======");
+        for (const auto& value : values) {
+            LOG_INFO(Logger::get("hyy"), "in mvccGet timestamp is {}, value: {}", value.start_ts(), value.value());
+        }
+        LOG_INFO(Logger::get("hyy"), "=======");
+
+        return target_value;
     }
 
     // For convinient, we only return values.
@@ -252,6 +280,19 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     return db_info;
 }
 
+void compare(String table_info_json, String latest_table_info_json, KeyspaceID keyspace_id){
+    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+    TiDB::TableInfoPtr latest_table_info = std::make_shared<TiDB::TableInfo>(latest_table_info_json, keyspace_id);
+    table_info->update_timestamp = 0;
+    latest_table_info->update_timestamp = 0;
+    if (table_info->serialize() == latest_table_info->serialize()) {
+        LOG_INFO(Logger::get("hyy"), " hyy table_info is the same");
+    } else {
+        LOG_INFO(Logger::get("hyy"), " hyy table_info is not the same, table_info is {}, latest_table_info is {}", table_info_json, latest_table_info_json);
+    }
+}
+
+// TODO:要处理一下 nullptr 的可能性。看看会有什么问题么
 TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
@@ -262,10 +303,19 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     }
     String table_key = getTableKey(table_id);
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
-    if (table_info_json.empty())
-        return nullptr;
+    if (table_info_json.empty()){
+        LOG_INFO(log, "The table {} is dropped in TiKV, try to get the latest table_info", table_id);
+        table_info_json = TxnStructure::mvccGet(snap,db_key,table_key);
+        if (table_info_json.empty()){
+            LOG_ERROR(log, "The table {} is dropped in TiKV, and the latest table_info is still empty, it should by gc", table_id);
+            return nullptr; 
+        }
+    }
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
+    
+    
+    // compare(table_info_json,latest_table_info_json, keyspace_id);
     return table_info;
 }
 

@@ -1448,7 +1448,7 @@ void StorageDeltaMerge::updateTableInfo(
         getColumns(),
         hidden_columns,
         table_info,
-        0,
+        getTombstone(),
         context);
 }
 
@@ -1492,7 +1492,7 @@ void StorageDeltaMerge::alterSchemaChange(
         getColumns(),
         hidden_columns,
         table_info,
-        0,
+        getTombstone(),
         context);
 
     // TODO:这边应该有些字段要改？

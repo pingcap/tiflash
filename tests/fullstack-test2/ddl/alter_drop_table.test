@@ -45,7 +45,7 @@ mysql> drop table test.t3;
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't3' and is_tombstone = 0
 
 
-## drop table arrive tiflash before ddl and insert 
+## drop table arrive tiflash before ddl and insert, and do recover, check the data is not lost
 mysql> drop table if exists test.t4;
 mysql> create table test.t4(a int, b int);
 mysql> alter table test.t4 set tiflash replica 1;
@@ -70,3 +70,20 @@ mysql> drop table test.t4;
 # make write cmd take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
+## wait the insert finish
+SLEEP 3
+
+# check the table is tombstone
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone = 0
+
+mysql> recover table test.t4;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t4;
++----+-----+------+
+| a  |  b  |  c   |
++----+-----+------+
+|  1 |   1 | NULL |
+|  1 |   2 |   3  |
++----+-----+------+
+
+mysql> drop table test.t4;

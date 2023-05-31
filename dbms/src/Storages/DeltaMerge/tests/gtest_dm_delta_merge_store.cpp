@@ -39,6 +39,7 @@
 #include <future>
 #include <iterator>
 #include <random>
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -1509,6 +1510,51 @@ try
 }
 CATCH
 
+
+ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, UInt32 flag, Int32 flen, String origin_default_value = "", String default_value = "", Int32 decimal = 0, String charset = "binary", String collate = "binary"){
+    ColumnInfo column;
+    column.id = column_id;
+    column.name = name;
+    column.tp = tp;
+    column.flag = flag;
+    column.flen = flen;
+    column.decimal = decimal;
+
+    Poco::JSON::Parser parser;
+    if (!origin_default_value.empty()){
+        column.origin_default_value = parser.parse(origin_default_value);
+    }
+    if (!default_value.empty()){
+        column.default_value = parser.parse(default_value);
+    }
+    if (!collate.empty()){
+        column.collate = parser.parse(collate);
+    }
+    if (!charset.empty()){
+        column.charset = parser.parse(charset);
+    }
+
+    return column;
+}
+
+TableInfo getTableInfo(std::vector<ColumnInfo>& columns){
+    TiDB::TableInfo table_info;
+    table_info.id = 1; // table_id
+    table_info.keyspace_id = NullspaceID;
+    table_info.name = "test_env";
+
+    table_info.columns = columns;
+    // original_table_info->pk_is_handle = false;
+    // original_table_info->is_common_handle = false;
+
+    auto replica_info = TiDB::TiFlashReplicaInfo();
+    replica_info.count = 1;
+    table_info.replica_info = replica_info;
+
+    return table_info;
+}
+
+
 TEST_P(DeltaMergeStoreRWTest, DDLChangeInt8ToInt32)
 try
 {
@@ -1533,6 +1579,10 @@ try
         ASSERT_TRUE(str_col.type->equals(*col_type_before_ddl));
     }
 
+    auto column_info = getColumnInfo(col_id_ddl, col_name_ddl, TiDB::TypeLong, 0, 11);
+    std::vector<ColumnInfo> column_infos{column_info};
+    auto new_table_info = getTableInfo(column_infos);
+    
     const size_t num_rows_write = 128;
     {
         // write to store
@@ -1550,17 +1600,7 @@ try
 
     {
         // DDL change col from i8 -> i32
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::MODIFY_COLUMN;
-            com.data_type = col_type_after_ddl;
-            com.column_name = col_name_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        store->applyAlters(new_table_info);
     }
 
     {
@@ -1638,18 +1678,9 @@ try
     }
 
     {
-        // DDL change delete col i8
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::DROP_COLUMN;
-            com.data_type = col_type_to_drop;
-            com.column_name = col_name_to_drop;
-            com.column_id = col_id_to_drop;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        std::vector<ColumnInfo> column_infos;
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     {
@@ -1715,17 +1746,11 @@ try
     }
 
     {
-        // DDL change add col i32
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info = getColumnInfo(col_id_c1, col_name_c1, TiDB::TypeTiny, 0, 3);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeLong, 0, 11);
+        std::vector<ColumnInfo> column_infos{column_info, column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     {
@@ -1777,7 +1802,7 @@ try
 {
     const String col_name_to_add = "f64";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
+    //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1787,30 +1812,13 @@ try
     }
 
     // DDL add column f64 with default value
+    // actual ddl is like: ADD COLUMN `f64` Double DEFAULT 1.123456
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Float64>(1.123456)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        // check default 值是不是对的
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeDouble, 0, 22, "1.123456", "1.123456", -1);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read
@@ -1843,7 +1851,7 @@ try
 {
     const String col_name_to_add = "f64";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
+    //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1853,31 +1861,14 @@ try
     }
 
     // DDL add column f64 with default value
+    // actual ddl is like: ADD COLUMN `f64` Decimal DEFAULT 1.123456
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal64(1123456), 6)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeNewDecimal, 0, 10, "1.123456", "1.123456", 0);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
+
 
     // try read
     {
@@ -1909,7 +1900,7 @@ try
 {
     const String col_name_to_add = "f32";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
+    // const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1919,30 +1910,12 @@ try
     }
 
     // DDL add column f32 with default value
+    // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeFloat, 0, 12, "1.125", "1.125", -1);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read
@@ -1974,7 +1947,7 @@ try
 {
     const String col_name_to_add = "Int8";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int8");
+    //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int8");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1984,30 +1957,12 @@ try
     }
 
     // DDL add column Int8 with default value
+    //actual ddl is like: ADD COLUMN `Int8` TinyInt DEFAULT 1
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `Int8` Int8 DEFAULT 1
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Int64>(1)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeTiny, 0, 4, "1", "1", 0);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read
@@ -2039,7 +1994,7 @@ try
 {
     const String col_name_to_add = "UInt8";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("UInt8");
+    //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("UInt8");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -2049,30 +2004,12 @@ try
     }
 
     // DDL add column UInt8 with default value
+    // actual ddl is like: ADD COLUMN `UInt8` TinyInt Unsigned DEFAULT 1
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `UInt8` UInt8 DEFAULT 1
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeTiny, 32, 3, "1", "1", 0);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read
@@ -2105,10 +2042,10 @@ try
 {
     const String col_name_to_add = "dt";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("MyDateTime");
+    //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("MyDateTime");
 
-    MyDateTime mydatetime_val(1999, 9, 9, 12, 34, 56, 0);
-    const UInt64 mydatetime_uint = mydatetime_val.toPackedUInt();
+    //MyDateTime mydatetime_val(1999, 9, 9, 12, 34, 56, 0);
+    //const UInt64 mydatetime_uint = mydatetime_val.toPackedUInt();
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -2118,27 +2055,14 @@ try
     }
 
     // DDL add column date with default value
+    // actual ddl is like: ADD COLUMN `date` DateTime DEFAULT '1999-09-09 12:34:56'
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `date` MyDateTime DEFAULT '<packed int of mydatetime>'
-            com.default_expression = makeASTFunction(
-                "CAST",
-                std::make_shared<ASTLiteral>(toField(mydatetime_uint)),
-                ASTPtr() // dummy alias
-            );
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeDatetime, 128, 19, "1999-09-09 12:34:56", "1999-09-09 12:34:56", 0);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
-
+    
     // try read
     {
         auto in = store->read(*db_context,
@@ -2183,30 +2107,12 @@ try
     }
 
     // DDL add column string with default value
+    // actual ddl is like: ADD COLUMN `string` VARCHAR(100) DEFAULT 'test_add_string_col'
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `string` String DEFAULT 'test_add_string_col'
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(String("test_add_string_col")));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeVarchar, 0, 100, "test_add_string_col", "test_add_string_col", 0, "utf8mb4", "utf8mb4_bin");
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read
@@ -2272,20 +2178,12 @@ try
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
+    // actual ddl is like: rename COLUMN `i8` to `i8_tmp`
     {
-        // DDL change col name from col_name_before_ddl -> col_name_after_ddl
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::RENAME_COLUMN;
-            com.data_type = col_type;
-            com.column_name = col_name_before_ddl;
-            com.new_column_name = col_name_after_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        auto column_info_rename = getColumnInfo(col_id_ddl, col_name_after_ddl, TiDB::TypeLong, 0, 11);
+        std::vector<ColumnInfo> column_infos{column_info_rename};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     {
@@ -2374,18 +2272,6 @@ try
     }
 
     {
-        // DDL change pk col name from col_name_before_ddl -> col_name_after_ddl
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::RENAME_COLUMN;
-            com.data_type = col_type;
-            com.column_name = col_name_before_ddl;
-            com.new_column_name = col_name_after_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
         TiDB::TableInfo table_info;
         {
             static const String json_table_info = R"(
@@ -2394,7 +2280,7 @@ try
             table_info.deserialize(json_table_info);
             ASSERT_TRUE(table_info.pk_is_handle);
         }
-        store->applyAlters(commands, table_info, ignored, *db_context);
+        store->applyAlters(table_info);
     }
 
     {
@@ -2514,30 +2400,12 @@ try
     }
 
     // DDL add column f32 with default value
+    //actual ddl is like: ADD COLUMN `f32` Float DEFAULT 1.125
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        auto column_info_add = getColumnInfo(col_id_to_add, col_name_to_add, TiDB::TypeFloat, 0, 12, "1.125", "1.125", -1);
+        std::vector<ColumnInfo> column_infos{column_info_add};
+        auto new_table_info = getTableInfo(column_infos);
+        store->applyAlters(new_table_info);
     }
 
     // try read

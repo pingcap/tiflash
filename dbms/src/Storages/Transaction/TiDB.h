@@ -386,7 +386,7 @@ struct TableInfo
     /// the index infos because most of the index info is useless in TiFlash.
     /// If is_common_handle = true, the primary index info is stored
     /// otherwise, all of the index info are ignored
-    std::vector<IndexInfo> index_infos;
+    std::vector<IndexInfo> index_infos; // 这个有用么？没用就删了
     SchemaState state = StateNone;
     bool pk_is_handle = false;
     /// when is_common_handle = true, it means this table is a clustered index table
@@ -405,7 +405,7 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // 这个没再用了么？没再用就删了
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
