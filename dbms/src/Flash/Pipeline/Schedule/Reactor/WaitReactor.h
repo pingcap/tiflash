@@ -27,6 +27,7 @@ class TaskScheduler;
 
 // hold the `Task *` to avoid the cost of `TaskPtr->get()`
 using WaitingTask = std::pair<TaskPtr, Task *>;
+using WaitingTasks = std::list<WaitingTask>;
 
 /// Used for batch calling task.await and submitting the tasks that have been removed from the waiting state to task thread pools.
 /// When there is no non-waiting state task for a long time, it will try to let the current thread rest for a period of time to give the CPU to other threads.
@@ -51,9 +52,9 @@ private:
 
     // Get the incremental tasks from waiting_task_list.
     // return false if waiting_task_list is empty and has finished.
-    inline bool takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting_tasks);
+    inline bool takeFromWaitingTaskList(WaitingTasks & local_waiting_tasks);
 
-    inline void react(std::list<WaitingTask> & local_waiting_tasks);
+    inline void react(WaitingTasks & local_waiting_tasks);
 
     inline bool awaitAndCollectReadyTask(WaitingTask && task);
 

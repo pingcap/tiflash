@@ -120,7 +120,7 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     waiting_task_list.submit(tasks);
 }
 
-bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting_tasks)
+bool WaitReactor::takeFromWaitingTaskList(WaitingTasks & local_waiting_tasks)
 {
     std::list<TaskPtr> tmp_list;
     bool ret = local_waiting_tasks.empty()
@@ -139,7 +139,7 @@ bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting
     return true;
 }
 
-void WaitReactor::react(std::list<WaitingTask> & local_waiting_tasks)
+void WaitReactor::react(WaitingTasks & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
@@ -177,7 +177,7 @@ void WaitReactor::doLoop()
     sched_setparam(0, &param);
 #endif
 
-    std::list<WaitingTask> local_waiting_tasks;
+    WaitingTasks local_waiting_tasks;
     while (takeFromWaitingTaskList(local_waiting_tasks))
         react(local_waiting_tasks);
     // Handle remaining tasks.
