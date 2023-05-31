@@ -148,7 +148,13 @@ void WaitReactor::react(WaitingTasks & local_waiting_tasks)
         else
             ++task_it;
     }
-    GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
+
+#ifdef __APPLE__
+    auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
+#else
+    thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
+#endif
+    metrics.Set(local_waiting_tasks.size());
 
     submitReadyTasks();
 }
@@ -178,10 +184,10 @@ void WaitReactor::doLoop()
 #endif
 
     WaitingTasks local_waiting_tasks;
-    while (takeFromWaitingTaskList(local_waiting_tasks))
+    while likely (takeFromWaitingTaskList(local_waiting_tasks))
         react(local_waiting_tasks);
     // Handle remaining tasks.
-    while (!local_waiting_tasks.empty())
+    while likely (!local_waiting_tasks.empty())
         react(local_waiting_tasks);
 
     LOG_INFO(logger, "wait reactor loop finished");
