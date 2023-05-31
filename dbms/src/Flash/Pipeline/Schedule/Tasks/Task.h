@@ -22,15 +22,15 @@
 namespace DB
 {
 /**
- *    CANCELLED/ERROR/FINISHED
- *               ▲
- *               │
- *  ┌────────────────────────┐
- *  │     ┌──►RUNNING◄──┐    │
- *  │     │             │    │
- *  │     ▼             ▼    │
- *  │ WATITING◄────────►IO   │
- *  └────────────────────────┘
+ *           CANCELLED/ERROR/FINISHED
+ *                      ▲
+ *                      │
+ *         ┌────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐    │
+ * INIT───►│     │             │    │
+ *         │     ▼             ▼    │
+ *         │ WATITING◄────────►IO   │
+ *         └────────────────────────┘
  */
 enum class ExecTaskStatus
 {
