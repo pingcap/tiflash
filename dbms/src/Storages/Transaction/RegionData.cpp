@@ -133,7 +133,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
             return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied {}",
+            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}",
                                         pk.toDebugString(),
                                         decoded_val.prewrite_ts,
                                         key->toDebugString(),
