@@ -109,20 +109,16 @@ void PipelineExecutorStatus::consume(ResultHandler & result_handler)
         Block ret;
         while (consumed_result_queue->pop(ret) == MPMCQueueResult::OK)
             result_handler(ret);
-        // In order to ensure that `onEventFinish` has finished calling at this point
-        // and avoid referencing the already destructed `mu` in `onEventFinish`.
-        {
-            std::lock_guard lock(mu);
-            RUNTIME_ASSERT(0 == active_event_count);
-        }
     }
     catch (...)
     {
         // If result_handler throws an error, here should notify the query to terminate, and wait for the end of the query.
         onErrorOccurred(std::current_exception());
-        std::unique_lock lock(mu);
-        cv.wait(lock, [&] { return 0 == active_event_count; });
     }
+    // In order to ensure that `onEventFinish` has finished calling at this point
+    // and avoid referencing the already destructed `mu` in `onEventFinish`.
+    std::unique_lock lock(mu);
+    cv.wait(lock, [&] { return 0 == active_event_count; });
     LOG_DEBUG(log, "query finished and consume done");
 }
 
