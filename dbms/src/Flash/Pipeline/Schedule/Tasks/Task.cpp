@@ -85,15 +85,8 @@ Task::~Task()
     }
 }
 
-#define CHECK_FINISHED                                        \
-    if unlikely (task_status == ExecTaskStatus::FINISHED      \
-                 || task_status == ExecTaskStatus::ERROR      \
-                 || task_status == ExecTaskStatus::CANCELLED) \
-        return task_status;
-
 ExecTaskStatus Task::execute()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
     switchStatus(executeImpl());
@@ -102,7 +95,6 @@ ExecTaskStatus Task::execute()
 
 ExecTaskStatus Task::executeIO()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
@@ -111,7 +103,6 @@ ExecTaskStatus Task::executeIO()
 
 ExecTaskStatus Task::await()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
@@ -132,8 +123,6 @@ void Task::finalize()
     LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 #endif // !NDEBUG
 }
-
-#undef CHECK_FINISHED
 
 void Task::switchStatus(ExecTaskStatus to)
 {
