@@ -49,15 +49,18 @@ private:
 
     inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
-    // Put the operator that has implemented the `awaitImpl` into the awaitables.
-    // In order to avoid calling the virtual function Operator::await too much in await,
-    // only the operator that needs await will implement `awaitImpl` and `isAwaitable`,
-    // and then it will be called in PipelineExec::await.
-    template <typename OperatorPtr>
-    inline void addOperatorIfAwaitable(const OperatorPtr & op)
+    ALWAYS_INLINE void fillAwaitable(Operator * op)
     {
-        if (op->isAwaitable())
-            awaitables.push_back(op.get());
+        assert(!awaitable);
+        assert(op);
+        awaitable = op;
+    }
+
+    ALWAYS_INLINE void fillIOOp(Operator * op)
+    {
+        assert(!io_op);
+        assert(op);
+        io_op = op;
     }
 
 private:
@@ -65,11 +68,11 @@ private:
     TransformOps transform_ops;
     SinkOpPtr sink_op;
 
-    // hold the operators that awaitable.
-    std::vector<Operator *> awaitables;
+    // hold the operator which is ready for executing await.
+    Operator * awaitable = nullptr;
 
     // hold the operator which is ready for executing io.
-    std::optional<Operator *> io_op;
+    Operator * io_op = nullptr;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.
