@@ -15,11 +15,9 @@
 mysql> drop table if exists test.t
 mysql> create table test.t(a date, b datetime, c timestamp(3), d timestamp(6));
 mysql> alter table test.t set tiflash replica 1;
-
-mysql> insert into test.t values ('2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14');
-
 func> wait_table test t
 
+mysql> insert into test.t values ('2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14');
 mysql> insert into test.t values ('2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192');
 mysql> insert into test.t values ('2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981');
 mysql> analyze table test.t;

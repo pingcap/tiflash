@@ -16,9 +16,9 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-mysql> insert into test.t values (1);
-
 func> wait_table test t
+
+mysql> insert into test.t values (1);
 
 # Decimal32  precision:[1,9]
 mysql> alter table test.t ADD COLUMN dec32_0 DECIMAL(9,0) NULL DEFAULT '999999999'

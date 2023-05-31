@@ -16,12 +16,11 @@ mysql> drop table if exists test.t;
 mysql> create table test.t (c1 tinyint(1), c2 bigint(20) unsigned);
 mysql> alter table test.t set tiflash replica 1;
 
+func> wait_table test t
+
 mysql> insert into test.t values(1, 123);
 mysql> insert into test.t values(NULL, 234);
 mysql> insert into test.t values(NULL, 0);
-
-func> wait_table test t
-
 mysql> select /*+ read_from_storage(tiflash[t]) */ c2 from test.t where ifnull(c1, c2);
 +------+
 | c2   |

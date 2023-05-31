@@ -16,10 +16,10 @@ mysql> drop table if exists test.a1
 mysql> create table test.a1(id int primary key, id1 int, id2 int not null default 88);
 mysql> alter table test.a1 set tiflash replica 1;
 
+func> wait_table test a1
+
 mysql> insert into test.a1 values(1,1,1),(2,2,2),(3,NULL,3),(4,NULL,4);
 mysql> insert into test.a1(id, id1) values(5,5);
-
-func> wait_table test a1
 
 mysql> select * from test.a1;
 +----+------+-----+

@@ -16,10 +16,9 @@ mysql> drop table if exists test.t
 mysql> create table test.t(i int)
 mysql> alter table test.t set tiflash replica 1
 
-mysql> insert into test.t values (1), (2);
-
 func> wait_table test t
 
+mysql> insert into test.t values (1), (2);
 # Add a new column with default value, missing column in old rows will filled with default value.
 mysql> alter table test.t add column i2 int not null default 33;
 mysql> set session tidb_isolation_read_engines='tikv';select * from test.t;

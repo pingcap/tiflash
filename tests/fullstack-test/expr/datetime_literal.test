@@ -16,10 +16,10 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int , b date)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
+func> wait_table test t
+
 mysql> insert into test.t values (1, date'2020-01-01');
 mysql> insert into test.t values (1, date'2020-01-02');
-
-func> wait_table test t
 mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t where b > date'2020-01-01';
 +------+------------+
 | a    | b          |
