@@ -896,8 +896,10 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
     auto range = std::make_pair(TiKVRangeKey::makeTiKVRangeKey<true>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.start.toRegionKey(table_id))),
                                 TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
+    Stopwatch watch;
+
     LOG_DEBUG(log, "Start proactive compact region range [{},{}]", range.first.toDebugString(), range.second.toDebugString());
-    std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange>> region_compact_indexes;
+    std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange, RegionPtr>> region_compact_indexes;
     {
         auto task_lock = genTaskLock();
         auto maybe_region_map = [&]() {
@@ -928,8 +930,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
                 storage->isCommonHandle(),
                 storage->getRowKeyColumnSize());
             auto region_task_lock = region_manager.genRegionTaskLock(overlapped_region.first);
-            region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range};
-            persistRegion(*overlapped_region.second, std::make_optional(&region_task_lock), "triggerCompactLog");
+            region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
         }
     }
     // flush all segments in the range of regions.
@@ -946,12 +947,18 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             LOG_DEBUG(log, "flushed segment of region {}", region.first);
             continue;
         }
+        auto region_id = region.first;
+        auto region_ptr = std::get<3>(region.second);
         LOG_DEBUG(log, "flush extra segment of region {}, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
+        auto region_task_lock = region_manager.genRegionTaskLock(region_id);
         storage->flushCache(tmt.getContext(), std::get<2>(region.second));
+        persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
     }
-    // Flush the segments that isn't related to any region.
-    // TODO Is it really necessary?
-    storage->flushCache(tmt.getContext(), rowkey_range);
+    // TODO Flush the segments that isn't related to any region. Is it really necessary?
+    // storage->flushCache(tmt.getContext(), rowkey_range);
+    auto elapsed_coupled_flush = watch.elapsedMilliseconds();
+    watch.restart();
+
     // forbid regions being removed.
     auto task_lock = genTaskLock();
     for (const auto & region : region_compact_indexes)
@@ -964,6 +971,9 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         }
         notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
     }
+    auto elapsed_notify_proxy = watch.elapsedMilliseconds();
+
+    LOG_DEBUG(log, "Finished proactive compact region range [{},{}], couple_flush {} notify_proxy {}", range.first.toDebugString(), range.second.toDebugString(), elapsed_coupled_flush, elapsed_notify_proxy);
 }
 
 // The caller will guarantee that delta cache has been flushed.
