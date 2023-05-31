@@ -88,8 +88,11 @@ private:
         const Context & db_context,
         const SelectQueryInfo & query_info,
         unsigned num_streams);
+<<<<<<< HEAD
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
+=======
+>>>>>>> 6f8bec72e3 (Fix Region cache update when duplicated Region id exist (#7572))
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
@@ -115,11 +118,20 @@ private:
         DAGPipeline & pipeline);
 
 private:
-    using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
+    using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
+<<<<<<< HEAD
+=======
+
+    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
+    BlockInputStreams readThroughExchange(unsigned num_streams);
+    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
+    std::vector<RequestAndRegionIDs> buildDispatchRequests();
+    void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
+>>>>>>> 6f8bec72e3 (Fix Region cache update when duplicated Region id exist (#7572))
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
