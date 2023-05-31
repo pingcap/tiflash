@@ -230,9 +230,9 @@ private:
     void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
-    RegionManager::RegionReadLock genRegionReadLock() const;
+    RegionManager::RegionReadLock genRegionMgrReadLock() const;
 
-    RegionManager::RegionWriteLock genRegionWriteLock(const KVStoreTaskLock &);
+    RegionManager::RegionWriteLock genRegionMgrWriteLock(const KVStoreTaskLock &);
 
     EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type,

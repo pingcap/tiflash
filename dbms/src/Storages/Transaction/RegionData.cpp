@@ -109,7 +109,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     return write_cf.getDataMut().erase(write_it);
 }
 
-RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value) const
+RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied) const
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [pk, ts] = write_it->first;
@@ -133,8 +133,12 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
             return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Raw TiDB PK: " + (pk.toDebugString()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
-                                + " can not found in default cf for key: " + key->toDebugString(),
+            throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied {}",
+                                        pk.toDebugString(),
+                                        decoded_val.prewrite_ts,
+                                        key->toDebugString(),
+                                        region_id,
+                                        applied),
                             ErrorCodes::ILLFORMAT_RAFT_ROW);
     }
 
