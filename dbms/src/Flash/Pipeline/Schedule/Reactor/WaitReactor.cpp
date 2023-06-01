@@ -185,16 +185,6 @@ void WaitReactor::doLoop()
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
 
-    // Because WaitReactor is only responsible for polling the status of waiting tasks,
-    // lowering the thread priority here can avoid excessive CPU usage.
-#ifdef __linux__
-    struct sched_param param
-    {
-    };
-    param.__sched_priority = sched_get_priority_min(sched_getscheduler(0));
-    sched_setparam(0, &param);
-#endif
-
     WaitingTasks local_waiting_tasks;
     while (likely(takeFromWaitingTaskList(local_waiting_tasks)))
         react(local_waiting_tasks);
