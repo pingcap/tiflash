@@ -127,10 +127,9 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size, [this](const ReceivedMessagePtr & element) {
             for (size_t i = 0; i < fine_grained_channel_size; ++i)
             {
-                if (msg_channels_for_fine_grained_shuffle[i]->tryPush(element) != MPMCQueueResult::OK)
-                    return false;
+                auto result = msg_channels_for_fine_grained_shuffle[i]->forcePush(element);
+                RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
             }
-            return true;
         });
     }
     else

@@ -104,12 +104,14 @@ public:
     void finish()
     {
         grpc_recv_queue->finish();
+        /// msg_channels_for_fine_grained_shuffle must be finished after msg_channel is finished
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
             channel->finish();
     }
     void cancel()
     {
         grpc_recv_queue->cancel();
+        /// msg_channels_for_fine_grained_shuffle must be cancelled after msg_channel is cancelled
         for (auto & channel : msg_channels_for_fine_grained_shuffle)
             channel->cancel();
     }
