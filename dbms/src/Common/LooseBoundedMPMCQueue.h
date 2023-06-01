@@ -78,7 +78,8 @@ public:
 
         if ((likely(status == MPMCQueueStatus::NORMAL)) && !isFullWithoutLock())
         {
-            return pushFront(std::forward<U>(data));
+            pushFront(std::forward<U>(data));
+            return MPMCQueueResult::OK;
         }
 
         switch (status)
@@ -106,7 +107,8 @@ public:
         if (isFullWithoutLock())
             return MPMCQueueResult::FULL;
 
-        return pushFront(std::forward<U>(data));
+        pushFront(std::forward<U>(data));
+        return MPMCQueueResult::OK;
     }
 
     /// Non-blocking function.
@@ -122,7 +124,8 @@ public:
         if unlikely (status == MPMCQueueStatus::FINISHED)
             return MPMCQueueResult::FINISHED;
 
-        return pushFront(std::forward<U>(data));
+        pushFront(std::forward<U>(data));
+        return MPMCQueueResult::OK;
     }
 
     MPMCQueueResult pop(T & data)
@@ -246,7 +249,7 @@ private:
     }
 
     template <typename U>
-    ALWAYS_INLINE MPMCQueueResult pushFront(U && data)
+    ALWAYS_INLINE void pushFront(U && data)
     {
         Int64 memory_usage = get_auxiliary_memory_usage(data);
         queue.emplace_front(std::forward<U>(data), memory_usage);
@@ -268,7 +271,6 @@ private:
         /// if we notify the writer if the queue is not full here, w3 can write immediately
         if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
             writer_head.notifyNext();
-        return MPMCQueueResult::OK;
     }
 
 private:
