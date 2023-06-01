@@ -95,7 +95,9 @@ void WaitReactor::tryYield()
         // ALU resources.  Experiments shown that adding the isb instruction
         // improves stability and reduces result jitter. Adding more delay
         // to the UT_RELAX_CPU than a single isb reduces performance.
+        // clang-format off
         asm volatile("isb" ::: "memory");
+        // clang-format on
 #else
         // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
         sched_yield();
