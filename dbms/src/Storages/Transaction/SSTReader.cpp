@@ -32,6 +32,10 @@ bool MonoSSTReader::remained() const
         auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
         if (!end.empty() && key >= end)
         {
+            if (key >= end)
+            {
+                LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), getDebugCfType());
+            }
             return false;
         }
     }
@@ -62,7 +66,7 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     {
         auto && r = range->comparableKeys();
         auto start = r.first.key.toString();
-        LOG_DEBUG(log, "Seek cf {} to {}", static_cast<std::underlying_type<decltype(type)>::type>(type), Redact::keyToDebugString(start.data(), start.size()));
+        LOG_DEBUG(log, "Seek cf {} to {}", getDebugCfType(), Redact::keyToDebugString(start.data(), start.size()));
         if (!start.empty())
         {
             proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
