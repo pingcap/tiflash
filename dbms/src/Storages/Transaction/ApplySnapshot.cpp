@@ -242,7 +242,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
                 {
-                    auto manage_lock = genRegionWriteLock(task_lock);
+                    auto manage_lock = genRegionMgrWriteLock(task_lock);
                     manage_lock.index.remove(range, region_id);
                 }
             }
@@ -250,13 +250,13 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             new_region = old_region;
             {
                 // add index
-                auto manage_lock = genRegionWriteLock(task_lock);
+                auto manage_lock = genRegionMgrWriteLock(task_lock);
                 manage_lock.index.add(new_region);
             }
         }
         else
         {
-            auto manage_lock = genRegionWriteLock(task_lock);
+            auto manage_lock = genRegionMgrWriteLock(task_lock);
             manage_lock.regions.emplace(region_id, new_region);
             manage_lock.index.add(new_region);
         }
