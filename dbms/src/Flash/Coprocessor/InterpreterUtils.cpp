@@ -382,6 +382,7 @@ void executePushedDownFilter(
     {
         auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+        // todo link runtime filter
         stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
@@ -405,10 +406,10 @@ void executePushedDownFilter(
     // for remote read, filter had been pushed down, don't need to execute again.
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
-        auto & group = group_builder.getCurGroup()[i];
-        group.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        auto & builder = group_builder.getCurBuilder(i);
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
-        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
     }
 }
 
@@ -464,8 +465,8 @@ void executeGeneratedColumnPlaceholder(
 
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
-        auto & group = group_builder.getCurGroup()[i];
-        group.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
+        auto & builder = group_builder.getCurBuilder(i);
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
     }
 }
 

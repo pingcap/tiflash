@@ -324,6 +324,15 @@ void MockRaftStoreProxy::init(size_t region_num)
     }
 }
 
+std::unique_ptr<TiFlashRaftProxyHelper> MockRaftStoreProxy::generateProxyHelper()
+{
+    auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
+        RaftStoreProxyPtr{this}));
+    // Bind ffi to MockSSTReader.
+    proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+    return proxy_helper;
+}
+
 size_t MockRaftStoreProxy::size() const
 {
     auto _ = genLockGuard();
@@ -378,7 +387,7 @@ void MockRaftStoreProxy::bootstrapWithRegion(
         auto _ = genLockGuard();
         RUNTIME_CHECK_MSG(regions.empty(), "Mock Proxy regions are not cleared");
         auto task_lock = kvs.genTaskLock();
-        auto lock = kvs.genRegionWriteLock(task_lock);
+        auto lock = kvs.genRegionMgrWriteLock(task_lock);
         RUNTIME_CHECK_MSG(lock.regions.empty(), "KVStore regions are not cleared");
     }
     auto start = RecordKVFormat::genKey(table_id, 0);
@@ -396,7 +405,7 @@ void MockRaftStoreProxy::debugAddRegions(
     int n = ranges.size();
     auto _ = genLockGuard();
     auto task_lock = kvs.genTaskLock();
-    auto lock = kvs.genRegionWriteLock(task_lock);
+    auto lock = kvs.genRegionMgrWriteLock(task_lock);
     for (int i = 0; i < n; ++i)
     {
         regions.emplace(region_ids[i], std::make_shared<MockProxyRegion>(region_ids[i]));

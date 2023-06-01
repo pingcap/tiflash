@@ -23,6 +23,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <unordered_map>
@@ -373,6 +374,42 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     String filter_column_name;
     dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, original_key_names, left, is_right_out_join, filters, filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
+}
+
+std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(const Context & context,
+                                                                const Block & input_header,
+                                                                const LoggerPtr & log)
+{
+    std::vector<RuntimeFilterPtr> result;
+    if (join.runtime_filter_list().empty())
+    {
+        return result;
+    }
+    result.reserve(join.runtime_filter_list().size());
+    NamesAndTypes source_columns;
+    source_columns.reserve(input_header.columns());
+    for (auto const & p : input_header)
+        source_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
+    LOG_DEBUG(log, "before gen runtime filter, pb rf size:{}", join.runtime_filter_list().size());
+    for (auto rf_pb : join.runtime_filter_list())
+    {
+        RuntimeFilterPtr runtime_filter = std::make_shared<RuntimeFilter>(rf_pb);
+        // check if rs operator support runtime filter target expr type
+        try
+        {
+            runtime_filter->build();
+            dag_analyzer.appendRuntimeFilterProperties(runtime_filter);
+        }
+        catch (TiFlashException & e)
+        {
+            LOG_WARNING(log, "The runtime filter will not be register, reason:{}", e.message());
+            continue;
+        }
+        LOG_DEBUG(log, "push back runtime filter, id:{}", runtime_filter->id);
+        result.push_back(runtime_filter);
+    }
+    return result;
 }
 } // namespace JoinInterpreterHelper
 } // namespace DB

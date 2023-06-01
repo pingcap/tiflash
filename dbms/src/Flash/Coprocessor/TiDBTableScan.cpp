@@ -35,6 +35,11 @@ TiDBTableScan::TiDBTableScan(
 
     if (is_partition_table_scan)
     {
+        for (const auto & rf_pb : table_scan->partition_table_scan().runtime_filter_list())
+        {
+            runtime_filter_ids.push_back(rf_pb.id());
+        }
+        max_wait_time_ms = table_scan->partition_table_scan().max_wait_time_ms();
         if (table_scan->partition_table_scan().has_table_id())
             logical_table_id = table_scan->partition_table_scan().table_id();
         else
@@ -54,6 +59,11 @@ TiDBTableScan::TiDBTableScan(
     }
     else
     {
+        for (const auto & rf_pb : table_scan->tbl_scan().runtime_filter_list())
+        {
+            runtime_filter_ids.push_back(rf_pb.id());
+        }
+        max_wait_time_ms = table_scan->tbl_scan().max_wait_time_ms();
         if (table_scan->tbl_scan().next_read_engine() != tipb::EngineType::Local)
             throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 

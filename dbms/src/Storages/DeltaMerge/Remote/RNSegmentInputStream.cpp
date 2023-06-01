@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>

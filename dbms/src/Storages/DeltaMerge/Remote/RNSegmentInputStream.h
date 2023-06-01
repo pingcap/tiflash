@@ -16,8 +16,10 @@
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::DM::Remote
 {

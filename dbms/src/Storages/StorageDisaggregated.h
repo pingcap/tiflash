@@ -104,13 +104,6 @@ private:
         const Context & db_context,
         unsigned num_streams);
 
-    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
-    BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(
-        PipelineExecutorStatus & exec_status,
-        PipelineExecGroupBuilder & group_builder,
-        unsigned num_streams);
-
     DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(
         const Context & db_context);
 
@@ -158,11 +151,15 @@ private:
         size_t num_streams);
 
 private:
-    using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
+    using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
+
+    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
+    BlockInputStreams readThroughExchange(unsigned num_streams);
+    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
     std::vector<RequestAndRegionIDs> buildDispatchRequests();
     void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);

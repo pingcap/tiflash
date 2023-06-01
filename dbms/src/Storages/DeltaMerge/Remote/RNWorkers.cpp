@@ -42,6 +42,7 @@ RNWorkers::RNWorkers(const Options & options)
         .read_mode = options.read_mode,
     });
 
+    // TODO: Can we push the task that all delta/stable data hit local cache first?
     for (auto const & seg_task : options.read_task->segment_read_tasks)
     {
         auto push_result = worker_fetch_pages->source_queue->tryPush(seg_task);
