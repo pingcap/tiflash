@@ -575,6 +575,8 @@ void FileCache::restoreWriteNode(const std::filesystem::directory_entry & write_
 {
     RUNTIME_CHECK_MSG(write_node_entry.is_directory(), "{} is not a directory", write_node_entry.path());
     auto write_node_data_path = write_node_entry.path() / "data";
+    if (!std::filesystem::exists(write_node_data_path))
+        return;
     for (const auto & table_entry : std::filesystem::directory_iterator(write_node_data_path))
     {
         restoreTable(table_entry);
