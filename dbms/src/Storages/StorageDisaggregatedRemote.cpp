@@ -61,28 +61,6 @@
 #include <numeric>
 #include <unordered_set>
 
-namespace pingcap::kv
-{
-// The rpc trait
-template <>
-struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
-{
-    using RequestType = disaggregated::EstablishDisaggTaskRequest;
-    using ResultType = disaggregated::EstablishDisaggTaskResponse;
-
-    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
-
-    static ::grpc::Status doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        ResultType * res)
-    {
-        return client->stub->EstablishDisaggTask(context, req, res);
-    }
-};
-} // namespace pingcap::kv
-
 namespace DB
 {
 
