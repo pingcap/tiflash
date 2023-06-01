@@ -378,7 +378,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
     {
-        if (!Spiller::supportSpill(build_sample_block))
+        if (!Spiller::supportSpill(probe_sample_block))
         {
             max_bytes_before_external_join = 0;
             build_spiller = nullptr;

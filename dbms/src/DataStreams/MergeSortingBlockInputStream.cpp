@@ -53,8 +53,8 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
         }
         else
         {
-            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
             max_bytes_before_external_sort = 0;
+            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
         }
     }
 }

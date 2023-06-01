@@ -294,8 +294,8 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
         }
         else
         {
-            LOG_WARNING(log, "Aggregation does not support spill, reason: {}", is_convertible_to_two_level ? "aggregator hash table does not support two level" : "input data contains only constant columns");
             params.setMaxBytesBeforeExternalGroupBy(0);
+            LOG_WARNING(log, "Aggregation does not support spill, reason: {}", is_convertible_to_two_level ? "aggregator hash table does not support two level" : "input data contains only constant columns");
         }
     }
 }
