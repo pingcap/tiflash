@@ -85,6 +85,7 @@ struct SpilledFiles
 class Spiller
 {
 public:
+    static bool supportSpill(const Block & header);
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
