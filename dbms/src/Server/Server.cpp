@@ -1026,7 +1026,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     diagnosticspb::ServerInfoResponse response;
     request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
     std::string req = request.SerializeAsString();
-    ffi_server_info_noproxy(intptr_t(&helper), strIntoView(&req), &response);
+    ffi_get_server_info_from_proxy(intptr_t(&helper), strIntoView(&req), &response);
     server_info.parseSysInfo(response);
     setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
     computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
