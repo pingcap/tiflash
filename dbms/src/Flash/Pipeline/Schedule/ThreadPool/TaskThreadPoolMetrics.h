@@ -42,7 +42,7 @@ public:
 
     void decThreadCnt();
 
-    void updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns);
+    void updateTaskExecuteTimeOnRound(uint64_t execute_time_ns);
 
 private:
     std::atomic_uint64_t max_execution_time_ns_of_a_round{0};

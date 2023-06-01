@@ -65,7 +65,6 @@ TaskThreadPoolMetrics<is_cpu>::TaskThreadPoolMetrics()
     SET_METRIC(pending_tasks_count, 0);
     SET_METRIC(executing_tasks_count, 0);
     SET_METRIC(task_thread_pool_size, 0);
-    SET_METRIC(max_execution_time_ms_of_a_round, 0);
 }
 
 template <bool is_cpu>
@@ -123,25 +122,15 @@ void TaskThreadPoolMetrics<is_cpu>::decThreadCnt()
 }
 
 template <bool is_cpu>
-void TaskThreadPoolMetrics<is_cpu>::updateTaskMaxtimeOnRound(uint64_t max_execution_time_ns)
+void TaskThreadPoolMetrics<is_cpu>::updateTaskExecuteTimeOnRound(uint64_t execute_time_ns)
 {
-    while (true)
+    if constexpr (is_cpu)
     {
-        auto cur_max_ns = max_execution_time_ns_of_a_round.load();
-        if (max_execution_time_ns <= cur_max_ns)
-            return;
-        if (max_execution_time_ns_of_a_round.compare_exchange_strong(cur_max_ns, max_execution_time_ns))
-        {
-            // Here still take from `max_execution_time_ns_of_a_round` instead of `max_execution_time_ns`.
-            // Otherwise, for a < b, if there is such an execution sequence
-            // 1. max_execution_time_ns_of_a_round.set(a)
-            // 2. max_execution_time_ns_of_a_round.set(b)
-            // 3. setMaxTimeMetrics(b)
-            // 4. setMaxTimeMetrics(a)
-            // The max time in metrics will be a instead of b.
-            SET_METRIC(max_execution_time_ms_of_a_round, max_execution_time_ns_of_a_round.load() / 1000.0);
-            return;
-        }
+        GET_METRIC(tiflash_pipeline_task_execute_round_time_seconds, type_cpu).Observe(execute_time_ns / 1'000'000'000.0);
+    }
+    else
+    {
+        GET_METRIC(tiflash_pipeline_task_execute_round_time_seconds, type_cpu).Observe(execute_time_ns / 1'000'000'000.0);
     }
 }
 
