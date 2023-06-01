@@ -71,7 +71,7 @@ public:
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_execute);
 #endif
-        metrics.Observe(value / 1'000'000'000.0);
+        metrics.Observe(value / 1'000'000.0);
         cpu_execute_time_ns += value;
     }
 
@@ -83,7 +83,7 @@ public:
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_queue);
 #endif
         auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000'000.0);
+        metrics.Observe(value / 1'000'000.0);
         cpu_pending_time_ns += value;
     }
 
@@ -94,7 +94,7 @@ public:
 #else
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_execute);
 #endif
-        metrics.Observe(value / 1'000'000'000.0);
+        metrics.Observe(value / 1'000'000.0);
         io_execute_time_ns += value;
     }
 
@@ -106,7 +106,7 @@ public:
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_queue);
 #endif
         auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000'000.0);
+        metrics.Observe(value / 1'000'000.0);
         io_pending_time_ns += value;
     }
 
@@ -118,7 +118,7 @@ public:
         thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_await);
 #endif
         auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000'000.0);
+        metrics.Observe(value / 1'000'000.0);
         await_time_ns += value;
     }
 
