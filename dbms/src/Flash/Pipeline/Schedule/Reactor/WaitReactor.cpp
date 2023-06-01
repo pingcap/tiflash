@@ -188,7 +188,7 @@ void WaitReactor::doLoop()
     while (likely(takeFromWaitingTaskList(local_waiting_tasks)))
         react(local_waiting_tasks);
     // Handle remaining tasks.
-    while (likely(!local_waiting_tasks.empty()))
+    while (!local_waiting_tasks.empty())
         react(local_waiting_tasks);
 
     LOG_INFO(logger, "wait reactor loop finished");
