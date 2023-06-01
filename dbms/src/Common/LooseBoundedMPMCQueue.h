@@ -56,6 +56,17 @@ public:
                     }
                   : std::move(get_auxiliary_memory_usage_))
     {}
+    LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_, PushCallback && push_callback_)
+        : capacity(std::max(1, capacity_))
+        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+        , get_auxiliary_memory_usage(
+              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+                  ? [](const T &) {
+                        return 0;
+                    }
+                  : std::move(get_auxiliary_memory_usage_))
+        , push_callback(std::move(push_callback_))
+    {}
 
     /// blocking function.
     /// Just like MPMCQueue::push.
