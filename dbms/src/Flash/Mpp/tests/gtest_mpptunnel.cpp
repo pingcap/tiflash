@@ -208,7 +208,7 @@ public:
     {
         while (true)
         {
-            auto pop_result = received_message_queue.pop<false, true>(0);
+            auto pop_result = received_message_queue.pop<true>(0);
             switch (pop_result.first)
             {
             case DB::MPMCQueueResult::OK:
@@ -285,12 +285,8 @@ public:
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
         if (tunnel->local_tunnel_v2)
             tunnel->local_tunnel_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_v2)
-            tunnel->local_tunnel_fine_grained_v2->is_done.store(true);
         else if (tunnel->local_tunnel_local_only_v2)
             tunnel->local_tunnel_local_only_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_local_only_v2)
-            tunnel->local_tunnel_fine_grained_local_only_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)

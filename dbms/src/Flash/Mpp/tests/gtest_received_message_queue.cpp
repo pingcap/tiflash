@@ -92,56 +92,42 @@ try
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
                 ReceivedMessageQueue queue(mock_async_request_handler_wait_queue, log, buffer_size, fine_grained, fine_grained_stream_size);
+                for (size_t i = 0; i < buffer_size; ++i)
+                {
+                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
+                    /// is_force = false
+                    auto result = queue.pushToMessageChannel<false>(message, ReceiverMode::Async);
+                    ASSERT_TRUE(result);
+                }
+                ASSERT_TRUE(!queue.isWritable());
+                auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
+                /// is_force = true
+                auto result = queue.pushToMessageChannel<true>(message, ReceiverMode::Async);
+                ASSERT_TRUE(result);
                 if (fine_grained)
                 {
-                    for (size_t i = 0; i < buffer_size; ++i)
-                    {
-                        auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        /// is_force = false
-                        auto result = queue.pushToMessageChannel<false>(message, ReceiverMode::Async);
-                        ASSERT_TRUE(result);
-                    }
-                    ASSERT_TRUE(!queue.isWritable());
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    /// is_force = true
-                    auto result = queue.pushToMessageChannel<true>(message, ReceiverMode::Async);
-                    ASSERT_TRUE(result);
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<true, false>(k);
+                            auto pop_result = queue.pop<false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                            if (k == 0)
-                                ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
                         }
                     }
-                    ASSERT_TRUE(queue.isWritable());
                 }
                 else
                 {
-                    for (size_t i = 0; i < buffer_size; ++i)
-                    {
-                        auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        /// is_force = false
-                        auto result = queue.pushToMessageChannel<false>(message, ReceiverMode::Async);
-                        ASSERT_TRUE(result);
-                    }
-                    ASSERT_TRUE(!queue.isWritable());
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    /// is_force = true
-                    auto result = queue.pushToMessageChannel<true>(message, ReceiverMode::Async);
-                    ASSERT_TRUE(result);
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false, false>(0);
+                        auto pop_result = queue.pop<false>(0);
                         ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                         ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
                     }
-                    ASSERT_TRUE(queue.isWritable());
                 }
+                ASSERT_TRUE(queue.isWritable());
             }
         }
     }
@@ -161,52 +147,40 @@ try
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
                 ReceivedMessageQueue queue(mock_async_request_handler_wait_queue, log, buffer_size, fine_grained, fine_grained_stream_size);
+                for (size_t i = 0; i < buffer_size; ++i)
+                {
+                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
+                    auto result = queue.pushToGRPCReceiveQueue(message);
+                    ASSERT_TRUE(result == GRPCReceiveQueueRes::OK);
+                }
+                ASSERT_TRUE(!queue.isWritable());
+                auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
+                auto result = queue.pushToGRPCReceiveQueue(message);
+                ASSERT_TRUE(result == GRPCReceiveQueueRes::FULL);
                 if (fine_grained)
                 {
-                    for (size_t i = 0; i < buffer_size; ++i)
-                    {
-                        auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        auto result = queue.pushToGRPCReceiveQueue(message);
-                        ASSERT_TRUE(result == GRPCReceiveQueueRes::OK);
-                    }
-                    ASSERT_TRUE(!queue.isWritable());
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    auto result = queue.pushToGRPCReceiveQueue(message);
-                    ASSERT_TRUE(result == GRPCReceiveQueueRes::FULL);
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<true, false>(k);
+                            auto pop_result = queue.pop<false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                            if (k == 0)
-                                ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
                         }
                     }
-                    ASSERT_TRUE(queue.isWritable());
                 }
                 else
                 {
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
-                        auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                        auto result = queue.pushToGRPCReceiveQueue(message);
-                        ASSERT_TRUE(result == GRPCReceiveQueueRes::OK);
-                    }
-                    ASSERT_TRUE(!queue.isWritable());
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    auto result = queue.pushToGRPCReceiveQueue(message);
-                    ASSERT_TRUE(result == GRPCReceiveQueueRes::FULL);
-                    for (size_t i = 0; i < buffer_size; ++i)
-                    {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false, false>(0);
+                        auto pop_result = queue.pop<false>(0);
                         ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
                         ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
                     }
-                    ASSERT_TRUE(queue.isWritable());
                 }
+                ASSERT_TRUE(queue.isWritable());
             }
         }
     }
