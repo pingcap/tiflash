@@ -80,9 +80,9 @@ void SpilledFiles::makeAllSpilledFilesImmutable()
 
 bool Spiller::supportSpill(const Block & header)
 {
-    for (size_t i = 0; i < header.columns(); ++i)
+    for (const auto & column_with_type_and_name : header)
     {
-        if (header.getByPosition(i).column == nullptr || !header.getByPosition(i).column->isColumnConst())
+        if (column_with_type_and_name.column == nullptr || !column_with_type_and_name.column->isColumnConst())
             return true;
     }
     return false;
