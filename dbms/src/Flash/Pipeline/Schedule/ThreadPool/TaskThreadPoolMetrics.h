@@ -41,9 +41,6 @@ public:
     void incThreadCnt();
 
     void decThreadCnt();
-
-private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
 };
 
 } // namespace DB
