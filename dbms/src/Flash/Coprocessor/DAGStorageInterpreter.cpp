@@ -40,6 +40,7 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -460,6 +461,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     /// handle filter conditions for local and remote table scan.
     /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+    /// todo add runtime filter in Filter input stream
     if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
     {
         ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
@@ -516,8 +518,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         // local sources
         while (i < remote_read_start_index)
         {
-            auto & group = group_builder.getCurGroup()[i++];
-            group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            auto & builder = group_builder.getCurBuilder(i++);
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
         }
     }
 }
@@ -763,6 +765,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.conditions,
             table_scan.getPushedDownFilters(),
             table_scan.getColumns(),
+            table_scan.getRuntimeFilterIDs(),
+            table_scan.getMaxWaitTimeMs(),
             context.getTimezoneInfo());
         query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
@@ -1038,7 +1042,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         {
             disaggregated_snap->addTask(table_id, std::move(table_snap));
         }
-
         if (has_multiple_partitions)
             stream_pool->addPartitionStreams(current_pipeline.streams);
         else
@@ -1338,8 +1341,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
-    std::unordered_map<Int64, Int64> region_id_to_table_id_map;
-    std::unordered_map<Int64, RegionRetryList> retry_regions_map;
+    std::unordered_map<RegionID, TableID> region_id_to_table_id_map;
+    std::unordered_map<TableID, RegionRetryList> retry_regions_map;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);

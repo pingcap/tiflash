@@ -91,6 +91,8 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
             conditions,
             pushed_down_filters,
             table_info.columns,
+            std::vector<int>(), // don't care runtime filter
+            0,
             timezone_info);
     }
 

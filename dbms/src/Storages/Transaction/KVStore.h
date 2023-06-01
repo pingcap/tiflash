@@ -16,6 +16,7 @@
 
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 namespace TiDB
@@ -85,7 +86,7 @@ public:
 
     RegionPtr getRegion(RegionID region_id) const;
 
-    using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+    using RegionRange = RegionRangeKeys::RegionRange;
 
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
 
@@ -229,9 +230,9 @@ private:
     void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
-    RegionManager::RegionReadLock genRegionReadLock() const;
+    RegionManager::RegionReadLock genRegionMgrReadLock() const;
 
-    RegionManager::RegionWriteLock genRegionWriteLock(const KVStoreTaskLock &);
+    RegionManager::RegionWriteLock genRegionMgrWriteLock(const KVStoreTaskLock &);
 
     EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type,
