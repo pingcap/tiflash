@@ -32,7 +32,18 @@ void MergeSortTransformOp::operatePrefix()
     // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
 
-    spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+    if (max_bytes_before_external_sort > 0)
+    {
+        if (Spiller::supportSpill(header_without_constants))
+        {
+            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+        }
+        else
+        {
+            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
+            max_bytes_before_external_sort = 0;
+        }
+    }
 }
 
 void MergeSortTransformOp::operateSuffix()

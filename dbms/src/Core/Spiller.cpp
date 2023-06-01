@@ -116,7 +116,6 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
         if (input_schema.getByPosition(i).column != nullptr && input_schema.getByPosition(i).column->isColumnConst())
             const_column_indexes.push_back(i);
     }
-    RUNTIME_CHECK_MSG(const_column_indexes.size() < input_schema.columns(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
     header_without_constants = input_schema;
     removeConstantColumns(header_without_constants);
 }
