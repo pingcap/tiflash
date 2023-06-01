@@ -59,6 +59,7 @@ private:
     ColumnFamilyType type;
     RegionRangeFilter range;
     SSTFormatKind kind;
+    mutable bool tail_checked;
     Poco::Logger * log;
 };
 

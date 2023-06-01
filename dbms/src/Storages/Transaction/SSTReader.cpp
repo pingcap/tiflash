@@ -32,9 +32,10 @@ bool MonoSSTReader::remained() const
         auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
         if (!end.empty() && key >= end)
         {
-            if (key >= end)
+            if (!tail_checked && key >= end)
             {
                 LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), getDebugCfType());
+                tail_checked = true;
             }
             return false;
         }
@@ -59,6 +60,7 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
     , range(range_)
+    , tail_checked(false)
 {
     log = &Poco::Logger::get("MonoSSTReader");
     kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
