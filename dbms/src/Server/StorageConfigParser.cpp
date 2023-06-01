@@ -14,6 +14,7 @@
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #include <cmath>
+#include <compare>
 #include <cstdlib>
 #include <filesystem>
 #include <string_view>
@@ -643,7 +644,10 @@ void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & l
     readConfig(table, "dtfile_level", dtfile_level);
     RUNTIME_CHECK(dtfile_level <= 100);
     readConfig(table, "delta_rate", delta_rate);
-    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
+    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.0) && std::islessequal(delta_rate, 1.0), delta_rate);
+    if (delta_rate == 0.0)
+        LOG_WARNING(log, "Starting with unlimited delta page cache capacity, delta_rate={}", delta_rate);
+
     readConfig(table, "reserved_rate", reserved_rate);
     RUNTIME_CHECK(std::isgreaterequal(reserved_rate, 0.0) && std::islessequal(reserved_rate, 0.5), reserved_rate);
     RUNTIME_CHECK(std::islessequal(delta_rate + reserved_rate, 1.0), delta_rate, reserved_rate);

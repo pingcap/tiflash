@@ -20,7 +20,8 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -97,18 +98,29 @@ private:
         const Context & db_context,
         const SelectQueryInfo & query_info,
         unsigned num_streams);
-    DM::RNRemoteReadTaskPtr buildDisaggTasks(
+
+    DM::Remote::RNReadTaskPtr buildReadTask(
         const Context & db_context,
-        const DM::ScanContextPtr & scan_context,
-        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
-    void buildDisaggTask(
+        const DM::ScanContextPtr & scan_context);
+
+    void buildReadTaskForWriteNode(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-        std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
-        std::mutex & store_read_tasks_lock);
-    std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    buildDisaggTaskForNode(
+        std::mutex & output_lock,
+        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+
+    void buildReadTaskForWriteNodeTable(
+        const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
+        const DM::DisaggTaskId & snapshot_id,
+        StoreID store_id,
+        const String & store_address,
+        const String & serialized_physical_table,
+        std::mutex & output_lock,
+        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+
+    std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(
@@ -116,8 +128,8 @@ private:
         const DM::ColumnDefinesPtr & columns_to_read);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
-        const DM::RNRemoteReadTaskPtr & remote_read_tasks,
-        const SelectQueryInfo & query_info,
+        const DM::Remote::RNReadTaskPtr & read_task,
+        const SelectQueryInfo &,
         size_t num_streams,
         DAGPipeline & pipeline);
 
