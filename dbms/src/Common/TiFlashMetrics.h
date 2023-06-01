@@ -367,9 +367,12 @@ namespace DB
         F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
         F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
         F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}))                                                                     \
-    M(tiflash_pipeline_task_execute_round_time_seconds, "Bucketed histogram of pipeline task execute round time", Histogram,                        \
-        F(type_cpu, {{"type", "cpu"}}, ExpBuckets{0.0005, 2, 20}),                                                                                  \
-        F(type_io, {{"type", "io"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
+    M(tiflash_pipeline_task_round_time_seconds, "Bucketed histogram of pipeline task round time", Histogram,                                        \
+        F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets{0.0005, 2, 20}),                                                                  \
+        F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.0005, 2, 20}),                                                                    \
+        F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
+        F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.0005, 2, 20}),                                                                        \
+        F(type_await, {{"type", "await"}}, ExpBuckets{0.0005, 2, 20}))                                                                              \
     M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
         F(type_to_init, {"type", "to_init"}),                                                                                                       \
         F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \

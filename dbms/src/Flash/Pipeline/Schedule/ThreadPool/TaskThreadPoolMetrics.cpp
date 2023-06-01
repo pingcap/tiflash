@@ -58,7 +58,6 @@ namespace DB
         }                                                                              \
     } while (0)
 
-// TODO support more metrics after profile info of task has supported.
 template <bool is_cpu>
 TaskThreadPoolMetrics<is_cpu>::TaskThreadPoolMetrics()
 {
@@ -119,19 +118,6 @@ template <bool is_cpu>
 void TaskThreadPoolMetrics<is_cpu>::decThreadCnt()
 {
     DEC_METRIC(task_thread_pool_size, 1);
-}
-
-template <bool is_cpu>
-void TaskThreadPoolMetrics<is_cpu>::updateTaskExecuteTimeOnRound(uint64_t execute_time_ns)
-{
-    if constexpr (is_cpu)
-    {
-        GET_METRIC(tiflash_pipeline_task_execute_round_time_seconds, type_cpu).Observe(execute_time_ns / 1'000'000'000.0);
-    }
-    else
-    {
-        GET_METRIC(tiflash_pipeline_task_execute_round_time_seconds, type_cpu).Observe(execute_time_ns / 1'000'000'000.0);
-    }
 }
 
 template class TaskThreadPoolMetrics<true>;

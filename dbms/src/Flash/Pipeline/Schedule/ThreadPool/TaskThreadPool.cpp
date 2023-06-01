@@ -104,7 +104,6 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         if (status != Impl::TargetStatus || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
-    metrics.updateTaskExecuteTimeOnRound(total_time_spent);
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
     switch (status)
