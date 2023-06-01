@@ -78,6 +78,16 @@ void SpilledFiles::makeAllSpilledFilesImmutable()
     mutable_spilled_files.clear();
 }
 
+bool Spiller::supportSpill(const Block & header)
+{
+    for (size_t i = 0; i < header.columns(); ++i)
+    {
+        if (header.getByPosition(i).column == nullptr || !header.getByPosition(i).column->isColumnConst())
+            return true;
+    }
+    return false;
+}
+
 Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_, bool release_spilled_file_on_restore_)
     : config(config_)
     , is_input_sorted(is_input_sorted_)
@@ -106,6 +116,7 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
         if (input_schema.getByPosition(i).column != nullptr && input_schema.getByPosition(i).column->isColumnConst())
             const_column_indexes.push_back(i);
     }
+    RUNTIME_CHECK_MSG(const_column_indexes.size() < input_schema.columns(), "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
     header_without_constants = input_schema;
     removeConstantColumns(header_without_constants);
 }
@@ -119,7 +130,6 @@ void Spiller::removeConstantColumns(Block & block) const
         RUNTIME_CHECK_MSG(block.getByPosition(*it).column->isColumnConst(), "The {}-th column in block must be constant column", *it);
         block.erase(*it);
     }
-    RUNTIME_CHECK_MSG(block.columns() > 0, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
 }
 
 CachedSpillHandlerPtr Spiller::createCachedSpillHandler(

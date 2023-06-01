@@ -347,20 +347,26 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
-    build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     if (max_bytes_before_external_join > 0)
     {
         if (join_map_method == JoinMapMethod::CROSS)
         {
             /// todo support spill for cross join
             max_bytes_before_external_join = 0;
-            LOG_WARNING(log, "Cross join does not support spilling, so set max_bytes_before_external_join = 0");
+            LOG_WARNING(log, "Join does not support spill, reason: cross join spill is not supported");
         }
         if (isNullAwareSemiFamily(kind))
         {
             max_bytes_before_external_join = 0;
-            LOG_WARNING(log, "null aware join does not support spilling, so set max_bytes_before_external_join = 0");
+            LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
+        if (!Spiller::supportSpill(build_sample_block))
+        {
+            max_bytes_before_external_join = 0;
+            LOG_WARNING(log, "Join does not support spill, reason: input data from build side contains only constant columns");
+        }
+        if (max_bytes_before_external_join > 0)
+            build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     }
     setSampleBlock(sample_block);
 }
@@ -370,7 +376,19 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     std::unique_lock lock(rwlock);
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
-    probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+    if (max_bytes_before_external_join > 0)
+    {
+        if (!Spiller::supportSpill(build_sample_block))
+        {
+            max_bytes_before_external_join = 0;
+            build_spiller = nullptr;
+            LOG_WARNING(log, "Join does not support spill, reason: input data from probe side contains only constant columns");
+        }
+        else
+        {
+            probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+        }
+    }
 }
 
 /// the block should be valid.
