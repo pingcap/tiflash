@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1681106846245,
+  "iteration": 1684914232042,
   "links": [],
   "panels": [
     {
@@ -95,6 +95,8 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
+            "hideEmpty": true,
+            "hideZero": true,
             "max": false,
             "min": false,
             "rightSide": true,
@@ -147,7 +149,7 @@
           "tooltip": {
             "msResolution": false,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -516,6 +518,239 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The number of Regions on each TiFlash instance",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "hiddenSeries": false,
+          "id": 200,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 300,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"region\"}) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Region",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 2,
+            "value_type": "cumulative"
+            },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+            },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": "",
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+            },
+            {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "TiFlash CPU usage calculated with process CPU running seconds.",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+            },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 17
+            },
+          "hiddenSeries": false,
+          "id": 51,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+            },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+            },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/limit/",
+              "color": "#F2495C",
+              "hideTooltip": true,
+              "legend": false,
+              "linewidth": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 40
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "limit-{{instance}}",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "CPU Usage",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The memory usage per TiFlash instance",
           "fieldConfig": {
             "defaults": {},
@@ -527,7 +762,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 10,
@@ -712,130 +947,6 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "TiFlash CPU usage calculated with process CPU running seconds.",
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "grid": {},
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 17
-          },
-          "hiddenSeries": false,
-          "id": 51,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": 250,
-            "sort": "max",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/limit/",
-              "color": "#F2495C",
-              "hideTooltip": true,
-              "legend": false,
-              "linewidth": 2
-            }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}",
-              "refId": "A",
-              "step": 40
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "limit-{{instance}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "CPU Usage",
-          "tooltip": {
-            "msResolution": false,
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": 1,
-              "format": "percentunit",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
           "description": "",
           "editable": true,
           "error": false,
@@ -847,10 +958,10 @@
           "fillGradient": 0,
           "grid": {},
           "gridPos": {
-            "h": 7,
+            "h": 8,
             "w": 12,
-            "x": 12,
-            "y": 17
+            "x": 0,
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 181,
@@ -5109,7 +5220,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 6
+            "y": 38
           },
           "hiddenSeries": false,
           "id": 41,
@@ -5222,7 +5333,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 6
+            "y": 38
           },
           "hiddenSeries": false,
           "id": 38,
@@ -5380,7 +5491,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 14
+            "y": 46
           },
           "hiddenSeries": false,
           "id": 40,
@@ -5480,7 +5591,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 22
+            "y": 54
           },
           "hiddenSeries": false,
           "id": 39,
@@ -5583,7 +5694,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 22
+            "y": 54
           },
           "hiddenSeries": false,
           "id": 42,
@@ -5687,7 +5798,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 59
           },
           "hiddenSeries": false,
           "id": 130,
@@ -5790,7 +5901,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 59
           },
           "hiddenSeries": false,
           "id": 131,
@@ -5894,7 +6005,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 32
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 50,
@@ -6028,7 +6139,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 32
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 22,
@@ -6142,7 +6253,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 32
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 52,
@@ -6244,7 +6355,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 39
+            "y": 71
           },
           "hiddenSeries": false,
           "id": 46,
@@ -6367,7 +6478,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 39
+            "y": 71
           },
           "hiddenSeries": false,
           "id": 47,
@@ -6491,7 +6602,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 46
+            "y": 78
           },
           "height": "",
           "hiddenSeries": false,
@@ -6621,7 +6732,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 46
+            "y": 78
           },
           "height": "",
           "hiddenSeries": false,
@@ -6749,7 +6860,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 86
           },
           "hiddenSeries": false,
           "id": 84,
@@ -6849,7 +6960,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 86
           },
           "hiddenSeries": false,
           "id": 86,
@@ -6981,7 +7092,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 94
           },
           "hiddenSeries": false,
           "id": 132,
@@ -7114,7 +7225,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 94
           },
           "hiddenSeries": false,
           "id": 67,
@@ -7228,7 +7339,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 102
           },
           "hiddenSeries": false,
           "id": 169,
@@ -7377,7 +7488,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 70
+            "y": 102
           },
           "hiddenSeries": false,
           "id": 88,
@@ -7576,7 +7687,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 77
+            "y": 109
           },
           "hiddenSeries": false,
           "id": 168,
@@ -8321,7 +8432,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 8
+            "y": 40
           },
           "hiddenSeries": false,
           "id": 128,
@@ -8464,7 +8575,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 8
+            "y": 40
           },
           "hiddenSeries": false,
           "id": 129,
@@ -8581,7 +8692,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 48
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -8643,7 +8754,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 48
           },
           "hiddenSeries": false,
           "id": 158,
@@ -8779,7 +8890,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 56
           },
           "hiddenSeries": false,
           "id": 163,
@@ -8884,7 +8995,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 56
           },
           "hiddenSeries": false,
           "id": 162,
@@ -9004,7 +9115,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 164,
@@ -9113,7 +9224,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 123,
@@ -9235,7 +9346,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 72
           },
           "height": "",
           "hiddenSeries": false,
@@ -9361,7 +9472,7 @@
             "y": 9
           },
           "hiddenSeries": false,
-          "id": 166,
+          "id": 167,
           "legend": {
             "alignAsTable": false,
             "avg": false,
@@ -12970,12 +13081,10 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:109",
               "alias": "dtfile_cache_hit_ratio",
               "yaxis": 2
             },
             {
-              "$$hashKey": "object:178",
               "alias": "page_cache_hit_ratio",
               "yaxis": 2
             }
@@ -13031,7 +13140,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:263",
               "decimals": null,
               "format": "ops",
               "label": null,
@@ -13041,7 +13149,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:264",
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -13135,7 +13242,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:263",
               "decimals": null,
               "format": "binBps",
               "label": null,
@@ -13145,7 +13251,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:264",
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -13262,7 +13367,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:263",
               "decimals": null,
               "format": "bytes",
               "label": null,
@@ -13272,7 +13376,6 @@
               "show": true
             },
             {
-              "$$hashKey": "object:264",
               "format": "percentunit",
               "label": null,
               "logBase": 1,

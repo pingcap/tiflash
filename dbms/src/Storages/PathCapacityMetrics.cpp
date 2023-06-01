@@ -262,15 +262,9 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
             for (const auto & [keyspace_id, used_bytes] : keyspace_id_to_used_bytes)
             {
                 UNUSED(keyspace_id);
-                total_stat.used_size += used_bytes;
                 remote_used_size += used_bytes;
             }
         }
-
-        // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
-        // EiB is not supported by TiUP now. https://github.com/pingcap/tiup/issues/2139
-        total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
-        total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     }
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsedRemote, remote_used_size);
 
