@@ -367,7 +367,7 @@ namespace DB
         F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
         F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
         F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}))                                                                     \
-    M(tiflash_pipeline_task_round_time_seconds, "Bucketed histogram of pipeline task round time", Histogram,                                        \
+    M(tiflash_pipeline_task_round_time_ms, "Bucketed histogram of pipeline task round time", Histogram,                                             \
         F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets{0.0005, 2, 20}),                                                                  \
         F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.0005, 2, 20}),                                                                    \
         F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \

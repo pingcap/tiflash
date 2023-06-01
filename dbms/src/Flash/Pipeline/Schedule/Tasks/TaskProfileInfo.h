@@ -67,9 +67,9 @@ public:
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
 #ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_cpu_execute);
+        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_execute);
 #else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_cpu_execute);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_execute);
 #endif
         metrics.Observe(value / 1'000'000'000.0);
         cpu_execute_time_ns += value;
@@ -78,9 +78,9 @@ public:
     ALWAYS_INLINE void elapsedCPUPendingTime()
     {
 #ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_cpu_queue);
+        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_queue);
 #else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_cpu_queue);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_queue);
 #endif
         auto value = elapsedFromPrev();
         metrics.Observe(value / 1'000'000'000.0);
@@ -90,9 +90,9 @@ public:
     ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
     {
 #ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_io_execute);
+        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_execute);
 #else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_io_execute);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_execute);
 #endif
         metrics.Observe(value / 1'000'000'000.0);
         io_execute_time_ns += value;
@@ -101,9 +101,9 @@ public:
     ALWAYS_INLINE void elapsedIOPendingTime()
     {
 #ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_io_queue);
+        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_queue);
 #else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_io_queue);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_queue);
 #endif
         auto value = elapsedFromPrev();
         metrics.Observe(value / 1'000'000'000.0);
@@ -113,9 +113,9 @@ public:
     ALWAYS_INLINE void elapsedAwaitTime()
     {
 #ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_await);
+        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_await);
 #else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_seconds, type_await);
+        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_await);
 #endif
         auto value = elapsedFromPrev();
         metrics.Observe(value / 1'000'000'000.0);
