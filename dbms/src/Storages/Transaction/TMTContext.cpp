@@ -78,15 +78,19 @@ SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const
 void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
 {
     String log_info;
+    double longest_live_time = 0;
     for (const auto & iter : monitored_tasks)
     {
         auto alive_time = iter.second.elapsedSeconds();
-        if (alive_time >= 1500)
+        if (alive_time > longest_live_time)
+            longest_live_time = alive_time;
+        if (alive_time >= 1200)
             log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
     }
 
     if (!log_info.empty())
         LOG_INFO(log, log_info);
+    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
 }
 
 void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
