@@ -342,7 +342,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
         kvs.handleDestroy(1, tmt);
         {
             auto task_lock = kvs.genTaskLock();
-            auto lock = kvs.genRegionWriteLock(task_lock);
+            auto lock = kvs.genRegionMgrWriteLock(task_lock);
             auto region = makeRegion(1, ori_source_range.first.key, ori_source_range.second.key);
             lock.regions.emplace(1, region);
             lock.index.add(region);
@@ -480,7 +480,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         {
             // add 7 back
             auto task_lock = kvs.genTaskLock();
-            auto lock = kvs.genRegionWriteLock(task_lock);
+            auto lock = kvs.genRegionMgrWriteLock(task_lock);
             auto region = makeRegion(7, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
             lock.regions.emplace(7, region);
             lock.index.add(region);
@@ -674,7 +674,7 @@ TEST_F(RegionKVStoreTest, Writes)
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE");
+                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE, region_id: 1, applied: 5");
                 ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 ]");
                 kvs.getRegion(1)->tryCompactionFilter(1000);
             }
