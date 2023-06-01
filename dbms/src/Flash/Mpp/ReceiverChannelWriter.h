@@ -46,7 +46,7 @@ public:
     //
     // Return true if all push succeed, otherwise return false.
     // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
-    template <bool is_force = false>
+    template <bool is_force>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
     bool isWritable() const;

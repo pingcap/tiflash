@@ -86,7 +86,7 @@ class ReceivedMessageQueue
     LoggerPtr log;
 
 public:
-    template <bool fine_grained_shuffle, bool need_wait>
+    template <bool need_wait>
     std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id);
 
     template <bool is_force>

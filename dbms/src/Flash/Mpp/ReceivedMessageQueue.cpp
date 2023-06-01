@@ -44,12 +44,12 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
 }
 } // namespace
 
-template <bool fine_grained_shuffle, bool need_wait>
+template <bool need_wait>
 std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
 {
     MPMCQueueResult res;
     ReceivedMessagePtr recv_msg;
-    if constexpr (fine_grained_shuffle)
+    if (fine_grained_channel_size > 0)
     {
         if constexpr (need_wait)
         {
@@ -118,6 +118,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
 {
     if (enable_fine_grained)
     {
+        assert(fine_grained_channel_size > 0);
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
             msg_channels_for_fine_grained_shuffle.push_back(std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(std::numeric_limits<size_t>::max()));
@@ -139,10 +140,8 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }
 
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, true>(size_t stream_id);
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true, false>(size_t stream_id);
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, true>(size_t stream_id);
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false, false>(size_t stream_id);
+template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true>(size_t stream_id);
+template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false>(size_t stream_id);
 template bool ReceivedMessageQueue::pushToMessageChannel<true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 template bool ReceivedMessageQueue::pushToMessageChannel<false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 

@@ -65,14 +65,14 @@ enum class AsyncRequestStagev1
 using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
-template <typename RPCContext, bool enable_fine_grained_shuffle>
+template <typename RPCContext>
 class AsyncRequestHandlerv1 : public UnaryCallback<bool>
 {
 public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
-    using Self = AsyncRequestHandlerv1<RPCContext, enable_fine_grained_shuffle>;
+    using Self = AsyncRequestHandlerv1<RPCContext>;
 
     AsyncRequestHandlerv1(
         MPMCQueue<Self *> * queue,
@@ -269,7 +269,7 @@ private:
             for (size_t i = 0; i < read_packet_index; ++i)
             {
                 auto & packet = packets[i];
-                if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
+                if (!channel_writer.write<false>(request->source_index, packet))
                 {
                     return {false, "channel write fails"};
                 }
@@ -515,10 +515,7 @@ void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request>
         {
             auto async_conn_num = async_requests.size();
             thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] {
-                if (enable_fine_grained_shuffle_flag)
-                    reactor<true>(async_requests);
-                else
-                    reactor<false>(async_requests);
+                reactor(async_requests);
             });
 
             ++thread_count;
@@ -592,10 +589,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && req)
 {
     thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-        if (enable_fine_grained_shuffle_flag)
-            readLoop<true>(req);
-        else
-            readLoop<false>(req);
+        readLoop(req);
     });
 
     ++thread_count;
@@ -604,10 +598,9 @@ void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && re
 
 
 template <typename RPCContext>
-template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
-    using AsyncHandler = AsyncRequestHandlerv1<RPCContext, enable_fine_grained_shuffle>;
+    using AsyncHandler = AsyncRequestHandlerv1<RPCContext>;
 
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
     SCOPE_EXIT({
@@ -647,7 +640,6 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
 
 
 template <typename RPCContext>
-template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
@@ -689,7 +681,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!channel_writer.write<enable_fine_grained_shuffle>(req.source_index, packet))
+                if (!channel_writer.write<false>(req.source_index, packet))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
@@ -829,10 +821,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
 {
     assert(received_message_queue != nullptr);
     verifyStreamId(stream_id);
-    if (enable_fine_grained_shuffle_flag)
-        return toReceiveResult(received_message_queue->pop<true, true>(stream_id));
-    else
-        return toReceiveResult(received_message_queue->pop<false, true>(stream_id));
+    return toReceiveResult(received_message_queue->pop<true>(stream_id));
 }
 
 template <typename RPCContext>
@@ -840,10 +829,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
 {
     assert(received_message_queue != nullptr);
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
-    if (enable_fine_grained_shuffle_flag)
-        return toReceiveResult(received_message_queue->pop<true, false>(stream_id));
-    else
-        return toReceiveResult(received_message_queue->pop<false, false>(stream_id));
+    return toReceiveResult(received_message_queue->pop<false>(stream_id));
 }
 
 template <typename RPCContext>
