@@ -90,7 +90,7 @@ Block MergeSortingBlockInputStream::readImpl()
               */
             if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
             {
-                if (!spiller->hasSpilledData())
+                if (!hasSpilledData())
                 {
                     LOG_INFO(log, "Begin spill in sort");
                 }
@@ -106,10 +106,10 @@ Block MergeSortingBlockInputStream::readImpl()
             }
         }
 
-        if (isCancelledOrThrowIfKilled() || (blocks.empty() && !spiller->hasSpilledData()))
+        if (isCancelledOrThrowIfKilled() || (blocks.empty() && !hasSpilledData()))
             return Block();
 
-        if (!spiller->hasSpilledData())
+        if (!hasSpilledData())
         {
             impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
         }
