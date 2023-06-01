@@ -128,8 +128,7 @@ FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_
 std::vector<StoreID> getCandidateStoreIDsForRegion(TMTContext & tmt_context, UInt64 region_id, UInt64 current_store_id)
 {
     auto pd_client = tmt_context.getPDClient();
-    auto resp = pd_client->getRegionByID(region_id);
-    const auto & region = resp.region();
+    auto [region, _] = pd_client->getRegionByID(region_id);
     std::vector<StoreID> store_ids;
     store_ids.reserve(region.peers_size());
     for (const auto & peer : region.peers())
