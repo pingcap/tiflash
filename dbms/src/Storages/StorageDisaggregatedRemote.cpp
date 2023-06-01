@@ -45,6 +45,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
+#include <Storages/StorageDisaggregatedHelpers.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -60,28 +61,7 @@
 
 #include <atomic>
 #include <numeric>
-
-namespace pingcap::kv
-{
-// The rpc trait
-template <>
-struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
-{
-    using RequestType = disaggregated::EstablishDisaggTaskRequest;
-    using ResultType = disaggregated::EstablishDisaggTaskResponse;
-
-    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
-
-    static ::grpc::Status doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        ResultType * res)
-    {
-        return client->stub->EstablishDisaggTask(context, req, res);
-    }
-};
-} // namespace pingcap::kv
+#include <unordered_set>
 
 namespace DB
 {
@@ -251,34 +231,7 @@ void StorageDisaggregated::buildDisaggTask(
                 batch_cop_task.store_addr,
                 retry_regions);
 
-            auto retry_from_region_infos = [&retry_regions, &cluster](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
-                for (const auto & region : region_infos)
-                {
-                    if (retry_regions.contains(region.region_id()))
-                    {
-                        auto region_ver_id = pingcap::kv::RegionVerID(
-                            region.region_id(),
-                            region.region_epoch().conf_ver(),
-                            region.region_epoch().version());
-                        cluster->region_cache->dropRegion(region_ver_id);
-                        retry_regions.erase(region.region_id());
-                        if (retry_regions.empty())
-                            break;
-                    }
-                }
-            };
-
-            // non-partition table
-            retry_from_region_infos(req->regions());
-            // partition table
-            for (const auto & table_region : req->table_regions())
-            {
-                if (retry_regions.empty())
-                    break;
-                retry_from_region_infos(table_region.regions());
-            }
-
-            RUNTIME_CHECK_MSG(retry_regions.empty(), "Failed to drop regions {} from the cache", retry_regions);
+            dropRegionCache(cluster->region_cache, req, std::move(retry_regions));
 
             throw Exception(
                 error.msg(),
@@ -447,6 +400,8 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         filter_conditions.conditions,
         table_scan.getPushedDownFilters(),
         table_scan.getColumns(),
+        std::vector<int>{},
+        0,
         db_context.getTimezoneInfo());
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(

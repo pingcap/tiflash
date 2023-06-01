@@ -1040,6 +1040,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t num_streams,
                                         UInt64 max_version,
                                         const PushDownFilterPtr & filter,
+                                        const RuntimeFilteList & runtime_filter_list,
+                                        const int rf_max_wait_time_ms,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
@@ -1100,7 +1102,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 read_task_pool,
                 filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
-                log_tracing_id);
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms);
         }
         else
         {
@@ -1692,7 +1696,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1711,7 +1715,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal()
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 

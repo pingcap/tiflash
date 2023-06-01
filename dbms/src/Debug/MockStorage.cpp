@@ -50,6 +50,11 @@ void MockStorage::addTableScanConcurrencyHint(const String & name, size_t concur
     table_scan_concurrency_hint[getTableId(name)] = concurrency_hint;
 }
 
+void MockStorage::addDeltaMergeTableConcurrencyHint(const String & name, size_t concurrency_hint)
+{
+    delta_merge_table_id_to_concurrency_hint[getTableIdForDeltaMerge(name)] = concurrency_hint;
+}
+
 Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
@@ -78,6 +83,15 @@ size_t MockStorage::getScanConcurrencyHint(Int64 table_id)
     if (tableExists(table_id))
     {
         return table_scan_concurrency_hint[table_id];
+    }
+    return 0;
+}
+
+size_t MockStorage::getDelatMergeTableConcurrencyHint(Int64 table_id)
+{
+    if (tableExistsForDeltaMerge(table_id))
+    {
+        return delta_merge_table_id_to_concurrency_hint[table_id];
     }
     return 0;
 }
@@ -162,7 +176,7 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     return {storage, column_names, query_info};
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order, std::vector<int> runtime_filter_ids, int rf_max_wait_time_ms)
 {
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
@@ -174,6 +188,8 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
             filter_conditions->conditions,
             pushed_down_filters, // Not care now
             mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
             context.getTimezoneInfo());
         auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
@@ -187,6 +203,14 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
     else
     {
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1);
         BlockInputStreamPtr in = ins[0];
         return in;

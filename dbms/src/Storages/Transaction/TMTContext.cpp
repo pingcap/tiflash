@@ -402,6 +402,10 @@ UInt64 TMTContext::waitIndexTimeout() const
 {
     return wait_index_timeout_ms.load(std::memory_order_relaxed);
 }
+void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
+{
+    return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
+}
 Int64 TMTContext::waitRegionReadyTimeout() const
 {
     return wait_region_ready_timeout_sec.load(std::memory_order_relaxed);
