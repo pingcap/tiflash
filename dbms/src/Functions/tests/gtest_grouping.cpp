@@ -26,8 +26,8 @@ namespace tests
 struct MetaData
 {
     tipb::GroupingMode mode{};
-    UInt64 grouping_id{};
-    std::set<UInt64> grouping_ids;
+    std::vector<UInt64> grouping_id;
+    std::vector<std::set<UInt64>> grouping_ids;
 };
 
 FuncMetaData buildFuncMetaData(const MetaData & meta_data)
@@ -37,12 +37,22 @@ FuncMetaData buildFuncMetaData(const MetaData & meta_data)
     grouping_meta.set_mode(meta_data.mode);
     if (meta_data.mode == tipb::GroupingMode::ModeBitAnd || meta_data.mode == tipb::GroupingMode::ModeNumericCmp)
     {
-        grouping_meta.add_grouping_marks(meta_data.grouping_id);
+        for (auto one_id : meta_data.grouping_id)
+        {
+            tipb::GroupingMark * grouping_mark = grouping_meta.add_grouping_marks();
+            grouping_mark->add_grouping_nums(one_id);
+        }
     }
     else
     {
-        for (auto grouping_id : meta_data.grouping_ids)
-            grouping_meta.add_grouping_marks(grouping_id);
+        for (const auto & one_grouping_mark : meta_data.grouping_ids)
+        {
+            tipb::GroupingMark * grouping_mark = grouping_meta.add_grouping_marks();
+            for (auto one_num : one_grouping_mark)
+            {
+                grouping_mark->add_grouping_nums(one_num);
+            }
+        }
     }
 
     func_meta.val = grouping_meta.SerializeAsString();
@@ -59,7 +69,6 @@ TEST_F(TestGrouping, ModeBitAnd)
 try
 {
     MetaData meta_data;
-    FuncMetaData func_meta;
     meta_data.mode = tipb::GroupingMode::ModeBitAnd;
 
     // const
@@ -71,10 +80,10 @@ try
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt8>(1, expect[i]),
+                createConstColumn<UInt64>(1, expect[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -95,10 +104,10 @@ try
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<UInt8>(expects[i]),
+                createColumn<UInt64>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
@@ -119,10 +128,10 @@ try
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<UInt8>>(expects[i]),
+                createColumn<Nullable<UInt64>>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
@@ -148,10 +157,10 @@ try
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt8>(1, expect[i]),
+                createConstColumn<UInt64>(1, expect[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -175,10 +184,10 @@ try
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<UInt8>(expects[i]),
+                createColumn<UInt64>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
@@ -202,10 +211,10 @@ try
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_id = meta_grouping_id[i];
+            meta_data.grouping_id = std::vector<UInt64>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<UInt8>>(expects[i]),
+                createColumn<Nullable<UInt64>>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
@@ -226,15 +235,15 @@ try
     {
         std::vector<UInt64> grouping_id{2, 2, 2, 2};
         std::vector<std::set<UInt64>> meta_grouping_ids{{0, 2}, {2}, {3}, {1, 3}};
-        std::vector<UInt64> expect{0, 0, 1, 1};
+        std::vector<UInt64> expect{1, 1, 0, 0};
 
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
-            meta_data.grouping_ids = meta_grouping_ids[i];
+            meta_data.grouping_ids = std::vector<std::set<UInt64>>{meta_grouping_ids[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt8>(1, expect[i]),
+                createConstColumn<UInt64>(1, expect[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -248,17 +257,17 @@ try
         std::vector<UInt64> grouping_id{1, 2, 3, 4};
         std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
         std::vector<std::vector<UInt64>> expects{
-            {1, 0, 1, 1},
-            {1, 1, 0, 1},
-            {1, 0, 0, 1},
-            {0, 1, 0, 1}};
+            {0, 1, 0, 0},
+            {0, 0, 1, 0},
+            {0, 1, 1, 0},
+            {1, 0, 1, 0}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_ids = meta_grouping_id[i];
+            meta_data.grouping_ids = std::vector<std::set<UInt64>>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<UInt8>(expects[i]),
+                createColumn<UInt64>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
@@ -272,17 +281,17 @@ try
         std::vector<std::optional<UInt64>> grouping_id{1, 2, 3, 4, {}};
         std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
         std::vector<std::vector<std::optional<UInt64>>> expects{
-            {1, 0, 1, 1, {}},
-            {1, 1, 0, 1, {}},
-            {1, 0, 0, 1, {}},
-            {0, 1, 0, 1, {}}};
+            {0, 1, 0, 0, {}},
+            {0, 0, 1, 0, {}},
+            {0, 1, 1, 0, {}},
+            {1, 0, 1, 0, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
-            meta_data.grouping_ids = meta_grouping_id[i];
+            meta_data.grouping_ids = std::vector<std::set<UInt64>>{meta_grouping_id[i]};
             FuncMetaData func_meta = buildFuncMetaData(meta_data);
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<UInt8>>(expects[i]),
+                createColumn<Nullable<UInt64>>(expects[i]),
                 executeFunctionWithMetaData(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
