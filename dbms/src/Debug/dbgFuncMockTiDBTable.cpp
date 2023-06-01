@@ -288,7 +288,7 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     auto & region_table = context.getTMTContext().getRegionTable();
     {
         {
-            auto manage_lock = kvstore->genRegionReadLock();
+            auto manage_lock = kvstore->genRegionMgrReadLock();
             for (const auto & e : manage_lock.regions)
                 regions.emplace_back(e.first);
         }

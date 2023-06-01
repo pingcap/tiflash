@@ -49,7 +49,7 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
 
 RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.readDataByWriteIt(write_it, need_value);
+    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex());
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
