@@ -110,6 +110,7 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
+    /// Return the 'ingtested bytes'.
     UInt64 ingestFiles(
         const DM::RowKeyRange & range,
         const std::vector<DM::ExternalDTFileInfo> & external_files,
