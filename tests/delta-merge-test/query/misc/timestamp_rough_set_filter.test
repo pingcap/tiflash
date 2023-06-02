@@ -15,18 +15,14 @@
 # Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
 # Preparation.
 # Use 'mpp_query:true' to make the logging contains tso prefix
-=> DBGInvoke __reset_schemas()
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> DBGInvoke __drop_tidb_db(default)
-=> drop table if exists default.test
-=> drop database if exists default
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
-=> DBGInvoke __mock_tidb_db(default)
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64, col_2 default \'asTiDBType|timestamp(5)\'')
 => DBGInvoke __refresh_table_schema2(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
@@ -39,8 +35,8 @@
 
 => DBGInvoke __try_flush_region(4)
 
-=> manage table default.test flush
-=> manage table default.test merge delta
+>> DBGInvoke query_mapped('manage table \$d.\$t flush', default, test)
+>> DBGInvoke query_mapped('manage table \$d.\$t merge delta', default, test)
 => select tidb_database, tidb_table, delta_rate_rows, total_stable_rows from system.dt_tables where tidb_database='default' and tidb_table='test' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_table─┬─delta_rate_rows─┬─total_stable_rows─┐
 │ default       │ test       │               0 │                 6 │

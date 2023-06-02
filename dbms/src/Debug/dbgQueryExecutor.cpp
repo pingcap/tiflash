@@ -175,10 +175,14 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, Debug::LOCAL_HOST);
         auto table_id = task.table_id;
+        LOG_INFO(Logger::get("hyy"), " executeMPPQuery table id is {}", table_id);
         if (table_id != -1)
         {
             /// contains a table scan
             const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
+            if (table_info == nullptr){
+                LOG_INFO(Logger::get("hyy"), " executeMPPQuery table_info is nullptr");
+            }
             if (table_info->is_partition_table)
             {
                 size_t current_region_size = 0;

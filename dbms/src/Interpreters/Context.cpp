@@ -493,6 +493,11 @@ static String resolveDatabase(const String & database_name, const String & curre
 DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
+
+    for (const auto & db_pair: shared->databases){
+        LOG_INFO(Logger::get("hyy"), "db name is {}",db_pair.first);
+}
+
     String db = resolveDatabase(database_name, current_database);
     assertDatabaseExists(db);
     return shared->databases[db];
@@ -1022,6 +1027,7 @@ void Context::addDatabase(const String & database_name, const DatabasePtr & data
 {
     auto lock = getLock();
 
+    LOG_INFO(Logger::get("hyy"), "into addDatabase with database_name {}", database_name);
     assertDatabaseDoesntExist(database_name);
     shared->databases[database_name] = database;
 }
@@ -1030,7 +1036,7 @@ void Context::addDatabase(const String & database_name, const DatabasePtr & data
 DatabasePtr Context::detachDatabase(const String & database_name)
 {
     auto lock = getLock();
-
+    LOG_INFO(Logger::get("hyy"), "into detachDatabase with database_name {}", database_name);
     auto res = getDatabase(database_name);
     shared->databases.erase(database_name);
     return res;

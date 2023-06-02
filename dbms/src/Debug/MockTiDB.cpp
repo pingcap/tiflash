@@ -275,6 +275,8 @@ TableID MockTiDB::newTable(
     auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
+    table_info->replica_info = TiDB::TiFlashReplicaInfo();
+    table_info->replica_info.count = 1;
     return addTable(database_name, std::move(*table_info));
 }
 
@@ -304,6 +306,8 @@ int MockTiDB::newTables(
         auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
         table_info.id = table_id_allocator++;
         table_info.update_timestamp = tso;
+        table_info.replica_info = TiDB::TiFlashReplicaInfo();
+        table_info.replica_info.count = 1;
 
         auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
         tables_by_id.emplace(table->table_info.id, table);
@@ -323,12 +327,26 @@ int MockTiDB::newTables(
     diff.schema_id = diff.affected_opts[0].schema_id;
     diff.version = version;
     version_diff[version] = diff;
+
+
+    for (auto & opt : diff.affected_opts){
+        version++;
+        SchemaDiff diff_set_tiflash_replica;
+        diff_set_tiflash_replica.type = SchemaActionType::SetTiFlashReplica;
+        diff_set_tiflash_replica.schema_id = opt.schema_id;
+        diff_set_tiflash_replica.table_id = opt.table_id;
+        diff_set_tiflash_replica.version = version;
+        version_diff[version] = diff_set_tiflash_replica;
+    }
+    
+
     return 0;
 }
 
 TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
 {
     auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+    LOG_INFO(Logger::get("hyy"), "add table with table id is {}", table->table_info.id);
     String qualified_name = database_name + "." + table->table_info.name;
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
@@ -340,6 +358,15 @@ TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && tabl
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
+
+
+    version++;
+    SchemaDiff diff_set_tiflash_replica;
+    diff_set_tiflash_replica.type = SchemaActionType::SetTiFlashReplica;
+    diff_set_tiflash_replica.schema_id = table->database_id;
+    diff_set_tiflash_replica.table_id = table->id();
+    diff_set_tiflash_replica.version = version;
+    version_diff[version] = diff_set_tiflash_replica;
 
     return table->table_info.id;
 }
@@ -645,6 +672,12 @@ TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const St
 {
     String qualified_name = database_name + "." + table_name;
     auto it = tables_by_name.find(qualified_name);
+
+    for (const auto & table_pair: tables_by_name){
+        LOG_INFO(Logger::get("hyy"), " in getTableByNameInternal table_pair.first is {}, table_pair.second's table_id is {}, and the target database_name is {}, table_name is {}", table_pair.first, table_pair.second->id(), database_name, table_name);
+    }
+    
+
     if (it == tables_by_name.end())
     {
         throw Exception("Mock TiDB table " + qualified_name + " does not exists", ErrorCodes::UNKNOWN_TABLE);

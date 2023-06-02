@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
+#include "Debug/dbgTools.h"
 
 namespace DB
 {
@@ -304,7 +305,8 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     if (args.size() < 2)
         throw Exception("Args not matched, should be: db_name, table_name, [table_name], ..., [table_name]", ErrorCodes::BAD_ARGUMENTS);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    auto db = context.getDatabase(database_name);
+    auto mapped_database_name = mappedDatabase(context, database_name);
+    auto db = context.getDatabase(mapped_database_name);
 
     std::vector<std::tuple<String, ColumnsDescription, String>> tables;
 

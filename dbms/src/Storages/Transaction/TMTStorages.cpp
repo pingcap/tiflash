@@ -80,7 +80,7 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
     std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     // std::cout << " into ManagedStorages::getByName " << std::endl;
     for (const auto & storage: storages) {
-        LOG_INFO(Logger::get("hyy"), "storage: db and table name {}.{} ", storage.second->getDatabaseName(),storage.second->getTableInfo().name);
+        LOG_INFO(Logger::get("hyy"), "storage: db and table name {}.{} with table_id is {} ", storage.second->getDatabaseName(),storage.second->getTableInfo().name, storage.second->getTableInfo().id);
     }
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {

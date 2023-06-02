@@ -386,7 +386,7 @@ struct TableInfo
     /// the index infos because most of the index info is useless in TiFlash.
     /// If is_common_handle = true, the primary index info is stored
     /// otherwise, all of the index info are ignored
-    std::vector<IndexInfo> index_infos; // 这个有用么？没用就删了
+    std::vector<IndexInfo> index_infos;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
     /// when is_common_handle = true, it means this table is a clustered index table
@@ -418,6 +418,8 @@ struct TableInfo
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 
+    // TODO:但是现在开始我们会更新 indexInfo 哎
+    
     /// should not be called if is_common_handle = false.
     /// when use IndexInfo, please avoid to use the offset info
     /// the offset value may be wrong in some cases,

@@ -234,7 +234,13 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
                 
             for (const auto & part_def : table_info->partition.definitions)
             {
-                partition_id_to_logical_id.emplace(part_def.id, diff.table_id);
+                //partition_id_to_logical_id.emplace(part_def.id, diff.table_id);
+                if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end()) {
+                    LOG_ERROR(log, "partition_id_to_logical_id {} already exists", part_def.id);
+                    partition_id_to_logical_id[part_def.id] = diff.table_id;
+                } else {
+                    partition_id_to_logical_id.emplace(part_def.id, diff.table_id);
+                }
             }
         }
 
@@ -434,7 +440,13 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
                     
                     for (const auto & part_def : table_info->partition.definitions)
                     {
-                        partition_id_to_logical_id.emplace(part_def.id, table_id);
+                        //partition_id_to_logical_id.emplace(part_def.id, table_id);
+                        if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end()) {
+                            LOG_ERROR(log, "partition_id_to_logical_id {} already exists", part_def.id);
+                            partition_id_to_logical_id[part_def.id] = table_id;
+                        } else {
+                            partition_id_to_logical_id.emplace(part_def.id, table_id);
+                        }
                     }
                 }
             }
@@ -1110,7 +1122,13 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             {
                 for (const auto & part_def : table->partition.definitions)
                 {
-                    partition_id_to_logical_id.emplace(part_def.id, table->id);
+                    //partition_id_to_logical_id.emplace(part_def.id, table->id);
+                    if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end()) {
+                        LOG_ERROR(log, "partition_id_to_logical_id {} already exists", part_def.id);
+                        partition_id_to_logical_id[part_def.id] = table->id;
+                    } else {
+                        partition_id_to_logical_id.emplace(part_def.id, table->id);
+                    }
                 }
             }
         }
@@ -1163,16 +1181,17 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
             return;
         }
 
+        // empty_input_for_udaf.test 这个测试
         applyCreatePhysicalTable(db_info, table_info);
-        //也要更新两个 map
-        shared_mutex_for_table_id_map.lock();
-        if (table_id_to_database_id.find(table_id) == table_id_to_database_id.end()){
-            table_id_to_database_id.emplace(table_id, database_id);
-        }
-        if (table_id != partition_table_id and partition_id_to_logical_id.find(table_id) == partition_id_to_logical_id.end()) {
-            partition_id_to_logical_id.emplace(partition_table_id, table_id);
-        }
-        shared_mutex_for_table_id_map.unlock();
+        // applyTable 入口前 check 过 map，所以肯定是 map里面有对应映射，所以不需要加
+        // shared_mutex_for_table_id_map.lock();
+        // if (table_id_to_database_id.find(table_id) == table_id_to_database_id.end()){
+        //     table_id_to_database_id.emplace(table_id, database_id);
+        // }
+        // if (table_id != partition_table_id and partition_id_to_logical_id.find(table_id) == partition_id_to_logical_id.end()) {
+        //     partition_id_to_logical_id.emplace(partition_table_id, table_id);
+        // }
+        // shared_mutex_for_table_id_map.unlock();
     } else {
         // 触发了 syncTableSchema 肯定是 tableInfo 不同了，但是应该还要检查一下
         LOG_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));

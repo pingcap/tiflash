@@ -126,6 +126,10 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
 template <bool mock_getter, bool mock_mapper>
 std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID table_id_){
     std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+
+    for (auto & pair: partition_id_to_logical_id) {
+        LOG_INFO(Logger::get("hyy"), "findDatabaseIDAndTableID partition_id_to_logical_id pair:{}.{}", pair.first, pair.second);
+    }
     auto database_iter = table_id_to_database_id.find(table_id_);
     DatabaseID database_id;
     TableID table_id = table_id_;
@@ -176,6 +180,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     }
     // 2. 获取 tableInfo
     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
+    // 如果不是分区表，table_id 和 table_id_ 是一样的，是分区的话，table_id 是 table_id_表的逻辑表
     builder.applyTable(database_id, table_id, table_id_);
 
     return true;

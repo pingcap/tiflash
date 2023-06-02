@@ -61,7 +61,17 @@ func> wait_table test t
 # test replica for add partition tables after set replica
 mysql> alter table test.t add partition (partition p2 values less than (2010));
 mysql> insert into test.t values (50);
->> DBGInvoke __refresh_schemas()
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++----+
+| x  |
++----+
+|  1 |
++----+
+|  8 |
++----+
+| 50 |
++----+
 
 >> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t")
 ┌─get_partition_tables_tiflash_replica_count(test, t)─┐

@@ -32,7 +32,7 @@
 #include <ext/singleton.h>
 #include <ostream>
 #include "Storages/Transaction/Types.h"
-#include "Debug/dbgFuncSchemaName.h"
+#include "Debug/dbgTools.h"
 
 namespace DB
 {
@@ -89,8 +89,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 
 
 using QualifiedName = std::pair<String, String>;
-std::optional<String> mappedDatabase(Context & context, const String & database_name);
-std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name);
+//std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name);
 void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2)
@@ -100,11 +99,11 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto mapped_db = mappedDatabase(context, database_name);
-    if (mapped_db == std::nullopt){
-        return;
-    }
+    // if (mapped_db == std::nullopt){
+    //     return;
+    // }
     TMTContext & tmt = context.getTMTContext();
-    auto storage = tmt.getStorages().getByName(mapped_db.value(), table_name, false);
+    auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
     if (storage == nullptr) {
         return;
     }   
@@ -211,7 +210,8 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     FmtBuffer fmt_buf;
     if (args.size() == 1)
     {
-        auto db = context.getDatabase(database_name);
+        auto mapped_database_name = mappedDatabase(context, database_name);
+        auto db = context.getDatabase(mapped_database_name);
         auto tiflash_db = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
         if (!tiflash_db)
             throw Exception(database_name + " is not DatabaseTiFlash", ErrorCodes::BAD_ARGUMENTS);
@@ -221,7 +221,11 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     else if (args.size() == 2)
     {
         const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-        auto storage = context.getTable(database_name, table_name);
+        auto mapped_table_name = mappedTable(context, database_name, table_name, true).second;
+        LOG_INFO(Logger::get("hyy"), "dbgFuncIsTombstone mapped_table_name is {} with table_name is {}", mapped_table_name, table_name);
+        auto mapped_database_name = mappedDatabase(context, database_name);
+        LOG_INFO(Logger::get("hyy"), "dbgFuncIsTombstone mapped_database_name is {}", mapped_database_name);
+        auto storage = context.getTable(mapped_database_name, mapped_table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         if (!managed_storage)
             throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);

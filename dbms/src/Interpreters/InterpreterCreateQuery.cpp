@@ -58,6 +58,7 @@ extern const int TABLE_METADATA_ALREADY_EXISTS;
 extern const int UNKNOWN_DATABASE_ENGINE;
 extern const int DUPLICATE_COLUMN;
 extern const int READONLY;
+extern const int DDL_GUARD_IS_ACTIVE;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -466,6 +467,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     String database_name = create.database.empty() ? current_database : create.database;
     String table_name = create.table;
+    LOG_INFO(Logger::get("hyy"), "createTable with table_name is {}", table_name);
     String table_name_escaped = escapeForFileName(table_name);
 
     // If this is a stub ATTACH query, read the query definition from the database
@@ -523,18 +525,43 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
               * Otherwise, concurrent queries for creating a table, if the table does not exist,
               *  can throw an exception, even if IF NOT EXISTS is specified.
               */
-            guard = context.getDDLGuardIfTableDoesntExist(
-                database_name,
-                table_name,
-                "Table " + database_name + "." + table_name + " is creating or attaching right now");
+            try {
+                guard = context.getDDLGuardIfTableDoesntExist(
+                    database_name,
+                    table_name,
+                    "Table " + database_name + "." + table_name + " is creating or attaching right now");
 
-            if (!guard)
-            {
-                if (create.if_not_exists)
-                    return {};
-                else
-                    throw Exception("Table " + database_name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+                if (!guard)
+                {
+                    if (create.if_not_exists)
+                        return {};
+                    else
+                        throw Exception("Table " + database_name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+                }
+            } catch(Exception & e){
+                // TODO:这怎么搞啊救命，搞个小点的值while
+                if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE){
+                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "InterpreterCreateQuery::createTable failed, with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
+                    // 但是直接退出的话，万一用的时候还没有完全创建完成怎么办
+                    for (int i = 0; i < 20; i++) {// retry for 1 mins
+                        while (!context.isTableExist(database_name, table_name)){
+                            const int wait_seconds = 3;
+                            LOG_ERROR(
+                                Logger::get("InterpreterCreateQuery"),
+                                "InterpreterCreateQuery::createTable failed but table not exist now, \nWe will sleep for {}"
+                                " seconds and try again.",
+                                wait_seconds);
+                            ::sleep(wait_seconds);
+                        }
+                        return {};
+                    }      
+                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for 20 retry times");
+                    e.rethrow();
+                } else {
+                    e.rethrow();
+                }
             }
+            
         }
         else if (context.tryGetExternalTable(table_name) && create.if_not_exists)
             return {};

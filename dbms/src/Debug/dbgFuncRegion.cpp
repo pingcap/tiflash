@@ -49,7 +49,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         = has_partition_id ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value)) : "";
     size_t offset = has_partition_id ? 1 : 0;
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 2 - offset]).name;
+    //auto mapped_database_name = mappedDatabase(context, database_name);
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 1 - offset]).name;
+    //auto mapped_table_name = mappedTable(context, database_name, table_name).second;
     TableID table_id = RegionBench::getTableID(context, database_name, table_name, partition_id);
     const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
@@ -183,6 +185,7 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
 void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    //auto mapped_database_name = mappedDatabase(context, database_name);
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto table = MockTiDB::instance().getTableByName(database_name, table_name);

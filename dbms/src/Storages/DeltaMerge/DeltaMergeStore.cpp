@@ -1654,6 +1654,7 @@ void DeltaMergeStore::applyAlters(
             {
                 /// TiDB only saves column name(not column id) in index info, so have to update primary
                 /// index info when rename column
+                // TODO:更新这个没必要吧？tidbInfo 本身就更新了呀
                 auto & index_info = table_info.getPrimaryIndexInfo();
                 for (auto & col : index_info.idx_cols)
                 {

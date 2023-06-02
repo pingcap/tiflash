@@ -123,7 +123,7 @@ public:
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
         for (auto & database : databases) {
-            LOG_INFO(log, "database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
+            LOG_INFO(log, "getDBInfoByName hyy database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
         }
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });

@@ -123,6 +123,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("mapped_table_exists", dbgFuncTableExists);
     regSchemalessFunc("mapped_database_exists", dbgFuncDatabaseExists);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
+    regSchemafulFunc("query_quota_mapped", dbgFuncQueryQuotaMapped);
     regSchemalessFunc("get_tiflash_replica_count", dbgFuncGetTiflashReplicaCount);
     regSchemalessFunc("get_partition_tables_tiflash_replica_count", dbgFuncGetPartitionTablesTiflashReplicaCount);
 

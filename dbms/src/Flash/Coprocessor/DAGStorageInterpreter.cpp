@@ -487,6 +487,7 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
             LOG_ERROR(Logger::get("hyy"), "column id {} not found", column.id);
             return false;
         }
+        // TODO:这边要加一个 name 的比较么？
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName()) {
             LOG_ERROR(Logger::get("hyy"), "column {}'s data type {} not match {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
             return false;

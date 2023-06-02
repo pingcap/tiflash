@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Preparation.
-=> DBGInvoke __reset_schemas()
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test_uint)
