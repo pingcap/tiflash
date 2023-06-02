@@ -143,7 +143,7 @@ std::pair<UInt64, bool> getTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_stor
 {
     auto struct_lock = dm_storage->lockStructureForShare(getThreadNameAndID());
     const auto & replica_info = dm_storage->getTableInfo().replica_info;
-    auto is_syncing = replica_info.count > 0 && replica_info.available && !(*replica_info.available);
+    auto is_syncing = replica_info.count > 0 && replica_info.available.has_value() && !(*replica_info.available);
     return {replica_info.count, is_syncing};
 }
 
