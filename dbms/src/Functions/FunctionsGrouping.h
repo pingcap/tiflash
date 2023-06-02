@@ -71,15 +71,11 @@ public:
         {
             for (const auto & one_grouping_mark : meta.grouping_marks())
             {
-                int grouping_num_size = one_grouping_mark.grouping_nums_size();
-                assert(grouping_num_size == 1);
+                assert(one_grouping_mark.grouping_nums_size() == 1);
                 if (mode == tipb::GroupingMode::ModeBitAnd)
-                {
-                    uint64_t first = one_grouping_mark.grouping_nums(0);
-                    assert(isPowerOf2(first));
-                }
+                    assert(isPowerOf2(one_grouping_mark.grouping_nums()[0]));
                 // should store the meta_grouping_id
-                meta_grouping_ids.emplace_back(one_grouping_mark.grouping_nums(0));
+                meta_grouping_ids.emplace_back(one_grouping_mark.grouping_nums()[0]);
             }
         }
         else
