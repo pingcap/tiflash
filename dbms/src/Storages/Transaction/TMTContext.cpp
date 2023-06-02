@@ -84,7 +84,7 @@ void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitor
         auto alive_time = iter.second.elapsedSeconds();
         if (alive_time > longest_live_time)
             longest_live_time = alive_time;
-        if (alive_time >= 1200)
+        if (alive_time >= 1500)
             log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
     }
 
