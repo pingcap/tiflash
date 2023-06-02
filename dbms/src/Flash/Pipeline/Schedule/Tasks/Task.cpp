@@ -128,6 +128,8 @@ void Task::finalize()
     is_finalized = true;
 
     finalizeImpl();
+
+    profile_info.reportMetrics();
 #ifndef NDEBUG
     LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 #endif // !NDEBUG

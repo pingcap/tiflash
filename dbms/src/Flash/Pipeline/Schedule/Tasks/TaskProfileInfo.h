@@ -66,60 +66,44 @@ public:
 
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_execute);
-#else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_execute);
-#endif
-        metrics.Observe(value / 1'000'000.0);
         cpu_execute_time_ns += value;
     }
 
     ALWAYS_INLINE void elapsedCPUPendingTime()
     {
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_queue);
-#else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_cpu_queue);
-#endif
-        auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000.0);
-        cpu_pending_time_ns += value;
+        cpu_pending_time_ns += elapsedFromPrev();
     }
 
     ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
     {
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_execute);
-#else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_execute);
-#endif
-        metrics.Observe(value / 1'000'000.0);
         io_execute_time_ns += value;
     }
 
     ALWAYS_INLINE void elapsedIOPendingTime()
     {
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_queue);
-#else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_io_queue);
-#endif
-        auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000.0);
-        io_pending_time_ns += value;
+        io_pending_time_ns += elapsedFromPrev();
     }
 
     ALWAYS_INLINE void elapsedAwaitTime()
     {
-#ifdef __APPLE__
-        auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_await);
-#else
-        thread_local auto & metrics = GET_METRIC(tiflash_pipeline_task_round_time_ms, type_await);
-#endif
-        auto value = elapsedFromPrev();
-        metrics.Observe(value / 1'000'000.0);
-        await_time_ns += value;
+        await_time_ns += elapsedFromPrev();
+    }
+
+    ALWAYS_INLINE void reportMetrics() const
+    {
+#define REPORT_METRICS(type, value_ns)                                                   \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)            \
+    {                                                                                    \
+        GET_METRIC(tiflash_pipeline_task_duration_seconds, type).Observe(value_seconds); \
+    }
+
+        REPORT_METRICS(type_cpu_execute, cpu_execute_time_ns);
+        REPORT_METRICS(type_cpu_queue, cpu_pending_time_ns);
+        REPORT_METRICS(type_io_execute, io_execute_time_ns);
+        REPORT_METRICS(type_io_queue, io_pending_time_ns);
+        REPORT_METRICS(type_await, await_time_ns);
+
+#undef REPORT_METRICS
     }
 
 private:
@@ -136,6 +120,23 @@ public:
         io_execute_time_ns += task_profile_info.getIOExecuteTimeNs();
         io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
         await_time_ns += task_profile_info.getAwaitTimeNs();
+    }
+
+    ALWAYS_INLINE void reportMetrics() const
+    {
+#define REPORT_METRICS(type, value_ns)                                                    \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)             \
+    {                                                                                     \
+        GET_METRIC(tiflash_pipeline_query_duration_seconds, type).Observe(value_seconds); \
+    }
+
+        REPORT_METRICS(type_cpu_execute, cpu_execute_time_ns);
+        REPORT_METRICS(type_cpu_queue, cpu_pending_time_ns);
+        REPORT_METRICS(type_io_execute, io_execute_time_ns);
+        REPORT_METRICS(type_io_queue, io_pending_time_ns);
+        REPORT_METRICS(type_await, await_time_ns);
+
+#undef REPORT_METRICS
     }
 };
 } // namespace DB
