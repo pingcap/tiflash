@@ -27,6 +27,9 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
 #define HANDLE_OP_STATUS(op, op_status, expect_status)                                                 \
     switch (op_status)                                                                                 \
     {                                                                                                  \
+    /* For the expected status, it will not return here, */                                            \
+    /* but instead return control to the macro caller, */                                              \
+    /* who will continue to call the next operator. */                                                 \
     case (expect_status):                                                                              \
         break;                                                                                         \
     /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
