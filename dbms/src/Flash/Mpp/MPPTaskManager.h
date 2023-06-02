@@ -54,6 +54,35 @@ struct MPPQueryTaskSet
     }
 };
 
+/// A simple thread unsafe FIFO cache
+struct CancelledMPPGatherCache
+{
+private:
+    std::deque<MPPGatherId> query_ids;
+    std::unordered_set<MPPGatherId, MPPGatherIdHash> query_id_set;
+    size_t capacity;
+
+public:
+    CancelledMPPGatherCache(size_t capacity_)
+        : capacity(capacity_)
+    {}
+    bool exists(const MPPGatherId & id)
+    {
+        return query_id_set.find(id) != query_id_set.end();
+    }
+    void put(const MPPGatherId & id)
+    {
+        if (query_id_set.size() >= capacity && query_id_set.find(id) == query_id_set.end())
+        {
+            auto evicted_id = query_ids.back();
+            query_ids.pop_back();
+            query_id_set.erase(evicted_id);
+        }
+        query_ids.push_front(id);
+        query_id_set.insert(id);
+    }
+};
+
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 /// a map from the mpp query id to mpp query task set, we use
@@ -112,6 +141,8 @@ class MPPTaskManager : private boost::noncopyable
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
+
+    CancelledMPPGatherCache cancelled_query_gather_cache;
 
     LoggerPtr log;
 

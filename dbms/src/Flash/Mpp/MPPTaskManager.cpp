@@ -36,6 +36,7 @@ extern const char pause_before_register_non_root_mpp_task[];
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
+    , cancelled_query_gather_cache(1000)
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
 {}
@@ -170,6 +171,7 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
         /// set a flag, so we can abort task one by
         /// one without holding the lock
         std::lock_guard lock(mu);
+        cancelled_query_gather_cache.put(MPPGatherId(0, query_id));
         auto it = mpp_query_map.find(query_id);
         if (it == mpp_query_map.end())
         {
@@ -237,6 +239,8 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         return {false, "task has been registered"};
     }
+    if (cancelled_query_gather_cache.exists(MPPGatherId(0, task->id.query_id)))
+        return {false, "query is being aborted"};
     MPPQueryTaskSetPtr query_set;
     if (it == mpp_query_map.end()) /// the first one
     {

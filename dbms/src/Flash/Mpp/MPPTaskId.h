@@ -55,6 +55,22 @@ struct MPPQueryIdHash
     size_t operator()(MPPQueryId const & mpp_query_id) const noexcept;
 };
 
+struct MPPGatherId
+{
+    UInt64 gather_id;
+    MPPQueryId query_id;
+    MPPGatherId(Int64 gather_id_, const MPPQueryId & query_id_)
+        : gather_id(gather_id_)
+        , query_id(query_id_)
+    {}
+    bool operator==(const MPPGatherId & rid) const;
+};
+
+struct MPPGatherIdHash
+{
+    size_t operator()(MPPGatherId const & mpp_gather_id) const noexcept;
+};
+
 // Identify a mpp task.
 struct MPPTaskId
 {
