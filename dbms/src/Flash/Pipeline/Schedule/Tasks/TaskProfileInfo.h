@@ -121,22 +121,5 @@ public:
         io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
         await_time_ns += task_profile_info.getAwaitTimeNs();
     }
-
-    ALWAYS_INLINE void reportMetrics() const
-    {
-#define REPORT_METRICS(type, value_ns)                                                    \
-    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)             \
-    {                                                                                     \
-        GET_METRIC(tiflash_pipeline_query_duration_seconds, type).Observe(value_seconds); \
-    }
-
-        REPORT_METRICS(type_cpu_execute, cpu_execute_time_ns);
-        REPORT_METRICS(type_cpu_queue, cpu_pending_time_ns);
-        REPORT_METRICS(type_io_execute, io_execute_time_ns);
-        REPORT_METRICS(type_io_queue, io_pending_time_ns);
-        REPORT_METRICS(type_await, await_time_ns);
-
-#undef REPORT_METRICS
-    }
 };
 } // namespace DB
