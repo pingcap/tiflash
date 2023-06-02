@@ -73,9 +73,9 @@ struct WindowTransformAction
 {
 private:
     // Used for calculating the frame start
-    RowNumber stepToFrameStart(const RowNumber & current_row, UInt64 n);
+    RowNumber stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
     // Used for calculating the frame end
-    std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, UInt64 n);
+    std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame);
 
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);

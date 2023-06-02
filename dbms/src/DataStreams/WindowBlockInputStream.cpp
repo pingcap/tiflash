@@ -273,56 +273,58 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-RowNumber WindowTransformAction::stepToFrameStart(const RowNumber & current_row, UInt64 n)
+RowNumber WindowTransformAction::stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame)
 {
+    auto step_num = frame.begin_offset;
     auto dist = distance(current_row, partition_start);
 
-    if (dist <= n)
+    if (dist <= step_num)
         return partition_start;
 
     RowNumber result_row = current_row;
 
     // The step happens only in a block
-    if (result_row.row >= n)
+    if (result_row.row >= step_num)
     {
-        result_row.row -= n;
+        result_row.row -= step_num;
         return result_row;
     }
 
     // The step happens between blocks
-    n -= (result_row.row + 1);
+    step_num -= (result_row.row + 1);
     --result_row.block;
     result_row.row = blockAt(result_row).rows - 1;
-    while (n > 0)
+    while (step_num > 0)
     {
         auto & block = blockAt(result_row);
-        if (block.rows > n)
+        if (block.rows > step_num)
         {
-            result_row.row = block.rows - n - 1; // index, so we need to -1
+            result_row.row = block.rows - step_num - 1; // index, so we need to -1
             break;
         }
-        n -= block.rows;
+        step_num -= block.rows;
         --result_row.block;
         result_row.row = blockAt(result_row).rows - 1;
     }
     return result_row;
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(const RowNumber & current_row, UInt64 n)
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame)
 {
+    auto step_num = frame.end_offset;
     if (!partition_ended)
         return std::make_tuple(RowNumber(), false);
 
     // Range of rows is [frame_start, frame_end),
     // and frame_end position is behind the position of the last frame row.
     // So we need to ++n.
-    ++n;
+    ++step_num;
 
     auto dist = distance(partition_end, current_row);
     RUNTIME_CHECK(dist >= 1);
 
     // Offset is too large and the partition_end is the longest position we can reach
-    if (dist <= n)
+    if (dist <= step_num)
         return std::make_tuple(partition_end, true);
 
     // Now, frame_end is impossible to reach to partition_end.
@@ -330,29 +332,29 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(const RowNumbe
     auto & block = blockAt(frame_end_row);
 
     // The step happens only in a block
-    if ((block.rows - frame_end_row.row - 1) >= n)
+    if ((block.rows - frame_end_row.row - 1) >= step_num)
     {
-        frame_end_row.row += n;
+        frame_end_row.row += step_num;
         return std::make_tuple(frame_end_row, true);
     }
 
     // The step happens between blocks
-    n -= block.rows - frame_end_row.row;
+    step_num -= block.rows - frame_end_row.row;
     ++frame_end_row.block;
     frame_end_row.row = 0;
-    while (n > 0)
+    while (step_num > 0)
     {
         auto block_rows = blockAt(frame_end_row).rows;
-        if (n >= block_rows)
+        if (step_num >= block_rows)
         {
             frame_end_row.row = 0;
             ++frame_end_row.block;
-            n -= block_rows;
+            step_num -= block_rows;
             continue;
         }
 
-        frame_end_row.row += n;
-        n = 0;
+        frame_end_row.row += step_num;
+        step_num = 0;
     }
 
     return std::make_tuple(frame_end_row, true);
@@ -402,7 +404,7 @@ void WindowTransformAction::advanceFrameStart()
     }
     case WindowFrame::BoundaryType::Offset:
         if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            frame_start = stepToFrameStart(current_row, window_description.frame.begin_offset);
+            frame_start = stepToFrameStart(current_row, window_description.frame);
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
@@ -508,7 +510,7 @@ void WindowTransformAction::advanceFrameEnd()
     case WindowFrame::BoundaryType::Offset:
     {
         if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            std::tie(frame_end, frame_ended) = stepToFrameEnd(current_row, window_description.frame.end_offset);
+            std::tie(frame_end, frame_ended) = stepToFrameEnd(current_row, window_description.frame);
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
