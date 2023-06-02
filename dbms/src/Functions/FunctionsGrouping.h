@@ -74,7 +74,7 @@ public:
                 assert(one_grouping_mark.grouping_nums_size() == 1);
                 if (mode == tipb::GroupingMode::ModeBitAnd)
                     assert(isPowerOf2(one_grouping_mark.grouping_nums()[0]));
-                // should store the meta_grouping_id
+                // should store the meta_grouping_id.
                 meta_grouping_ids.emplace_back(one_grouping_mark.grouping_nums()[0]);
             }
         }
