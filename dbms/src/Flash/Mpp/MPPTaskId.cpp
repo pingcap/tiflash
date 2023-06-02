@@ -88,13 +88,12 @@ size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcep
 
 bool MPPGatherId::operator==(const MPPGatherId & rid) const
 {
-    return query_id.query_ts == rid.query_id.query_ts && query_id.local_query_id == rid.query_id.local_query_id && query_id.server_id == rid.query_id.server_id
-        && query_id.start_ts == rid.query_id.start_ts && gather_id == rid.gather_id;
+    return gather_id == rid.gather_id && query_id == rid.query_id;
 }
+
 size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noexcept
 {
-    return std::hash<UInt64>()(mpp_gather_id.query_id.query_ts) ^ std::hash<UInt64>()(mpp_gather_id.query_id.local_query_id)
-        ^ std::hash<UInt64>()(mpp_gather_id.query_id.server_id) ^ std::hash<UInt64>()(mpp_gather_id.gather_id);
+    return MPPQueryIdHash()(mpp_gather_id.query_id) ^ std::hash<UInt64>()(mpp_gather_id.gather_id);
 }
 
 String MPPTaskId::toString() const
