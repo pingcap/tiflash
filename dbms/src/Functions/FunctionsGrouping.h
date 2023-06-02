@@ -71,9 +71,13 @@ public:
         {
             for (const auto & one_grouping_mark : meta.grouping_marks())
             {
-                assert(one_grouping_mark.grouping_nums_size() == 1);
+                int grouping_num_size = one_grouping_mark.grouping_nums_size();
+                assert(grouping_num_size == 1);
                 if (mode == tipb::GroupingMode::ModeBitAnd)
-                    assert(isPowerOf2(one_grouping_mark.grouping_nums(0)));
+                {
+                    uint64_t first = one_grouping_mark.grouping_nums(0);
+                    assert(isPowerOf2(first));
+                }
                 // should store the meta_grouping_id
                 meta_grouping_ids.emplace_back(one_grouping_mark.grouping_nums(0));
             }
@@ -158,43 +162,43 @@ private:
 
     ResultType groupingImplModeAndBit(UInt64 grouping_id) const
     {
-        UInt64 final = 0;
+        UInt64 res = 0;
         for (auto one_grouping_id : meta_grouping_ids)
         {
-            final <<= 1;
-            if ((grouping_id & one_grouping_id) > 0)
-                // col is not needed, meaning being filled null and grouped. = 1
-                final += 1;
+            res <<= 1;
+            if ((grouping_id & one_grouping_id) <= 0)
+                // col is not need, meaning be filled with null and grouped. = 1
+                res += 1;
         }
-        return final;
+        return res;
     }
 
     ResultType groupingImplModeNumericCmp(UInt64 grouping_id) const
     {
-        UInt64 final = 0;
+        UInt64 res = 0;
         for (auto one_grouping_id : meta_grouping_ids)
         {
-            final <<= 1;
-            if (grouping_id > one_grouping_id)
+            res <<= 1;
+            if (grouping_id <= one_grouping_id)
                 // col is not needed, meaning being filled null and grouped. = 1
-                final += 1;
+                res += 1;
         }
-        return final;
+        return res;
     }
 
     ResultType groupingImplModeNumericSet(UInt64 grouping_id) const
     {
-        UInt64 final = 0;
+        UInt64 res = 0;
         for (auto one_grouping_mark : meta_grouping_marks)
         {
-            final <<= 1;
+            res <<= 1;
             auto iter = one_grouping_mark.find(grouping_id);
-            if (iter != one_grouping_mark.end())
-                // In num-set mode, grouping marks stores those not-needed-col's grouping set (GIDs).
-                // When we can find the grouping id in set, it means this col is not needed and has been filled with null and grouped. = 1
-                final += 1;
+            if (iter == one_grouping_mark.end())
+                // In num-set mode, grouping marks stores those needed-col's grouping set (GIDs).
+                // When we can't find the grouping id in set, it means this col is not needed, being filled with null and grouped. = 1
+                res += 1;
         }
-        return final;
+        return res;
     }
 
 private:
