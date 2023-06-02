@@ -70,6 +70,7 @@ private:
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
+    bool hasSpilledData() const { return max_bytes_before_external_sort > 0 && spiller->hasSpilledData(); }
     SortDescription order_desc;
     // 0 means no limit.
     size_t limit;

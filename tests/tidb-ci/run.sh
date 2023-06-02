@@ -82,3 +82,11 @@ docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T 
 
 docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
+
+# run force_enable_lm tests
+docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml up -d
+wait_env
+docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/force_enable_lm'
+
+docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml down
+clean_data_log

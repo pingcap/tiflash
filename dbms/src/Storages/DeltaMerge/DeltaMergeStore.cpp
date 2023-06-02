@@ -27,6 +27,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -1039,6 +1040,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t num_streams,
                                         UInt64 max_version,
                                         const PushDownFilterPtr & filter,
+                                        const RuntimeFilteList & runtime_filter_list,
+                                        const int rf_max_wait_time_ms,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
@@ -1099,7 +1102,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 read_task_pool,
                 filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
-                log_tracing_id);
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms);
         }
         else
         {
@@ -1185,9 +1190,9 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream);
 
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        if (enable_read_thread)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
@@ -1197,24 +1202,33 @@ void DeltaMergeStore::read(
                     extra_table_id_index,
                     log_tracing_id));
         }
-        else
-        {
-            group_builder.addConcurrency(
-                std::make_unique<DMSegmentThreadSourceOp>(
-                    exec_status,
-                    dm_context,
-                    read_task_pool,
-                    after_segment_read,
-                    columns_to_read,
-                    filter,
-                    max_version,
-                    expected_block_size,
-                    /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                    extra_table_id_index,
-                    physical_table_id,
-                    log_tracing_id));
-        }
     }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_status,
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                log_tracing_id));
+        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_status,
+                log_tracing_id,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
+    }
+
     LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 
@@ -1682,7 +1696,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1701,7 +1715,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal()
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 
