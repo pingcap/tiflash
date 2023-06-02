@@ -273,7 +273,7 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, UInt64 n)
+RowNumber WindowTransformAction::stepToFrameStart(const RowNumber & current_row, UInt64 n)
 {
     auto dist = distance(current_row, partition_start);
 
@@ -308,7 +308,7 @@ RowNumber WindowTransformAction::stepForward(const RowNumber & current_row, UInt
     return result_row;
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber & current_row, UInt64 n)
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(const RowNumber & current_row, UInt64 n)
 {
     if (!partition_ended)
         return std::make_tuple(RowNumber(), false);
@@ -361,7 +361,10 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepBackward(const RowNumber 
 UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
 {
     if (left.block == right.block)
+    {
+        RUNTIME_CHECK_MSG(left.row >= right.row, "left should always be bigger than right");
         return left.row - right.row;
+    }
 
     RUNTIME_CHECK_MSG(left.block > right.block, "left should always be bigger than right");
 
@@ -399,7 +402,7 @@ void WindowTransformAction::advanceFrameStart()
     }
     case WindowFrame::BoundaryType::Offset:
         if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            frame_start = stepForward(current_row, window_description.frame.begin_offset);
+            frame_start = stepToFrameStart(current_row, window_description.frame.begin_offset);
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
@@ -505,7 +508,7 @@ void WindowTransformAction::advanceFrameEnd()
     case WindowFrame::BoundaryType::Offset:
     {
         if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            std::tie(frame_end, frame_ended) = stepBackward(current_row, window_description.frame.end_offset);
+            std::tie(frame_end, frame_ended) = stepToFrameEnd(current_row, window_description.frame.end_offset);
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
