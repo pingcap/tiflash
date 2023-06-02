@@ -158,16 +158,11 @@ OperatorStatus PipelineExec::executeIOImpl()
 {
     assert(io_op);
     auto op_status = io_op->executeIO();
-    switch (op_status)
-    {
-    case OperatorStatus::IO:
-        return OperatorStatus::IO;
-    case OperatorStatus::WAITING:
+    if (op_status == OperatorStatus::WAITING)
         fillAwaitable(io_op);
-    default:
+    if (op_status != OperatorStatus::IO)
         io_op = nullptr;
-        return op_status;
-    }
+    return op_status;
 }
 
 OperatorStatus PipelineExec::await()
@@ -184,16 +179,11 @@ OperatorStatus PipelineExec::awaitImpl()
 {
     assert(awaitable);
     auto op_status = awaitable->await();
-    switch (op_status)
-    {
-    case OperatorStatus::WAITING:
-        return OperatorStatus::WAITING;
-    case OperatorStatus::IO:
-        fillIOOp(io_op);
-    default:
+    if (op_status == OperatorStatus::IO)
+        fillIOOp(awaitable);
+    if (op_status != OperatorStatus::WAITING)
         awaitable = nullptr;
-        return op_status;
-    }
+    return op_status;
 }
 
 #undef HANDLE_OP_STATUS
