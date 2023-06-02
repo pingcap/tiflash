@@ -39,12 +39,7 @@ public:
     // If !is_force:
     //    call LooseBoundedMPMCQueue::push
     //
-    // If enable_fine_grained_shuffle:
-    //      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
-    // If fine grained_shuffle is disabled:
-    //      Push all chunks to msg_channels[0].
-    //
-    // Return true if all push succeed, otherwise return false.
+    // Return true if push succeed, otherwise return false.
     // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
     template <bool is_force>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);

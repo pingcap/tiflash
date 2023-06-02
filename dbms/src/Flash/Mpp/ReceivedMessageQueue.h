@@ -17,55 +17,22 @@
 #include <Common/FailPoint.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceivedMessage.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>
 
 namespace DB
 {
+using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
+using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+
 enum class ReceiverMode
 {
     Local = 0,
     Sync,
     Async
 };
-
-struct ReceivedMessage
-{
-    size_t source_index;
-    String req_info;
-    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
-    const mpp::Error * error_ptr;
-    const String * resp_ptr;
-    std::vector<const String *> chunks;
-    /// used for fine grained shuffle
-    std::vector<std::vector<const String *>> fine_grained_chunks;
-    std::shared_ptr<std::atomic<size_t>> remaining_consumers;
-
-    // Constructor that move chunks.
-    ReceivedMessage(size_t source_index_,
-                    const String & req_info_,
-                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
-                    const mpp::Error * error_ptr_,
-                    const String * resp_ptr_,
-                    std::vector<const String *> && chunks_)
-        : source_index(source_index_)
-        , req_info(req_info_)
-        , packet(packet_)
-        , error_ptr(error_ptr_)
-        , resp_ptr(resp_ptr_)
-        , chunks(chunks_)
-    {}
-
-    bool containUsefulMessage() const
-    {
-        return error_ptr != nullptr || resp_ptr != nullptr || !chunks.empty();
-    }
-};
-
-using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
-using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
 class ReceivedMessageQueue
 {
@@ -79,7 +46,7 @@ class ReceivedMessageQueue
     /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
     /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
     ///       remove the msg from msg_channel/grpc_recv_queue
-    mutable std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
+    std::vector<MsgChannelPtr> msg_channels_for_fine_grained_shuffle;
     MsgChannelPtr msg_channel;
     std::shared_ptr<GRPCReceiveQueue<ReceivedMessagePtr>> grpc_recv_queue;
     size_t fine_grained_channel_size;

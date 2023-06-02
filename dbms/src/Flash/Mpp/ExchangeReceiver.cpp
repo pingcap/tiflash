@@ -743,10 +743,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     DecodeDetail detail;
 
-    auto & chunks = recv_msg->remaining_consumers == nullptr ? recv_msg->chunks : recv_msg->fine_grained_chunks[stream_id];
+    auto & chunks = recv_msg->getChunks(stream_id);
     if (chunks.empty())
         return detail;
-    auto & packet = recv_msg->packet->getPacket();
+    auto & packet = recv_msg->getPacket();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
@@ -845,15 +845,15 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
     case ReceiveStatus::ok:
     {
         assert(recv_result.recv_msg != nullptr);
-        if (unlikely(recv_result.recv_msg->error_ptr != nullptr))
+        if (unlikely(recv_result.recv_msg->getErrorPtr() != nullptr))
             return ExchangeReceiverResult::newError(
-                recv_result.recv_msg->source_index,
-                recv_result.recv_msg->req_info,
-                recv_result.recv_msg->error_ptr->msg());
+                recv_result.recv_msg->getSourceIndex(),
+                recv_result.recv_msg->getReqInfo(),
+                recv_result.recv_msg->getErrorPtr()->msg());
 
         ExchangeReceiverMetric::subDataSizeMetric(
             data_size_in_queue,
-            recv_result.recv_msg->packet->getPacket().ByteSizeLong());
+            recv_result.recv_msg->getPacket().ByteSizeLong());
         return toDecodeResult(stream_id, block_queue, header, recv_result.recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:
@@ -918,36 +918,27 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
-    bool handle_resp = false;
-    if (recv_msg->remaining_consumers != nullptr)
-    {
-        /// fine grained shuffle
-        handle_resp = stream_id == 0 && recv_msg->resp_ptr != nullptr;
-    }
-    else
-    {
-        handle_resp = recv_msg->resp_ptr != nullptr;
-    }
-    if (handle_resp) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+    const auto * resp_ptr = recv_msg->getRespPtr(stream_id);
+    if (resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
     {
         auto select_resp = std::make_shared<tipb::SelectResponse>();
-        if (unlikely(!select_resp->ParseFromString(*(recv_msg->resp_ptr))))
+        if (unlikely(!select_resp->ParseFromString(*resp_ptr)))
         {
-            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, "decode error");
+            return ExchangeReceiverResult::newError(recv_msg->getSourceIndex(), recv_msg->getReqInfo(), "decode error");
         }
         else
         {
-            auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
+            auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
             /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
             if (unlikely(!result.resp->chunks().empty()))
             {
-                assert(recv_msg->chunks.empty());
+                assert(recv_msg->getChunks(stream_id).empty());
                 // Fine grained shuffle should only be enabled when sending data to TiFlash node.
                 // So all data should be encoded into MPPDataPacket.chunks.
                 RUNTIME_CHECK_MSG(!enable_fine_grained_shuffle_flag, "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
                 result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
             }
-            else if (!recv_msg->chunks.empty())
+            else if (!recv_msg->getChunks(stream_id).empty())
             {
                 result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
             }
@@ -956,7 +947,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     }
     else /// the non-last packets
     {
-        auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
+        auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
         result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
         return result;
     }

@@ -113,7 +113,10 @@ try
                             ReceivedMessagePtr recv_msg;
                             auto pop_result = queue.pop<false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                            ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            if (k == 0)
+                                ASSERT_TRUE(*pop_result.second->getRespPtr(k) == fmt::format("test_{}", i));
+                            else
+                                ASSERT_TRUE(pop_result.second->getRespPtr(k) == nullptr);
                         }
                     }
                 }
@@ -124,7 +127,7 @@ try
                         ReceivedMessagePtr recv_msg;
                         auto pop_result = queue.pop<false>(0);
                         ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                        ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                        ASSERT_TRUE(*pop_result.second->getRespPtr(0) == fmt::format("test_{}", i));
                     }
                 }
                 ASSERT_TRUE(queue.isWritable());
@@ -166,7 +169,10 @@ try
                             ReceivedMessagePtr recv_msg;
                             auto pop_result = queue.pop<false>(k);
                             ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                            ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                            if (k == 0)
+                                ASSERT_TRUE(*pop_result.second->getRespPtr(k) == fmt::format("test_{}", i));
+                            else
+                                ASSERT_TRUE(pop_result.second->getRespPtr(k) == nullptr);
                         }
                     }
                 }
@@ -177,7 +183,7 @@ try
                         ReceivedMessagePtr recv_msg;
                         auto pop_result = queue.pop<false>(0);
                         ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                        ASSERT_TRUE(*pop_result.second->resp_ptr == fmt::format("test_{}", i));
+                        ASSERT_TRUE(*pop_result.second->getRespPtr(0) == fmt::format("test_{}", i));
                     }
                 }
                 ASSERT_TRUE(queue.isWritable());

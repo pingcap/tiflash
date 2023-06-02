@@ -641,8 +641,8 @@ try
     t.join();
     auto result_size = receiver->getReceivedMsgs().size();
     GTEST_ASSERT_EQ(result_size == 2, true);
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->packet->getPacket().data(), "First");
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->packet->getPacket().data(), "Second");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->getPacket().data(), "Second");
 }
 CATCH
 
@@ -836,7 +836,7 @@ TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
     t.join();
 
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->getPacket().data(), "First");
 }
 
 TEST_F(TestMPPTunnel, isWritableTimeout)

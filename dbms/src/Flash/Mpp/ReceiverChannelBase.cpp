@@ -49,36 +49,14 @@ ReceivedMessagePtr toReceivedMessage(
     std::vector<const String *> chunks(packet.chunks_size());
     for (int i = 0; i < packet.chunks_size(); ++i)
         chunks[i] = &packet.chunks(i);
-    auto ret = std::make_shared<ReceivedMessage>(
+    return std::make_shared<ReceivedMessage>(
         source_index,
         req_info,
         tracked_packet,
         error_ptr,
         resp_ptr,
-        std::move(chunks));
-    if (for_fine_grained_shuffle)
-    {
-        assert(fine_grained_consumer_size > 0);
-        ret->remaining_consumers = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
-        ret->fine_grained_chunks.resize(fine_grained_consumer_size);
-        if (packet.chunks_size() > 0)
-        {
-            RUNTIME_CHECK_MSG(!packet.stream_ids().empty(), "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                                                            "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                                                            "Cannot handle this.",
-                              source_index);
-
-            // packet.stream_ids[i] is corresponding to packet.chunks[i],
-            // indicating which stream_id this chunk belongs to.
-            RUNTIME_CHECK_MSG(packet.chunks_size() == packet.stream_ids_size(), "Packet's chunk size({}) not equal to its size of streams({})", packet.chunks_size(), packet.stream_ids_size());
-
-            for (int i = 0; i < packet.stream_ids_size(); ++i)
-            {
-                UInt64 stream_id = packet.stream_ids(i) % fine_grained_consumer_size;
-                ret->fine_grained_chunks[stream_id].push_back(&packet.chunks(i));
-            }
-        }
-    }
-    return ret;
+        std::move(chunks),
+        for_fine_grained_shuffle,
+        fine_grained_consumer_size);
 }
 } // namespace DB
