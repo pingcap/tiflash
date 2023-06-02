@@ -53,6 +53,7 @@ protected:
 
 private:
     DM::DMContextPtr dm_context;
+
     DM::SegmentReadTaskPoolPtr task_pool;
     DM::AfterSegmentRead after_segment_read;
     DM::ColumnDefines columns_to_read;

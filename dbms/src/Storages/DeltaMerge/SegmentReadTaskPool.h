@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <mutex>
 
 namespace DB
 {
@@ -293,6 +294,71 @@ private:
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
+
+class SegmentReadTaskPoolSet
+{
+public:
+    SegmentReadTaskPoolSet() = default;
+
+    void addPoolNoLock(SegmentReadTaskPoolPtr & pool, size_t concurrent)
+    {
+        pools.push_back(std::make_pair(pool, concurrent));
+    }
+
+    SegmentReadTaskPoolPtr pickOne()
+    {
+        std::lock_guard lock(mu);
+        if (pools.empty())
+            return nullptr;
+
+        auto & pool_and_counter = pools[idx];
+        assert(pool_and_counter.second != 0);
+
+        auto ret = pool_and_counter.first;
+        --pool_and_counter.second;
+
+        // idx will be changed, so that each pool could be returned equably
+        if (pool_and_counter.second == 0)
+            removePoolNoLock();
+        else
+            goToNextIdxNoLock();
+
+        return ret;
+    }
+
+private:
+    void removePoolNoLock()
+    {
+        auto back_idx = pools.size() - 1;
+        if (idx != back_idx)
+            // swap this exhausted pool to the end and pop it out
+            pools[idx].swap(pools[back_idx]);
+        else
+            idx = 0;
+
+        // Ths exhausted pool is always placed at the end of the vector, just pop it
+        pools.pop_back();
+    }
+
+    void goToNextIdxNoLock()
+    {
+        if (idx + 1 < pools.size())
+            idx = idx + 1;
+        idx = 0;
+    }
+
+private:
+    std::mutex mu;
+
+    // Each pool has a counter which is equal to the concurrent degree.
+    // Each time we pick up a pool from pools, the counter will minus one.
+    std::vector<std::pair<SegmentReadTaskPoolPtr, size_t>> pools;
+
+    // Used for referring to a pool in pools
+    size_t idx = 0;
+};
+
+using SegmentReadTaskPoolSetPtr = std::shared_ptr<SegmentReadTaskPoolSet>;
 
 } // namespace DM
 } // namespace DB

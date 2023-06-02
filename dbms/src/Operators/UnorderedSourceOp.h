@@ -30,23 +30,22 @@ class UnorderedSourceOp : public SourceOp
 public:
     UnorderedSourceOp(
         PipelineExecutorStatus & exec_status_,
-        const DM::SegmentReadTaskPoolPtr & task_pool_,
+        const DM::SegmentReadTaskPoolSetPtr & task_pool_set_,
         const DM::ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
         const String & req_id)
         : SourceOp(exec_status_, req_id)
-        , task_pool(task_pool_)
+        , task_pool_set(task_pool_set_)
+        , task_pool(nullptr)
         , ref_no(0)
     {
-        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        fetchNewTaskPool();
+        RUNTIME_CHECK_MSG(task_pool.get() != nullptr, "task_pool shouldn't be nullptr");        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
     }
 
     ~UnorderedSourceOp() override
     {
-        task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        releaseCurrentTaskPool();
     }
 
     String getName() const override
@@ -70,7 +69,33 @@ private:
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
     }
 
+    void fetchNewTaskPool()
+    {
+        releaseCurrentTaskPool();
+        getTaskPool();
+    }
+
+    void getTaskPool()
+    {
+        task_pool = task_pool_set->pickOne();
+        if (task_pool != nullptr)
+        {
+            ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+            LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        }
+    }
+
+    void releaseCurrentTaskPool()
+    {
+        if (task_pool != nullptr)
+        {
+            task_pool->decreaseUnorderedInputStreamRefCount();
+            LOG_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->pool_id, ref_no);
+        }
+    }
+
 private:
+    DM::SegmentReadTaskPoolSetPtr task_pool_set;
     DM::SegmentReadTaskPoolPtr task_pool;
     std::optional<Block> t_block;
     int64_t ref_no;

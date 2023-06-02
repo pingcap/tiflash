@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -86,6 +87,7 @@ private:
     buildLocalExecForPhysicalTable(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
+        DM::SegmentReadTaskPoolSetPtr & pool_set,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         size_t max_block_size);

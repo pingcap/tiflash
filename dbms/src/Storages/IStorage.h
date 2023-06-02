@@ -21,6 +21,7 @@
 #include <Storages/ITableDeclaration.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
+#include <DeltaMerge/SegmentReadTaskPool.h>
 
 #include <memory>
 #include <optional>
@@ -151,6 +152,7 @@ public:
     virtual void read(
         PipelineExecutorStatus & /*exec_status*/,
         PipelineExecGroupBuilder & /*group_builder*/,
+        DM::SegmentReadTaskPoolSetPtr & /*pool_set*/,
         const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,
         const Context & /*context*/,

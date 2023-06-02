@@ -47,7 +47,14 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
             return OperatorStatus::HAS_OUTPUT;
         }
         else
+        {
+            // Data in this task_pool has been exhausted,
+            // we should try to fetch a new task_pool.
+            fetchNewTaskPool();
+            if (task_pool != nullptr)
+                continue; // Fetch new task_pool successfully, and continue to read data
             return OperatorStatus::HAS_OUTPUT;
+        }
     }
 }
 } // namespace DB

@@ -940,6 +940,7 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr
 DAGStorageInterpreter::buildLocalExecForPhysicalTable(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    DM::SegmentReadTaskPoolSetPtr & pool_set,
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     size_t max_block_size)
@@ -962,6 +963,7 @@ DAGStorageInterpreter::buildLocalExecForPhysicalTable(
                 storage->read(
                     exec_status,
                     group_builder,
+                    pool_set,
                     required_columns,
                     query_info,
                     context,
@@ -1089,8 +1091,7 @@ void DAGStorageInterpreter::buildLocalExec(
     const auto table_query_infos = generateSelectQueryInfos();
 
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
-    // TODO Improve the performance of partition table in extreme case.
-    // ref https://github.com/pingcap/tiflash/issues/4474
+    DM::SegmentReadTaskPoolSetPtr pool_set = std::make_shared<DM::SegmentReadTaskPoolSet>();
     for (const auto & table_query_info : table_query_infos)
     {
         PipelineExecGroupBuilder builder;

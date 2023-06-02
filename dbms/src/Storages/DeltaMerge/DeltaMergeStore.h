@@ -372,6 +372,7 @@ public:
     void read(
         PipelineExecutorStatus & exec_status_,
         PipelineExecGroupBuilder & group_builder,
+        DM::SegmentReadTaskPoolSetPtr & pool_set,
         const Context & db_context,
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,

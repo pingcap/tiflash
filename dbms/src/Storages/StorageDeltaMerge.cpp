@@ -956,6 +956,7 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
 void StorageDeltaMerge::read(
     PipelineExecutorStatus & exec_status_,
     PipelineExecGroupBuilder & group_builder,
+    DM::SegmentReadTaskPoolSetPtr & pool_set,
     const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -989,6 +990,7 @@ void StorageDeltaMerge::read(
     store->read(
         exec_status_,
         group_builder,
+        pool_set,
         context,
         context.getSettingsRef(),
         columns_to_read,
