@@ -743,10 +743,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     assert(recv_msg != nullptr);
     DecodeDetail detail;
 
-    auto & chunks = recv_msg->getChunks(stream_id);
+    const auto & chunks = recv_msg->getChunks(stream_id);
     if (chunks.empty())
         return detail;
-    auto & packet = recv_msg->getPacket();
+    const auto & packet = recv_msg->getPacket();
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
