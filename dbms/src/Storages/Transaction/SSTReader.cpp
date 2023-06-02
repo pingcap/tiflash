@@ -32,7 +32,7 @@ bool MonoSSTReader::remained() const
         auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
         if (!end.empty() && key >= end)
         {
-            if (!tail_checked && key >= end)
+            if (!tail_checked)
             {
                 LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), getDebugCfType());
                 tail_checked = true;
