@@ -47,7 +47,9 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
+namespace
+{
+SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
     // Doesn't need SchemaSyncer for tiflash_compute mode.
     if (disaggregated_compute_mode)
@@ -72,6 +74,54 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
         std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
 }
 
+// Print log for MPPTask which hasn't been removed for over 25 minutes.
+void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+{
+    String log_info;
+    double longest_live_time = 0;
+    for (const auto & iter : monitored_tasks)
+    {
+        auto alive_time = iter.second.elapsedSeconds();
+        if (alive_time > longest_live_time)
+            longest_live_time = alive_time;
+        if (alive_time >= 1500)
+            log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
+    }
+
+    if (!log_info.empty())
+        LOG_INFO(log, log_info);
+    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
+}
+
+void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
+{
+    std::unique_lock lock(monitor->mu, std::defer_lock);
+    while (true)
+    {
+        lock.lock();
+
+        // Check MPPTasks every 25 minutes
+        monitor->cv.wait_for(lock, std::chrono::seconds(1500));
+
+        auto snapshot = monitor->monitored_tasks;
+        if (monitor->is_shutdown)
+        {
+            lock.unlock();
+            checkLongLiveMPPTasks(snapshot, monitor->log);
+            return;
+        }
+
+        lock.unlock();
+        checkLongLiveMPPTasks(snapshot, monitor->log);
+    }
+}
+
+void startMonitorMPPTaskThread(const MPPTaskManagerPtr & manager)
+{
+    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [monitor = manager->getMPPTaskMonitor()] { monitorMPPTasks(monitor); });
+}
+} // namespace
+
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
     , kvstore(context_.getSharedContextDisagg()->isDisaggregatedComputeMode() && context_.getSharedContextDisagg()->use_autoscaler ? nullptr : std::make_shared<KVStore>(context))
@@ -93,6 +143,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
+    startMonitorMPPTaskThread(mpp_task_manager);
+
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
