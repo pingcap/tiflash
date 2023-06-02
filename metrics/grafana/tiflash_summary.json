@@ -13675,7 +13675,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_round_time_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r\n",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r\n\r",
               "interval": "",
               "legendFormat": "95-{{type}}",
               "queryType": "randomWalk",
@@ -13683,7 +13683,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_round_time_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r\n\r",
               "hide": false,
               "interval": "",
               "legendFormat": "99-{{type}}",
@@ -13691,7 +13691,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_pipeline_task_round_time_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r\n",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))\r\n\r",
               "hide": false,
               "interval": "",
               "legendFormat": "999-{{type}}",
@@ -13699,7 +13699,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_pipeline_task_round_time_ms_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_execute\"}[1m])) / sum(rate(tiflash_pipeline_task_round_time_ms_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_execute\"}[1m])) \r\n",
+              "expr": "sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_execute\"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_execute\"}[1m]))\r",
               "hide": false,
               "interval": "",
               "legendFormat": "avg-cpu_execute",
@@ -13707,7 +13707,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_pipeline_task_round_time_ms_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_queue\"}[1m])) / sum(rate(tiflash_pipeline_task_round_time_ms_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_queue\"}[1m])) \r\n",
+              "expr": "sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_queue\"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"cpu_queue\"}[1m])) \r\n\r",
               "hide": false,
               "interval": "",
               "legendFormat": "avg-cpu_queue",
@@ -13715,7 +13715,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_pipeline_task_round_time_ms_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_execute\"}[1m])) / sum(rate(tiflash_pipeline_task_round_time_ms_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_execute\"}[1m])) \r\n",
+              "expr": "sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_execute\"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_execute\"}[1m])) \r\n\r",
               "hide": false,
               "interval": "",
               "legendFormat": "avg-io_execute",
@@ -13723,7 +13723,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_pipeline_task_round_time_ms_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_queue\"}[1m])) / sum(rate(tiflash_pipeline_task_round_time_ms_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_queue\"}[1m])) \r\n",
+              "expr": "sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_queue\"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"io_queue\"}[1m])) \r",
               "hide": false,
               "interval": "",
               "legendFormat": "avg-io_queue",
@@ -13731,7 +13731,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_pipeline_task_round_time_ms_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"await\"}[1m])) / sum(rate(tiflash_pipeline_task_round_time_ms_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"await\"}[1m])) \r\n",
+              "expr": "sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"await\"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"await\"}[1m])) \r",
               "hide": false,
               "interval": "",
               "legendFormat": "avg-await",
@@ -13742,7 +13742,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Task Round Time",
+          "title": "Task Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -13759,7 +13759,7 @@
           "yaxes": [
             {
               "$$hashKey": "object:1070",
-              "format": "ms",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,
