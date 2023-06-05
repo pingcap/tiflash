@@ -68,11 +68,15 @@ public:
     {}
     bool exists(const MPPGatherId & id)
     {
+        assert(gather_ids_set.size() == gather_ids.size());
         return gather_ids_set.find(id) != gather_ids_set.end();
     }
     void add(const MPPGatherId & id)
     {
-        if (gather_ids_set.size() >= capacity && gather_ids_set.find(id) == gather_ids_set.end())
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return;
+        if (gather_ids_set.size() >= capacity)
         {
             auto evicted_id = gather_ids.back();
             gather_ids.pop_back();
