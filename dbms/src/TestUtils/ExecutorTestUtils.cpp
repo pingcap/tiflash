@@ -23,8 +23,11 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <gtest/gtest.h>
 
 #include <functional>
+
+#include "Common/Stopwatch.h"
 
 namespace DB::tests
 {
@@ -325,7 +328,9 @@ void ExecutorTest::testForExecutionSummary(
 {
     request->set_collect_execution_summaries(true);
     DAGContext dag_context(*request, "test_execution_summary", concurrency);
+    Stopwatch stop_watch;
     executeStreams(&dag_context);
+    auto time_ns_used = stop_watch.elapsed();
     ASSERT_TRUE(dag_context.collect_execution_summaries);
     ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
     statistics_collector.initialize(&dag_context);
@@ -350,7 +355,8 @@ void ExecutorTest::testForExecutionSummary(
             ASSERT_EQ(summary.concurrency(), it->second.second)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
                 << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
-        // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
+        ASSERT_LE(summary.time_processed_ns(), time_ns_used);
+        // num_iterations and tiflash_scan_context are not checked here.
     }
 }
 

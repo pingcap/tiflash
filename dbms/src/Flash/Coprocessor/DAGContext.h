@@ -343,8 +343,8 @@ private:
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
 
-    /// profile related
-    /// PhysicalPlan will be added to profile_infos to map concurrently at runtime, so a lock is needed to prevent data race.
+    /// operator profile related
+    /// operator_profile_infos will be added to map concurrently at runtime, so a lock is needed to prevent data race.
     std::mutex operator_profile_infos_map_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;

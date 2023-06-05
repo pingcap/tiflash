@@ -35,11 +35,12 @@ struct OperatorProfileInfo
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
 
-    // Some special fields, used by Exchange/RemoteTableScan
+    // Some special fields, used by ExchangeReceive/RemoteTableScan
     bool is_local = true;
     std::vector<ConnectionProfileInfo> connection_profile_infos;
     RemoteExecutionSummary remote_execution_summary;
 
+    // Used by ExchangeReceive/RemoteTableScan.
     ALWAYS_INLINE void initForRemote(size_t connections)
     {
         is_local = false;
@@ -51,7 +52,7 @@ struct OperatorProfileInfo
         total_stopwatch.start();
     }
 
-    ALWAYS_INLINE void anchor(const Block & block)
+    ALWAYS_INLINE void updateInfoForBlock(const Block & block)
     {
         if likely (block)
         {
@@ -60,6 +61,11 @@ struct OperatorProfileInfo
             bytes += block.bytes();
             allocated_bytes += block.allocatedBytes();
         }
+    }
+
+    ALWAYS_INLINE void anchor(const Block & block)
+    {
+        updateInfoForBlock(block);
         anchor();
     }
 
@@ -70,13 +76,7 @@ struct OperatorProfileInfo
 
     ALWAYS_INLINE void update(const Block & block)
     {
-        if likely (block)
-        {
-            ++blocks;
-            rows += block.rows();
-            bytes += block.bytes();
-            allocated_bytes += block.allocatedBytes();
-        }
+        updateInfoForBlock(block);
         update();
     }
 };
