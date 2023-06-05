@@ -91,11 +91,20 @@ public:
 
     ALWAYS_INLINE void reportMetrics() const
     {
+#ifdef __APPLE__
 #define REPORT_METRICS(type, value_ns)                                                   \
     if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)            \
     {                                                                                    \
         GET_METRIC(tiflash_pipeline_task_duration_seconds, type).Observe(value_seconds); \
     }
+#else
+#define REPORT_METRICS(type, value_ns)                                                         \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)                  \
+    {                                                                                          \
+        thread_local auto & metric = GET_METRIC(tiflash_pipeline_task_duration_seconds, type); \
+        metric.Observe(value_seconds);                                                         \
+    }
+#endif
 
         REPORT_METRICS(type_cpu_execute, cpu_execute_time_ns);
         REPORT_METRICS(type_cpu_queue, cpu_pending_time_ns);
