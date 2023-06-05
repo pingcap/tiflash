@@ -31,9 +31,9 @@ using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 class SharedQueue
 {
 public:
-    static SharedQueuePtr build(size_t producer, size_t consumer);
+    static SharedQueuePtr build(size_t producer, size_t consumer, Int64 max_buffered_bytes);
 
-    SharedQueue(size_t queue_size, size_t init_producer);
+    SharedQueue(CapacityLimits queue_limits, size_t init_producer);
 
     MPMCQueueResult tryPush(Block && block);
     MPMCQueueResult tryPop(Block & block);

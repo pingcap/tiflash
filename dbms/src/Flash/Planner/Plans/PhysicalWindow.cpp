@@ -92,14 +92,14 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 void PhysicalWindow::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t concurrency)
 {
     executeExpression(exec_status, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
 
     if (!fine_grained_shuffle.enable())
-        executeUnion(exec_status, group_builder, log);
+        executeUnion(exec_status, group_builder, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
@@ -107,7 +107,7 @@ void PhysicalWindow::buildPipelineExecGroup(
     });
 
     if (!fine_grained_shuffle.enable() && is_restore_concurrency)
-        restoreConcurrency(exec_status, group_builder, concurrency, log);
+        restoreConcurrency(exec_status, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     executeExpression(exec_status, group_builder, window_description.after_window, log);
 }

@@ -84,11 +84,12 @@ void restoreConcurrency(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     size_t concurrency,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log)
 {
     if (concurrency > 1 && group_builder.concurrency() == 1)
     {
-        auto shared_queue = SharedQueue::build(1, concurrency);
+        auto shared_queue = SharedQueue::build(1, concurrency, max_buffered_bytes);
         // sink op of builder must be empty.
         group_builder.transform([&](auto & builder) {
             builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
@@ -103,11 +104,12 @@ void restoreConcurrency(
 void executeUnion(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log)
 {
     if (group_builder.concurrency() > 1)
     {
-        auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1);
+        auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1, max_buffered_bytes);
         group_builder.transform([&](auto & builder) {
             builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
         });
@@ -292,9 +294,9 @@ void executeFinalSort(
                 limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
         });
 
-        executeUnion(exec_status, group_builder, log);
-
         const Settings & settings = context.getSettingsRef();
+        executeUnion(exec_status, group_builder, settings.max_buffered_bytes_in_executor, log);
+
         size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
         SpillConfig spill_config{
             context.getTemporaryPath(),
