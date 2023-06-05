@@ -60,6 +60,8 @@ struct MPPQueryIdHash
 /// the same MPP query could have dependence to each other(e.g. for query A join B, if the join is not supported in TiFlash, TiDB will generate
 /// two mpp gathers, one is reading from A and the other is reading from B, the probe side's mpp gather depends on the build side's mpp gather),
 /// so the smallest scheduling unit in TiFlash is still the MPP query
+/// Note currently, TiDB does not fill `gather_id` in mpp::TaskMeta, TiFlash hard coded 0 as the gather id for all MPPGatherId, so a mpp query now
+/// only has one MPPGather, and the schedule/cancel/retry unit in TiFlash is MPP query, we may implement mpp gather level's cancel/retry in the future.
 struct MPPGatherId
 {
     UInt64 gather_id;
