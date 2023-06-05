@@ -69,10 +69,10 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
 
     auto restore_segments_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
 
-    for (auto & iter : storages)
+    for (const auto & iter : storages)
     {
         const auto & ks_table_id = iter.first;
-        auto & storage = iter.second;
+        const auto & storage = iter.second;
         auto task = [&init_stores_function, &ks_table_id, &storage, &restore_segments_thread_pool] {
             init_stores_function(ks_table_id, storage, &restore_segments_thread_pool);
         };
