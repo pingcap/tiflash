@@ -55,6 +55,11 @@ struct MPPQueryIdHash
     size_t operator()(MPPQueryId const & mpp_query_id) const noexcept;
 };
 
+/// A MPP query has one or more MPPGathers, each mpp gather has one or more MPPTasks. The mpp tasks in different mpp gathers are independent
+/// to each other, so theoretically speaking, the smallest cancel/retry unit of MPP query could be MPPGather. However, MPPGathers belong to
+/// the same MPP query could have dependence to each other(e.g. for query A join B, if the join is not supported in TiFlash, TiDB will generate
+/// two mpp gathers, one is reading from A and the other is reading from B, the probe side's mpp gather depends on the build side's mpp gather),
+/// so the smallest scheduling unit in TiFlash is still the MPP query
 struct MPPGatherId
 {
     UInt64 gather_id;

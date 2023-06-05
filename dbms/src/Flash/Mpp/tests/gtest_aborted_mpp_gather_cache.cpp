@@ -21,18 +21,18 @@ namespace DB
 {
 namespace tests
 {
-class TestCancelledMPPGatherCache : public testing::Test
+class TestAbortedMPPGatherCache : public testing::Test
 {
 };
 
-TEST_F(TestCancelledMPPGatherCache, TestEvict)
+TEST_F(TestAbortedMPPGatherCache, TestEvict)
 try
 {
     size_t capacity = 5;
-    CancelledMPPGatherCache cache(capacity);
+    AbortedMPPGatherCache cache(capacity);
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.put(MPPGatherId(i, MPPQueryId(1, 2, 3, 4)));
+        cache.add(MPPGatherId(i, MPPQueryId(1, 2, 3, 4)));
     }
     for (size_t i = 0; i < capacity; i++)
     {
@@ -40,13 +40,13 @@ try
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.put(MPPGatherId(0, MPPQueryId(1, 2, 3, 4)));
+        cache.add(MPPGatherId(0, MPPQueryId(1, 2, 3, 4)));
     }
     for (size_t i = 0; i < capacity; i++)
     {
         ASSERT_EQ(cache.exists(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))), true);
     }
-    cache.put(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4)));
+    cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4)));
     ASSERT_EQ(cache.exists(MPPGatherId(0, MPPQueryId(1, 2, 3, 4))), false);
     for (size_t i = 0; i < capacity; i++)
     {

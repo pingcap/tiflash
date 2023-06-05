@@ -54,32 +54,32 @@ struct MPPQueryTaskSet
     }
 };
 
-/// A simple thread unsafe FIFO cache
-struct CancelledMPPGatherCache
+/// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
+class AbortedMPPGatherCache
 {
 private:
-    std::deque<MPPGatherId> query_ids;
-    std::unordered_set<MPPGatherId, MPPGatherIdHash> query_id_set;
+    std::deque<MPPGatherId> gather_ids;
+    std::unordered_set<MPPGatherId, MPPGatherIdHash> gather_ids_set;
     size_t capacity;
 
 public:
-    CancelledMPPGatherCache(size_t capacity_)
+    AbortedMPPGatherCache(size_t capacity_)
         : capacity(capacity_)
     {}
     bool exists(const MPPGatherId & id)
     {
-        return query_id_set.find(id) != query_id_set.end();
+        return gather_ids_set.find(id) != gather_ids_set.end();
     }
-    void put(const MPPGatherId & id)
+    void add(const MPPGatherId & id)
     {
-        if (query_id_set.size() >= capacity && query_id_set.find(id) == query_id_set.end())
+        if (gather_ids_set.size() >= capacity && gather_ids_set.find(id) == gather_ids_set.end())
         {
-            auto evicted_id = query_ids.back();
-            query_ids.pop_back();
-            query_id_set.erase(evicted_id);
+            auto evicted_id = gather_ids.back();
+            gather_ids.pop_back();
+            gather_ids_set.erase(evicted_id);
         }
-        query_ids.push_front(id);
-        query_id_set.insert(id);
+        gather_ids.push_front(id);
+        gather_ids_set.insert(id);
     }
 };
 
@@ -142,7 +142,7 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
-    CancelledMPPGatherCache cancelled_query_gather_cache;
+    AbortedMPPGatherCache aborted_query_gather_cache;
 
     LoggerPtr log;
 
@@ -161,9 +161,9 @@ public:
 
     void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
-    MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
 
-    MPPQueryTaskSetPtr getQueryTaskSet(const MPPQueryId & query_id);
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSet(const MPPQueryId & query_id);
 
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 
