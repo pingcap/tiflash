@@ -27,6 +27,7 @@
 #include <prometheus/registry.h>
 
 #include <ext/scope_guard.h>
+#include <mutex>
 
 
 // to make GCC 11 happy
@@ -530,8 +531,13 @@ class TiFlashMetrics
 public:
     static TiFlashMetrics & instance();
 
+    void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
+
 private:
     TiFlashMetrics();
+
+    prometheus::Counter * getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &);
+    void removeReplicaSyncRUCounter(UInt32 keyspace_id);
 
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
@@ -551,6 +557,10 @@ private:
     using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
+
+    prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
+    std::mutex replica_sync_ru_mtx;
+    std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
