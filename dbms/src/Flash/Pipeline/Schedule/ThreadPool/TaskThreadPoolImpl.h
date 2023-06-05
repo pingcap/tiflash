@@ -23,7 +23,7 @@ namespace DB
 {
 struct CPUImpl
 {
-    static constexpr auto NAME = "cpu intensive";
+    static constexpr auto NAME = "CPUTaskThreadPool";
 
     static constexpr bool is_cpu = true;
 
@@ -39,7 +39,7 @@ struct CPUImpl
 
 struct IOImpl
 {
-    static constexpr auto NAME = "io intensive";
+    static constexpr auto NAME = "IOTaskThreadPool";
 
     static constexpr bool is_cpu = false;
 
