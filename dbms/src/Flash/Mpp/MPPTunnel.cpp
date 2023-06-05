@@ -90,7 +90,7 @@ MPPTunnel::MPPTunnel(
     , timeout_nanoseconds(timeout_.count() * 1000000000ULL)
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
-    , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , queue_limit(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get(req_id, tunnel_id))
     , data_size_in_queue(0)
 {
@@ -217,7 +217,7 @@ void MPPTunnel::connectSync(PacketWriter * writer)
         RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
 
         LOG_TRACE(log, "ready to connect sync");
-        sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
+        sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_limit, mem_tracker, log, tunnel_id, &data_size_in_queue);
         sync_tunnel_sender->startSendThread(writer);
         tunnel_sender = sync_tunnel_sender;
 
@@ -265,11 +265,11 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         auto kick_func_for_test = call_data->getGRPCSendKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_limit, mem_tracker, log, tunnel_id, kick_func_for_test.value(), &data_size_in_queue);
         }
         else
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall(), &data_size_in_queue);
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_limit, mem_tracker, log, tunnel_id, call_data->grpcCall(), &data_size_in_queue);
         }
         call_data->attachAsyncTunnelSender(async_tunnel_sender);
         tunnel_sender = async_tunnel_sender;
@@ -443,7 +443,7 @@ void MPPTunnel::connectLocalV1(PacketWriter * writer)
         LOG_TRACE(log, "ready to connect local tunnel version 1");
 
         RUNTIME_ASSERT(writer == nullptr, log);
-        local_tunnel_sender_v1 = std::make_shared<LocalTunnelSenderV1>(queue_size, mem_tracker, log, tunnel_id, &data_size_in_queue);
+        local_tunnel_sender_v1 = std::make_shared<LocalTunnelSenderV1>(queue_limit, mem_tracker, log, tunnel_id, &data_size_in_queue);
         tunnel_sender = local_tunnel_sender_v1;
 
         status = TunnelStatus::Connected;

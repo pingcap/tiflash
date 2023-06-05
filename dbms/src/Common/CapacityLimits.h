@@ -20,11 +20,11 @@ namespace DB
 {
 struct CapacityLimits
 {
-    size_t max_size;
-    size_t max_bytes;
-    CapacityLimits(size_t max_size_, size_t max_bytes_)
-        : max_size(max_size_)
-        , max_bytes(max_bytes_)
+    Int64 max_size;
+    Int64 max_bytes;
+    CapacityLimits(Int64 max_size_, Int64 max_bytes_ = std::numeric_limits<Int64>::max())
+        : max_size(std::max(1, max_size_))
+        , max_bytes(max_bytes_ <= 0 ? std::numeric_limits<Int64>::max() : max_bytes_)
     {}
 };
 } // namespace DB
