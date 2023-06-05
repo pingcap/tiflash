@@ -46,12 +46,13 @@ using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log)
 {
     if (concurrency > 1 && pipeline.streams.size() == 1)
     {
         BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier());
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, max_buffered_bytes, pipeline.firstStream(), log->identifier());
         shared_query_block_input_stream->setExtraInfo("restore concurrency");
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
@@ -60,6 +61,7 @@ void restoreConcurrency(
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log,
     bool ignore_block,
     const String & extra_info)
@@ -68,9 +70,9 @@ void executeUnion(
     {
         BlockInputStreamPtr stream;
         if (ignore_block)
-            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier());
+            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier(), max_buffered_bytes);
         else
-            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier());
+            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier(), max_buffered_bytes);
         stream->setExtraInfo(extra_info);
 
         pipeline.streams.resize(1);
@@ -192,7 +194,7 @@ void orderStreams(
     else
     {
         /// If there are several streams, we merge them into one
-        executeUnion(pipeline, max_streams, log, false, "for partial order");
+        executeUnion(pipeline, max_streams, settings.max_buffered_bytes_in_executor, log, false, "for partial order");
 
         /// Merge the sorted blocks.
         pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
@@ -323,14 +325,14 @@ void executeCreatingSets(
     DAGContext & dag_context = *context.getDAGContext();
     /// add union to run in parallel if needed
     if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/false, "for test");
     else if (context.isMPPTest())
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp test");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/true, "for mpp test");
     else if (dag_context.isMPPTask())
         /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/true, "for mpp");
     else
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for non mpp");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/false, "for non mpp");
     if (dag_context.hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();

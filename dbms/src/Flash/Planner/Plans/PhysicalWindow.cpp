@@ -81,7 +81,7 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     else
     {
         /// If there are several streams, we merge them into one.
-        executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "merge into one for window input");
         RUNTIME_CHECK(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
