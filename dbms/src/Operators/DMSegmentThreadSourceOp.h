@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <DataStreams/SegmentReadTransformAction.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -41,8 +40,6 @@ public:
         UInt64 max_version_,
         size_t expected_block_size_,
         DM::ReadMode read_mode_,
-        int extra_table_id_index,
-        TableID physical_table_id,
         const String & req_id);
 
     String getName() const override;
@@ -69,10 +66,11 @@ private:
     BlockInputStreamPtr cur_stream;
 
     DM::SegmentPtr cur_segment;
-    SegmentReadTransformAction action;
 
     FilterPtr filter_ignored = nullptr;
     std::optional<Block> t_block;
+
+    size_t total_rows = 0;
 };
 
 } // namespace DB

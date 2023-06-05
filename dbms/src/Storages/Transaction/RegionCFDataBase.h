@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <map>
@@ -22,7 +23,7 @@ namespace DB
 {
 
 struct TiKVRangeKey;
-using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+using RegionRange = RegionRangeKeys::RegionRange;
 using RegionDataRes = size_t;
 
 enum class DupCheck

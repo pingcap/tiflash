@@ -102,15 +102,15 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    group_builder.init(concurrency);
-    size_t partition_id = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
-            exec_status,
-            log->identifier(),
-            mpp_exchange_receiver,
-            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0));
-    });
+    for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+    {
+        group_builder.addConcurrency(
+            std::make_unique<ExchangeReceiverSourceOp>(
+                exec_status,
+                log->identifier(),
+                mpp_exchange_receiver,
+                /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
+    }
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

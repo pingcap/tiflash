@@ -47,6 +47,22 @@ enum class AbortType
     ONERROR,
 };
 
+// This struct notify the MPPTaskManager that this MPPTask is completed destructed
+class MPPTaskMonitorHelper
+{
+public:
+    MPPTaskMonitorHelper() = default;
+
+    ~MPPTaskMonitorHelper();
+
+    void initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_);
+
+private:
+    MPPTaskManager * manager = nullptr;
+    String task_unique_id;
+    bool initialized = false;
+};
+
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
@@ -113,6 +129,9 @@ private:
     void setErrString(const String & message);
 
 private:
+    // We must ensure this member variable is put at this place to be destructed at proper time
+    MPPTaskMonitorHelper mpp_task_monitor_helper;
+
     // To make sure dag_req is not destroyed before the mpp task ends.
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;

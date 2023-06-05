@@ -18,10 +18,13 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <kvproto/kvrpcpb.pb.h>
+
 
 namespace DB
 {
@@ -57,7 +60,23 @@ BlockInputStreams StorageDisaggregated::read(
     return readThroughExchange(num_streams);
 }
 
-BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+void StorageDisaggregated::read(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const Names & /*column_names*/,
+    const SelectQueryInfo & /*query_info*/,
+    const Context & /*context*/,
+    size_t /*max_block_size*/,
+    unsigned num_streams)
+{
+    // TODO support S3
+    RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
+
+    /// Fetch all data from write node through MPP exchange sender/receiver
+    readThroughExchange(exec_status, group_builder, num_streams);
+}
+
+std::vector<RequestAndRegionIDs> StorageDisaggregated::buildDispatchRequests()
 {
     auto remote_table_ranges = buildRemoteTableRanges();
 
@@ -69,6 +88,12 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
         dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
+    return dispatch_reqs;
+}
+
+BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams)
+{
+    std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
@@ -76,15 +101,33 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
     // TODO: push down filter conditions to write node
     filterConditions(*analyzer, pipeline);
 
     return pipeline.streams;
 }
 
+void StorageDisaggregated::readThroughExchange(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    unsigned num_streams)
+{
+    std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
+
+    buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // TODO: push down filter conditions to write node
+    filterConditions(exec_status, group_builder, *analyzer);
+}
+
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
 {
-    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    std::unordered_map<TableID, RegionRetryList> all_remote_regions;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
@@ -110,7 +153,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     const std::vector<RemoteTableRange> & remote_table_ranges,
     const pingcap::kv::LabelFilter & label_filter)
 {
-    std::vector<Int64> physical_table_ids;
+    std::vector<TableID> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
     std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
     ranges_for_each_physical_table.reserve(remote_table_ranges.size());
@@ -232,7 +275,7 @@ tipb::Executor StorageDisaggregated::buildTableScanTiPB()
     return ts_exec;
 }
 
-void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
+void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams)
 {
     tipb::ExchangeReceiver receiver;
     for (const auto & dispatch_req : dispatch_reqs)
@@ -272,10 +315,16 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
+}
+
+void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline)
+{
+    buildExchangeReceiver(dispatch_reqs, num_streams);
 
     // We can use PhysicalExchange::transform() to build InputStream after
     // DAGQueryBlockInterpreter is deprecated to avoid duplicated code here.
     const String extra_info = "disaggregated compute node exchange receiver";
+    const String & executor_id = table_scan.getTableScanExecutorID();
     for (size_t i = 0; i < num_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
@@ -295,6 +344,25 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
+void StorageDisaggregated::buildReceiverSources(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const std::vector<RequestAndRegionIDs> & dispatch_reqs,
+    unsigned num_streams)
+{
+    buildExchangeReceiver(dispatch_reqs, num_streams);
+
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        group_builder.addConcurrency(
+            std::make_unique<ExchangeReceiverSourceOp>(
+                exec_status,
+                log->identifier(),
+                exchange_receiver,
+                /*stream_id=*/0));
+    }
+}
+
 void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
     if (filter_conditions.hasValue())
@@ -307,43 +375,32 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
     }
 }
 
+void StorageDisaggregated::filterConditions(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
+{
+    if (filter_conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+    }
+}
+
 void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
 {
     // If the column is not in the columns of pushed down filter, append a cast to the column.
-    std::vector<ExtraCastAfterTSMode> need_cast_column;
-    need_cast_column.reserve(table_scan.getColumnSize());
-    std::unordered_set<ColumnID> col_id_set;
+    std::vector<UInt8> may_need_add_cast_column;
+    may_need_add_cast_column.reserve(table_scan.getColumnSize());
+    std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
     {
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), col_id_set);
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
     }
-    bool has_need_cast_column = false;
     for (const auto & col : table_scan.getColumns())
-    {
-        if (col_id_set.contains(col.id))
-        {
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
-        }
-        else
-        {
-            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
-            {
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                has_need_cast_column = true;
-            }
-            else if (col.id != -1 && col.tp == TiDB::TypeTime)
-            {
-                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-                has_need_cast_column = true;
-            }
-            else
-            {
-                need_cast_column.push_back(ExtraCastAfterTSMode::None);
-            }
-        }
-    }
+        may_need_add_cast_column.push_back(!col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
+    bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true) != may_need_add_cast_column.end();
     ExpressionActionsChain chain;
-    if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         chain.finalize();

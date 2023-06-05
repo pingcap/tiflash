@@ -165,7 +165,9 @@ void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
         log,
         "remaining_tasks must >= 0, but actual value is {}",
         remaining_tasks);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+#ifndef NDEBUG
+    LOG_TRACE(log, "one task finished, {} tasks remaining", remaining_tasks);
+#endif // !NDEBUG
     if (0 == remaining_tasks)
         finish();
 }
@@ -210,6 +212,7 @@ void Event::switchStatus(EventStatus from, EventStatus to)
         magic_enum::enum_name(from),
         magic_enum::enum_name(to),
         magic_enum::enum_name(status.load()));
+
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 

@@ -28,14 +28,15 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
-
 namespace DB
 {
 class Context;
@@ -273,6 +274,8 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
+    RU getReadRU() const;
+
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -315,6 +318,8 @@ public:
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+
+    RuntimeFilterMgr runtime_filter_mgr;
 
 private:
     void initExecutorIdToJoinIdMap();

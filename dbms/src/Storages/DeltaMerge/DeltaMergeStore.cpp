@@ -20,11 +20,14 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -970,6 +973,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         EMPTY_FILTER,
@@ -992,7 +996,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
                 req_info);
         }
         else
@@ -1006,9 +1009,11 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 /* read_mode */ ReadMode::Raw,
-                extra_table_id_index,
-                physical_table_id,
                 req_info);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
         }
         res.push_back(stream);
     }
@@ -1031,7 +1036,10 @@ static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, b
 ReadMode DeltaMergeStore::getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+                      "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
+                      filter == nullptr || filter->before_where == nullptr,
+                      magic_enum::enum_name(read_mode));
     return read_mode;
 }
 
@@ -1042,6 +1050,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t num_streams,
                                         UInt64 max_version,
                                         const PushDownFilterPtr & filter,
+                                        const RuntimeFilteList & runtime_filter_list,
+                                        const int rf_max_wait_time_ms,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
@@ -1061,11 +1071,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(tracing_logger,
-              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
-              keep_order,
-              db_context.getSettingsRef().dt_enable_read_thread,
-              enable_read_thread);
+    LOG_INFO(tracing_logger,
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} is_fast_scan={} is_push_down_filter_empty={}",
+             keep_order,
+             db_context.getSettingsRef().dt_enable_read_thread,
+             enable_read_thread,
+             is_fast_scan,
+             filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1077,6 +1089,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         filter,
@@ -1099,8 +1112,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 read_task_pool,
                 filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
-                log_tracing_id);
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms);
         }
         else
         {
@@ -1113,9 +1127,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 max_version,
                 expected_block_size,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
                 log_tracing_id);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
         }
         res.push_back(stream);
     }
@@ -1124,8 +1140,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     return res;
 }
 
-SourceOps DeltaMergeStore::readSourceOps(
+void DeltaMergeStore::read(
     PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
@@ -1170,6 +1187,7 @@ SourceOps DeltaMergeStore::readSourceOps(
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         filter,
@@ -1182,23 +1200,24 @@ SourceOps DeltaMergeStore::readSourceOps(
         enable_read_thread,
         final_num_stream);
 
-    SourceOps res;
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        if (enable_read_thread)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            res.push_back(
+            group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
                     exec_status,
                     read_task_pool,
                     columns_to_read,
                     extra_table_id_index,
-                    physical_table_id,
                     log_tracing_id));
         }
-        else
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            res.push_back(std::make_unique<DMSegmentThreadSourceOp>(
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
                 exec_status,
                 dm_context,
                 read_task_pool,
@@ -1208,14 +1227,19 @@ SourceOps DeltaMergeStore::readSourceOps(
                 max_version,
                 expected_block_size,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
                 log_tracing_id));
         }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_status,
+                log_tracing_id,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
     }
-    LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 
-    return res;
+    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
@@ -1766,7 +1790,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1785,7 +1809,7 @@ void DeltaMergeStore::restoreStableFilesFromLocal()
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 

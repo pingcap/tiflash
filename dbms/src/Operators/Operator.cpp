@@ -33,7 +33,9 @@ extern const char random_pipeline_model_cancel_failpoint[];
 
 OperatorStatus Operator::await()
 {
-    CHECK_IS_CANCELLED
+    // `exec_status.is_cancelled` has been checked by `EventTask`.
+    // If `exec_status.is_cancelled` is checked here, the overhead of `exec_status.is_cancelled` will be amplified by the high frequency of `await` calls.
+
     // TODO collect operator profile info here.
     auto op_status = awaitImpl();
 #ifndef NDEBUG

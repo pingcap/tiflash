@@ -33,6 +33,7 @@ public:
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
     {
+        exchange_receiver->verifyStreamId(stream_id);
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }

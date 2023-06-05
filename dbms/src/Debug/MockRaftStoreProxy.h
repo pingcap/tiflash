@@ -152,19 +152,20 @@ struct MockRaftStoreProxy : MutexLockWrap
     }
 
     MockProxyRegionPtr getRegion(uint64_t id);
-
     MockProxyRegionPtr doGetRegion(uint64_t id);
 
     MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
 
     void init(size_t region_num);
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
 
     size_t size() const;
 
-    void wake();
+    void wakeNotifier();
 
     void testRunNormal(const std::atomic_bool & over);
 
+    /// Handle one read index task.
     void runOneRound();
 
     void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
@@ -183,27 +184,33 @@ struct MockRaftStoreProxy : MutexLockWrap
         Type type = NORMAL;
     };
 
-    /// boostrap a region.
-    void bootstrap(
+    /// Boostrap with a given region.
+    /// Similar to TiKV's `bootstrap_region`.
+    void bootstrapWithRegion(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
         std::optional<std::pair<std::string, std::string>> maybe_range);
 
-    /// boostrap a table, since applying snapshot needs table schema.
-    TableID bootstrap_table(
+    /// Boostrap a table.
+    /// Must be called if:
+    /// 1. Applying snapshot which needs table schema
+    /// 2. Doing row2col.
+    TableID bootstrapTable(
         Context & ctx,
         KVStore & kvs,
-        TMTContext & tmt);
+        TMTContext & tmt,
+        bool drop_at_first = true);
 
-    /// clear tables.
-    void clear_tables(
-        Context & ctx,
+    /// Manually add a region.
+    void debugAddRegions(
         KVStore & kvs,
-        TMTContext & tmt);
+        TMTContext & tmt,
+        std::vector<UInt64> region_ids,
+        std::vector<std::pair<std::string, std::string>> && ranges);
 
     /// We assume that we generate one command, and immediately commit.
-    /// normal write to a region.
+    /// Normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
@@ -220,6 +227,14 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     /// Create a compactLog admin command, returns (index, term) of the admin command itself.
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
+
+    std::tuple<uint64_t, uint64_t> adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest &&, raft_cmdpb::AdminResponse &&);
+
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2 = true);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composePrepareMerge(metapb::Region && target, UInt64 min_index);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeCommitMerge(metapb::Region && source, UInt64 commit);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeRollbackMerge(UInt64 commit);
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeBatchSplit(std::vector<UInt64> && region_ids, std::vector<std::pair<std::string, std::string>> && ranges, metapb::RegionEpoch old_epoch);
 
     struct Cf
     {
@@ -273,16 +288,24 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t region_id,
         uint64_t to);
 
+    void clear()
+    {
+        auto _ = genLockGuard();
+        regions.clear();
+    }
+
     MockRaftStoreProxy()
     {
         log = Logger::get("MockRaftStoreProxy");
         table_id = 1;
     }
 
+    // Mock Proxy will drop read index requests to these regions
     std::unordered_set<uint64_t> region_id_to_drop;
+    // Mock Proxy will return error read index response to these regions
     std::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
-    std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
+    std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
     AsyncWaker::Notifier notifier;
     TableID table_id;
     LoggerPtr log;
@@ -308,5 +331,19 @@ struct GCMonitor : MutexLockWrap
 
     static GCMonitor global_gc_monitor;
 };
+
+template <typename... Types>
+std::vector<std::pair<std::string, std::string>> regionRangeToEncodeKeys(Types &&... args)
+{
+    // RegionRangeKeys::RegionRange is not copy-constructible, however, initialize_list need copy construction.
+    // So we have to so this way, rather than create a composeXXX that accepts a vector of RegionRangeKeys::RegionRange.
+    std::vector<std::pair<std::string, std::string>> ranges_str;
+    ([&] {
+        auto & x = args;
+        ranges_str.emplace_back(std::make_pair(x.first.toString(), x.second.toString()));
+    }(),
+     ...);
+    return ranges_str;
+}
 
 } // namespace DB

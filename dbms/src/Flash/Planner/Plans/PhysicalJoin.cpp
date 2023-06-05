@@ -122,9 +122,9 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
-    if (settings.force_enable_pipeline && max_bytes_before_external_join > 0)
+    if (settings.enforce_enable_pipeline && max_bytes_before_external_join > 0)
     {
-        // Currently, the pipeline model does not support disk-based join, so when force_enable_pipeline is true, the disk-based join will be disabled.
+        // Currently, the pipeline model does not support disk-based join, so when enforce_enable_pipeline is true, the disk-based join will be disabled.
         max_bytes_before_external_join = 0;
         LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
     }
@@ -137,6 +137,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     Names join_output_column_names;
     for (const auto & col : join_output_schema)
         join_output_column_names.emplace_back(col.name);
+
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
+    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
+
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -153,10 +158,12 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
+        settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
-        context.isTest());
+        context.isTest(),
+        runtime_filter_list);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 

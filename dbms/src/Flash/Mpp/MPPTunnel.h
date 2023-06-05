@@ -111,7 +111,7 @@ public:
 
     virtual bool finish() = 0;
 
-    virtual bool isReadyForWrite() const = 0;
+    virtual bool isWritable() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -204,7 +204,7 @@ public:
         return send_queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !send_queue.isFull();
     }
@@ -246,7 +246,7 @@ public:
         return queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !queue.isFull();
     }
@@ -276,7 +276,7 @@ private:
 };
 
 // local_only means ExhangeReceiver receives data only from local
-template <bool enable_fine_grained_shuffle, bool local_only>
+template <bool local_only>
 class LocalTunnelSenderV2 : public TunnelSender
 {
 public:
@@ -326,14 +326,14 @@ public:
         return true;
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         if constexpr (local_only)
-            return local_request_handler.isReadyForWrite();
+            return local_request_handler.isWritable();
         else
         {
             std::lock_guard lock(mu);
-            return local_request_handler.isReadyForWrite();
+            return local_request_handler.isWritable();
         }
     }
 
@@ -357,11 +357,11 @@ private:
         // Adding a lock ensures that there is only one other thread competing with async reactor,
         // so the probability of async reactor getting the lock is 1/2.
         if constexpr (local_only)
-            return local_request_handler.write<enable_fine_grained_shuffle, is_force>(source_index, data);
+            return local_request_handler.write<is_force>(source_index, data);
         else
         {
             std::lock_guard lock(mu);
-            return local_request_handler.write<enable_fine_grained_shuffle, is_force>(source_index, data);
+            return local_request_handler.write<is_force>(source_index, data);
         }
     }
 
@@ -428,7 +428,7 @@ public:
         return send_queue.finish();
     }
 
-    bool isReadyForWrite() const override
+    bool isWritable() const override
     {
         return !send_queue.isFull();
     }
@@ -442,10 +442,8 @@ using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
 using SyncTunnelSenderPtr = std::shared_ptr<SyncTunnelSender>;
 using AsyncTunnelSenderPtr = std::shared_ptr<AsyncTunnelSender>;
 using LocalTunnelSenderV1Ptr = std::shared_ptr<LocalTunnelSenderV1>;
-using LocalTunnelSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<false, false>>;
-using LocalTunnelFineGrainedSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<true, false>>;
-using LocalTunnelSenderLocalOnlyV2Ptr = std::shared_ptr<LocalTunnelSenderV2<false, true>>;
-using LocalTunnelSenderFineGrainedLocalOnlyV2Ptr = std::shared_ptr<LocalTunnelSenderV2<true, true>>;
+using LocalTunnelSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<false>>;
+using LocalTunnelSenderLocalOnlyV2Ptr = std::shared_ptr<LocalTunnelSenderV2<true>>;
 
 /**
  * MPPTunnel represents the sender of an exchange connection.
@@ -504,11 +502,11 @@ public:
     // forceWrite write a single packet to the tunnel's send queue without blocking,
     // and need to call isReadForWrite first.
     // ```
-    // while (!isReadyForWrite()) {}
+    // while (!isWritable()) {}
     // forceWrite(std::move(data));
     // ```
     void forceWrite(TrackedMppDataPacketPtr && data);
-    bool isReadyForWrite() const;
+    bool isWritable() const;
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();
@@ -525,7 +523,6 @@ public:
     void connectLocalV2(
         size_t source_index,
         LocalRequestHandler & local_request_handler,
-        bool is_fine_grained,
         bool has_remote_conn);
 
     // like `connect` but it's intended to connect async grpc.
@@ -549,9 +546,7 @@ public:
     LocalTunnelSenderV1Ptr getLocalTunnelSenderV1() { return local_tunnel_sender_v1; }
 
     LocalTunnelSenderV2Ptr getLocalTunnelSenderV2() { return local_tunnel_v2; }
-    LocalTunnelFineGrainedSenderV2Ptr getLocalTunnelFineGrainedSenderV2() { return local_tunnel_fine_grained_v2; }
     LocalTunnelSenderLocalOnlyV2Ptr getLocalTunnelLocalOnlyV2() { return local_tunnel_local_only_v2; }
-    LocalTunnelSenderFineGrainedLocalOnlyV2Ptr getLocalTunnelFineGrainedLocalOnlyV2() { return local_tunnel_fine_grained_local_only_v2; }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -605,11 +600,9 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderV1Ptr local_tunnel_sender_v1;
-
     LocalTunnelSenderV2Ptr local_tunnel_v2;
-    LocalTunnelFineGrainedSenderV2Ptr local_tunnel_fine_grained_v2;
     LocalTunnelSenderLocalOnlyV2Ptr local_tunnel_local_only_v2;
-    LocalTunnelSenderFineGrainedLocalOnlyV2Ptr local_tunnel_fine_grained_local_only_v2;
+
     std::atomic<Int64> data_size_in_queue;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;

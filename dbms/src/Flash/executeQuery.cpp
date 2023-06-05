@@ -30,6 +30,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/S3/S3Common.h>
 
 namespace ProfileEvents
 {
@@ -101,7 +102,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
     }
 
-
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
@@ -162,18 +162,18 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    if (context.getSettingsRef().force_enable_pipeline)
+    if (context.getSettingsRef().enforce_enable_pipeline)
     {
         RUNTIME_CHECK_MSG(
-            context.getSharedContextDisagg()->notDisaggregatedMode(),
-            "The pipeline model does not support storage-computing separation mode, and an error is reported because the setting force_enable_pipeline is true.");
+            context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
+            "The pipeline model does not support storage-computing separation with S3 mode, and an error is reported because the setting enforce_enable_pipeline is true.");
         auto res = executeAsPipeline(context, internal);
-        RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting force_enable_pipeline is true.");
+        RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
         return std::move(*res);
     }
     if (context.getSettingsRef().enable_planner
         && context.getSettingsRef().enable_pipeline
-        && context.getSharedContextDisagg()->notDisaggregatedMode())
+        && (context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled()))
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

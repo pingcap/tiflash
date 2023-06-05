@@ -274,6 +274,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              "",
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -450,6 +452,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -533,6 +537,8 @@ try
                           /* num_streams= */ 1,
                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                           EMPTY_FILTER,
+                          std::vector<RuntimeFilterPtr>{},
+                          0,
                           TRACING_NAME,
                           /* keep_order= */ false,
                           /* is_fast_scan= */ false,
@@ -558,6 +564,8 @@ try
                      /* num_streams= */ 1,
                      /* max_version= */ std::numeric_limits<UInt64>::max(),
                      std::make_shared<PushDownFilter>(filter),
+                     std::vector<RuntimeFilterPtr>{},
+                     0,
                      TRACING_NAME,
                      /* keep_order= */ false,
                      /* is_fast_scan= */ false,
@@ -647,6 +655,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -726,6 +736,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -775,6 +787,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -802,6 +816,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -877,6 +893,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -948,6 +966,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -969,6 +989,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1014,6 +1036,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1044,6 +1068,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1087,6 +1113,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1106,6 +1134,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1125,6 +1155,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1144,6 +1176,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1201,6 +1235,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1227,6 +1263,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1253,6 +1291,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1272,6 +1312,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1293,6 +1335,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1350,6 +1394,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1376,6 +1422,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1402,6 +1450,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1486,6 +1536,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,
@@ -1510,62 +1562,6 @@ try
     }
 }
 CATCH
-
-
-ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, UInt32 flag, Int32 flen, String origin_default_value = "", String default_value = "", Int32 decimal = 0, String charset = "binary", String collate = "binary")
-{
-    ColumnInfo column;
-    column.id = column_id;
-    column.name = name;
-    column.tp = tp;
-    column.flag = flag;
-    column.flen = flen;
-    column.decimal = decimal;
-
-    LOG_INFO(Logger::get("hyy"), "getColumnInfo parser origin_default_value: {}, default_value: {}, collate:{}, charset: {}", origin_default_value, default_value, collate, charset);
-    Poco::JSON::Parser parser;
-    if (!origin_default_value.empty())
-    {
-        column.origin_default_value = parser.parse(origin_default_value);
-    }
-    LOG_INFO(Logger::get("hyy"), "getColumnInfo parser origin_default_value finished");
-    if (!default_value.empty())
-    {
-        column.default_value = parser.parse(default_value);
-    }
-    LOG_INFO(Logger::get("hyy"), "getColumnInfo parser default_value finished");
-    if (!collate.empty())
-    {
-        column.collate = parser.parse(collate);
-    }
-    LOG_INFO(Logger::get("hyy"), "getColumnInfo parser collate finished");
-    if (!charset.empty())
-    {
-        column.charset = parser.parse(charset);
-    }
-    LOG_INFO(Logger::get("hyy"), "getColumnInfo parser finished");
-
-    return column;
-}
-
-TableInfo getTableInfo(std::vector<ColumnInfo> & columns)
-{
-    TiDB::TableInfo table_info;
-    table_info.id = 1; // table_id
-    table_info.keyspace_id = NullspaceID;
-    table_info.name = "test_env";
-
-    table_info.columns = columns;
-    // original_table_info->pk_is_handle = false;
-    // original_table_info->is_common_handle = false;
-
-    auto replica_info = TiDB::TiFlashReplicaInfo();
-    replica_info.count = 1;
-    table_info.replica_info = replica_info;
-
-    return table_info;
-}
-
 
 TEST_P(DeltaMergeStoreRWTest, DDLChangeInt8ToInt32)
 try
@@ -1626,6 +1622,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1709,6 +1707,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1780,6 +1780,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1847,6 +1849,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -1915,7 +1919,6 @@ CATCH
 // }
 // CATCH
 
-
 TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat32)
 try
 {
@@ -1948,6 +1951,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -1995,6 +2000,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2042,6 +2049,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2089,6 +2098,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2142,6 +2153,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2217,6 +2230,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -2322,6 +2337,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -2370,6 +2387,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,
@@ -2440,6 +2459,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2482,6 +2503,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2593,6 +2616,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2695,6 +2720,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2767,6 +2794,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2796,6 +2825,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2852,6 +2883,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2889,6 +2922,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2956,6 +2991,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,

@@ -149,7 +149,7 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     static uint16_t getPartitionNum() { return 1; }
-    static bool isReadyForWrite() { throw Exception("Unsupport async write"); }
+    static bool isWritable() { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -293,7 +293,7 @@ struct MockReceiverContext
         return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
     }
 
-    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool, bool) {}
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};

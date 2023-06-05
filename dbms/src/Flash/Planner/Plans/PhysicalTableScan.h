@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -50,17 +49,15 @@ public:
     const String & getFilterConditionsId() const;
 
     void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorStatus & /*exec_status*/,
         PipelineExecGroupBuilder & group_builder,
-        Context & context,
-        size_t concurrency) override;
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
-    // generate sourceOps in compile time
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
         PipelineExecutorStatus & exec_status) override;
-
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
@@ -75,10 +72,8 @@ private:
 
     TiDBTableScan tidb_table_scan;
 
-    std::unique_ptr<DAGStorageInterpreter> storage_interpreter;
-
     Block sample_block;
 
-    SourceOps source_ops;
+    PipelineExecGroupBuilder pipeline_exec_builder;
 };
 } // namespace DB

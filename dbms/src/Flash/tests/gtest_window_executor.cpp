@@ -330,7 +330,7 @@ try
 
         /*
         select count(1) from (
-            SELECT 
+            SELECT
                 ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
                 ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order` DESC)
             FROM `test_db`.`test_table`
@@ -347,7 +347,7 @@ try
 
         /*
         select count(1) from (
-            SELECT 
+            SELECT
                 ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
                 ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`)
             FROM `test_db`.`test_table`
@@ -370,7 +370,7 @@ try
 
         /*
         select count(1) from (
-            SELECT 
+            SELECT
                 Rank() OVER (PARTITION BY `partition` ORDER BY  `order`),
                 DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`)
             FROM `test_db`.`test_table`

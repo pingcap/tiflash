@@ -45,7 +45,11 @@
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
+<<<<<<< HEAD
 #include <mutex>
+=======
+#include <magic_enum.hpp>
+>>>>>>> f6184d5250480ec5ba8c958231ef8fc430b21203
 #include <tuple>
 
 #include "Storages/Transaction/RegionCFDataBase.h"
@@ -371,15 +375,20 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applySetTiFlashReplica(db_info, diff.table_id);
         break;
     }
+    case SchemaActionType::UpdateTiFlashReplicaStatus:
+    {
+        applySetTiFlashReplica(db_info, diff.table_id);
+        break;
+    }
     default:
     {
         if (diff.type < SchemaActionType::MaxRecognizedType)
         {
-            LOG_INFO(log, "Ignore change type: {}", int(diff.type));
+            LOG_INFO(log, "Ignore change type: {}", magic_enum::enum_name(diff.type));
         }
         else
         { // >= SchemaActionType::MaxRecognizedType
-            LOG_ERROR(log, "Unsupported change type: {}", int(diff.type));
+            LOG_ERROR(log, "Unsupported change type: {}", magic_enum::enum_name(diff.type));
         }
 
         break;
@@ -1112,7 +1121,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DatabaseID database_id, T
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
     applyDropPhysicalTable(name_mapper.mapDatabaseName(database_id, keyspace_id), table_info.id);
 }
-
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()

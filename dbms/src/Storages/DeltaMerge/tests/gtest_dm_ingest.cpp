@@ -270,6 +270,8 @@ try
             /* num_streams= */ 1,
             /* max_version= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
             "",
             /* keep_order= */ true)[0];
         ASSERT_INPUTSTREAM_COLS_UR(

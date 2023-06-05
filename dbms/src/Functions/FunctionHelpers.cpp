@@ -33,7 +33,7 @@ const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * co
     if (!column->isColumnConst())
         return {};
 
-    const ColumnConst * res = static_cast<const ColumnConst *>(column);
+    const auto * res = static_cast<const ColumnConst *>(column);
 
     if (checkColumn<ColumnString>(&res->getDataColumn()) || checkColumn<ColumnFixedString>(&res->getDataColumn()))
         return res;
@@ -44,7 +44,7 @@ const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * co
 
 Columns convertConstTupleToConstantElements(const ColumnConst & column)
 {
-    const ColumnTuple & src_tuple = static_cast<const ColumnTuple &>(column.getDataColumn());
+    const auto & src_tuple = static_cast<const ColumnTuple &>(column.getDataColumn());
     const Columns & src_tuple_columns = src_tuple.getColumns();
     size_t tuple_size = src_tuple_columns.size();
     size_t rows = column.size();
@@ -67,7 +67,7 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
     {
         const auto & col = block.getByPosition(i);
 
-        if (args.count(i) && col.type->isNullable())
+        if (args.contains(i) && col.type->isNullable())
         {
             const DataTypePtr & nested_type = static_cast<const DataTypeNullable &>(*col.type).getNestedType();
 
@@ -92,9 +92,9 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
             else
                 throw Exception(
                     "Illegal column for DataTypeNullable:" + col.type->getName() + " [column_name=" + col.name
-                        + "] [created=" + DB::toString(bool(col.column))
-                        + "] [nullable=" + (col.column ? DB::toString(bool(col.column->isColumnNullable())) : "null")
-                        + "] [const=" + (col.column ? DB::toString(bool(col.column->isColumnConst())) : "null") + "]",
+                        + "] [created=" + DB::toString(col.column != nullptr)
+                        + "] [nullable=" + (col.column ? DB::toString(col.column->isColumnNullable()) : "null")
+                        + "] [const=" + (col.column ? DB::toString(col.column->isColumnConst()) : "null") + "]",
                     ErrorCodes::ILLEGAL_COLUMN);
         }
         else

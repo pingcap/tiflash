@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/Reactor/Spinner.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
@@ -26,6 +25,12 @@ namespace DB
 {
 class TaskScheduler;
 
+// hold the `Task *` to avoid the cost of `TaskPtr->get()`
+using WaitingTask = std::pair<TaskPtr, Task *>;
+using WaitingTasks = std::list<WaitingTask>;
+
+/// Used for batch calling task.await and submitting the tasks that have been removed from the waiting state to task thread pools.
+/// When there is no non-waiting state task for a long time, it will try to let the current thread rest for a period of time to give the CPU to other threads.
 class WaitReactor
 {
 public:
@@ -47,19 +52,27 @@ private:
 
     // Get the incremental tasks from waiting_task_list.
     // return false if waiting_task_list is empty and has finished.
-    bool takeFromWaitingTaskList(std::list<TaskPtr> & local_waiting_tasks);
+    inline bool takeFromWaitingTaskList(WaitingTasks & local_waiting_tasks);
 
-    void react(std::list<TaskPtr> & local_waiting_tasks);
+    inline void react(WaitingTasks & local_waiting_tasks);
+
+    inline bool awaitAndCollectReadyTask(WaitingTask && task);
+
+    inline void submitReadyTasks();
+
+    inline void tryYield();
 
 private:
-    WaitingTaskList waiting_task_list;
-
     LoggerPtr logger = Logger::get();
 
     TaskScheduler & scheduler;
 
-    Spinner spinner;
-
     std::thread thread;
+
+    WaitingTaskList waiting_task_list;
+
+    int16_t spin_count = 0;
+    std::vector<TaskPtr> cpu_tasks;
+    std::vector<TaskPtr> io_tasks;
 };
 } // namespace DB
