@@ -24,33 +24,42 @@ extern const char random_pipeline_model_execute_prefix_failpoint[];
 extern const char random_pipeline_model_execute_suffix_failpoint[];
 } // namespace FailPoints
 
-#define HANDLE_OP_STATUS(op, op_status, expect_status)                                            \
-    switch (op_status)                                                                            \
-    {                                                                                             \
-    case (expect_status):                                                                         \
-        break;                                                                                    \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
-    case OperatorStatus::IO:                                                                      \
-        assert(!io_op);                                                                           \
-        assert(op);                                                                               \
-        io_op.emplace((op).get());                                                                \
-    /* For unexpected status, an immediate return is required. */                                 \
-    default:                                                                                      \
-        return (op_status);                                                                       \
+#define HANDLE_OP_STATUS(op, op_status, expect_status)                                                 \
+    switch (op_status)                                                                                 \
+    {                                                                                                  \
+    /* For the expected status, it will not return here, */                                            \
+    /* but instead return control to the macro caller, */                                              \
+    /* who will continue to call the next operator. */                                                 \
+    case (expect_status):                                                                              \
+        break;                                                                                         \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
+    case OperatorStatus::IO:                                                                           \
+        fillIOOp((op).get());                                                                          \
+        return (op_status);                                                                            \
+    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
+    case OperatorStatus::WAITING:                                                                      \
+        fillAwaitable((op).get());                                                                     \
+        return (op_status);                                                                            \
+    /* For unexpected status, an immediate return is required. */                                      \
+    default:                                                                                           \
+        return (op_status);                                                                            \
     }
 
-#define HANDLE_LAST_OP_STATUS(op, op_status)                                                      \
-    assert(op);                                                                                   \
-    switch (op_status)                                                                            \
-    {                                                                                             \
-    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
-    case OperatorStatus::IO:                                                                      \
-        assert(!io_op);                                                                           \
-        assert(op);                                                                               \
-        io_op.emplace((op).get());                                                                \
-    /* For the last operator, the status will always be returned. */                              \
-    default:                                                                                      \
-        return (op_status);                                                                       \
+#define HANDLE_LAST_OP_STATUS(op, op_status)                                                           \
+    assert(op);                                                                                        \
+    switch (op_status)                                                                                 \
+    {                                                                                                  \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
+    case OperatorStatus::IO:                                                                           \
+        fillIOOp((op).get());                                                                          \
+        return (op_status);                                                                            \
+    /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
+    case OperatorStatus::WAITING:                                                                      \
+        fillAwaitable((op).get());                                                                     \
+        return (op_status);                                                                            \
+    /* For the last operator, the status will always be returned. */                                   \
+    default:                                                                                           \
+        return (op_status);                                                                            \
     }
 
 PipelineExec::PipelineExec(
@@ -61,10 +70,6 @@ PipelineExec::PipelineExec(
     , transform_ops(std::move(transform_ops_))
     , sink_op(std::move(sink_op_))
 {
-    addOperatorIfAwaitable(sink_op);
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
-        addOperatorIfAwaitable(*it);
-    addOperatorIfAwaitable(source_op);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
 
@@ -151,10 +156,12 @@ OperatorStatus PipelineExec::executeIO()
 }
 OperatorStatus PipelineExec::executeIOImpl()
 {
-    assert(io_op && *io_op);
-    auto op_status = (*io_op)->executeIO();
+    assert(io_op);
+    auto op_status = io_op->executeIO();
+    if (op_status == OperatorStatus::WAITING)
+        fillAwaitable(io_op);
     if (op_status != OperatorStatus::IO)
-        io_op.reset();
+        io_op = nullptr;
     return op_status;
 }
 
@@ -163,32 +170,20 @@ OperatorStatus PipelineExec::await()
     auto op_status = awaitImpl();
 #ifndef NDEBUG
     // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
+    // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }
 OperatorStatus PipelineExec::awaitImpl()
 {
-    for (auto & awaitable : awaitables)
-    {
-        auto op_status = awaitable->await();
-        switch (op_status)
-        {
-        // If NEED_INPUT is returned, continue checking the next operator.
-        case OperatorStatus::NEED_INPUT:
-            break;
-        // For the io status, the operator needs to be filled in io_op for later use in executeIO.
-        case OperatorStatus::IO:
-            assert(!io_op);
-            assert(awaitable);
-            io_op.emplace(awaitable);
-        // For unexpected status, an immediate return is required.
-        default:
-            return op_status;
-        }
-    }
-    // await must eventually return HAS_OUTPUT.
-    return OperatorStatus::HAS_OUTPUT;
+    assert(awaitable);
+    auto op_status = awaitable->await();
+    if (op_status == OperatorStatus::IO)
+        fillIOOp(awaitable);
+    if (op_status != OperatorStatus::WAITING)
+        awaitable = nullptr;
+    return op_status;
 }
 
 #undef HANDLE_OP_STATUS
