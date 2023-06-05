@@ -71,7 +71,8 @@ namespace DB
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
     M(exception_during_spill)                                     \
-    M(force_fail_to_create_etcd_session)
+    M(force_fail_to_create_etcd_session)                          \
+    M(force_remote_read_for_batch_cop_once)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -101,7 +102,8 @@ namespace DB
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
-    M(exception_after_large_write_exceed)
+    M(exception_after_large_write_exceed)                    \
+    M(exception_when_fetch_disagg_pages)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \

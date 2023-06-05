@@ -32,7 +32,18 @@ void MergeSortTransformOp::operatePrefix()
     // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
 
-    spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+    if (max_bytes_before_external_sort > 0)
+    {
+        if (Spiller::supportSpill(header_without_constants))
+        {
+            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+        }
+        else
+        {
+            max_bytes_before_external_sort = 0;
+            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
+        }
+    }
 }
 
 void MergeSortTransformOp::operateSuffix()
@@ -104,7 +115,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // convert to restore phase.
     status = MergeSortStatus::SPILL;
     assert(!cached_handler);
-    if (!spiller->hasSpilledData())
+    if (!hasSpilledData())
         LOG_INFO(log, "Begin spill in merge sort");
     cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
@@ -135,7 +146,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
     {
         if unlikely (!block)
         {
-            return spiller->hasSpilledData()
+            return hasSpilledData()
                 ? fromPartialToRestore()
                 : fromPartialToMerge(block);
         }

@@ -14,11 +14,16 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <memory>
 
-namespace DB
+namespace DB::DM::Remote
 {
-class SourceOp;
-using SourceOpPtr = std::unique_ptr<SourceOp>;
-using SourceOps = std::vector<SourceOpPtr>;
-} // namespace DB
+
+class RNReadTask;
+using RNReadTaskPtr = std::shared_ptr<RNReadTask>;
+
+class RNReadSegmentTask;
+using RNReadSegmentTaskPtr = std::shared_ptr<RNReadSegmentTask>;
+
+} // namespace DB::DM::Remote

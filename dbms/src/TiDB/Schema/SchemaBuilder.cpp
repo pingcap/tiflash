@@ -45,6 +45,7 @@
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
+#include <magic_enum.hpp>
 #include <tuple>
 
 namespace DB
@@ -550,15 +551,20 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applySetTiFlashReplica(db_info, diff.table_id);
         break;
     }
+    case SchemaActionType::UpdateTiFlashReplicaStatus:
+    {
+        applySetTiFlashReplica(db_info, diff.table_id);
+        break;
+    }
     default:
     {
         if (diff.type < SchemaActionType::MaxRecognizedType)
         {
-            LOG_INFO(log, "Ignore change type: {}", int(diff.type));
+            LOG_INFO(log, "Ignore change type: {}", magic_enum::enum_name(diff.type));
         }
         else
         { // >= SchemaActionType::MaxRecognizedType
-            LOG_ERROR(log, "Unsupported change type: {}", int(diff.type));
+            LOG_ERROR(log, "Unsupported change type: {}", magic_enum::enum_name(diff.type));
         }
 
         break;
@@ -1250,7 +1256,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
     const TiDB::TableInfoPtr & latest_table_info,
     const ManageableStoragePtr & storage)
 {
-    if (storage->getTableInfo().replica_info.count == latest_table_info->replica_info.count)
+    if (storage->getTableInfo().replica_info.count == latest_table_info->replica_info.count && storage->getTableInfo().replica_info.available == latest_table_info->replica_info.available)
         return;
 
     // Get a copy of old table info and update replica info

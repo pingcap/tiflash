@@ -27,6 +27,7 @@
 #include <prometheus/registry.h>
 
 #include <ext/scope_guard.h>
+#include <mutex>
 
 
 // to make GCC 11 happy
@@ -229,10 +230,12 @@ namespace DB
         F(type_total_establish_backoff, {{"type", "total_establish_backoff"}}, ExpBuckets{0.01, 2, 20}),                                            \
         F(type_resolve_lock, {{"type", "resolve_lock"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
         F(type_rpc_fetch_page, {{"type", "rpc_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                              \
+        F(type_write_page_cache, {{"type", "write_page_cache"}}, ExpBuckets{0.01, 2, 20}),                                                          \
         F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
-        F(type_build_read_task, {{"type", "build_read_task"}}, ExpBuckets{0.01, 2, 20}),                                                            \
-        F(type_seg_next_task, {{"type", "seg_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                                \
-        F(type_seg_build_stream, {{"type", "seg_build_stream"}}, ExpBuckets{0.01, 2, 20}))                                                          \
+        F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                        \
+        F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                                \
+        F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                \
+        F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}))                                                                    \
     M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
         F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
         F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \
@@ -307,6 +310,8 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                             \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                                       \
+    M(tiflash_mpp_task_monitor, "Monitor the lifecycle of MPP Task", Gauge,                                                                         \
+        F(type_longest_live_time, {"type", "longest_live_time"}),)                                                                                  \
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                                    \
         F(type_send, {{"type", "send_queue"}}),                                                                                                     \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                                  \
@@ -531,8 +536,13 @@ class TiFlashMetrics
 public:
     static TiFlashMetrics & instance();
 
+    void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
+
 private:
     TiFlashMetrics();
+
+    prometheus::Counter * getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &);
+    void removeReplicaSyncRUCounter(UInt32 keyspace_id);
 
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
@@ -552,6 +562,10 @@ private:
     using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
+
+    prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
+    std::mutex replica_sync_ru_mtx;
+    std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

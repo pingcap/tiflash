@@ -39,6 +39,8 @@ protected:
     void doFinalizeImpl() override;
 
 private:
-    PipelineExecPtr pipeline_exec;
+    PipelineExecPtr pipeline_exec_holder;
+    // To reduce the overheads of `pipeline_exec_holder.get()`
+    PipelineExec * pipeline_exec;
 };
 } // namespace DB

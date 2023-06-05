@@ -1077,7 +1077,7 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
-void StorageDeltaMerge::ingestFiles(
+UInt64 StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range,
     const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range,
@@ -1429,6 +1429,7 @@ try
     setColumns(std::move(new_columns));
     if (table_info)
     {
+        LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.value().get().serialize());
         tidb_table_info = table_info.value();
     }
 

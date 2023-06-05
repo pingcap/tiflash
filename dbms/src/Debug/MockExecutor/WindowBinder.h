@@ -19,6 +19,7 @@
 
 namespace DB::mock
 {
+// true: unbounded, false: not unbounded
 using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
 struct MockWindowFrame
 {

@@ -329,10 +329,9 @@ public:
     {}
 
 protected:
-    // doAwaitImpl ==> doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
+    // doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
     ExecTaskStatus doExecuteImpl() override
     {
-        assert(task_status == ExecTaskStatus::RUNNING);
         if (cpu_execute_time < min_time)
         {
             std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
@@ -344,7 +343,6 @@ protected:
 
     ExecTaskStatus doExecuteIOImpl() override
     {
-        assert(task_status == ExecTaskStatus::IO);
         if (io_execute_time < min_time)
         {
             std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
@@ -356,18 +354,11 @@ protected:
 
     ExecTaskStatus doAwaitImpl() override
     {
-        if (task_status == ExecTaskStatus::WAITING)
-        {
-            if unlikely (!wait_stopwatch)
-                wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-            return wait_stopwatch->elapsed() < min_time
-                ? ExecTaskStatus::WAITING
-                : ExecTaskStatus::FINISHED;
-        }
-        else
-        {
-            return ExecTaskStatus::RUNNING;
-        }
+        if unlikely (!wait_stopwatch)
+            wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        return wait_stopwatch->elapsed() < min_time
+            ? ExecTaskStatus::WAITING
+            : ExecTaskStatus::FINISHED;
     }
 
 private:
@@ -398,7 +389,7 @@ protected:
 class EventTestRunner : public ::testing::Test
 {
 public:
-    void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
+    static void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
         Events sources;
         for (const auto & event : events)
@@ -415,13 +406,13 @@ public:
         }
     }
 
-    void wait(PipelineExecutorStatus & exec_status)
+    static void wait(PipelineExecutorStatus & exec_status)
     {
         std::chrono::seconds timeout(15);
         exec_status.waitFor(timeout);
     }
 
-    void assertNoErr(PipelineExecutorStatus & exec_status)
+    static void assertNoErr(PipelineExecutorStatus & exec_status)
     {
         auto exception_ptr = exec_status.getExceptionPtr();
         auto exception_msg = exec_status.getExceptionMsg();
@@ -621,7 +612,7 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, insert_events)
+TEST_F(EventTestRunner, insertEvents)
 try
 {
     PipelineExecutorStatus exec_status;
@@ -630,6 +621,7 @@ try
         counters.push_back(99);
     {
         std::vector<EventPtr> events;
+        events.reserve(counters.size());
         for (auto & counter : counters)
             events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter));
         auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);

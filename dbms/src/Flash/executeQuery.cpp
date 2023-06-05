@@ -102,7 +102,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
     }
 
-
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
