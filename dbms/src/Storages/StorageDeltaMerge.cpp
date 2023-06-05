@@ -1376,6 +1376,7 @@ try
 
     if (table_info)
     {
+        LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.value().get().serialize());
         tidb_table_info = table_info.value();
     }
 
@@ -1456,7 +1457,8 @@ void StorageDeltaMerge::updateTableInfo(
     const String & table_name)
 {
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
-    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
+    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
+    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED) // TODO:这个有没有必要
     {
         auto & tmt_context = context.getTMTContext();
         tidb_table_info.engine_type = tmt_context.getEngineType();
@@ -1493,6 +1495,7 @@ void StorageDeltaMerge::alterSchemaChange(
 
 
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
+    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
     {
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
