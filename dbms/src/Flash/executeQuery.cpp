@@ -170,7 +170,7 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
     if (context.getSettingsRef().enforce_enable_pipeline)
     {
         RUNTIME_CHECK_MSG(
-            !TaskScheduler::instance,
+            TaskScheduler::instance,
             "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
         RUNTIME_CHECK_MSG(
             context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
