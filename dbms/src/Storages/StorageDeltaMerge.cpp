@@ -241,7 +241,8 @@ void StorageDeltaMerge::updateTableColumnInfo()
     }
 
     setColumns(new_columns);
-    for (const auto & new_column: new_columns.getAllPhysical()){
+    for (const auto & new_column : new_columns.getAllPhysical())
+    {
         LOG_INFO(Logger::get("hyy"), "StorageDeltaMerge::StorageDeltaMerge updateTableColumnInfo in new_columns col: {}", new_column.name);
     }
 
@@ -1418,11 +1419,13 @@ getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
     return std::make_tuple(std::move(columns), std::move(primary_keys));
 }
 
-ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info){
+ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info)
+{
     auto [columns, pks] = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
     // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
     ColumnsDescription new_columns;
-    for (auto column : columns) {
+    for (auto column : columns)
+    {
         new_columns.ordinary.emplace_back(std::move(column));
     }
     new_columns.materialized = getColumns().materialized;
@@ -1435,8 +1438,8 @@ void StorageDeltaMerge::updateTableInfo(
     TiDB::TableInfo & table_info,
     const Context & context,
     const String & database_name,
-    const String & table_name) {
-
+    const String & table_name)
+{
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
     if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
     {
@@ -1467,11 +1470,12 @@ void StorageDeltaMerge::alterSchemaChange(
     // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
-    for (const auto & new_column: new_columns.getAllPhysical()){
+    for (const auto & new_column : new_columns.getAllPhysical())
+    {
         LOG_INFO(Logger::get("hyy"), "alterSchemaChange in new_columns col: {}", new_column.name);
     }
     setColumns(std::move(new_columns));
-    
+
 
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
 
@@ -1480,7 +1484,9 @@ void StorageDeltaMerge::alterSchemaChange(
         if (storeInited())
         {
             _store->applyAlters(table_info);
-        } else {
+        }
+        else
+        {
             updateTableColumnInfo();
         }
     }
@@ -1503,7 +1509,7 @@ void StorageDeltaMerge::alterSchemaChange(
         context);
 
     // TODO:这边应该有些字段要改？
-    
+
     if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
     {
         auto & tmt_context = context.getTMTContext();

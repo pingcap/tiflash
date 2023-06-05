@@ -43,10 +43,7 @@ struct SchemaBuilder
 
     LoggerPtr log;
 
-    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, 
-                  std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id_, 
-                  std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id_, 
-                  std::shared_mutex & shared_mutex_for_table_id_map_, std::shared_mutex & shared_mutex_for_databases_)
+    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id_, std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id_, std::shared_mutex & shared_mutex_for_table_id_map_, std::shared_mutex & shared_mutex_for_databases_)
         : getter(getter_)
         , context(context_)
         , shared_mutex_for_databases(shared_mutex_for_databases_)

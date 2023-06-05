@@ -525,7 +525,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
               * Otherwise, concurrent queries for creating a table, if the table does not exist,
               *  can throw an exception, even if IF NOT EXISTS is specified.
               */
-            try {
+            try
+            {
                 guard = context.getDDLGuardIfTableDoesntExist(
                     database_name,
                     table_name,
@@ -538,13 +539,18 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                     else
                         throw Exception("Table " + database_name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
                 }
-            } catch(Exception & e){
+            }
+            catch (Exception & e)
+            {
                 // TODO:这怎么搞啊救命，搞个小点的值while
-                if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE){
+                if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE)
+                {
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "InterpreterCreateQuery::createTable failed, with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
                     // 但是直接退出的话，万一用的时候还没有完全创建完成怎么办
-                    for (int i = 0; i < 20; i++) {// retry for 1 mins
-                        while (!context.isTableExist(database_name, table_name)){
+                    for (int i = 0; i < 20; i++)
+                    { // retry for 1 mins
+                        while (!context.isTableExist(database_name, table_name))
+                        {
                             const int wait_seconds = 3;
                             LOG_ERROR(
                                 Logger::get("InterpreterCreateQuery"),
@@ -554,14 +560,15 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                             ::sleep(wait_seconds);
                         }
                         return {};
-                    }      
+                    }
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for 20 retry times");
                     e.rethrow();
-                } else {
+                }
+                else
+                {
                     e.rethrow();
                 }
             }
-            
         }
         else if (context.tryGetExternalTable(table_name) && create.if_not_exists)
             return {};

@@ -26,8 +26,9 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
-#include "Storages/Transaction/Types.h"
+
 #include "Debug/dbgTools.h"
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -93,11 +94,11 @@ void dbgFuncTableExists(Context & context, const ASTs & args, DBGInvoker::Printe
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    auto mapped = mappedTableWithOptional(context, database_name, table_name); 
+    auto mapped = mappedTableWithOptional(context, database_name, table_name);
     if (!mapped.has_value())
         output("false");
     else
-        output("true");  
+        output("true");
 }
 
 void dbgFuncDatabaseExists(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -106,11 +107,11 @@ void dbgFuncDatabaseExists(Context & context, const ASTs & args, DBGInvoker::Pri
         throw Exception("Args not matched, should be: database-name", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    auto mapped = mappedDatabaseWithOptional(context, database_name); 
+    auto mapped = mappedDatabaseWithOptional(context, database_name);
     if (!mapped.has_value())
         output("false");
     else
-        output("true");  
+        output("true");
 }
 
 BlockInputStreamPtr dbgFuncQueryQuotaMapped(Context & context, const ASTs & args)
@@ -147,12 +148,11 @@ BlockInputStreamPtr dbgFuncQueryQuotaMapped(Context & context, const ASTs & args
             LOG_INFO(Logger::get("hyy"), "Database {} not found.", database_name);
             return res;
         }
-        boost::algorithm::replace_all(query, "$d", "'"+mapped.value()+"'");
+        boost::algorithm::replace_all(query, "$d", "'" + mapped.value() + "'");
     }
 
     return executeQuery(query, context, true).in;
 }
-
 
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
@@ -206,7 +206,8 @@ void dbgFuncGetTiflashReplicaCount(Context & context, const ASTs & args, DBGInvo
 
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     auto mapped = mappedTableWithOptional(context, database_name, table_name);
-    if (!mapped.has_value()){
+    if (!mapped.has_value())
+    {
         output("0");
         return;
     }
@@ -231,7 +232,8 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     auto mapped = mappedTableWithOptional(context, database_name, table_name);
 
-    if (!mapped.has_value()){
+    if (!mapped.has_value())
+    {
         output("not find the table");
         return;
     }
@@ -250,7 +252,8 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
     {
         auto paritition_table_info = table_info.producePartitionTableInfo(part_def.id, name_mapper);
         auto partition_storage = context.getTMTContext().getStorages().get(NullspaceID, paritition_table_info->id);
-        if (partition_storage && partition_storage->getTombstone() == 0) {
+        if (partition_storage && partition_storage->getTombstone() == 0)
+        {
             fmt_buf.append((std::to_string(partition_storage->getTableInfo().replica_info.count)));
             fmt_buf.append("/");
         }

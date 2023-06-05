@@ -666,7 +666,8 @@ std::optional<QualifiedName> mappedTableWithOptional(Context & context, const St
 
     TMTContext & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
-    if (storage == nullptr){
+    if (storage == nullptr)
+    {
         //std::cout << "storage is null" << std::endl;
         return std::nullopt;
     }
@@ -680,7 +681,8 @@ QualifiedName mappedTable(Context & context, const String & database_name, const
 
     TMTContext & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().getByName(mapped_db, table_name, include_tombstone);
-    if (storage == nullptr){
+    if (storage == nullptr)
+    {
         throw Exception("Table " + table_name + " not found", ErrorCodes::UNKNOWN_TABLE);
     }
 

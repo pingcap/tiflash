@@ -204,7 +204,8 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 {
     const auto & settings = context.getSettingsRef();
 
-    for (const auto & table_pair : tables){
+    for (const auto & table_pair : tables)
+    {
         LOG_INFO(Logger::get("hyy"), "create Table with existing table name: {}, and self table name is {}", table_pair.first, table_name);
     }
 

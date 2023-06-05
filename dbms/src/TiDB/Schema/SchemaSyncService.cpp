@@ -198,7 +198,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
         auto storage = storage_ptr.lock();
         if (unlikely(!storage))
             continue;
-        
+
         String database_name = storage->getDatabaseName();
         String table_name = storage->getTableName();
         const auto & table_info = storage->getTableInfo();

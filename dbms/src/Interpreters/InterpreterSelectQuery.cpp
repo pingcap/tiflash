@@ -61,6 +61,7 @@
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+
 #include "common/logger_useful.h"
 
 #pragma GCC diagnostic push
@@ -293,7 +294,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     // }
 
     /// If first try failed, sync schema and try again.
-    // always sync schema 
+    // always sync schema
     {
         //LOG_INFO(log, "not OK, syncing schemas.");
         auto start_time = Clock::now();
@@ -304,7 +305,8 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
         auto storage_tmp = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
-        if (!managed_storage || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT || managed_storage->engineType() == ::TiDB::StorageEngine::TMT)){
+        if (!managed_storage || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+        {
             LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
             table_lock = storage->lockForShare(context.getCurrentQueryId());

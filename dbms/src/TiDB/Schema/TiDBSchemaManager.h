@@ -16,29 +16,36 @@
 
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 // #include <boost/thread/shared_mutex.hpp>
-namespace DB {
+namespace DB
+{
 
-class TiDBSchemaSyncerManager {
+class TiDBSchemaSyncerManager
+{
 public:
-    explicit TiDBSchemaSyncerManager(KVClusterPtr cluster_, bool mock_getter_, bool mock_mapper_) : 
-            cluster(cluster_)
-            ,mock_getter(mock_getter_)
-            ,mock_mapper(mock_mapper_) {}
+    explicit TiDBSchemaSyncerManager(KVClusterPtr cluster_, bool mock_getter_, bool mock_mapper_)
+        : cluster(cluster_)
+        , mock_getter(mock_getter_)
+        , mock_mapper(mock_mapper_)
+    {}
 
-    SchemaSyncerPtr getSchemaSyncer(KeyspaceID keyspace_id){
+    SchemaSyncerPtr getSchemaSyncer(KeyspaceID keyspace_id)
+    {
         auto syncer = schema_syncers.find(keyspace_id);
         return syncer == schema_syncers.end() ? nullptr : syncer->second;
     }
 
-    SchemaSyncerPtr getOrCreateSchemaSyncer(KeyspaceID keyspace_id){
+    SchemaSyncerPtr getOrCreateSchemaSyncer(KeyspaceID keyspace_id)
+    {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto syncer = schema_syncers.find(keyspace_id);
-        if (syncer == schema_syncers.end()) {
+        if (syncer == schema_syncers.end())
+        {
             read_lock.unlock();
             std::unique_lock<std::shared_mutex> write_lock(schema_syncers_mutex);
 
             syncer = schema_syncers.find(keyspace_id);
-            if (syncer == schema_syncers.end()){
+            if (syncer == schema_syncers.end())
+            {
                 return createSchemaSyncer(keyspace_id);
             }
             return syncer->second;
@@ -46,48 +53,58 @@ public:
         return syncer->second;
     }
 
-    SchemaSyncerPtr createSchemaSyncer(KeyspaceID keyspace_id) {
-        if (!mock_getter and !mock_mapper) {
+    SchemaSyncerPtr createSchemaSyncer(KeyspaceID keyspace_id)
+    {
+        if (!mock_getter and !mock_mapper)
+        {
             auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false, false>>(cluster, keyspace_id));
-            schema_syncers[keyspace_id] = schema_syncer ;
-            return schema_syncer;
-        } else if (mock_getter and mock_mapper) {
-            // for mock test
-            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
-            schema_syncers[keyspace_id] = schema_syncer ;
+            schema_syncers[keyspace_id] = schema_syncer;
             return schema_syncer;
         }
-        
+        else if (mock_getter and mock_mapper)
+        {
+            // for mock test
+            auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, true>>(cluster, keyspace_id));
+            schema_syncers[keyspace_id] = schema_syncer;
+            return schema_syncer;
+        }
+
         // for unit test
         auto schema_syncer = std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true, false>>(cluster, keyspace_id));
-        schema_syncers[keyspace_id] = schema_syncer ;
+        schema_syncers[keyspace_id] = schema_syncer;
         return schema_syncer;
     }
 
-    bool syncSchemas(Context & context, KeyspaceID keyspace_id){
+    bool syncSchemas(Context & context, KeyspaceID keyspace_id)
+    {
         auto schema_syncer = getOrCreateSchemaSyncer(keyspace_id);
         return schema_syncer->syncSchemas(context);
     }
 
-    bool syncTableSchema(Context & context, KeyspaceID keyspace_id, TableID table_id){
+    bool syncTableSchema(Context & context, KeyspaceID keyspace_id, TableID table_id)
+    {
         auto schema_syncer = getOrCreateSchemaSyncer(keyspace_id);
         return schema_syncer->syncTableSchema(context, table_id);
     }
 
-    void reset(KeyspaceID keyspace_id){
+    void reset(KeyspaceID keyspace_id)
+    {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return;
         }
         schema_syncer->reset();
     }
 
-    TiDB::DBInfoPtr getDBInfoByName(KeyspaceID keyspace_id, const String & database_name){
+    TiDB::DBInfoPtr getDBInfoByName(KeyspaceID keyspace_id, const String & database_name)
+    {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return nullptr;
         }
@@ -98,17 +115,20 @@ public:
     {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return nullptr;
         }
         return schema_syncer->getDBInfoByMappedName(mapped_database_name);
     }
 
-    bool removeSchemaSyncer(KeyspaceID keyspace_id) {
+    bool removeSchemaSyncer(KeyspaceID keyspace_id)
+    {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return false;
         }
@@ -116,7 +136,8 @@ public:
 
         std::unique_lock<std::shared_mutex> lock(schema_syncers_mutex);
         schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
             return false;
         }
@@ -124,10 +145,12 @@ public:
         return true;
     }
 
-    void removeTableID(KeyspaceID keyspace_id, TableID table_id) {
+    void removeTableID(KeyspaceID keyspace_id, TableID table_id)
+    {
         std::shared_lock<std::shared_mutex> read_lock(schema_syncers_mutex);
         auto schema_syncer = getSchemaSyncer(keyspace_id);
-        if (schema_syncer == nullptr) {
+        if (schema_syncer == nullptr)
+        {
             LOG_ERROR(Logger::get("TiDBSchemaSyncerManager"), "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
         }
         schema_syncer->removeTableID(table_id);
@@ -143,4 +166,4 @@ private:
 
     std::unordered_map<KeyspaceID, SchemaSyncerPtr> schema_syncers;
 };
-}
+} // namespace DB

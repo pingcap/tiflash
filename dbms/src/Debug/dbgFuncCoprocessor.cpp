@@ -20,6 +20,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
+
 #include "Common/Exception.h"
 #include "Debug/dbgFuncSchemaName.h"
 #include "Debug/dbgTools.h"
@@ -60,7 +61,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
             if (!managed_storage //
                 || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT
-                    || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+                     || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
                 throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
             return managed_storage->getTableInfo();
         },
@@ -73,7 +74,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     //     e.rethrow();
     // }
     // return nullptr;
-    
+
 
     //return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }

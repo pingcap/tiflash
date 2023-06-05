@@ -50,11 +50,11 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 
 namespace DB
@@ -473,22 +473,27 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 // 离谱，columns.name 都是空，不放的，默认值不填 refer toTiDBColumnInfo
 // 不过 default value 不比较理论上对 tiflash 这边没有影响，他本来就不用管后续 default value 的变更？
-bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns) {
+bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns)
+{
     auto columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
-    for (const auto & column : cur_columns) {
+    for (const auto & column : cur_columns)
+    {
         column_id_map[column.id] = column;
     }
 
     // TODO:加个 size 比较，具体要看一下 是不是 差3
-    for (const auto & column : columns){
+    for (const auto & column : columns)
+    {
         auto iter = column_id_map.find(column.id);
-        if (iter == column_id_map.end()) {
+        if (iter == column_id_map.end())
+        {
             LOG_ERROR(Logger::get("hyy"), "column id {} not found", column.id);
             return false;
         }
         // TODO:这边要加一个 name 的比较么？
-        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName()) {
+        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
+        {
             LOG_ERROR(Logger::get("hyy"), "column {}'s data type {} not match {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
             return false;
         }
@@ -1163,11 +1168,15 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         // 直接比较要读的 columnInfo 和 storage 的 columns 能不能对上
         bool res = compareColumns(table_scan, table_store->getStoreColumnDefines());
-        
-        if (res) {
+
+        if (res)
+        {
             return std::make_tuple(table_store, lock, true);
-        } else {
-            if (schema_synced) {
+        }
+        else
+        {
+            if (schema_synced)
+            {
                 throw TiFlashException(fmt::format("Table {} schema version newer than query schema version", table_id), Errors::Table::SchemaVersionError);
             }
         }
@@ -1182,14 +1191,16 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         std::vector<TableID> need_sync_table_ids;
 
         auto [logical_table_storage, logical_table_lock, ok] = get_and_lock_storage(schema_synced, logical_table_id);
-        if (!ok){
+        if (!ok)
+        {
             need_sync_table_ids.push_back(logical_table_id);
         }
-        else {
+        else
+        {
             table_storages.emplace_back(std::move(logical_table_storage));
             table_locks.emplace_back(std::move(logical_table_lock));
-        }   
-        
+        }
+
         if (!table_scan.isPartitionTableScan())
         {
             return {table_storages, table_locks, need_sync_table_ids, need_sync_table_ids.empty()};
@@ -1200,7 +1211,9 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             if (!ok)
             {
                 need_sync_table_ids.push_back(physical_table_id);
-            } else {
+            }
+            else
+            {
                 table_storages.emplace_back(std::move(physical_table_storage));
                 table_locks.emplace_back(std::move(physical_table_lock));
             }
@@ -1232,7 +1245,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         {
             sync_schema(table_id);
         }
-        
+
 
         std::tie(storages, locks, need_sync_table_ids, ok) = get_and_lock_storages(true);
         if (ok)

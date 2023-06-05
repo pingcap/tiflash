@@ -299,7 +299,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 {
     // 空 snapshot 就不用转了呀，直接返回空
     // TODO:不确定对后面有什么影响
-    if (snaps.len == 0) {
+    if (snaps.len == 0)
+    {
         return {};
     }
     auto context = tmt.getContext();

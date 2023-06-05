@@ -95,7 +95,7 @@ namespace DB
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
-    M(exception_after_large_write_exceed)                    
+    M(exception_after_large_write_exceed)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -106,7 +106,7 @@ namespace DB
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)  \
-    M(pause_before_register_non_root_mpp_task) 
+    M(pause_before_register_non_root_mpp_task)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -114,7 +114,7 @@ namespace DB
     M(pause_when_ingesting_to_dt_store)   \
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
-    M(pause_query_init)                   
+    M(pause_query_init)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \

@@ -39,6 +39,7 @@
 #include <future>
 #include <iterator>
 #include <random>
+
 #include "Storages/Transaction/Types.h"
 
 namespace DB
@@ -1511,7 +1512,8 @@ try
 CATCH
 
 
-ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, UInt32 flag, Int32 flen, String origin_default_value = "", String default_value = "", Int32 decimal = 0, String charset = "binary", String collate = "binary"){
+ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, UInt32 flag, Int32 flen, String origin_default_value = "", String default_value = "", Int32 decimal = 0, String charset = "binary", String collate = "binary")
+{
     ColumnInfo column;
     column.id = column_id;
     column.name = name;
@@ -1522,19 +1524,23 @@ ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, U
 
     LOG_INFO(Logger::get("hyy"), "getColumnInfo parser origin_default_value: {}, default_value: {}, collate:{}, charset: {}", origin_default_value, default_value, collate, charset);
     Poco::JSON::Parser parser;
-    if (!origin_default_value.empty()){
+    if (!origin_default_value.empty())
+    {
         column.origin_default_value = parser.parse(origin_default_value);
     }
     LOG_INFO(Logger::get("hyy"), "getColumnInfo parser origin_default_value finished");
-    if (!default_value.empty()){
+    if (!default_value.empty())
+    {
         column.default_value = parser.parse(default_value);
     }
     LOG_INFO(Logger::get("hyy"), "getColumnInfo parser default_value finished");
-    if (!collate.empty()){
+    if (!collate.empty())
+    {
         column.collate = parser.parse(collate);
     }
     LOG_INFO(Logger::get("hyy"), "getColumnInfo parser collate finished");
-    if (!charset.empty()){
+    if (!charset.empty())
+    {
         column.charset = parser.parse(charset);
     }
     LOG_INFO(Logger::get("hyy"), "getColumnInfo parser finished");
@@ -1542,7 +1548,8 @@ ColumnInfo getColumnInfo(ColumnID column_id, const String & name, TiDB::TP tp, U
     return column;
 }
 
-TableInfo getTableInfo(std::vector<ColumnInfo>& columns){
+TableInfo getTableInfo(std::vector<ColumnInfo> & columns)
+{
     TiDB::TableInfo table_info;
     table_info.id = 1; // table_id
     table_info.keyspace_id = NullspaceID;
@@ -1583,7 +1590,7 @@ try
         ASSERT_EQ(str_col.id, col_id_ddl);
         ASSERT_TRUE(str_col.type->equals(*col_type_before_ddl));
     }
-    
+
     const size_t num_rows_write = 128;
     {
         // write to store
@@ -2072,7 +2079,7 @@ try
         new_table_info.deserialize(json_table_info);
         store->applyAlters(new_table_info);
     }
-    
+
     // try read
     {
         auto in = store->read(*db_context,

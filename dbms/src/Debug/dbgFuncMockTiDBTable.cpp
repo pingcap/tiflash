@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
+
 #include "Debug/dbgTools.h"
 
 namespace DB

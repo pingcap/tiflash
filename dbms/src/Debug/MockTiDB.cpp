@@ -153,10 +153,12 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
 
     if (databases.find(database_name) == databases.end())
     {
-        if (databases.empty()) {
+        if (databases.empty())
+        {
             schema_id = 1;
         }
-        else {
+        else
+        {
             schema_id = databases.cbegin()->second + 1;
         }
         databases.emplace(database_name, schema_id);
@@ -332,7 +334,8 @@ std::vector<TableID> MockTiDB::newTables(
     version_diff[version] = diff;
 
 
-    for (auto & opt : diff.affected_opts){
+    for (auto & opt : diff.affected_opts)
+    {
         version++;
         SchemaDiff diff_set_tiflash_replica;
         diff_set_tiflash_replica.type = SchemaActionType::SetTiFlashReplica;
@@ -341,7 +344,7 @@ std::vector<TableID> MockTiDB::newTables(
         diff_set_tiflash_replica.version = version;
         version_diff[version] = diff_set_tiflash_replica;
     }
-    
+
 
     return table_ids;
 }
@@ -676,10 +679,11 @@ TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const St
     String qualified_name = database_name + "." + table_name;
     auto it = tables_by_name.find(qualified_name);
 
-    for (const auto & table_pair: tables_by_name){
+    for (const auto & table_pair : tables_by_name)
+    {
         LOG_INFO(Logger::get("hyy"), " in getTableByNameInternal table_pair.first is {}, table_pair.second's table_id is {}, and the target database_name is {}, table_name is {}", table_pair.first, table_pair.second->id(), database_name, table_name);
     }
-    
+
 
     if (it == tables_by_name.end())
     {

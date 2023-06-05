@@ -50,7 +50,6 @@ private:
     KeyspaceSet keyspaces;
     //mutable std::mutex mutex;
     mutable std::shared_mutex shared_mutex; // 这个要看过，会不会饿死啥的都要考虑
-
 };
 
 } // namespace DB

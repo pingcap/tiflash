@@ -494,9 +494,10 @@ DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
 
-    for (const auto & db_pair: shared->databases){
-        LOG_INFO(Logger::get("hyy"), "db name is {}",db_pair.first);
-}
+    for (const auto & db_pair : shared->databases)
+    {
+        LOG_INFO(Logger::get("hyy"), "db name is {}", db_pair.first);
+    }
 
     String db = resolveDatabase(database_name, current_database);
     assertDatabaseExists(db);

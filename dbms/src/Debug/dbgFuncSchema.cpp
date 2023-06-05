@@ -31,8 +31,9 @@
 
 #include <ext/singleton.h>
 #include <ostream>
-#include "Storages/Transaction/Types.h"
+
 #include "Debug/dbgTools.h"
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -104,16 +105,19 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
     // }
     TMTContext & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
-    if (storage == nullptr) {
+    if (storage == nullptr)
+    {
         return;
-    }   
+    }
 
     auto schema_syncer = tmt.getSchemaSyncerManager();
     try
     {
         schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, storage->getTableInfo().id);
-        if (storage->getTableInfo().partition.num > 0) {
-            for (const auto & def : storage->getTableInfo().partition.definitions){
+        if (storage->getTableInfo().partition.num > 0)
+        {
+            for (const auto & def : storage->getTableInfo().partition.definitions)
+            {
                 schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, def.id);
             }
         }
@@ -135,7 +139,8 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
 }
 
 
-void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker::Printer output){
+void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
     if (args.size() != 2)
         throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
 
@@ -153,8 +158,10 @@ void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker
     try
     {
         schema_syncer->syncTableSchema(context, keyspace_id, table_id);
-        if (table->table_info.partition.num > 0) {
-            for (const auto & def : table->table_info.partition.definitions){
+        if (table->table_info.partition.num > 0)
+        {
+            for (const auto & def : table->table_info.partition.definitions)
+            {
                 schema_syncer->syncTableSchema(context, keyspace_id, def.id);
             }
         }
@@ -173,7 +180,6 @@ void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker
     }
 
     output("table schema refreshed");
-
 }
 
 // Trigger gc on all databases / tables.

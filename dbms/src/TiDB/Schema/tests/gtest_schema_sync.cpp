@@ -233,7 +233,8 @@ try
 
     refreshSchema();
 
-    for (auto table_id: table_ids){
+    for (auto table_id : table_ids)
+    {
         refreshTableSchema(table_id);
     }
 

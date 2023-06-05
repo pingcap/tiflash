@@ -180,7 +180,8 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         {
             /// contains a table scan
             const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
-            if (table_info == nullptr){
+            if (table_info == nullptr)
+            {
                 LOG_INFO(Logger::get("hyy"), " executeMPPQuery table_info is nullptr");
             }
             if (table_info->is_partition_table)

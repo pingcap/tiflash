@@ -314,13 +314,15 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
-    }   
+    }
 
-    for (const auto & original_table_column : original_table_columns){
+    for (const auto & original_table_column : original_table_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with original_table_column name:{}", original_table_column.name);
     }
 
-    for (const auto & store_column : *store_columns){
+    for (const auto & store_column : *store_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with store_column name:{}", store_column.name);
     }
 
@@ -1628,40 +1630,48 @@ void DeltaMergeStore::applyAlters(
     // TODO:要改这么多，性能能保证么？？？？？
     std::unique_lock lock(read_write_mutex);
 
-    for (const auto & original_table_column : original_table_columns){
+    for (const auto & original_table_column : original_table_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with original_table_column name:{}", original_table_column.name);
     }
 
-    for (const auto & store_column : *store_columns){
+    for (const auto & store_column : *store_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with store_column name:{}", store_column.name);
     }
-    
+
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
     std::unordered_map<ColumnID, int> original_columns_index_map;
-    for (size_t index = 0; index < new_original_table_columns.size(); ++index) {
+    for (size_t index = 0; index < new_original_table_columns.size(); ++index)
+    {
         original_columns_index_map[new_original_table_columns[index].id] = index;
     }
 
     std::set<ColumnID> new_column_ids;
-    for (const auto& column : table_info.columns){
+    for (const auto & column : table_info.columns)
+    {
         auto column_id = column.id;
         new_column_ids.insert(column_id);
         auto iter = original_columns_index_map.find(column_id);
-        if (iter == original_columns_index_map.end()) {
+        if (iter == original_columns_index_map.end())
+        {
             // 创建新的列
             ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
             define.default_value = column.defaultValueToField();
-            
+
             new_original_table_columns.emplace_back(std::move(define));
-        } else {
+        }
+        else
+        {
             // 更新列, 包括 rename column(同时要改 index 里的，虽然觉得没什么必要的样子）, type change,
             auto & original_column = new_original_table_columns[iter->second];
             auto new_data_type = getDataTypeByColumnInfo(column)->getName();
             original_column.default_value = column.defaultValueToField();
-            if (original_column.name == column.name and original_column.type->getName() == new_data_type) {
+            if (original_column.name == column.name and original_column.type->getName() == new_data_type)
+            {
                 // 啥也不需要改
                 continue;
             }
@@ -1683,21 +1693,26 @@ void DeltaMergeStore::applyAlters(
                 }
             }
             original_column.name = column.name;
-            original_column.type = getDataTypeByColumnInfo(column);      
+            original_column.type = getDataTypeByColumnInfo(column);
         }
     }
 
     // 删除列
     auto iter = new_original_table_columns.begin();
-    while (iter != new_original_table_columns.end()) {
+    while (iter != new_original_table_columns.end())
+    {
         // 把三大列排除
-        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID) {
+        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
+        {
             iter++;
             continue;
         }
-        if (new_column_ids.count(iter->id) == 0) {
+        if (new_column_ids.count(iter->id) == 0)
+        {
             iter = new_original_table_columns.erase(iter);
-        } else {
+        }
+        else
+        {
             iter++;
         }
     }
@@ -1728,11 +1743,13 @@ void DeltaMergeStore::applyAlters(
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    for (const auto & original_table_column : original_table_columns){
+    for (const auto & original_table_column : original_table_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with original_table_column name:{}", original_table_column.name);
     }
 
-    for (const auto & store_column : *store_columns){
+    for (const auto & store_column : *store_columns)
+    {
         LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with store_column name:{}", store_column.name);
     }
 

@@ -115,7 +115,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             LOG_DEBUG(Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), ready_region_count, lag_regions_log.toString());
         }
     });
-    
+
     ss << ready_region_count << std::endl;
     for (const auto & region_id : region_list)
         ss << region_id << ' ';

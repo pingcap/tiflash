@@ -15,6 +15,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/TiDB.h>
+
 #include <shared_mutex>
 
 namespace DB
@@ -52,7 +53,8 @@ ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_
     // std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     shared_mutex.lock_shared();
 
-    if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end()){
+    if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end())
+    {
         shared_mutex.unlock_shared();
         return it->second;
     }
@@ -79,8 +81,9 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
     //std::lock_guard lock(mutex);
     std::shared_lock<std::shared_mutex> shared_lock(shared_mutex);
     // std::cout << " into ManagedStorages::getByName " << std::endl;
-    for (const auto & storage: storages) {
-        LOG_INFO(Logger::get("hyy"), "storage: db and table name {}.{} with table_id is {} ", storage.second->getDatabaseName(),storage.second->getTableInfo().name, storage.second->getTableInfo().id);
+    for (const auto & storage : storages)
+    {
+        LOG_INFO(Logger::get("hyy"), "storage: db and table name {}.{} with table_id is {} ", storage.second->getDatabaseName(), storage.second->getTableInfo().name, storage.second->getTableInfo().id);
     }
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<KeyspaceTableID, ManageableStoragePtr> & pair) {

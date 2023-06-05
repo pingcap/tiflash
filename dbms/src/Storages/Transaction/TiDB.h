@@ -419,7 +419,7 @@ struct TableInfo
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 
     // TODO:但是现在开始我们会更新 indexInfo 哎
-    
+
     /// should not be called if is_common_handle = false.
     /// when use IndexInfo, please avoid to use the offset info
     /// the offset value may be wrong in some cases,

@@ -40,6 +40,7 @@ class TiDBSchemaSyncer : public SchemaSyncer
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
     using NameMapper = std::conditional_t<mock_mapper, MockSchemaNameMapper, SchemaNameMapper>;
+
 private:
     KVClusterPtr cluster;
 
@@ -49,7 +50,7 @@ private:
 
     std::mutex mutex_for_sync_table_schema; // for syncTableSchema
 
-    std::mutex mutex_for_sync_schema; // for syncSchemas 
+    std::mutex mutex_for_sync_schema; // for syncSchemas
 
     std::shared_mutex shared_mutex_for_databases; // mutex for databases
 
@@ -102,17 +103,21 @@ public:
 
     bool syncTableSchema(Context & context, TableID table_id_) override;
 
-    void removeTableID(TableID table_id) override {
+    void removeTableID(TableID table_id) override
+    {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
         auto it = table_id_to_database_id.find(table_id);
-        if (it == table_id_to_database_id.end()) {
+        if (it == table_id_to_database_id.end())
+        {
             LOG_ERROR(log, "table_id {} is already moved in schemaSyncer", table_id);
         }
-        else {
+        else
+        {
             table_id_to_database_id.erase(it);
         }
-        
-        if (partition_id_to_logical_id.find(table_id) != partition_id_to_logical_id.end()) {
+
+        if (partition_id_to_logical_id.find(table_id) != partition_id_to_logical_id.end())
+        {
             partition_id_to_logical_id.erase(table_id);
         }
     }
@@ -122,7 +127,8 @@ public:
         LOG_INFO(log, "into getDBInfoByName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
-        for (auto & database : databases) {
+        for (auto & database : databases)
+        {
             LOG_INFO(log, "getDBInfoByName hyy database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
         }
 
@@ -137,7 +143,8 @@ public:
         LOG_INFO(log, "into getDBInfoByMappedName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
-        for (auto database : databases) {
+        for (auto database : databases)
+        {
             LOG_INFO(log, "database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
         }
 
@@ -155,7 +162,7 @@ public:
     }
 
     // just for test
-    void reset() override 
+    void reset() override
     {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
         databases.clear();
