@@ -110,7 +110,7 @@ GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessage
 ReceivedMessageQueue::ReceivedMessageQueue(
     const AsyncRequestHandlerWaitQueuePtr & conn_wait_queue,
     const LoggerPtr & log_,
-    size_t max_buffer_size,
+    const CapacityLimits & queue_limits,
     bool enable_fine_grained,
     size_t fine_grained_channel_size_)
     : fine_grained_channel_size(enable_fine_grained ? fine_grained_channel_size_ : 0)
@@ -126,8 +126,8 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         /// because pop from msg_channel rely on this assumption. An alternative is to make msg_channel a set/map of messages for fine grained shuffle, but
         /// it need many more changes
         msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(
-            max_buffer_size,
-            [](const ReceivedMessagePtr &) { return 0; },
+            queue_limits,
+            [](const ReceivedMessagePtr & message) { return message->getPacket().ByteSizeLong(); },
             [this](const ReceivedMessagePtr & element) {
                 for (size_t i = 0; i < fine_grained_channel_size; ++i)
                 {
@@ -138,7 +138,7 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     }
     else
     {
-        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(queue_limits, [](const ReceivedMessagePtr & message) { return message->getPacket().ByteSizeLong(); });
     }
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }

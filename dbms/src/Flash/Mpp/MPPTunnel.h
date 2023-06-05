@@ -223,13 +223,20 @@ class AsyncTunnelSender : public TunnelSender
 public:
     AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_limits, call_, log_)
+        , queue(
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
+              call_,
+              log_)
     {}
 
     /// For gtest usage.
     AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_limits, func)
+        , queue(
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
+              func)
     {}
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -479,7 +486,7 @@ public:
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);
@@ -488,7 +495,7 @@ public:
     MPPTunnel(
         const String & tunnel_id_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);

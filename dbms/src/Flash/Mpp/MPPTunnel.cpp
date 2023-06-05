@@ -71,17 +71,17 @@ MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
-    int input_steams_num_,
+    const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
     const String & req_id)
-    : MPPTunnel(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()), timeout_, input_steams_num_, is_local_, is_async_, req_id)
+    : MPPTunnel(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()), timeout_, queue_limits_, is_local_, is_async_, req_id)
 {}
 
 MPPTunnel::MPPTunnel(
     const String & tunnel_id_,
     const std::chrono::seconds timeout_,
-    int input_steams_num_,
+    const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
     const String & req_id)
@@ -90,7 +90,7 @@ MPPTunnel::MPPTunnel(
     , timeout_nanoseconds(timeout_.count() * 1000000000ULL)
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
-    , queue_limit(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , queue_limit(queue_limits_)
     , log(Logger::get(req_id, tunnel_id))
     , data_size_in_queue(0)
 {

@@ -323,15 +323,13 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
-    Int32 local_tunnel_version_,
-    Int32 async_recv_version_,
-    Int32 recv_queue_size,
+    const Settings & config,
     const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
-    , max_buffer_size(getMaxBufferSize(source_num, recv_queue_size))
+    , max_buffer_size(getMaxBufferSize(source_num, config.recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
     , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
@@ -340,8 +338,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , local_tunnel_version(local_tunnel_version_)
-    , async_recv_version(async_recv_version_)
+    , local_tunnel_version(config.local_tunnel_version)
+    , async_recv_version(config.async_recv_version)
     , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
