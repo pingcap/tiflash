@@ -19,47 +19,44 @@
 
 namespace DB
 {
-bool ReceiverChannelBase::splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
+namespace
 {
-    if (packet.chunks().empty())
-        return true;
-
-    // Packet not empty.
-    if (unlikely(packet.stream_ids().empty()))
-    {
-        // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
-        // This can happen when there are old version nodes when upgrading.
-        LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                       "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                       "Cannot handle this.",
-                  source_index);
-        return false;
-    }
-
-    // packet.stream_ids[i] is corresponding to packet.chunks[i],
-    // indicating which stream_id this chunk belongs to.
-    RUNTIME_ASSERT(packet.chunks_size() == packet.stream_ids_size(), log, "packet's chunk size shoule be equal to it's size of streams");
-
-    for (int i = 0; i < packet.stream_ids_size(); ++i)
-    {
-        UInt64 stream_id = packet.stream_ids(i) % channel_size;
-        chunks[stream_id].push_back(&packet.chunks(i));
-    }
-
-    return true;
-}
-
-const mpp::Error * ReceiverChannelBase::getErrorPtr(const mpp::MPPDataPacket & packet)
+const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
 {
     if (unlikely(packet.has_error()))
         return &packet.error();
     return nullptr;
 }
 
-const String * ReceiverChannelBase::getRespPtr(const mpp::MPPDataPacket & packet)
+const String * getRespPtr(const mpp::MPPDataPacket & packet)
 {
     if (unlikely(!packet.data().empty()))
         return &packet.data();
     return nullptr;
+}
+} // namespace
+
+ReceivedMessagePtr toReceivedMessage(
+    const TrackedMppDataPacketPtr & tracked_packet,
+    size_t source_index,
+    const String & req_info,
+    bool for_fine_grained_shuffle,
+    size_t fine_grained_consumer_size)
+{
+    const auto & packet = tracked_packet->packet;
+    const mpp::Error * error_ptr = getErrorPtr(packet);
+    const String * resp_ptr = getRespPtr(packet);
+    std::vector<const String *> chunks(packet.chunks_size());
+    for (int i = 0; i < packet.chunks_size(); ++i)
+        chunks[i] = &packet.chunks(i);
+    return std::make_shared<ReceivedMessage>(
+        source_index,
+        req_info,
+        tracked_packet,
+        error_ptr,
+        resp_ptr,
+        std::move(chunks),
+        for_fine_grained_shuffle,
+        fine_grained_consumer_size);
 }
 } // namespace DB

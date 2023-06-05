@@ -18,26 +18,13 @@
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_receiver_local_msg_push_failure_failpoint[];
-extern const char random_receiver_sync_msg_push_failure_failpoint[];
-extern const char random_receiver_async_msg_push_failure_failpoint[];
-} // namespace FailPoints
-
-enum class ReceiverMode
-{
-    Local = 0,
-    Sync,
-    Async
-};
-
 namespace ExchangeReceiverMetric
 {
 inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
@@ -58,46 +45,21 @@ inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
 }
 } // namespace ExchangeReceiverMetric
 
-struct ReceivedMessage
-{
-    size_t source_index;
-    String req_info;
-    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
-    const mpp::Error * error_ptr;
-    const String * resp_ptr;
-    std::vector<const String *> chunks;
-
-    // Constructor that move chunks.
-    ReceivedMessage(size_t source_index_,
-                    const String & req_info_,
-                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
-                    const mpp::Error * error_ptr_,
-                    const String * resp_ptr_,
-                    std::vector<const String *> && chunks_)
-        : source_index(source_index_)
-        , req_info(req_info_)
-        , packet(packet_)
-        , error_ptr(error_ptr_)
-        , resp_ptr(resp_ptr_)
-        , chunks(chunks_)
-    {}
-
-    void switchMemTracker()
-    {
-        packet->switchMemTracker(current_memory_tracker);
-    }
-};
-
-using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
-using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+ReceivedMessagePtr toReceivedMessage(
+    const TrackedMppDataPacketPtr & tracked_packet,
+    size_t source_index,
+    const String & req_info,
+    bool for_fine_grained_shuffle,
+    size_t fine_grained_consumer_size);
 
 class ReceiverChannelBase
 {
 public:
-    ReceiverChannelBase(const size_t channel_size_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
+    ReceiverChannelBase(ReceivedMessageQueue * received_message_queue_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
         : data_size_in_queue(data_size_in_queue_)
-        , channel_size(channel_size_)
+        , received_message_queue(received_message_queue_)
+        , fine_grained_channel_size(received_message_queue->getFineGrainedStreamSize())
+        , enable_fine_grained_shuffle(fine_grained_channel_size > 0)
         , req_info(req_info_)
         , log(log_)
         , mode(mode_)
@@ -106,13 +68,10 @@ public:
     ~ReceiverChannelBase() = default;
 
 protected:
-    bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
-
-    static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet);
-    static const String * getRespPtr(const mpp::MPPDataPacket & packet);
-
     std::atomic<Int64> * data_size_in_queue;
-    const size_t channel_size;
+    ReceivedMessageQueue * received_message_queue = nullptr;
+    size_t fine_grained_channel_size;
+    bool enable_fine_grained_shuffle;
     String req_info;
     const LoggerPtr log;
     ReceiverMode mode;
