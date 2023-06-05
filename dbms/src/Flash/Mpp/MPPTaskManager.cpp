@@ -302,8 +302,14 @@ std::pair<MPPQueryTaskSetPtr, bool> MPPTaskManager::getQueryTaskSetWithoutLock(c
     /// gather_id is not set by TiDB, so use 0 instead
     bool already_aborted = aborted_query_gather_cache.exists(MPPGatherId(0, query_id));
     if (it != mpp_query_map.end())
+    {
         already_aborted |= !it->second->isInNormalState();
-    return it == mpp_query_map.end() ? std::make_pair(nullptr, already_aborted) : std::make_pair(it->second, already_aborted);
+        return std::make_pair(it->second, already_aborted);
+    }
+    else
+    {
+        return std::make_pair(nullptr, already_aborted);
+    }
 }
 
 std::pair<MPPQueryTaskSetPtr, bool> MPPTaskManager::getQueryTaskSet(const MPPQueryId & query_id)
