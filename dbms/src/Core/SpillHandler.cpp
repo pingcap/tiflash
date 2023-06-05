@@ -98,6 +98,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
                 continue;
             /// erase constant column
             spiller->removeConstantColumns(block);
+            RUNTIME_CHECK_MSG(block.columns() > 0, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
             if (unlikely(writer == nullptr))
             {
                 std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();

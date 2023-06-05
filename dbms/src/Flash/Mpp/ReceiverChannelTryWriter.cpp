@@ -19,135 +19,53 @@
 
 namespace DB
 {
-namespace
-{
-inline bool loopJudge(GRPCReceiveQueueRes res)
-{
-    return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL);
-}
-} // namespace
-
-template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
 {
-    const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
-    const String * resp_ptr = getRespPtr(tracked_packet->packet);
+    auto received_message = toReceivedMessage(tracked_packet, source_index, req_info, enable_fine_grained_shuffle, fine_grained_channel_size);
+    if (!received_message->containUsefulMessage())
+    {
+        /// don't need to push an empty response to received_message_queue
+        return GRPCReceiveQueueRes::OK;
+    }
 
-    GRPCReceiveQueueRes res;
-    if constexpr (enable_fine_grained_shuffle)
-        res = tryWriteFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
-    else
-        res = tryWriteNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
+    GRPCReceiveQueueRes res = tryWriteImpl(received_message);
 
     if (likely(res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
-    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) res:{}, enable_fine_grained_shuffle: {}", channel_size, magic_enum::enum_name(res), enable_fine_grained_shuffle);
+    LOG_TRACE(log, "push recv_msg to msg_channel, res:{}, enable_fine_grained_shuffle: {}, fine grained channel size: {}", magic_enum::enum_name(res), enable_fine_grained_shuffle, fine_grained_channel_size);
     return res;
 }
 
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
-{
-    GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
-    auto & packet = tracked_packet->packet;
-    std::vector<std::vector<const String *>> chunks(channel_size);
-
-    if (!splitFineGrainedShufflePacketIntoChunks(source_index, packet, chunks))
-        return GRPCReceiveQueueRes::CANCELLED;
-
-    // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
-    for (size_t i = 0; i < channel_size && loopJudge(res); ++i)
-    {
-        if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
-            continue;
-
-        std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-            source_index,
-            req_info,
-            tracked_packet,
-            error_ptr,
-            resp_ptr,
-            std::move(chunks[i]));
-
-        GRPCReceiveQueueRes write_res = tryWriteImpl(i, std::move(recv_msg));
-        if (write_res != GRPCReceiveQueueRes::OK)
-            res = write_res;
-
-        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
-
-        // Only the first ExchangeReceiverInputStream/Source need to handle resp.
-        resp_ptr = nullptr;
-    }
-    return res;
-}
-
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
-{
-    GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
-    auto & packet = tracked_packet->packet;
-    std::vector<const String *> chunks(packet.chunks_size());
-
-    for (int i = 0; i < packet.chunks_size(); ++i)
-        chunks[i] = &packet.chunks(i);
-
-    if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
-    {
-        std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-            source_index,
-            req_info,
-            tracked_packet,
-            error_ptr,
-            resp_ptr,
-            std::move(chunks));
-
-        res = tryWriteImpl(0, std::move(recv_msg));
-        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
-    }
-    return res;
-}
-
-template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
 {
     GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
-    auto iter = rewrite_msgs.begin();
-
-    while (loopJudge(res) && (iter != rewrite_msgs.end()))
+    if (rewrite_msg != nullptr)
     {
-        GRPCReceiveQueueRes write_res = tryRewriteImpl(iter->first, iter->second);
-        if (write_res == GRPCReceiveQueueRes::OK)
+        res = tryRewriteImpl(rewrite_msg);
+        if (res == GRPCReceiveQueueRes::OK)
         {
-            auto tmp_iter = iter;
-            ++iter;
-            rewrite_msgs.erase(tmp_iter);
+            rewrite_msg = nullptr;
         }
-        else
-        {
-            ++iter;
-            res = write_res;
-        }
-
-        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
+        /// if rewrite fails, wait for the next rewrite
     }
 
     return res;
 }
 
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(size_t index, std::shared_ptr<ReceivedMessage> && msg)
+GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(ReceivedMessagePtr & msg)
 {
-    GRPCReceiveQueueRes res = grpc_recv_queues[index].push(msg);
-    assert(rewrite_msgs.find(index) == rewrite_msgs.end());
+    assert(rewrite_msg == nullptr);
+
+    GRPCReceiveQueueRes res = received_message_queue->pushToGRPCReceiveQueue(msg);
+
     if (res == GRPCReceiveQueueRes::FULL)
-        rewrite_msgs.insert({index, std::move(msg)});
+        rewrite_msg = std::move(msg);
     return res;
 }
 
-GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(size_t index, std::shared_ptr<ReceivedMessage> & msg)
+GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(ReceivedMessagePtr & msg)
 {
-    return grpc_recv_queues[index].push(msg);
+    return received_message_queue->pushToGRPCReceiveQueue(msg);
 }
 
-template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<true>();
-template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<false>();
-template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite<true>(size_t, const TrackedMppDataPacketPtr &);
-template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite<false>(size_t, const TrackedMppDataPacketPtr &);
 } // namespace DB

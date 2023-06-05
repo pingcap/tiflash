@@ -68,6 +68,7 @@ static const char GC_FENCE_PREFIX = 'F';
 static const char LAST_CHANGE_PREFIX = 'l';
 static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
 static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
+static const char PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX = 'F';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
