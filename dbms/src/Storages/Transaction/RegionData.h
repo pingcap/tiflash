@@ -42,7 +42,7 @@ public:
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
 
-    RegionDataReadInfo readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value = true) const;
+    RegionDataReadInfo readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied) const;
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 

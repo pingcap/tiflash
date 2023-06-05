@@ -61,11 +61,11 @@ struct WindowFrame
     FrameType type = FrameType::Ranges;
 
     BoundaryType begin_type = BoundaryType::Unbounded;
-    Field begin_offset = Field(UInt64(0));
+    UInt64 begin_offset = 0;
     bool begin_preceding = true;
 
     BoundaryType end_type = BoundaryType::Unbounded;
-    Field end_offset = Field(UInt64(0));
+    UInt64 end_offset = 0;
     bool end_preceding = false;
 
     bool operator==(const WindowFrame & other) const

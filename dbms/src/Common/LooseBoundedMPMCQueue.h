@@ -32,12 +32,20 @@ class LooseBoundedMPMCQueue
 {
 public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
+    using PushCallback = std::function<void(const T & element)>;
 
     explicit LooseBoundedMPMCQueue(size_t capacity_)
         : capacity(std::max(1, capacity_))
         , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
         , get_auxiliary_memory_usage([](const T &) { return 0; })
     {}
+    LooseBoundedMPMCQueue(size_t capacity_, PushCallback && push_callback_)
+        : capacity(std::max(1, capacity_))
+        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
+        , get_auxiliary_memory_usage([](const T &) { return 0; })
+        , push_callback(std::move(push_callback_))
+    {}
+
     LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : capacity(std::max(1, capacity_))
         , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
@@ -47,6 +55,17 @@ public:
                         return 0;
                     }
                   : std::move(get_auxiliary_memory_usage_))
+    {}
+    LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_, PushCallback && push_callback_)
+        : capacity(std::max(1, capacity_))
+        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+        , get_auxiliary_memory_usage(
+              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+                  ? [](const T &) {
+                        return 0;
+                    }
+                  : std::move(get_auxiliary_memory_usage_))
+        , push_callback(std::move(push_callback_))
     {}
 
     /// blocking function.
@@ -235,6 +254,10 @@ private:
         Int64 memory_usage = get_auxiliary_memory_usage(data);
         queue.emplace_front(std::forward<U>(data), memory_usage);
         current_auxiliary_memory_usage += memory_usage;
+        if (push_callback)
+        {
+            push_callback(queue.front().data);
+        }
         reader_head.notifyNext();
         /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,
         /// T1: a writer write an object with size 100
@@ -256,11 +279,11 @@ private:
     {
         T data;
         Int64 memory_usage;
-        DataWithMemoryUsage(T && data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T && data_, Int64 memory_usage_)
             : data(std::move(data_))
             , memory_usage(memory_usage_)
         {}
-        DataWithMemoryUsage(T & data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T & data_, Int64 memory_usage_)
             : data(data_)
             , memory_usage(memory_usage_)
         {}
@@ -270,6 +293,7 @@ private:
     size_t capacity;
     const Int64 max_auxiliary_memory_usage;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
+    const PushCallback push_callback;
     Int64 current_auxiliary_memory_usage = 0;
 
     MPMCQueueDetail::WaitingNode reader_head;

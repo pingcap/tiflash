@@ -46,7 +46,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     {
         // Load persisted info.
         it = tables.emplace(ks_tb_id, table_id).first;
-        LOG_INFO(log, "get new table {}", table_id);
+        LOG_INFO(log, "get new table {} of keyspace {}", table_id, keyspace_id);
     }
     return it->second;
 }
@@ -426,7 +426,9 @@ void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, con
     std::lock_guard lock(mutex);
 
     if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
+    {
         callback(it->second.regions);
+    }
 }
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id) const
