@@ -292,18 +292,20 @@ public:
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    void ingestFiles(const DMContextPtr & dm_context, //
-                     const RowKeyRange & range,
-                     const std::vector<DM::ExternalDTFileInfo> & external_files,
-                     bool clear_data_in_range);
+    /// Return the 'ingested bytes'.
+    UInt64 ingestFiles(const DMContextPtr & dm_context, //
+                       const RowKeyRange & range,
+                       const std::vector<DM::ExternalDTFileInfo> & external_files,
+                       bool clear_data_in_range);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    void ingestFiles(const Context & db_context, //
-                     const DB::Settings & db_settings,
-                     const RowKeyRange & range,
-                     const std::vector<DM::ExternalDTFileInfo> & external_files,
-                     bool clear_data_in_range)
+    /// Return the 'ingtested bytes'.
+    UInt64 ingestFiles(const Context & db_context, //
+                       const DB::Settings & db_settings,
+                       const RowKeyRange & range,
+                       const std::vector<DM::ExternalDTFileInfo> & external_files,
+                       bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestFiles(dm_context, range, external_files, clear_data_in_range);
