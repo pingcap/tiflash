@@ -47,7 +47,7 @@ protected:
     void finalizeImpl() override;
     virtual void doFinalizeImpl(){};
 
-    UInt64 getWaitingTimeToScheduled() const;
+    UInt64 getScheduleDuration() const;
 
 private:
     PipelineExecutorStatus & exec_status;

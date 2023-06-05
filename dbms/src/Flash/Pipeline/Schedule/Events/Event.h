@@ -60,9 +60,9 @@ public:
     // return true for source event.
     bool prepare();
 
-    UInt64 getWaitingTimeToScheduled() const;
+    UInt64 getScheduleDuration() const;
 
-    UInt64 getWaitingTimeToFinished() const;
+    UInt64 getFinishDuration() const;
 
 protected:
     // add task ready to be scheduled.
@@ -114,7 +114,7 @@ private:
     bool is_source = true;
 
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
-    UInt64 waiting_time_to_scheduled = 0;
-    UInt64 waiting_time_to_finished = 0;
+    UInt64 schedule_duration = 0;
+    UInt64 finish_duration = 0;
 };
 } // namespace DB
