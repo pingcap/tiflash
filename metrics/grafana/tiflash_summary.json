@@ -3950,6 +3950,107 @@
           "gridPos": {
             "h": 7,
             "w": 12,
+            "x": 0,
+            "y": 52
+          },
+          "hiddenSeries": false,
+          "id": 199,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "tiflash_mpp_task_monitor{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Time of the Longest Live MPP Task",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "$$hashKey": "object:78",
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "$$hashKey": "object:79",
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
             "x": 12,
             "y": 52
           },
@@ -5220,7 +5321,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 6
           },
           "hiddenSeries": false,
           "id": 41,
@@ -5333,7 +5434,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 38
+            "y": 6
           },
           "hiddenSeries": false,
           "id": 38,
@@ -5491,7 +5592,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 46
+            "y": 14
           },
           "hiddenSeries": false,
           "id": 40,
@@ -5591,7 +5692,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 22
           },
           "hiddenSeries": false,
           "id": 39,
@@ -5694,7 +5795,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 22
           },
           "hiddenSeries": false,
           "id": 42,
@@ -5798,7 +5899,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 59
+            "y": 27
           },
           "hiddenSeries": false,
           "id": 130,
@@ -5901,7 +6002,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 59
+            "y": 27
           },
           "hiddenSeries": false,
           "id": 131,
@@ -6005,7 +6106,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 64
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 50,
@@ -6139,7 +6240,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 64
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 22,
@@ -6253,7 +6354,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 64
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 52,
@@ -6355,7 +6456,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 71
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 46,
@@ -6478,7 +6579,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 71
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 47,
@@ -6602,7 +6703,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 78
+            "y": 46
           },
           "height": "",
           "hiddenSeries": false,
@@ -6732,7 +6833,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 78
+            "y": 46
           },
           "height": "",
           "hiddenSeries": false,
@@ -6860,7 +6961,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 54
           },
           "hiddenSeries": false,
           "id": 84,
@@ -6960,7 +7061,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 54
           },
           "hiddenSeries": false,
           "id": 86,
@@ -7092,7 +7193,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 94
+            "y": 62
           },
           "hiddenSeries": false,
           "id": 132,
@@ -7225,7 +7326,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 94
+            "y": 62
           },
           "hiddenSeries": false,
           "id": 67,
@@ -7339,7 +7440,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 102
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 169,
@@ -7488,7 +7589,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 102
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 88,
@@ -7687,7 +7788,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 109
+            "y": 77
           },
           "hiddenSeries": false,
           "id": 168,
@@ -8432,7 +8533,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 128,
@@ -8575,7 +8676,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 129,
@@ -8692,7 +8793,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 16
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -8754,7 +8855,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 16
           },
           "hiddenSeries": false,
           "id": 158,
@@ -8890,7 +8991,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 24
           },
           "hiddenSeries": false,
           "id": 163,
@@ -8995,7 +9096,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 24
           },
           "hiddenSeries": false,
           "id": 162,
@@ -9115,7 +9216,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 64
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 164,
@@ -9224,7 +9325,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 64
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 123,
@@ -9346,7 +9447,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 40
           },
           "height": "",
           "hiddenSeries": false,
@@ -9472,7 +9573,7 @@
             "y": 9
           },
           "hiddenSeries": false,
-          "id": 167,
+          "id": 166,
           "legend": {
             "alignAsTable": false,
             "avg": false,

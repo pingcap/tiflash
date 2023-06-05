@@ -389,7 +389,7 @@ protected:
 class EventTestRunner : public ::testing::Test
 {
 public:
-    void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
+    static void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
         Events sources;
         for (const auto & event : events)
@@ -406,13 +406,13 @@ public:
         }
     }
 
-    void wait(PipelineExecutorStatus & exec_status)
+    static void wait(PipelineExecutorStatus & exec_status)
     {
         std::chrono::seconds timeout(15);
         exec_status.waitFor(timeout);
     }
 
-    void assertNoErr(PipelineExecutorStatus & exec_status)
+    static void assertNoErr(PipelineExecutorStatus & exec_status)
     {
         auto exception_ptr = exec_status.getExceptionPtr();
         auto exception_msg = exec_status.getExceptionMsg();
@@ -612,7 +612,7 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, insert_events)
+TEST_F(EventTestRunner, insertEvents)
 try
 {
     PipelineExecutorStatus exec_status;
@@ -621,6 +621,7 @@ try
         counters.push_back(99);
     {
         std::vector<EventPtr> events;
+        events.reserve(counters.size());
         for (auto & counter : counters)
             events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter));
         auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);

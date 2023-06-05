@@ -85,6 +85,20 @@ void injectFailPointDuringRegisterTunnel(bool is_root_task)
 }
 } // namespace
 
+void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_)
+{
+    manager = manager_;
+    task_unique_id = task_unique_id_;
+    manager->addMonitoredTask(task_unique_id);
+    initialized = true;
+}
+
+MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
+{
+    if (initialized)
+        manager->removeMonitoredTask(task_unique_id);
+}
+
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
@@ -95,6 +109,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
 {
     current_memory_tracker = nullptr;
+    mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
 
 MPPTask::~MPPTask()

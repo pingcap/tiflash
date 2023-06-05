@@ -20,8 +20,11 @@
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace DB
 {
@@ -34,7 +37,15 @@ extern const char pause_before_register_non_root_mpp_task[];
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , log(Logger::get())
+    , monitor(std::make_shared<MPPTaskMonitor>(log))
 {}
+
+MPPTaskManager::~MPPTaskManager()
+{
+    std::lock_guard lock(monitor->mu);
+    monitor->is_shutdown = true;
+    monitor->cv.notify_all();
+}
 
 MPPQueryTaskSetPtr MPPTaskManager::addMPPQueryTaskSet(const MPPQueryId & query_id)
 {
@@ -308,5 +319,4 @@ void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
     std::lock_guard lock(mu);
     scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
-
 } // namespace DB

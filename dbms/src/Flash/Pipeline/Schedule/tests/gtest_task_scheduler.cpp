@@ -25,7 +25,7 @@ namespace
 class Waiter
 {
 public:
-    Waiter(size_t init_value)
+    explicit Waiter(size_t init_value)
         : counter(init_value)
     {}
     void notify()
@@ -58,7 +58,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleTask()
+    ~SimpleTask() override
     {
         waiter.notify();
     }
@@ -83,7 +83,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleWaitingTask()
+    ~SimpleWaitingTask() override
     {
         waiter.notify();
     }
@@ -131,7 +131,7 @@ public:
         : waiter(waiter_)
     {}
 
-    ~SimpleBlockedTask()
+    ~SimpleBlockedTask() override
     {
         waiter.notify();
     }
@@ -180,7 +180,7 @@ public:
         , waiter(waiter_)
     {}
 
-    ~MemoryTraceTask()
+    ~MemoryTraceTask() override
     {
         waiter.notify();
     }
@@ -236,7 +236,7 @@ class TaskSchedulerTestRunner : public ::testing::Test
 public:
     static constexpr size_t thread_num = 5;
 
-    void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
+    static void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
         TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
@@ -245,7 +245,7 @@ public:
     }
 };
 
-TEST_F(TaskSchedulerTestRunner, simple_task)
+TEST_F(TaskSchedulerTestRunner, simpleTask)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
@@ -259,7 +259,7 @@ try
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
+TEST_F(TaskSchedulerTestRunner, simpleWaitingTask)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
@@ -273,7 +273,7 @@ try
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, test_memory_trace)
+TEST_F(TaskSchedulerTestRunner, testMemoryTrace)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)

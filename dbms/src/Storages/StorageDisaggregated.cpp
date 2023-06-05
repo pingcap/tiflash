@@ -22,6 +22,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 
@@ -126,7 +127,7 @@ void StorageDisaggregated::readThroughExchange(
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
 {
-    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    std::unordered_map<TableID, RegionRetryList> all_remote_regions;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
@@ -152,7 +153,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     const std::vector<RemoteTableRange> & remote_table_ranges,
     const pingcap::kv::LabelFilter & label_filter)
 {
-    std::vector<Int64> physical_table_ids;
+    std::vector<TableID> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
     std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
     ranges_for_each_physical_table.reserve(remote_table_ranges.size());

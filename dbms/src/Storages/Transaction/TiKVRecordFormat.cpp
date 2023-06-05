@@ -117,6 +117,11 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 UNUSED(txn_source_prefic);
                 break;
             }
+            case PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX:
+            {
+                // https://github.com/pingcap/tidb/issues/43540
+                break;
+            }
             default:
             {
                 std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();

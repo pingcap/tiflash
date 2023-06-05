@@ -167,7 +167,9 @@ public:
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
     std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
 
+    // Requires RegionMeta's lock
     UInt64 appliedIndex() const;
+    // Requires RegionMeta's lock
     UInt64 appliedIndexTerm() const;
 
     void notifyApplied() { meta.notifyAll(); }

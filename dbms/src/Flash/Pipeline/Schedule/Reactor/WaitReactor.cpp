@@ -88,13 +88,25 @@ void WaitReactor::tryYield()
     {
 #if defined(__x86_64__)
         _mm_pause();
+#elif defined __aarch64__
+        // A "yield" instruction in aarch64 is essentially a nop, and does
+        // not cause enough delay to help backoff. "isb" is a barrier that,
+        // especially inside a loop, creates a small delay without consuming
+        // ALU resources.  Experiments shown that adding the isb instruction
+        // improves stability and reduces result jitter. Adding more delay
+        // to the UT_RELAX_CPU than a single isb reduces performance.
+        // clang-format off
+        asm volatile("isb" ::: "memory");
+        // clang-format on
 #else
+        // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
         sched_yield();
 #endif
         if (spin_count == 640)
         {
             spin_count = 0;
-            sched_yield();
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(2ms);
         }
     }
 }
@@ -120,7 +132,7 @@ void WaitReactor::submit(std::list<TaskPtr> & tasks)
     waiting_task_list.submit(tasks);
 }
 
-bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting_tasks)
+bool WaitReactor::takeFromWaitingTaskList(WaitingTasks & local_waiting_tasks)
 {
     std::list<TaskPtr> tmp_list;
     bool ret = local_waiting_tasks.empty()
@@ -139,7 +151,7 @@ bool WaitReactor::takeFromWaitingTaskList(std::list<WaitingTask> & local_waiting
     return true;
 }
 
-void WaitReactor::react(std::list<WaitingTask> & local_waiting_tasks)
+void WaitReactor::react(WaitingTasks & local_waiting_tasks)
 {
     for (auto task_it = local_waiting_tasks.begin(); task_it != local_waiting_tasks.end();)
     {
@@ -148,7 +160,13 @@ void WaitReactor::react(std::list<WaitingTask> & local_waiting_tasks)
         else
             ++task_it;
     }
-    GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
+
+#ifdef __APPLE__
+    auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
+#else
+    thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count);
+#endif
+    metrics.Set(local_waiting_tasks.size());
 
     submitReadyTasks();
 }
@@ -167,18 +185,8 @@ void WaitReactor::doLoop()
     setThreadName("WaitReactor");
     LOG_INFO(logger, "start wait reactor loop");
 
-    // Because WaitReactor is only responsible for polling the status of waiting tasks,
-    // lowering the thread priority here can avoid excessive CPU usage.
-#ifdef __linux__
-    struct sched_param param
-    {
-    };
-    param.__sched_priority = sched_get_priority_min(sched_getscheduler(0));
-    sched_setparam(0, &param);
-#endif
-
-    std::list<WaitingTask> local_waiting_tasks;
-    while (takeFromWaitingTaskList(local_waiting_tasks))
+    WaitingTasks local_waiting_tasks;
+    while (likely(takeFromWaitingTaskList(local_waiting_tasks)))
         react(local_waiting_tasks);
     // Handle remaining tasks.
     while (!local_waiting_tasks.empty())

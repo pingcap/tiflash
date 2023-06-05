@@ -26,7 +26,8 @@ PipelineTask::PipelineTask(
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
     : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
-    , pipeline_exec(std::move(pipeline_exec_))
+    , pipeline_exec_holder(std::move(pipeline_exec_))
+    , pipeline_exec(pipeline_exec_holder.get())
 {
     RUNTIME_CHECK(pipeline_exec);
     pipeline_exec->executePrefix();
@@ -37,7 +38,8 @@ void PipelineTask::doFinalizeImpl()
     assert(pipeline_exec);
     pipeline_exec->executeSuffix();
     pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getWaitingTimeToScheduled());
-    pipeline_exec.reset();
+    pipeline_exec = nullptr;
+    pipeline_exec_holder.reset();
 }
 
 #define HANDLE_NOT_RUNNING_STATUS         \
