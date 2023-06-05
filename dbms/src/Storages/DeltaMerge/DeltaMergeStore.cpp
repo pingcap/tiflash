@@ -314,6 +314,14 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
+    }   
+
+    for (const auto & original_table_column : original_table_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with original_table_column name:{}", original_table_column.name);
+    }
+
+    for (const auto & store_column : *store_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with store_column name:{}", store_column.name);
     }
 
     setUpBackgroundTask(dm_context);
@@ -1620,6 +1628,15 @@ void DeltaMergeStore::applyAlters(
     // TODO:要改这么多，性能能保证么？？？？？
     std::unique_lock lock(read_write_mutex);
 
+    for (const auto & original_table_column : original_table_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with original_table_column name:{}", original_table_column.name);
+    }
+
+    for (const auto & store_column : *store_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with store_column name:{}", store_column.name);
+    }
+    
+
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
@@ -1673,6 +1690,11 @@ void DeltaMergeStore::applyAlters(
     // 删除列
     auto iter = new_original_table_columns.begin();
     while (iter != new_original_table_columns.end()) {
+        // 把三大列排除
+        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID) {
+            iter++;
+            continue;
+        }
         if (new_column_ids.count(iter->id) == 0) {
             iter = new_original_table_columns.erase(iter);
         } else {
@@ -1705,6 +1727,14 @@ void DeltaMergeStore::applyAlters(
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
+
+    for (const auto & original_table_column : original_table_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with original_table_column name:{}", original_table_column.name);
+    }
+
+    for (const auto & store_column : *store_columns){
+        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with store_column name:{}", store_column.name);
+    }
 
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }

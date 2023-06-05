@@ -245,6 +245,7 @@ private:
         return store_inited.load(std::memory_order_acquire);
     }
     void updateTableColumnInfo();
+    ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info);
     DM::ColumnDefines getStoreColumnDefines() const override;
     bool dataDirExist();
     void shutdownImpl();

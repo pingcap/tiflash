@@ -35,15 +35,16 @@
 │ test3 │     3 │    14 │
 │ test5 │     5 │    16 │
 └───────┴───────┴───────┘
-#=> selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
-#┌─col_1─┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
-#│ test1 │     1 │    12 │                 1 │                 0 │
-#│ test2 │     2 │    10 │                 1 │                 0 │
-#│ test3 │     3 │    14 │                 1 │                 0 │
-#│ test4 │     4 │    15 │                 3 │                 0 │
-#│       │     0 │     0 │                 4 │                 1 │
-#│ test5 │     5 │    16 │                 1 │                 0 │
-#└───────┴───────┴───────┴───────────────────┴───────────────────┘
+
+=> DBGInvoke query_mapped('selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK', default, test)
+┌─col_1─┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
+│ test1 │     1 │    12 │                 1 │                 0 │
+│ test2 │     2 │    10 │                 1 │                 0 │
+│ test3 │     3 │    14 │                 1 │                 0 │
+│ test4 │     4 │    15 │                 3 │                 0 │
+│       │     0 │     0 │                 4 │                 1 │
+│ test5 │     5 │    16 │                 1 │                 0 │
+└───────┴───────┴───────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────────────────────────────────────────────────────────────────────┐
 │ [region 4] ranges: [020A7465737430038000000000000000, 020E74657374313030038000000000000064), state: Normal │
@@ -66,18 +67,18 @@
 │ test10 │    10 │    19 │
 │ test11 │    11 │    18 │
 └────────┴───────┴───────┘
-#=> selraw col_1,col_2,col_3, _INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
-#┌─col_1──┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
-#│ test1  │     1 │    12 │                 1 │                 0 │
-#│ test2  │     2 │    10 │                 1 │                 0 │
-#│ test3  │     3 │    14 │                 1 │                 0 │
-#│ test4  │     4 │    15 │                 3 │                 0 │
-#│        │     0 │     0 │                 4 │                 1 │
-#│ test5  │     5 │    16 │                 1 │                 0 │
-#│ test10 │    10 │    17 │                 1 │                 0 │
-#│ test10 │    10 │    19 │                 3 │                 0 │
-#│ test11 │    11 │    18 │                 1 │                 0 │
-#└────────┴───────┴───────┴───────────────────┴───────────────────┘
+=> DBGInvoke query_mapped('selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK', default, test)
+┌─col_1──┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
+│ test1  │     1 │    12 │                 1 │                 0 │
+│ test2  │     2 │    10 │                 1 │                 0 │
+│ test3  │     3 │    14 │                 1 │                 0 │
+│ test4  │     4 │    15 │                 3 │                 0 │
+│        │     0 │     0 │                 4 │                 1 │
+│ test5  │     5 │    16 │                 1 │                 0 │
+│ test10 │    10 │    17 │                 1 │                 0 │
+│ test10 │    10 │    19 │                 3 │                 0 │
+│ test11 │    11 │    18 │                 1 │                 0 │
+└────────┴───────┴───────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────────────────────────────────────────────────────────────────────┐
 │ [region 5] ranges: [020A7465737434038000000000000004, 020E74657374313030038000000000000064), state: Normal │

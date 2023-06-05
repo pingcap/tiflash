@@ -30,18 +30,20 @@
 => DBGInvoke __try_flush_region(4)
 
 #=> selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from default.test
-#┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-#│ test2 │     2 │          51 │                 0 │
-#└───────┴───────┴─────────────┴───────────────────┘
-#┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-#│ test3 │     3 │          52 │                 0 │
-#└───────┴───────┴─────────────┴───────────────────┘
-#┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-#│ test3 │     4 │          53 │                 0 │
-#└───────┴───────┴─────────────┴───────────────────┘
-#┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-#│ test1 │     1 │          50 │                 0 │
-#└───────┴───────┴─────────────┴───────────────────┘
+=> DBGInvoke query_mapped('selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid', default, test)
+┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
+│ test1 │     1 │          50 │                 0 │
+└───────┴───────┴─────────────┴───────────────────┘
+┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
+│ test2 │     2 │          51 │                 0 │
+└───────┴───────┴─────────────┴───────────────────┘
+┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
+│ test3 │     3 │          52 │                 0 │
+└───────┴───────┴─────────────┴───────────────────┘
+┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
+│ test3 │     4 │          53 │                 0 │
+└───────┴───────┴─────────────┴───────────────────┘
+
 
 => DBGInvoke query_mapped('selraw count(*) from \$d.\$t', default, test)
 ┌─count()─┐

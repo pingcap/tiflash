@@ -280,13 +280,14 @@ TableID MockTiDB::newTable(
     return addTable(database_name, std::move(*table_info));
 }
 
-int MockTiDB::newTables(
+std::vector<TableID> MockTiDB::newTables(
     const String & database_name,
     const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
     Timestamp tso,
     const String & engine_type)
 {
     std::lock_guard lock(tables_mutex);
+    std::vector<TableID> table_ids;
     if (databases.find(database_name) == databases.end())
     {
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
@@ -319,6 +320,8 @@ int MockTiDB::newTables(
         opt.old_schema_id = table->database_id;
         opt.old_table_id = table->id();
         diff.affected_opts.push_back(std::move(opt));
+
+        table_ids.push_back(table->id());
     }
 
     if (diff.affected_opts.empty())
@@ -340,7 +343,7 @@ int MockTiDB::newTables(
     }
     
 
-    return 0;
+    return table_ids;
 }
 
 TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)

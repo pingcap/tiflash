@@ -92,7 +92,6 @@ StorageDeltaMerge::StorageDeltaMerge(
     , global_context(global_context_.getGlobalContext())
     , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
-    LOG_INFO(log, "hyy StorageDeltaMerge tomstone is {}", tombstone);
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
@@ -242,6 +241,9 @@ void StorageDeltaMerge::updateTableColumnInfo()
     }
 
     setColumns(new_columns);
+    for (const auto & new_column: new_columns.getAllPhysical()){
+        LOG_INFO(Logger::get("hyy"), "StorageDeltaMerge::StorageDeltaMerge updateTableColumnInfo in new_columns col: {}", new_column.name);
+    }
 
     if (unlikely(handle_column_define.name.empty()))
     {
@@ -1416,13 +1418,14 @@ getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
     return std::make_tuple(std::move(columns), std::move(primary_keys));
 }
 
-ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info){
+ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info){
     auto [columns, pks] = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
     // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
     ColumnsDescription new_columns;
     for (auto column : columns) {
         new_columns.ordinary.emplace_back(std::move(column));
     }
+    new_columns.materialized = getColumns().materialized;
     return new_columns;
 }
 
@@ -1464,7 +1467,11 @@ void StorageDeltaMerge::alterSchemaChange(
     // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
+    for (const auto & new_column: new_columns.getAllPhysical()){
+        LOG_INFO(Logger::get("hyy"), "alterSchemaChange in new_columns col: {}", new_column.name);
+    }
     setColumns(std::move(new_columns));
+    
 
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
 

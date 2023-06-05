@@ -163,6 +163,7 @@ public:
         std::unique_lock<std::shared_mutex> lock_table(shared_mutex_for_table_id_map);
         table_id_to_database_id.clear();
         partition_id_to_logical_id.clear();
+        cur_version = 0;
     }
 };
 

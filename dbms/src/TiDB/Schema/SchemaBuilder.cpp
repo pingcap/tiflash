@@ -1086,6 +1086,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     std::vector<DBInfoPtr> all_schemas = getter.listDBs(); 
 
     // TODO:改成并行
+    std::unordered_set<String> db_set;
     for (const auto & db : all_schemas)
     {
         shared_mutex_for_databases.lock_shared();
@@ -1094,6 +1095,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             shared_mutex_for_databases.unlock_shared();
             // TODO:create database 感觉就是写入 db.sql, 以及把 database 信息写入 context，如果后面不存 .sql，可以再进行简化
             applyCreateSchema(db);
+            db_set.emplace(name_mapper.mapDatabaseName(*db));
             LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
         } else {
             shared_mutex_for_databases.unlock_shared();
@@ -1131,6 +1133,40 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                     }
                 }
             }
+        }
+    }
+
+    // TODO:can be removed if we don't save the .sql 
+    /// Drop all unmapped tables.
+    auto storage_map = context.getTMTContext().getStorages().getAllStorage();
+    for (auto it = storage_map.begin(); it != storage_map.end(); it++)
+    {
+        auto table_info = it->second->getTableInfo();
+        if (table_info.keyspace_id != keyspace_id)
+        {
+            continue;
+        }
+        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+        if (table_id_to_database_id.find(table_info.id) == table_id_to_database_id.end() && partition_id_to_logical_id.find(table_info.id) == partition_id_to_logical_id.end())
+        {
+            applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id);
+            LOG_DEBUG(log, "Table {}.{} dropped during sync all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(table_info));
+        }
+    }
+
+    /// Drop all unmapped dbs.
+    const auto & dbs = context.getDatabases();
+    for (auto it = dbs.begin(); it != dbs.end(); it++)
+    {
+        auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(it->first);
+        if (db_keyspace_id != keyspace_id)
+        {
+            continue;
+        }
+        if (db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
+        {
+            applyDropSchema(it->first);
+            LOG_DEBUG(log, "DB {} dropped during sync all schemas", it->first);
         }
     }
 
