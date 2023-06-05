@@ -303,10 +303,10 @@ using TableInfoPtr = std::shared_ptr<TableInfo>;
 struct TiFlashReplicaInfo
 {
     UInt64 count = 0;
+    std::optional<bool> available;
 
     /// Fields below are useless for tiflash now.
     // Strings location_labels
-    // bool available
     // std::vector<Int64> available_partition_ids;
 
     Poco::JSON::Object::Ptr getJSONObject() const;
