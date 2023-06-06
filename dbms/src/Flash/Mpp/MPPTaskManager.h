@@ -21,6 +21,44 @@ struct MPPQueryTaskSet
     MPPTaskMap task_map;
 };
 
+<<<<<<< HEAD
+=======
+/// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
+class AbortedMPPGatherCache
+{
+private:
+    std::deque<MPPGatherId> gather_ids;
+    std::unordered_set<MPPGatherId, MPPGatherIdHash> gather_ids_set;
+    size_t capacity;
+
+public:
+    AbortedMPPGatherCache(size_t capacity_)
+        : capacity(capacity_)
+    {}
+    bool exists(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        return gather_ids_set.find(id) != gather_ids_set.end();
+    }
+    void add(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return;
+        if (gather_ids_set.size() >= capacity)
+        {
+            auto evicted_id = gather_ids.back();
+            gather_ids.pop_back();
+            gather_ids_set.erase(evicted_id);
+        }
+        gather_ids.push_front(id);
+        gather_ids_set.insert(id);
+    }
+};
+
+using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
+
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 /// a map from the mpp query id to mpp query task set, we use
 /// the start ts of a query as the query id as TiDB will guarantee
 /// the uniqueness of the start ts
@@ -33,7 +71,13 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
+<<<<<<< HEAD
     Poco::Logger * log;
+=======
+    AbortedMPPGatherCache aborted_query_gather_cache;
+
+    LoggerPtr log;
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 
     std::condition_variable cv;
 
@@ -47,9 +91,15 @@ public:
 
     bool registerTask(MPPTaskPtr task);
 
+<<<<<<< HEAD
     void unregisterTask(MPPTask * task);
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
+=======
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSet(const MPPQueryId & query_id);
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 
     void cancelMPPQuery(UInt64 query_id, const String & reason);
 
