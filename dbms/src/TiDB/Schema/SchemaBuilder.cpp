@@ -89,7 +89,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
         for (auto && opt : diff.affected_opts)
-        {            
+        {
             auto table_info = getter.getTableInfo(opt.schema_id, opt.table_id);
             // TODO: double check 一下如果没有 table_info 就不 emplace 是否合理
             // 这个应该是合理的，因为可能先 creates 后面 又 drop 了，不过如果后面改并行的时候，就不一定了。
@@ -106,7 +106,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
                 // 不过后面如果想删空表的时候需要考虑一下。
                 // 另外就是如果是每个 replica 的分区表，这个情况怎么搞。
                 auto new_db_info = getter.getDatabase(diff.schema_id);
-                if (new_db_info == nullptr) {
+                if (new_db_info == nullptr)
+                {
                     LOG_ERROR(log, "miss database: {}", diff.schema_id);
                     return;
                 }
@@ -126,12 +127,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
                     }
                 }
             }
-            
-
         }
         return;
     }
-    
+
 
     if (diff.type == SchemaActionType::RenameTables)
     {
@@ -151,7 +150,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     switch (diff.type)
     {
-    
     case SchemaActionType::CreateTable:
     {
         auto table_info = getter.getTableInfo(diff.schema_id, diff.table_id);
@@ -169,13 +167,14 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // TODO:目前先暴力的直接生成 logical table，后面在看看怎么处理
             auto new_db_info = getter.getDatabase(diff.schema_id);
-            if (new_db_info == nullptr) {
+            if (new_db_info == nullptr)
+            {
                 LOG_ERROR(log, "miss database: {}", diff.schema_id);
                 return;
             }
 
             applyCreatePhysicalTable(new_db_info, table_info);
-            
+
             for (const auto & part_def : table_info->partition.definitions)
             {
                 if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end())
@@ -191,9 +190,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         }
 
         LOG_INFO(log, "Finish Create Table");
-        break;   
+        break;
     }
-    
+
     case SchemaActionType::RecoverTable: // recover 不能拖时间，不然就直接失效了....
     {
         // 更新 table_id_to_database_id, 并且执行 recover

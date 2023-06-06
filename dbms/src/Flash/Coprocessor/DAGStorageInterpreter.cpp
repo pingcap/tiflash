@@ -486,7 +486,8 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
     for (const auto & column : columns)
     {
         // Exclude virtual columns
-        if (column.id < 0) {
+        if (column.id < 0)
+        {
             continue;
         }
         LOG_INFO(Logger::get("hyy"), "column id {} name {} type {}", column.id, column.name, getDataTypeByColumnInfo(column)->getName());
