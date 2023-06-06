@@ -372,8 +372,9 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    tunnel_set->waitForConnected();
     LOG_DEBUG(log, "init exchange receiver done");
+    tunnel_set->waitForConnected();
+    LOG_DEBUG(log, "wait tunnel set connected done");
     query_executor_holder.set(queryExecute(*context));
     LOG_DEBUG(log, "init query executor done");
     {
