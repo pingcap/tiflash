@@ -127,8 +127,8 @@ public:
         REPORT_DURATION_METRICS(type_io_queue, io_pending_time_ns);
         REPORT_DURATION_METRICS(type_await, await_time_ns);
 
-        REPORT_ROUND_METRICS(type_cpu, cpu_execute_time_ns);
-        REPORT_ROUND_METRICS(type_io, io_execute_time_ns);
+        REPORT_ROUND_METRICS(type_cpu, cpu_execute_max_time_ns_per_round);
+        REPORT_ROUND_METRICS(type_io, io_execute_max_time_ns_per_round);
 
 #undef REPORT_METRICS
 #undef REPORT_ROUND_METRICS
