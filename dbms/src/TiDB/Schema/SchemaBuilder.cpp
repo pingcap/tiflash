@@ -84,7 +84,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
 
     // 其实我不用管 createtables？所有的真实 create 都要等到 set tiflash replica 的操作呀
-    /*
+    // 不能不管，因为 create table 一定早于 insert，但是 set tiflash replica 不能保证一定早于 insert，不然会出现 insert 的时候表不存在的情况，并且还拉不到表信息
     if (diff.type == SchemaActionType::CreateTables) // createTables 不实际 apply schema，但是更新 table_id_to_database_id 和 partition_id_with_table_id
     {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
@@ -115,14 +115,23 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
                 for (const auto & part_def : table_info->partition.definitions)
                 {
-                    partition_id_to_logical_id.emplace(part_def.id, opt.table_id);
+                    if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end())
+                    {
+                        LOG_ERROR(log, "partition_id_to_logical_id {} already exists", part_def.id);
+                        partition_id_to_logical_id[part_def.id] = opt.table_id;
+                    }
+                    else
+                    {
+                        partition_id_to_logical_id.emplace(part_def.id, opt.table_id);
+                    }
                 }
             }
+            
 
         }
         return;
     }
-    */
+    
 
     if (diff.type == SchemaActionType::RenameTables)
     {
@@ -142,10 +151,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     switch (diff.type)
     {
-    /*
+    
     case SchemaActionType::CreateTable:
     {
-        
         auto table_info = getter.getTableInfo(diff.schema_id, diff.table_id);
         if (table_info == nullptr)
         {
@@ -170,14 +178,22 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             
             for (const auto & part_def : table_info->partition.definitions)
             {
-                partition_id_to_logical_id.emplace(part_def.id, diff.table_id);
+                if (partition_id_to_logical_id.find(part_def.id) != partition_id_to_logical_id.end())
+                {
+                    LOG_ERROR(log, "partition_id_to_logical_id {} already exists", part_def.id);
+                    partition_id_to_logical_id[part_def.id] = diff.table_id;
+                }
+                else
+                {
+                    partition_id_to_logical_id.emplace(part_def.id, diff.table_id);
+                }
             }
         }
 
         LOG_INFO(log, "Finish Create Table");
         break;   
     }
-    */
+    
     case SchemaActionType::RecoverTable: // recover 不能拖时间，不然就直接失效了....
     {
         // 更新 table_id_to_database_id, 并且执行 recover
@@ -440,6 +456,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
         else
         {
             // 如果 map 里没有，就走 create 逻辑，有的话就不用管了
+            // TODO:check 这个合理么
             std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
             if (table_id_to_database_id.find(table_id) == table_id_to_database_id.end())
             {

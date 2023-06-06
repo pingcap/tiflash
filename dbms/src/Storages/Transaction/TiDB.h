@@ -400,12 +400,12 @@ struct TableInfo
     bool is_view = false;
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO:可以删了
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO(hyy):can be removed after removing RegionPtrWithBlock
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // 这个没再用了么？没再用就删了
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
@@ -417,8 +417,6 @@ struct TableInfo
     TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
-
-    // TODO:但是现在开始我们会更新 indexInfo 哎
 
     /// should not be called if is_common_handle = false.
     /// when use IndexInfo, please avoid to use the offset info

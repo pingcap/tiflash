@@ -1458,11 +1458,11 @@ void StorageDeltaMerge::updateTableInfo(
 {
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
-    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED) // TODO:这个有没有必要
-    {
-        auto & tmt_context = context.getTMTContext();
-        tidb_table_info.engine_type = tmt_context.getEngineType();
-    }
+    // if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED) // TODO:这个有没有必要
+    // {
+    //     auto & tmt_context = context.getTMTContext();
+    //     tidb_table_info.engine_type = tmt_context.getEngineType();
+    // }
 
     updateDeltaMergeTableCreateStatement(
         database_name,
@@ -1526,13 +1526,13 @@ void StorageDeltaMerge::alterSchemaChange(
         getTombstone(),
         context);
 
-    // TODO:这边应该有些字段要改？
+    // // TODO:这边应该有些字段要改？
 
-    if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
-    {
-        auto & tmt_context = context.getTMTContext();
-        tidb_table_info.engine_type = tmt_context.getEngineType();
-    }
+    // if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
+    // {
+    //     auto & tmt_context = context.getTMTContext();
+    //     tidb_table_info.engine_type = tmt_context.getEngineType();
+    // }
 }
 
 ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const

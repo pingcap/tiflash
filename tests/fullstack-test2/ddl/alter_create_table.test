@@ -39,6 +39,8 @@ mysql> alter table test.t set tiflash replica 1;
 │ false                        │
 └──────────────────────────────┘
 
+func> wait_table test t
+
 mysql> select table_schema, table_name, replica_count, available, progress from information_schema.tiflash_replica where table_schema='test' and table_name='t';
 +--------------+------------+---------------+-----------+----------+
 | table_schema | table_name | replica_count | available | progress |

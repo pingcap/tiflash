@@ -25,6 +25,7 @@ namespace DB
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
+    // TODO:修一下 -1 的问题
     LOG_INFO(log, "Start syncSchemas");
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);

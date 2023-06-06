@@ -472,6 +472,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 // 离谱，columns.name 都是空，不放的，默认值不填 refer toTiDBColumnInfo
 // 不过 default value 不比较理论上对 tiflash 这边没有影响，他本来就不用管后续 default value 的变更？
+// TODO:check 一下这个前提是否能满足
 bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns)
 {
     auto columns = table_scan.getColumns();
@@ -484,6 +485,11 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
     // TODO:加个 size 比较，具体要看一下 是不是 差3
     for (const auto & column : columns)
     {
+        // Exclude virtual columns
+        if (column.id < 0) {
+            continue;
+        }
+        LOG_INFO(Logger::get("hyy"), "column id {} name {} type {}", column.id, column.name, getDataTypeByColumnInfo(column)->getName());
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {

@@ -542,22 +542,24 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             }
             catch (Exception & e)
             {
-                // TODO:这怎么搞啊救命，搞个小点的值while
+                // Help: please check the logical could be ok
+                // Due to even if it throws this two error code, it can't ensure the table is completely created
+                // So we have to wait for the table created completely, then return to use the table.
+                // Thus, we choose to do a retry here to wait the table created completed.
                 if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE)
                 {
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "InterpreterCreateQuery::createTable failed, with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
-                    // 但是直接退出的话，万一用的时候还没有完全创建完成怎么办
                     for (int i = 0; i < 20; i++)
                     { // retry for 1 mins
                         while (!context.isTableExist(database_name, table_name))
                         {
-                            const int wait_seconds = 3;
+                            const int wait_useconds = 20000;
                             LOG_ERROR(
                                 Logger::get("InterpreterCreateQuery"),
                                 "InterpreterCreateQuery::createTable failed but table not exist now, \nWe will sleep for {}"
-                                " seconds and try again.",
-                                wait_seconds);
-                            ::sleep(wait_seconds);
+                                " ms and try again.",
+                                wait_useconds / 1000);
+                            usleep(wait_useconds); // sleep 20ms
                         }
                         return {};
                     }
