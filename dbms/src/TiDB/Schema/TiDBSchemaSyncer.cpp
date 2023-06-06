@@ -17,6 +17,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include "Common/Logger.h"
+
 namespace DB
 {
 
@@ -27,7 +29,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
-
+    LOG_ERROR(log, "syncSchemas version: {}, cur_version is {}", version, cur_version);
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
@@ -108,6 +110,12 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
         {
             --used_version;
             break;
+        }
+
+        if (!diff)
+        {
+            LOG_INFO(log, "Diff in version {} is empty", used_version);
+            continue;
         }
 
         if (diff->regenerate_schema_map)
