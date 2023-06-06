@@ -20,6 +20,13 @@ func> wait_table test t
 
 >> DBGInvoke __refresh_schemas()
 
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++------+
+| a    |
++------+
+|    1 |
++------+
+
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
 │ 1                                  │
@@ -47,6 +54,14 @@ mysql> alter table test.t set tiflash replica 1
 func> wait_table test t
 
 >> DBGInvoke __refresh_schemas()
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++------+
+| x    |
++------+
+|    1 |
+|    8 |
++------+
 
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
