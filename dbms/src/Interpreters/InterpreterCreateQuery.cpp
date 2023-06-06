@@ -551,7 +551,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "InterpreterCreateQuery::createTable failed, with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
                     for (int i = 0; i < 20; i++)
                     { // retry for 1 mins
-                        while (!context.isTableExist(database_name, table_name))
+                        if (!context.isTableExist(database_name, table_name))
                         {
                             const int wait_useconds = 20000;
                             LOG_ERROR(

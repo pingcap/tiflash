@@ -98,6 +98,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 template <bool mock_getter, bool mock_mapper>
 Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version)
 {
+    // TODO:怎么会有这么大量的 最后一个 diff是空啊
     LOG_DEBUG(log, "Try load schema diffs.");
 
     Int64 used_version = cur_version;
