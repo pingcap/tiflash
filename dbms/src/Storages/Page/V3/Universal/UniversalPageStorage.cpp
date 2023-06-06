@@ -499,24 +499,14 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // Persist the checkpoint to remote store.
     // If not persisted or exception throw, then we can not apply the checkpoint
     // info to directory. Neither update `last_checkpoint_sequence`.
-    try
-    {
-        auto checkpoint = PS::V3::LocalCheckpointFiles{
-            .data_files = data_file_paths,
-            .manifest_file = {manifest_file_path},
-        };
-        bool persist_done = options.persist_checkpoint(checkpoint);
-        if (!persist_done)
-        {
-            LOG_ERROR(log, "failed to persist checkpoint");
-            return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "failed to persist checkpoint");
-        return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
-    }
+
+    auto checkpoint = PS::V3::LocalCheckpointFiles{
+        .data_files = data_file_paths,
+        .manifest_file = {manifest_file_path},
+    };
+    bool persist_done = options.persist_checkpoint(checkpoint);
+    RUNTIME_CHECK(persist_done);
+
     auto upload_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");

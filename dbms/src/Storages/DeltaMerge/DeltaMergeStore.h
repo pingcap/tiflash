@@ -676,8 +676,10 @@ private:
 
     bool handleBackgroundTask(bool heavy);
 
+    void listLocalStableFiles(const std::function<void(UInt64, const String &)> & handle) const;
     void restoreStableFiles() const;
     void restoreStableFilesFromLocal() const;
+    void removeLocalStableFilesIfDisagg() const;
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
