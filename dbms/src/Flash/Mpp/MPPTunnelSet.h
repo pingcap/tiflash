@@ -71,6 +71,8 @@ public:
 
     bool isLocal(size_t index) const;
 
+    void waitForConnected();
+
 private:
     std::vector<TunnelPtr> tunnels;
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;

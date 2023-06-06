@@ -548,6 +548,8 @@ public:
     LocalTunnelSenderV2Ptr getLocalTunnelSenderV2() { return local_tunnel_v2; }
     LocalTunnelSenderLocalOnlyV2Ptr getLocalTunnelLocalOnlyV2() { return local_tunnel_local_only_v2; }
 
+    void waitForConnected();
+
 private:
     friend class tests::TestMPPTunnel;
     // TODO(hyb): Extract Cancelled status from Finished to distinguish Completed and Cancelled situation
@@ -559,9 +561,7 @@ private:
         Finished // Final state, no more work to do
     };
 
-    std::string_view statusToString();
-
-    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
+    std::string_view statusToString() const;
 
     void waitForSenderFinish(bool allow_throw);
 

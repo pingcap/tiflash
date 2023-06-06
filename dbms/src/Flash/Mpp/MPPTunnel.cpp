@@ -159,12 +159,6 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 {
     LOG_TRACE(log, "ready to write");
-    {
-        std::unique_lock lk(mu);
-        waitUntilConnectedOrFinished(lk);
-        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-    }
-
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
@@ -197,13 +191,7 @@ void MPPTunnel::forceWrite(TrackedMppDataPacketPtr && data)
 void MPPTunnel::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
-    {
-        std::unique_lock lk(mu);
-        /// make sure to finish the tunnel after it is connected
-        waitUntilConnectedOrFinished(lk);
-        if (tunnel_sender == nullptr)
-            throw Exception(fmt::format("write to tunnel {} which is already closed.", tunnel_id));
-    }
+    // tunnel_sender has been checked in `waitForConnected`.
     tunnel_sender->finish();
     waitForSenderFinish(/*allow_throw=*/true);
 }
@@ -310,62 +298,44 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
     LOG_TRACE(log, "end wait for consumer finish!");
 }
 
-void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
+void MPPTunnel::waitForConnected()
 {
+    std::unique_lock lk(mu);
     auto not_unconnected = [&] {
         return (status != TunnelStatus::Unconnected);
     };
     if (timeout.count() > 0)
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "start waitForConnected");
         if (status == TunnelStatus::Unconnected)
         {
             fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
         }
         auto res = cv_for_status_changed.wait_for(lk, timeout, not_unconnected);
-        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
-        if (!res)
+        LOG_TRACE(log, "end waitForConnected");
+        if unlikely (!res)
             throw Exception(tunnel_id + " is timeout");
     }
     else
     {
-        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "start waitForConnected");
         cv_for_status_changed.wait(lk, not_unconnected);
-        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "end waitForConnected");
     }
-    if (status == TunnelStatus::Unconnected)
-        throw Exception(fmt::format("MPPTunnel {} can not be connected because MPPTask is cancelled", tunnel_id));
+    RUNTIME_CHECK_MSG(status == TunnelStatus::Connected, "MPPTunnel {} can not be connected because MPPTask is cancelled.", tunnel_id);
+    RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "tunnel {} which is already closed.", tunnel_id);
 }
 
 bool MPPTunnel::isWritable() const
 {
     std::unique_lock lk(mu);
-    switch (status)
-    {
-    case TunnelStatus::Unconnected:
-    {
-        if (timeout.count() > 0)
-        {
-            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
-            if (unlikely(!timeout_stopwatch))
-                timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-            if (unlikely(timeout_stopwatch->elapsed() > timeout_nanoseconds))
-                throw Exception(tunnel_id + " is timeout");
-        }
-        return false;
-    }
-    case TunnelStatus::Connected:
-        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return tunnel_sender->isWritable();
-    default:
-        // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
-        // and then handled by `forceWrite`.
-        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return true;
-    }
+    RUNTIME_CHECK_MSG(status == TunnelStatus::Connected, "The MPPTunnel {} can be written only in Connected status, but the current status is {}", tunnel_id, statusToString());
+    // tunnel_sender has been checked in `waitForConnected`.
+    assert(tunnel_sender != nullptr);
+    return tunnel_sender->isWritable();
 }
 
-std::string_view MPPTunnel::statusToString()
+std::string_view MPPTunnel::statusToString() const
 {
     return magic_enum::enum_name(status);
 }

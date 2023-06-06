@@ -132,6 +132,15 @@ bool MPPTunnelSetBase<Tunnel>::isLocal(size_t index) const
     return getTunnels()[index]->isLocal();
 }
 
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::waitForConnected()
+{
+    for (auto & tunnel : tunnels)
+    {
+        tunnel->waitForConnected();
+    }
+}
+
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class MPPTunnelSetBase<MPPTunnel>;
 

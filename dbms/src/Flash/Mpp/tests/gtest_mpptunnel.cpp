@@ -282,11 +282,7 @@ public:
 
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
-        tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_v2)
-            tunnel->local_tunnel_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_local_only_v2)
-            tunnel->local_tunnel_local_only_v2->is_done.store(true);
+        tunnel->close("set finished", true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -312,9 +308,43 @@ public:
             tunnels.push_back(constructLocalTunnel());
 
         receiver->connectLocalTunnel(tunnels);
+        for (auto & tunnel : tunnels)
+            tunnel->waitForConnected();
         return std::pair<MockExchangeReceiverPtr, std::vector<MPPTunnelPtr>>(receiver, tunnels);
     }
 };
+
+/// Test waitForConnected
+TEST_F(TestMPPTunnel, closeBeforeWaitForConnected)
+try
+{
+    try
+    {
+        auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+        mpp_tunnel_ptr->close("Canceled", false);
+        GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+        mpp_tunnel_ptr->waitForConnected();
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Connected failed: MPPTunnel 0000_0001 can not be connected because MPPTask is cancelled.");
+    }
+}
+CATCH
+
+TEST_F(TestMPPTunnel, waitForConnectedTimeout)
+try
+{
+    timeout = std::chrono::seconds(1);
+    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+    mpp_tunnel_ptr->waitForConnected();
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "0000_0001 is timeout");
+}
 
 /// Test Sync MPPTunnel
 TEST_F(TestMPPTunnel, SyncConnectWhenFinished)
@@ -368,42 +398,13 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnel, SyncWriteAfterUnconnectFinished)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-        setTunnelFinished(mpp_tunnel_ptr);
-        mpp_tunnel_ptr->write(newDataPacket("First"));
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel 0000_0001 which is already closed.");
-    }
-}
-
-TEST_F(TestMPPTunnel, SyncWriteDoneAfterUnconnectFinished)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-        setTunnelFinished(mpp_tunnel_ptr);
-        mpp_tunnel_ptr->writeDone();
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed.");
-    }
-}
-
 TEST_F(TestMPPTunnel, SyncConnectWriteCancel)
 try
 {
     std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockPacketWriter>();
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     mpp_tunnel_ptr->write(newDataPacket("First"));
     mpp_tunnel_ptr->close("Cancel", true);
@@ -422,6 +423,7 @@ try
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockPacketWriter>();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     mpp_tunnel_ptr->write(newDataPacket("First"));
     mpp_tunnel_ptr->writeDone();
@@ -437,6 +439,7 @@ try
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockPacketWriter>();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     mpp_tunnel_ptr->write(newDataPacket("First"));
     mpp_tunnel_ptr->getSyncTunnelSender()->consumerFinish("");
@@ -455,6 +458,7 @@ TEST_F(TestMPPTunnel, SyncWriteError)
         auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
         std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockFailedWriter>();
         mpp_tunnel_ptr->connectSync(writer_ptr.get());
+        mpp_tunnel_ptr->waitForConnected();
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
         mpp_tunnel_ptr->write(newDataPacket("First"));
         mpp_tunnel_ptr->waitForFinish();
@@ -476,6 +480,7 @@ TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
         mpp_tunnel_ptr = constructRemoteSyncTunnel();
         writer_ptr = std::make_unique<MockPacketWriter>();
         mpp_tunnel_ptr->connectSync(writer_ptr.get());
+        mpp_tunnel_ptr->waitForConnected();
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
         mpp_tunnel_ptr->close("Canceled", false);
         mpp_tunnel_ptr->write(newDataPacket("First"));
@@ -496,6 +501,7 @@ try
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
     mpp_tunnel_ptr->connectAsync(call_data.get());
+    mpp_tunnel_ptr->waitForConnected();
 
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
@@ -519,6 +525,7 @@ try
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
     mpp_tunnel_ptr->connectAsync(call_data.get());
+    mpp_tunnel_ptr->waitForConnected();
 
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
@@ -541,6 +548,7 @@ try
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
     mpp_tunnel_ptr->connectAsync(call_data.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
     std::thread t(&MockAsyncCallData::run, call_data.get());
@@ -563,6 +571,7 @@ TEST_F(TestMPPTunnel, AsyncWriteError)
         std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
         call_data->write_failed = true;
         mpp_tunnel_ptr->connectAsync(call_data.get());
+        mpp_tunnel_ptr->waitForConnected();
 
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
@@ -710,32 +719,6 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnel, LocalWriteAfterUnconnectFinished)
-try
-{
-    auto tunnel = constructLocalTunnel();
-    setTunnelFinished(tunnel);
-    tunnel->write(newDataPacket("First"));
-    GTEST_FAIL();
-}
-catch (Exception & e)
-{
-    GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel 0000_0001 which is already closed.");
-}
-
-TEST_F(TestMPPTunnel, LocalWriteDoneAfterUnconnectFinished)
-try
-{
-    auto tunnel = constructLocalTunnel();
-    setTunnelFinished(tunnel);
-    tunnel->writeDone();
-    GTEST_FAIL();
-}
-catch (Exception & e)
-{
-    GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed.");
-}
-
 TEST_F(TestMPPTunnel, LocalWriteError)
 try
 {
@@ -793,6 +776,7 @@ TEST_F(TestMPPTunnel, SyncTunnelForceWrite)
     auto writer_ptr = std::make_unique<MockPacketWriter>();
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
     ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
@@ -809,6 +793,7 @@ TEST_F(TestMPPTunnel, AsyncTunnelForceWrite)
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
     mpp_tunnel_ptr->connectAsync(call_data.get());
+    mpp_tunnel_ptr->waitForConnected();
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
     std::thread t(&MockAsyncCallData::run, call_data.get());
 
@@ -837,23 +822,6 @@ TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
 
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->getPacket().data(), "First");
-}
-
-TEST_F(TestMPPTunnel, isWritableTimeout)
-try
-{
-    timeout = std::chrono::seconds(1);
-    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
-    while (stop_watch.elapsedSeconds() < 3 * timeout.count())
-    {
-        ASSERT_FALSE(mpp_tunnel_ptr->isWritable());
-    }
-    GTEST_FAIL();
-}
-catch (Exception & e)
-{
-    GTEST_ASSERT_EQ(e.message(), "0000_0001 is timeout");
 }
 } // namespace tests
 } // namespace DB
