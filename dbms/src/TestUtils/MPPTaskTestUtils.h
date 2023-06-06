@@ -81,9 +81,20 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
+<<<<<<< HEAD
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+=======
+    std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> prepareAndRunMPPStreams(DAGRequestBuilder builder);
+
+    std::tuple<DAGProperties, std::vector<QueryTask>> prepareMPPStreams(DAGRequestBuilder builder);
+
+    static void setCancelTest();
+
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties);
+    ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
@@ -97,12 +108,21 @@ protected:
     static MPPTestMeta test_meta;
 };
 
+<<<<<<< HEAD
 #define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
     do                                                                                                                                      \
     {                                                                                                                                       \
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
         ASSERT_COLUMNS_EQ_UR(exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+=======
+#define ASSERT_MPPTASK_EQUAL(tasks, properties, expected_cols)                      \
+    do                                                                              \
+    {                                                                               \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                            \
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage()); \
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeMPPTasks(tasks, properties));    \
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
     } while (0)
 
 
@@ -113,8 +133,8 @@ protected:
         {                                                                      \
             (properties).mpp_partition_num = i;                                \
             MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
-            auto tasks = (builder).buildMPPTasks(context, properties);         \
-            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);              \
+            auto mpp_tasks = (builder).buildMPPTasks(context, properties);     \
+            ASSERT_MPPTASK_EQUAL(mpp_tasks, properties, expect_cols);          \
         }                                                                      \
     } while (0)
 

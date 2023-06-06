@@ -68,20 +68,44 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
+<<<<<<< HEAD
 std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
+=======
+void MPPTaskTestUtils::setCancelTest()
+{
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
+}
+
+std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareAndRunMPPStreams(DAGRequestBuilder builder)
+{
+    auto [properties, tasks] = prepareMPPStreams(builder);
+    auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
+    return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
+}
+
+std::tuple<DAGProperties, std::vector<QueryTask>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+<<<<<<< HEAD
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
     return {properties.start_ts, res};
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+=======
+    return {properties, tasks};
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 {
-    auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
+    auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
     return readBlocks(res);
 }
 
@@ -140,7 +164,11 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
+<<<<<<< HEAD
         while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) != nullptr)
+=======
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id).first != nullptr)
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
@@ -158,11 +186,29 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
+<<<<<<< HEAD
         if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) == nullptr)
+=======
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(query_id).first == nullptr)
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
         {
             return ::testing::AssertionFailure() << "Query " << start_ts << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();
 }
+<<<<<<< HEAD
+=======
+
+ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuilder builder)
+{
+    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+    auto tasks = (builder).buildMPPTasks(context, properties);
+    MockComputeServerManager::instance().resetMockMPPServerInfo(serverNum());
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+    return executeMPPTasks(tasks, properties);
+}
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 } // namespace DB::tests
