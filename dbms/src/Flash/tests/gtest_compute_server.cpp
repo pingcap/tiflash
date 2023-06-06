@@ -519,13 +519,33 @@ try
 {
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
+    setCancelTest();
     {
-        auto [query_id, res] = prepareMPPStreams(context
-                                                     .scan("test_db", "test_table_1")
-                                                     .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                                                     .project({"max(s1)"}));
+        /// case 1, cancel after dispatch MPPTasks
+        auto [query_id, res] = prepareAndRunMPPStreams(context
+                                                           .scan("test_db", "test_table_1")
+                                                           .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                                           .project({"max(s1)"}));
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
+        EXPECT_TRUE(assertQueryCancelled(query_id));
+    }
+    {
+        /// case 2, cancel before dispatch MPPTasks
+        auto [properties, tasks] = prepareMPPStreams(context
+                                                         .scan("test_db", "test_table_1")
+                                                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                                         .project({"max(s1)"}));
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        EXPECT_TRUE(!assertQueryActive(query_id));
+        MockComputeServerManager::instance().cancelQuery(query_id);
+        try
+        {
+            executeMPPTasks(tasks, properties);
+        }
+        catch (...)
+        {
+        }
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
     WRAP_FOR_SERVER_TEST_END
@@ -538,9 +558,10 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
-        auto [query_id, res] = prepareMPPStreams(context
-                                                     .scan("test_db", "l_table")
-                                                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        setCancelTest();
+        auto [query_id, res] = prepareAndRunMPPStreams(context
+                                                           .scan("test_db", "l_table")
+                                                           .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
@@ -555,11 +576,12 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
-        auto [query_id, _] = prepareMPPStreams(context
-                                                   .scan("test_db", "l_table")
-                                                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                   .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                   .project({col("max(l_table.s)"), col("l_table.s")}));
+        setCancelTest();
+        auto [query_id, _] = prepareAndRunMPPStreams(context
+                                                         .scan("test_db", "l_table")
+                                                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                         .project({col("max(l_table.s)"), col("l_table.s")}));
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
@@ -573,15 +595,16 @@ try
 {
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
+    setCancelTest();
     {
-        auto [query_id1, res1] = prepareMPPStreams(context
-                                                       .scan("test_db", "l_table")
-                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
-        auto [query_id2, res2] = prepareMPPStreams(context
-                                                       .scan("test_db", "l_table")
-                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
+        auto [query_id1, res1] = prepareAndRunMPPStreams(context
+                                                             .scan("test_db", "l_table")
+                                                             .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        auto [query_id2, res2] = prepareAndRunMPPStreams(context
+                                                             .scan("test_db", "l_table")
+                                                             .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                             .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                             .project({col("max(l_table.s)"), col("l_table.s")}));
 
         EXPECT_TRUE(assertQueryActive(query_id1));
         MockComputeServerManager::instance().cancelQuery(query_id1);
@@ -597,9 +620,9 @@ try
         std::vector<std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>>> queries;
         for (size_t i = 0; i < 10; ++i)
         {
-            queries.push_back(prepareMPPStreams(context
-                                                    .scan("test_db", "l_table")
-                                                    .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})));
+            queries.push_back(prepareAndRunMPPStreams(context
+                                                          .scan("test_db", "l_table")
+                                                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})));
         }
         for (size_t i = 0; i < 10; ++i)
         {
@@ -666,7 +689,7 @@ try
                             .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, enable)
                             .project({col("l_table_2.s1"), col("l_table_2.s2"), col("l_table_2.s3")});
         auto tasks = request2.buildMPPTasks(context, properties);
-        const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+        const auto actual_cols = executeMPPTasks(tasks, properties);
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
     WRAP_FOR_SERVER_TEST_END
@@ -692,13 +715,57 @@ try
                             .scan("test_db", "test_table_2")
                             .aggregation({Max(col("s3"))}, {col("s1"), col("s2")}, enable);
         auto tasks = request2.buildMPPTasks(context, properties);
-        const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+        const auto actual_cols = executeMPPTasks(tasks, properties);
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
     WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(ComputeServerRunner, randomFailpointForPipeline)
+try
+{
+    enablePipeline(true);
+    startServers(3);
+    std::vector<String> failpoints{
+        "random_pipeline_model_task_run_failpoint-0.8",
+        "random_pipeline_model_task_construct_failpoint-1.0",
+        "random_pipeline_model_event_schedule_failpoint-1.0",
+        // Because the mock table scan will always output data, there will be no event triggering onEventFinish, so the query will not terminate.
+        // "random_pipeline_model_event_finish_failpoint-0.99",
+        "random_pipeline_model_operator_run_failpoint-0.8",
+        "random_pipeline_model_cancel_failpoint-0.8",
+        "random_pipeline_model_execute_prefix_failpoint-1.0",
+        "random_pipeline_model_execute_suffix_failpoint-1.0"};
+    for (const auto & failpoint : failpoints)
+    {
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
+        initRandomFailPoint(config_str);
+        MPPQueryId query_id{0, 0, 0, 0};
+        try
+        {
+            std::vector<BlockInputStreamPtr> tmp;
+            std::tie(query_id, tmp) = prepareAndRunMPPStreams(context
+                                                                  .scan("test_db", "l_table")
+                                                                  .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                                  .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                                  .project({col("max(l_table.s)"), col("l_table.s")}));
+        }
+        catch (...)
+        {
+            // Only consider whether a crash occurs
+            ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+        // Check if the query is stuck
+        EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+        disableRandomFailPoint(config_str);
+    }
+}
+CATCH
+
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 #undef WRAP_FOR_SERVER_TEST_BEGIN
 #undef WRAP_FOR_SERVER_TEST_END
 
