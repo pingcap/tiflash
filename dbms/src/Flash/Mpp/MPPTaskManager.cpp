@@ -34,6 +34,16 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
+namespace
+{
+String getAbortedMessage(MPPQueryTaskSetPtr & query)
+{
+    if (query == nullptr || query->error_message.empty())
+        return "query is aborted";
+    return query->error_message;
+}
+} // namespace
+
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , aborted_query_gather_cache(1000)
@@ -78,7 +88,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         /// if the query is aborted, return the error message
         LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
         /// meet error
-        return {nullptr, query_set != nullptr && !query_set->error_message.empty() ? query_set->error_message : "query is aborted"};
+        return {nullptr, getAbortedMessage(query_set)};
     }
 
     if (query_set == nullptr || query_set->task_map.find(id) == query_set->task_map.end())
@@ -139,7 +149,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
             /// if the query is aborted, return true to stop waiting timeout.
             LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
             cancelled = true;
-            error_message = query_set != nullptr && !query_set->error_message.empty() ? query_set->error_message : "query is aborted";
+            error_message = getAbortedMessage(query_set);
             return true;
         }
         if (query_set == nullptr)
@@ -233,10 +243,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     auto [query_set, already_aborted] = getQueryTaskSetWithoutLock(task->id.query_id);
     if (already_aborted)
     {
-        if (query_set != nullptr && !query_set->error_message.empty())
-            return {false, fmt::format("query is being aborted, error message = {}", query_set->error_message)};
-        else
-            return {false, "query is aborted"};
+        return {false, fmt::format("query is being aborted, error message = {}", getAbortedMessage(query_set))};
     }
     if (query_set != nullptr && query_set->task_map.find(task->id) != query_set->task_map.end())
     {
