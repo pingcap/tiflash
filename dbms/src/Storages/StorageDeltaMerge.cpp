@@ -159,6 +159,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
     }
 
+    // TODO(hyy):seems aliases and default in ColumnsDescription is useless，please check if we can remove it
     ColumnsDescription new_columns(columns.ordinary, columns.materialized, columns.aliases, columns.defaults);
     size_t pks_combined_bytes = 0;
     auto all_columns = columns.getAllPhysical();
@@ -248,6 +249,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         LOG_INFO(Logger::get("hyy"), "StorageDeltaMerge::StorageDeltaMerge updateTableColumnInfo in new_columns col: {}", new_column.name);
     }
 
+    // TODO:Could we remove this branch?
     if (unlikely(handle_column_define.name.empty()))
     {
         // If users deploy a cluster with TiFlash node with version v4.0.0~v4.0.3, and rename primary key column. They will
@@ -1374,6 +1376,7 @@ try
         }
     }
 
+    std::unique_lock<std::mutex> lock(table_info_mutex);
     if (table_info)
     {
         LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.value().get().serialize());
@@ -1456,6 +1459,7 @@ void StorageDeltaMerge::updateTableInfo(
     const String & database_name,
     const String & table_name)
 {
+    std::unique_lock<std::mutex> lock(table_info_mutex);
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
     // if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED) // TODO:这个有没有必要
@@ -1491,6 +1495,8 @@ void StorageDeltaMerge::alterSchemaChange(
     {
         LOG_INFO(Logger::get("hyy"), "alterSchemaChange in new_columns col: {}", new_column.name);
     }
+
+    std::unique_lock<std::mutex> lock(table_info_mutex);
     setColumns(std::move(new_columns));
 
 
@@ -1502,8 +1508,8 @@ void StorageDeltaMerge::alterSchemaChange(
         if (storeInited())
         {
             _store->applyAlters(table_info);
-        }
-        else
+        } 
+        else  // 理论上我觉得应该不会有没有创建的情况。因为只要有数据写入了就会创建了，而没有数据写入的时候，也不会进行 alterSchemaChange 操作
         {
             updateTableColumnInfo();
         }

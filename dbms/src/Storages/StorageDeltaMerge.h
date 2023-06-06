@@ -291,6 +291,7 @@ private:
     const bool data_path_contains_database_name = false;
 
     mutable std::mutex store_mutex;
+    mutable std::mutex table_info_mutex; // to ensure only one schema change at a time
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
