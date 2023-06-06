@@ -70,9 +70,15 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
     {
         return true;
     }
+<<<<<<< HEAD
     const auto & id = task->getId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
     if (nullptr == query_task_set || query_task_set->to_be_cancelled)
+=======
+    const auto & id = schedule_entry.getMPPTaskId();
+    auto [query_task_set, already_aborted] = task_manager.getQueryTaskSetWithoutLock(id.query_id);
+    if (nullptr == query_task_set || already_aborted)
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
     {
         LOG_FMT_WARNING(log, "{} is scheduled with miss or cancellation.", id.toString());
         return true;
@@ -98,7 +104,11 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
 
     if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
     {
+<<<<<<< HEAD
         auto query_task_set = task_manager.getQueryTaskSetWithoutLock(tso);
+=======
+        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id).first;
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
         if (query_task_set) /// release all waiting tasks
         {
             while (!query_task_set->waiting_tasks.empty())
@@ -145,7 +155,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
     while (!waiting_set.empty())
     {
         auto current_query_id = *waiting_set.begin();
-        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id);
+        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id).first;
         if (nullptr == query_task_set) /// silently solve this rare case
         {
             LOG_FMT_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id);

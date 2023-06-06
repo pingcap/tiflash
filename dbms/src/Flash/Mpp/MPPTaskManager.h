@@ -38,6 +38,39 @@ struct MPPQueryTaskSet
     std::queue<MPPTaskId> waiting_tasks;
 };
 
+/// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
+class AbortedMPPGatherCache
+{
+private:
+    std::deque<MPPGatherId> gather_ids;
+    std::unordered_set<MPPGatherId, MPPGatherIdHash> gather_ids_set;
+    size_t capacity;
+
+public:
+    AbortedMPPGatherCache(size_t capacity_)
+        : capacity(capacity_)
+    {}
+    bool exists(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        return gather_ids_set.find(id) != gather_ids_set.end();
+    }
+    void add(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return;
+        if (gather_ids_set.size() >= capacity)
+        {
+            auto evicted_id = gather_ids.back();
+            gather_ids.pop_back();
+            gather_ids_set.erase(evicted_id);
+        }
+        gather_ids.push_front(id);
+        gather_ids_set.insert(id);
+    }
+};
+
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 /// a map from the mpp query id to mpp query task set, we use
@@ -54,7 +87,13 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
+<<<<<<< HEAD
     Poco::Logger * log;
+=======
+    AbortedMPPGatherCache aborted_query_gather_cache;
+
+    LoggerPtr log;
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 
     std::condition_variable cv;
 
@@ -69,9 +108,15 @@ public:
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
+<<<<<<< HEAD
     bool registerTask(MPPTaskPtr task);
 
     void unregisterTask(MPPTask * task);
+=======
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSet(const MPPQueryId & query_id);
+>>>>>>> 12435a7c05 (Fix "lost cancel" for mpp query (#7589))
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
