@@ -1138,8 +1138,8 @@ void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
             pipeline.streams,
             BlockInputStreams{},
             max_streams,
-            /*req_id=*/"",
-            0);
+            0,
+            /*req_id=*/"");
         ;
 
         pipeline.streams.resize(1);

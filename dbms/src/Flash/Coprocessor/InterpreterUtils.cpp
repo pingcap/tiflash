@@ -70,9 +70,9 @@ void executeUnion(
     {
         BlockInputStreamPtr stream;
         if (ignore_block)
-            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier(), max_buffered_bytes);
+            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, BlockInputStreams{}, max_streams, max_buffered_bytes, log->identifier());
         else
-            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, log->identifier(), max_buffered_bytes);
+            stream = std::make_shared<UnionWithBlock>(pipeline.streams, BlockInputStreams{}, max_streams, max_buffered_bytes, log->identifier());
         stream->setExtraInfo(extra_info);
 
         pipeline.streams.resize(1);

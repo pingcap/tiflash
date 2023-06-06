@@ -97,8 +97,8 @@ public:
         BlockInputStreams inputs,
         BlockInputStreams additional_inputs_at_end,
         size_t max_threads,
-        const String & req_id,
         Int64 max_buffered_bytes,
+        const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(
             CapacityLimits(std::min(std::max(inputs.size(), additional_inputs_at_end.size()), max_threads) * 5, max_buffered_bytes),
