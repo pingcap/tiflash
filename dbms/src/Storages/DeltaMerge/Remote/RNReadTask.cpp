@@ -95,11 +95,11 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
 
     LOG_DEBUG(
         log,
-        "Build RNReadSegmentTask, segment_id={} store_id={} keyspace_id={} table_id={} memtable_cfs={} persisted_cfs={}",
-        proto.segment_id(),
+        "Build RNReadSegmentTask, store_id={} keyspace_id={} table_id={} segment_id={} memtable_cfs={} persisted_cfs={}",
         store_id,
         keyspace_id,
         physical_table_id,
+        proto.segment_id(),
         segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
         segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
 
