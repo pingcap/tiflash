@@ -233,7 +233,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     auto [query_set, already_aborted] = getQueryTaskSetWithoutLock(task->id.query_id);
     if (already_aborted)
     {
-        if (query_set != nullptr && query_set->error_message.empty())
+        if (query_set != nullptr && !query_set->error_message.empty())
             return {false, fmt::format("query is being aborted, error message = {}", query_set->error_message)};
         else
             return {false, "query is aborted"};
