@@ -49,14 +49,10 @@ pipeline 会根据 query 并发度被实例化成若干个 task 在固定大小�
 │      └────────────┘        │
 │                            │
 └────────────────────────────┘
-
-- cpu task thread pool: for operator cpu intensive compute.
-- io task thread pool: for operator io intensive block.
-- wait reactor: for polling asynchronous io status, etc.
 ```
-
-#### CPU/IO Task Thread Pool
-
-#### Wait Reactor
+task 会根据执行的逻辑的不同在 task scheduler 里的不同组件中执行，时刻切换。
+- CPU Task Thread Pool
+- IO Task Thread Pool
+- Wait Reactor
 
 ## Impacts & Risks
