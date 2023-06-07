@@ -20,7 +20,7 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id);
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -123,7 +123,7 @@ protected:
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);     \
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
         for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)                  \
             TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \

@@ -192,7 +192,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 
 ColumnsWithTypeAndName MPPTaskTestUtils::buildAndExecuteMPPTasks(DAGRequestBuilder builder)
 {
-    auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     auto tasks = (builder).buildMPPTasks(context, properties);

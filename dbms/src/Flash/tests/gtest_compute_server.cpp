@@ -284,7 +284,7 @@ exchange_sender_3 | type:PassThrough, {<0, Long>}
     }
 
     {
-        auto properties = getDAGPropertiesForTest(1, -1, -1);
+        auto properties = getDAGPropertiesForTest(1);
         auto tasks = context
                          .scan("test_db", "test_table_1")
                          .aggregation({Count(col("s1"))}, {})
@@ -356,7 +356,7 @@ try
     }
 
     {
-        auto properties = getDAGPropertiesForTest(1, -1, -1);
+        auto properties = getDAGPropertiesForTest(1);
         auto tasks = context
                          .scan("test_db", "l_table")
                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -444,7 +444,7 @@ try
     }
 
     {
-        auto properties = getDAGPropertiesForTest(1, -1, -1);
+        auto properties = getDAGPropertiesForTest(1);
         auto tasks = context
                          .scan("test_db", "l_table")
                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -535,7 +535,7 @@ try
     setCancelTest();
     {
         /// case 1, cancel after dispatch MPPTasks
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto res = prepareMPPStreams(context
                                          .scan("test_db", "test_table_1")
@@ -548,7 +548,7 @@ try
     }
     {
         /// case 2, cancel before dispatch MPPTasks
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto tasks = prepareMPPTasks(context
                                          .scan("test_db", "test_table_1")
@@ -577,7 +577,7 @@ try
     startServers(4);
     {
         setCancelTest();
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto res = prepareMPPStreams(context
                                          .scan("test_db", "l_table")
@@ -598,7 +598,7 @@ try
     startServers(4);
     {
         setCancelTest();
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto stream = prepareMPPStreams(context
                                             .scan("test_db", "l_table")
@@ -621,13 +621,13 @@ try
     startServers(4);
     setCancelTest();
     {
-        auto properties1 = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties1 = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id1(properties1.query_ts, properties1.local_query_id, properties1.server_id, properties1.start_ts);
         auto res1 = prepareMPPStreams(context
                                           .scan("test_db", "l_table")
                                           .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                       properties1);
-        auto properties2 = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties2 = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id2(properties2.query_ts, properties2.local_query_id, properties2.server_id, properties2.start_ts);
         auto res2 = prepareMPPStreams(context
                                           .scan("test_db", "l_table")
@@ -650,7 +650,7 @@ try
         std::vector<std::tuple<MPPQueryId, BlockInputStreamPtr>> queries;
         for (size_t i = 0; i < 10; ++i)
         {
-            auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+            auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
             MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
             queries.push_back(std::make_tuple(query_id, prepareMPPStreams(context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}), properties)));
         }
@@ -707,7 +707,7 @@ try
 
     for (auto join_type : join_types)
     {
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
                            .scan("test_db", "l_table_2")
                            .join(context.scan("test_db", "r_table_2"), join_type, {col("s1"), col("s2")}, disable)
@@ -735,7 +735,7 @@ try
     constexpr uint64_t enable = 8;
     constexpr uint64_t disable = 0;
     {
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
                            .scan("test_db", "test_table_2")
                            .aggregation({Max(col("s3"))}, {col("s1"), col("s2")}, disable);
@@ -771,7 +771,7 @@ try
     {
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), -1, -1);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         try
         {
@@ -840,6 +840,7 @@ try
             }
             GTEST_FAIL();
         }
+        FailPointHelper::disableFailPoint(failpoint);
     }
 }
 CATCH
