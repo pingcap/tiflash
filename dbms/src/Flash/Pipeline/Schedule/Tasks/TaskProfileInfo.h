@@ -96,7 +96,7 @@ public:
     ALWAYS_INLINE void reportMetrics() const
     {
 #ifdef __APPLE__
-#define REPORT_METRICS(type, value_ns)                                                   \
+#define REPORT_DURATION_METRICS(type, value_ns)                                          \
     if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)            \
     {                                                                                    \
         GET_METRIC(tiflash_pipeline_task_duration_seconds, type).Observe(value_seconds); \
