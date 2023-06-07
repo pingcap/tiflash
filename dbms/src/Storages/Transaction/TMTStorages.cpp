@@ -16,8 +16,6 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/TiDB.h>
 
-#include <shared_mutex>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -48,9 +46,7 @@ ManageableStoragePtr ManagedStorages::get(KeyspaceID keyspace_id, TableID table_
     std::lock_guard lock(mutex);
 
     if (auto it = storages.find(KeyspaceTableID{keyspace_id, table_id}); it != storages.end())
-    {
         return it->second;
-    }
     return nullptr;
 }
 
