@@ -162,6 +162,8 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
+    // tunnel_sender has been checked in `waitForConnected`.
+    assert(tunnel_sender);
     if (tunnel_sender->push(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
@@ -178,6 +180,8 @@ void MPPTunnel::forceWrite(TrackedMppDataPacketPtr && data)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
+    // tunnel_sender has been checked in `waitForConnected`.
+    assert(tunnel_sender);
     if (tunnel_sender->forcePush(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
@@ -192,6 +196,7 @@ void MPPTunnel::writeDone()
 {
     LOG_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     // tunnel_sender has been checked in `waitForConnected`.
+    assert(tunnel_sender);
     tunnel_sender->finish();
     waitForSenderFinish(/*allow_throw=*/true);
 }
