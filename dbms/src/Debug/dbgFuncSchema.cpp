@@ -88,9 +88,6 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     output("schemas refreshed");
 }
 
-
-using QualifiedName = std::pair<String, String>;
-//std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name);
 void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2)
@@ -138,13 +135,11 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
     output("table schema refreshed");
 }
 
-
-void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncRefreshMappedTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2)
         throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
 
-    std::cout << " begin dbgFuncRefreshTableSchema2 " << std::endl;
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 

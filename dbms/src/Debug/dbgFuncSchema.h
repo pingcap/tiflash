@@ -39,8 +39,8 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
 
 // Refresh the schema for a table.
 // Usage:
-//  ./storage-client.sh "DBGInvoke refresh_table_schema2(db_name, table_name)" // the db_name and table_name is just for tiflash
-void dbgFuncRefreshTableSchema2(Context & context, const ASTs & args, DBGInvoker::Printer output);
+//  ./storage-client.sh "DBGInvoke refresh_mapped_table_schema(db_name, table_name)" // the db_name and table_name is just for tiflash
+void dbgFuncRefreshMappedTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Trigger gc on all databases / tables.
 // Usage:

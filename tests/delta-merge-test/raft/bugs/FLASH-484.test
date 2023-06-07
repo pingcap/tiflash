@@ -23,7 +23,7 @@
 
 ## create a DeltaMerge table
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
-=> DBGInvoke __refresh_table_schema2(default, test)
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 
 => DBGInvoke __put_region(4, 0, 100, default, test)
 

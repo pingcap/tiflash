@@ -27,9 +27,9 @@
 => DBGInvoke __mock_tidb_db(default)
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __create_tidb_tables(default, t1, t2, t3)
-=> DBGInvoke __refresh_table_schema2(default, t1)
-=> DBGInvoke __refresh_table_schema2(default, t2)
-=> DBGInvoke __refresh_table_schema2(default, t3)
+=> DBGInvoke __refresh_mapped_table_schema(default, t1)
+=> DBGInvoke __refresh_mapped_table_schema(default, t2)
+=> DBGInvoke __refresh_mapped_table_schema(default, t3)
 
 => DBGInvoke query_mapped('select tidb_database,tidb_name,engine from system.tables where database=''\$d'' and name=''\$t''', default, t1)
 ┌─tidb_database─┬─tidb_name─┬─engine─────┐

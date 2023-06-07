@@ -91,7 +91,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
     regSchemalessFunc("refresh_table_schema", dbgFuncRefreshTableSchema);
-    regSchemalessFunc("refresh_table_schema2", dbgFuncRefreshTableSchema2);
+    regSchemalessFunc("refresh_mapped_table_schema", dbgFuncRefreshMappedTableSchema);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
@@ -123,7 +123,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("mapped_table_exists", dbgFuncTableExists);
     regSchemalessFunc("mapped_database_exists", dbgFuncDatabaseExists);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
-    regSchemafulFunc("query_quota_mapped", dbgFuncQueryQuotaMapped);
     regSchemalessFunc("get_tiflash_replica_count", dbgFuncGetTiflashReplicaCount);
     regSchemalessFunc("get_partition_tables_tiflash_replica_count", dbgFuncGetPartitionTablesTiflashReplicaCount);
 

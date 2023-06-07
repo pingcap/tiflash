@@ -62,7 +62,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         LOG_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
         GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
 
-        if (cur_version == 0)
+        if (cur_version <= 0)
         {
             // first load all db and tables
             Int64 version_after_load_all = syncAllSchemas(context, getter, version);
@@ -86,7 +86,8 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
             }
             else
             {
-                // TODO:-1 就是遇到了 RegenerateSchemaMap = true, 需要从头全部重新载入，该删的删，该改的改
+                // when diff->regenerate_schema_map == true, we use syncAllSchemas to reload all schemas
+                cur_version = syncAllSchemas(context, getter, version);
             }
         }
     }
@@ -98,7 +99,6 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 template <bool mock_getter, bool mock_mapper>
 Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version)
 {
-    // TODO:怎么会有这么大量的 最后一个 diff是空啊
     LOG_DEBUG(log, "Try load schema diffs.");
 
     Int64 used_version = cur_version;

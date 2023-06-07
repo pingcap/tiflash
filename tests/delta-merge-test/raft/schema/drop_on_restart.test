@@ -31,8 +31,8 @@
 => DBGInvoke __mock_tidb_table(db3, test3, 'col_1 String', '', 'dt')
 => DBGInvoke __mock_tidb_table(db4, test, 'col_1 String', '', 'dt')
 => DBGInvoke __refresh_schemas()
-=> DBGInvoke __refresh_table_schema2(db3, test3)
-=> DBGInvoke __refresh_table_schema2(db4, test)
+=> DBGInvoke __refresh_mapped_table_schema(db3, test3)
+=> DBGInvoke __refresh_mapped_table_schema(db4, test)
 => select tidb_name from system.databases where tidb_name like '%db%' and is_tombstone = 0
 ┌─tidb_name───┐
 │ db3         │

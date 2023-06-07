@@ -28,7 +28,7 @@
 => DBGInvoke __mock_tidb_partition(default, test, 9998)
 => DBGInvoke __mock_tidb_partition(default, test, 9999)
 
-=> DBGInvoke __refresh_table_schema2(default, test)
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 
 => DBGInvoke __put_region(1, 0, 100, default, test, 9997)
 

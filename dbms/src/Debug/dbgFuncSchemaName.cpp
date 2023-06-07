@@ -114,47 +114,6 @@ void dbgFuncDatabaseExists(Context & context, const ASTs & args, DBGInvoker::Pri
         output("true");
 }
 
-BlockInputStreamPtr dbgFuncQueryQuotaMapped(Context & context, const ASTs & args)
-{
-    if (args.size() < 2 || args.size() > 3)
-        throw Exception("Args not matched, should be: query, database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
-
-    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    LOG_INFO(Logger::get("hyy"), "query is {}", query);
-    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-
-    if (args.size() == 3)
-    {
-        const String & table_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
-        auto mapped = mappedTableWithOptional(context, database_name, table_name);
-        if (mapped == std::nullopt)
-        {
-            std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>("Error");
-            //res->append("Table " + database_name + "." + table_name + " not found.");
-            LOG_INFO(Logger::get("hyy"), "Table {} not found.", database_name + "." + table_name);
-            return res;
-        }
-        boost::algorithm::replace_all(query, "$d", "'" + mapped->first + "'");
-        boost::algorithm::replace_all(query, "$t", "'" + mapped->second + "'");
-        LOG_INFO(Logger::get("hyy"), "after replace query is {}", query);
-    }
-    else
-    {
-        auto mapped = mappedDatabaseWithOptional(context, database_name);
-        if (mapped == std::nullopt)
-        {
-            std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>("Error");
-            //res->append("Database " + database_name + " not found.");
-            LOG_INFO(Logger::get("hyy"), "Database {} not found.", database_name);
-            return res;
-        }
-        boost::algorithm::replace_all(query, "$d", "'" + mapped.value() + "'");
-    }
-
-    return executeQuery(query, context, true).in;
-}
-
-
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
 {
     if (args.size() < 2 || args.size() > 3)
