@@ -831,9 +831,7 @@ try
             catch (...)
             {
                 auto error_message = getCurrentExceptionMessage(false);
-                if (error_message.find(failpoint) == std::string::npos)
-                    std::cout << error_message << std::endl;
-                ASSERT_TRUE(error_message.find(failpoint) != std::string::npos);
+                ASSERT_TRUE(error_message.find(failpoint) != std::string::npos) << " error message is " << error_message << " failpoint is " << failpoint;
                 MockComputeServerManager::instance().cancelQuery(query_id);
                 EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
                 continue;
