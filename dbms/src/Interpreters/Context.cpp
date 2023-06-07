@@ -1028,7 +1028,6 @@ void Context::addDatabase(const String & database_name, const DatabasePtr & data
 {
     auto lock = getLock();
 
-    LOG_INFO(Logger::get("hyy"), "into addDatabase with database_name {}", database_name);
     assertDatabaseDoesntExist(database_name);
     shared->databases[database_name] = database;
 }
@@ -1037,7 +1036,6 @@ void Context::addDatabase(const String & database_name, const DatabasePtr & data
 DatabasePtr Context::detachDatabase(const String & database_name)
 {
     auto lock = getLock();
-    LOG_INFO(Logger::get("hyy"), "into detachDatabase with database_name {}", database_name);
     auto res = getDatabase(database_name);
     shared->databases.erase(database_name);
     return res;

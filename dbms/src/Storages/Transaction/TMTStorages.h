@@ -48,8 +48,8 @@ public:
 private:
     StorageMap storages;
     KeyspaceSet keyspaces;
-    //mutable std::mutex mutex;
-    mutable std::shared_mutex shared_mutex; // 这个要看过，会不会饿死啥的都要考虑
+    // if we use shared_mutex, the performance under high concurrency is obviously worser than std::mutex
+    mutable std::mutex mutex;
 };
 
 } // namespace DB

@@ -319,16 +319,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         throw;
     }
 
-    for (const auto & original_table_column : original_table_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with original_table_column name:{}", original_table_column.name);
-    }
-
-    for (const auto & store_column : *store_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::DeltaMergeStore end with store_column name:{}", store_column.name);
-    }
-
     setUpBackgroundTask(dm_context);
 
     LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
@@ -1651,19 +1641,7 @@ BlockPtr DeltaMergeStore::getHeader() const
 void DeltaMergeStore::applyAlters(
     TableInfo & table_info)
 {
-    // TODO:要改这么多，性能能保证么？？？？？
     std::unique_lock lock(read_write_mutex);
-
-    for (const auto & original_table_column : original_table_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with original_table_column name:{}", original_table_column.name);
-    }
-
-    for (const auto & store_column : *store_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters begin with store_column name:{}", store_column.name);
-    }
-
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
@@ -1766,16 +1744,6 @@ void DeltaMergeStore::applyAlters(
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
-
-    for (const auto & original_table_column : original_table_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with original_table_column name:{}", original_table_column.name);
-    }
-
-    for (const auto & store_column : *store_columns)
-    {
-        LOG_INFO(Logger::get("hyy"), "DeltaMergeStore::applyAlters end with store_column name:{}", store_column.name);
-    }
 
     std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }

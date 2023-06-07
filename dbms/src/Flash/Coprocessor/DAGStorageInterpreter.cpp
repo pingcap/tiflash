@@ -490,7 +490,7 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
         {
             continue;
         }
-        LOG_INFO(Logger::get("hyy"), "column id {} name {} type {}", column.id, column.name, getDataTypeByColumnInfo(column)->getName());
+        //LOG_INFO(Logger::get("hyy"), "column id {} name {} type {}", column.id, column.name, getDataTypeByColumnInfo(column)->getName());
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {

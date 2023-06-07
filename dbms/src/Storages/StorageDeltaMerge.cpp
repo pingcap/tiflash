@@ -244,10 +244,6 @@ void StorageDeltaMerge::updateTableColumnInfo()
     }
 
     setColumns(new_columns);
-    for (const auto & new_column : new_columns.getAllPhysical())
-    {
-        LOG_INFO(Logger::get("hyy"), "StorageDeltaMerge::StorageDeltaMerge updateTableColumnInfo in new_columns col: {}", new_column.name);
-    }
 
     // TODO:Could we remove this branch?
     if (unlikely(handle_column_define.name.empty()))
@@ -1409,19 +1405,13 @@ catch (Exception & e)
     throw;
 }
 
-std::tuple<NamesAndTypes, Strings>
-getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
+NamesAndTypes getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 {
     NamesAndTypes columns;
-    std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
-        if (column.hasPriKeyFlag())
-        {
-            primary_keys.emplace_back(column.name);
-        }
     }
 
     if (!table_info.pk_is_handle)
@@ -1431,23 +1421,24 @@ getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
             columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>());
         else
             columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>());
-        primary_keys.clear();
-        primary_keys.emplace_back(MutableSupport::tidb_pk_column_name);
     }
 
-    return std::make_tuple(std::move(columns), std::move(primary_keys));
+    return columns;
 }
 
 ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info)
 {
-    auto [columns, pks] = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
+    auto columns = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
     // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
     ColumnsDescription new_columns;
-    for (auto column : columns)
+    for (const auto & column : columns)
     {
         new_columns.ordinary.emplace_back(std::move(column));
     }
+
+    // TODO:会前面的 materialized 是空么？
     new_columns.materialized = getColumns().materialized;
+
     return new_columns;
 }
 
@@ -1491,25 +1482,22 @@ void StorageDeltaMerge::alterSchemaChange(
     // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
-    for (const auto & new_column : new_columns.getAllPhysical())
-    {
-        LOG_INFO(Logger::get("hyy"), "alterSchemaChange in new_columns col: {}", new_column.name);
-    }
 
     std::unique_lock<std::mutex> lock(table_info_mutex);
+
     setColumns(std::move(new_columns));
 
-
     tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
-    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
+    //LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
+    LOG_DEBUG(log, "alterSchemaChange Update table_info");
 
     {
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
             _store->applyAlters(table_info);
-        } 
-        else  // 理论上我觉得应该不会有没有创建的情况。因为只要有数据写入了就会创建了，而没有数据写入的时候，也不会进行 alterSchemaChange 操作
+        }
+        else // 理论上我觉得应该不会有没有创建的情况。因为只要有数据写入了就会创建了，而没有数据写入的时候，也不会进行 alterSchemaChange 操作
         {
             updateTableColumnInfo();
         }

@@ -204,11 +204,6 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 {
     const auto & settings = context.getSettingsRef();
 
-    for (const auto & table_pair : tables)
-    {
-        LOG_INFO(Logger::get("hyy"), "create Table with existing table name: {}, and self table name is {}", table_pair.first, table_name);
-    }
-
     /// Create a file with metadata if necessary - if the query is not ATTACH.
     /// Write the query of `ATTACH table` to it.
 
@@ -415,7 +410,6 @@ void DatabaseTiFlash::alterTable(
     const ASTModifier & storage_modifier)
 {
     /// Read the definition of the table and replace the necessary parts with new ones.
-
     const String table_name_escaped = escapeForFileName(name);
     const String table_metadata_tmp_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql.tmp";
     const String table_metadata_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql";
@@ -440,6 +434,7 @@ void DatabaseTiFlash::alterTable(
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
 
     ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns);
+
     ast_create_query.replace(ast_create_query.columns, new_columns);
 
     if (storage_modifier)
