@@ -470,9 +470,10 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
-// 离谱，columns.name 都是空，不放的，默认值不填 refer toTiDBColumnInfo
-// 不过 default value 不比较理论上对 tiflash 这边没有影响，他本来就不用管后续 default value 的变更？
-// TODO:check 一下这个前提是否能满足
+// TODO:Question: here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
+// we think we can directly do read, and don't need sync schema.
+// compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
+// column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns)
 {
     auto columns = table_scan.getColumns();
@@ -482,31 +483,29 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
         column_id_map[column.id] = column;
     }
 
-    // TODO:加个 size 比较，具体要看一下 是不是 差3
     for (const auto & column : columns)
     {
-        // Exclude virtual columns
+        // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
         if (column.id < 0)
         {
             continue;
         }
-        //LOG_INFO(Logger::get("hyy"), "column id {} name {} type {}", column.id, column.name, getDataTypeByColumnInfo(column)->getName());
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            LOG_ERROR(Logger::get("hyy"), "column id {} not found", column.id);
+            LOG_ERROR(Logger::get("DAGStorageInterpreter"), "the column with id {} in query is not found in current columns", column.id);
             return false;
         }
-        // TODO:这边要加一个 name 的比较么？
+
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            LOG_ERROR(Logger::get("hyy"), "column {}'s data type {} not match {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
+            LOG_ERROR(Logger::get("DAGStorageInterpreter"), "the data type {} of column {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
             return false;
         }
     }
-
     return true;
 }
+
 // Apply learner read to ensure we can get strong consistent with TiKV Region
 // leaders. If the local Regions do not match the requested Regions, then build
 // request to retry fetching data from other nodes.
@@ -1187,9 +1186,8 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         return storages_with_lock;
     }
 
-    /// Align schema version under the read lock.
-    /// Return: [storage, table_structure_lock, ok]
-    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, bool> {
+    /// Return: [storage, table_structure_lock]
+    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto table_store = tmt.getStorages().get(keyspace_id, table_id);
@@ -1198,7 +1196,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             if (schema_synced)
                 throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
             else
-                return {{}, {}, false};
+                return {{}, {}};
         }
 
         if (unlikely(table_store->engineType() != ::TiDB::StorageEngine::DT))
@@ -1214,32 +1212,31 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
-        // 直接比较要读的 columnInfo 和 storage 的 columns 能不能对上
+        // check the columns in table_scan and table_store, to check whether we need to sync table schema.
         bool res = compareColumns(table_scan, table_store->getStoreColumnDefines());
 
         if (res)
         {
-            return std::make_tuple(table_store, lock, true);
+            return std::make_tuple(table_store, lock);
         }
         else
         {
             if (schema_synced)
             {
-                throw TiFlashException(fmt::format("Table {} schema version newer than query schema version", table_id), Errors::Table::SchemaVersionError);
+                throw TiFlashException(fmt::format("Table {} schema is newer than query schema version", table_id), Errors::Table::SchemaVersionError);
             }
         }
-        return {nullptr, {}, false};
+        return {nullptr, {}};
     };
 
-    // TODO:ok 这个可以删掉
-    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<TableID>, bool> {
+    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<TableID>> {
         std::vector<ManageableStoragePtr> table_storages;
         std::vector<TableStructureLockHolder> table_locks;
 
         std::vector<TableID> need_sync_table_ids;
 
-        auto [logical_table_storage, logical_table_lock, ok] = get_and_lock_storage(schema_synced, logical_table_id);
-        if (!ok)
+        auto [logical_table_storage, logical_table_lock] = get_and_lock_storage(schema_synced, logical_table_id);
+        if (logical_table_storage == nullptr)
         {
             need_sync_table_ids.push_back(logical_table_id);
         }
@@ -1251,12 +1248,12 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         if (!table_scan.isPartitionTableScan())
         {
-            return {table_storages, table_locks, need_sync_table_ids, need_sync_table_ids.empty()};
+            return {table_storages, table_locks, need_sync_table_ids};
         }
         for (auto const physical_table_id : table_scan.getPhysicalTableIDs())
         {
-            auto [physical_table_storage, physical_table_lock, ok] = get_and_lock_storage(schema_synced, physical_table_id);
-            if (!ok)
+            auto [physical_table_storage, physical_table_lock] = get_and_lock_storage(schema_synced, physical_table_id);
+            if (physical_table_storage == nullptr)
             {
                 need_sync_table_ids.push_back(physical_table_id);
             }
@@ -1266,21 +1263,20 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
                 table_locks.emplace_back(std::move(physical_table_lock));
             }
         }
-        return {table_storages, table_locks, need_sync_table_ids, need_sync_table_ids.empty()};
+        return {table_storages, table_locks, need_sync_table_ids};
     };
 
     auto sync_schema = [&](TableID table_id) {
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
-        //LOG_INFO(log, "DAGStorageInterpreter begin sync table schema ");
         auto start_time = Clock::now();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, dagContext().getKeyspaceID(), table_id);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_INFO(log, "[hyy] Table {} schema sync cost {} ms.", logical_table_id, schema_sync_cost);
+        LOG_INFO(log, "Table {} schema sync cost {} ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.
-    auto [storages, locks, need_sync_table_ids, ok] = get_and_lock_storages(false);
-    if (ok)
+    auto [storages, locks, need_sync_table_ids] = get_and_lock_storages(false);
+    if (need_sync_table_ids.empty())
     {
         LOG_INFO(log, "OK, no syncing required.");
     }
@@ -1295,8 +1291,8 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         }
 
 
-        std::tie(storages, locks, need_sync_table_ids, ok) = get_and_lock_storages(true);
-        if (ok)
+        std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
+        if (need_sync_table_ids.empty())
         {
             LOG_INFO(log, "OK after syncing.");
         }
