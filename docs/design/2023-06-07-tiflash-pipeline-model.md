@@ -22,7 +22,7 @@ Referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework
 
 ## Detailed Design
 
-[pipeline_model_overview](./images/2023-06-07-tiflash-pipeline-model.png)
+![pipeline_model_overview](./images/2023-06-07-tiflash-pipeline-model.png)
 
 ### Generate pipeline dag
 
@@ -33,7 +33,6 @@ After the query is split into a pipeline dag, it will be submitted to the task s
 ### Schedule and execute task
 
 The pipeline will be instantiated into several tasks according to the query concurrency and then executed in a fixed-size thread pool.
-
 ```
 ┌────────────────────────────┐
 │      task scheduler        │
