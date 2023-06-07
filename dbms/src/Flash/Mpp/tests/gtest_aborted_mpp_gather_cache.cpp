@@ -32,25 +32,25 @@ try
     AbortedMPPGatherCache cache(capacity);
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.add(MPPGatherId(i, MPPQueryId(1, 2, 3, 4)));
+        cache.add(MPPGatherId(i, MPPQueryId(1, 2, 3, 4)), "");
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(cache.exists(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))), true);
+        ASSERT_EQ(!cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))).empty(), true);
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        cache.add(MPPGatherId(0, MPPQueryId(1, 2, 3, 4)));
+        cache.add(MPPGatherId(0, MPPQueryId(1, 2, 3, 4)), "");
     }
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(cache.exists(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))), true);
+        ASSERT_EQ(!cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))).empty(), true);
     }
-    cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4)));
-    ASSERT_EQ(cache.exists(MPPGatherId(0, MPPQueryId(1, 2, 3, 4))), false);
+    cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4)), "");
+    ASSERT_EQ(cache.check(MPPGatherId(0, MPPQueryId(1, 2, 3, 4))).empty(), false);
     for (size_t i = 0; i < capacity; i++)
     {
-        ASSERT_EQ(cache.exists(MPPGatherId(i + 1, MPPQueryId(1, 2, 3, 4))), true);
+        ASSERT_EQ(!cache.check(MPPGatherId(i + 1, MPPQueryId(1, 2, 3, 4))).empty(), true);
     }
 }
 CATCH
