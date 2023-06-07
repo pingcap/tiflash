@@ -80,14 +80,15 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
 
 void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskResponse * response)
 {
-    // run into DAGStorageInterpreter and build the segment snapshots
-    query_executor_holder.set(queryExecute(*context));
-
+    // Set the store_id to response before executing query
     auto & tmt = context->getTMTContext();
     {
         const auto & kvstore = tmt.getKVStore();
         response->set_store_id(kvstore->getStoreID());
     }
+
+    // run into DAGStorageInterpreter and build the segment snapshots
+    query_executor_holder.set(queryExecute(*context));
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();

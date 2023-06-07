@@ -2505,7 +2505,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log->getChild(dm_context.tracing_id), "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 

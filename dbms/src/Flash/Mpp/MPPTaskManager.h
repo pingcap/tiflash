@@ -54,6 +54,39 @@ struct MPPQueryTaskSet
     }
 };
 
+/// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
+class AbortedMPPGatherCache
+{
+private:
+    std::deque<MPPGatherId> gather_ids;
+    std::unordered_set<MPPGatherId, MPPGatherIdHash> gather_ids_set;
+    size_t capacity;
+
+public:
+    AbortedMPPGatherCache(size_t capacity_)
+        : capacity(capacity_)
+    {}
+    bool exists(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        return gather_ids_set.find(id) != gather_ids_set.end();
+    }
+    void add(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return;
+        if (gather_ids_set.size() >= capacity)
+        {
+            auto evicted_id = gather_ids.back();
+            gather_ids.pop_back();
+            gather_ids_set.erase(evicted_id);
+        }
+        gather_ids.push_front(id);
+        gather_ids_set.insert(id);
+    }
+};
+
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 /// a map from the mpp query id to mpp query task set, we use
@@ -113,6 +146,8 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
+    AbortedMPPGatherCache aborted_query_gather_cache;
+
     LoggerPtr log;
 
     std::condition_variable cv;
@@ -130,9 +165,9 @@ public:
 
     void removeMonitoredTask(const String & task_unique_id) { monitor->removeMonitoredTask(task_unique_id); }
 
-    MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
 
-    MPPQueryTaskSetPtr getQueryTaskSet(const MPPQueryId & query_id);
+    std::pair<MPPQueryTaskSetPtr, bool> getQueryTaskSet(const MPPQueryId & query_id);
 
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 
