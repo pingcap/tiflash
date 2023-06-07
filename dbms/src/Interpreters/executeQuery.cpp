@@ -433,7 +433,6 @@ BlockIO executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
-    LOG_INFO(Logger::get("hyy"), " executeQuery query is {}", query);
     BlockIO streams;
     SQLQuerySource query_src(query.data(), query.data() + query.size());
     std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);

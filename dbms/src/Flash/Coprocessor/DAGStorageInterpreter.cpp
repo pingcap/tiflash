@@ -57,6 +57,8 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
+#include "Common/Logger.h"
+
 
 namespace DB
 {
@@ -474,7 +476,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 // we think we can directly do read, and don't need sync schema.
 // compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
-bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns)
+bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const LoggerPtr & log)
 {
     auto columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
@@ -493,13 +495,13 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            LOG_ERROR(Logger::get("DAGStorageInterpreter"), "the column with id {} in query is not found in current columns", column.id);
+            LOG_WARNING(log, "the column with id {} in query is not found in current columns", column.id);
             return false;
         }
 
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            LOG_ERROR(Logger::get("DAGStorageInterpreter"), "the data type {} of column {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
+            LOG_WARNING(log, "the data type {} of column {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
             return false;
         }
     }
@@ -1213,7 +1215,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
-        bool res = compareColumns(table_scan, table_store->getStoreColumnDefines());
+        bool res = compareColumns(table_scan, table_store->getStoreColumnDefines(), log);
 
         if (res)
         {

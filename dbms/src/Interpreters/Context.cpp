@@ -202,6 +202,7 @@ struct ContextShared
     /// database -> table -> exception_message
     /// For the duration of the operation, an element is placed here, and an object is returned, which deletes the element in the destructor.
     /// In case the element already exists, an exception is thrown. See class DDLGuard below.
+    // TODO: now each table is global unique, so we can use only table name as key, without the database level.
     using DDLGuards = std::unordered_map<String, DDLGuard::Map>;
     DDLGuards ddl_guards;
     /// If you capture mutex and ddl_guards_mutex, then you need to grab them strictly in this order.
@@ -493,12 +494,6 @@ static String resolveDatabase(const String & database_name, const String & curre
 DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
-
-    for (const auto & db_pair : shared->databases)
-    {
-        LOG_INFO(Logger::get("hyy"), "db name is {}", db_pair.first);
-    }
-
     String db = resolveDatabase(database_name, current_database);
     assertDatabaseExists(db);
     return shared->databases[db];
@@ -1036,6 +1031,7 @@ void Context::addDatabase(const String & database_name, const DatabasePtr & data
 DatabasePtr Context::detachDatabase(const String & database_name)
 {
     auto lock = getLock();
+
     auto res = getDatabase(database_name);
     shared->databases.erase(database_name);
     return res;

@@ -467,7 +467,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     String database_name = create.database.empty() ? current_database : create.database;
     String table_name = create.table;
-    LOG_INFO(Logger::get("hyy"), "createTable with table_name is {}", table_name);
     String table_name_escaped = escapeForFileName(table_name);
 
     // If this is a stub ATTACH query, read the query definition from the database
@@ -548,22 +547,21 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                 // Thus, we choose to do a retry here to wait the table created completed.
                 if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE)
                 {
-                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "InterpreterCreateQuery::createTable failed, with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
-                    for (int i = 0; i < 20; i++)
-                    { // retry for 1 mins
+                    LOG_WARNING(Logger::get("InterpreterCreateQuery"), "createTable failed with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
+                    for (int i = 0; i < 20; i++) // retry for 400ms
+                    {
                         if (!context.isTableExist(database_name, table_name))
                         {
                             const int wait_useconds = 20000;
                             LOG_ERROR(
                                 Logger::get("InterpreterCreateQuery"),
-                                "InterpreterCreateQuery::createTable failed but table not exist now, \nWe will sleep for {}"
-                                " ms and try again.",
+                                "createTable failed but table not exist now, \nWe will sleep for {} ms and try again.",
                                 wait_useconds / 1000);
                             usleep(wait_useconds); // sleep 20ms
                         }
                         return {};
                     }
-                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for 20 retry times");
+                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for retry 20 times");
                     e.rethrow();
                 }
                 else
