@@ -15,8 +15,6 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 
-#include "DataStreams/IBlockInputStream.h"
-
 namespace DB
 {
 String ExchangeReceiveDetail::toJson() const
