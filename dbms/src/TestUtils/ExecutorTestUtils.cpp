@@ -14,6 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Pipeline/Pipeline.h>
@@ -26,8 +27,6 @@
 #include <gtest/gtest.h>
 
 #include <functional>
-
-#include "Common/Stopwatch.h"
 
 namespace DB::tests
 {

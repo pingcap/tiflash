@@ -52,7 +52,7 @@ struct OperatorProfileInfo
         total_stopwatch.start();
     }
 
-    ALWAYS_INLINE void updateInfoForBlock(const Block & block)
+    ALWAYS_INLINE void updateInfoFromBlock(const Block & block)
     {
         if likely (block)
         {
@@ -65,7 +65,7 @@ struct OperatorProfileInfo
 
     ALWAYS_INLINE void anchor(const Block & block)
     {
-        updateInfoForBlock(block);
+        updateInfoFromBlock(block);
         anchor();
     }
 
@@ -76,7 +76,7 @@ struct OperatorProfileInfo
 
     ALWAYS_INLINE void update(const Block & block)
     {
-        updateInfoForBlock(block);
+        updateInfoFromBlock(block);
         update();
     }
 };
