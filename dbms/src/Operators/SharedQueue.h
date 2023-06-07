@@ -57,7 +57,7 @@ public:
     {
     }
 
-    ~SharedQueueSinkOp()
+    ~SharedQueueSinkOp() override
     {
         shared_queue->producerFinish();
     }
