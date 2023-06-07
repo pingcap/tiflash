@@ -15,6 +15,7 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/dbgFuncSchemaName.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Parsers/ASTIdentifier.h>
@@ -27,31 +28,12 @@
 
 #include <boost/algorithm/string/replace.hpp>
 
-#include "Debug/dbgTools.h"
-#include "Storages/Transaction/Types.h"
-
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
-
-// using QualifiedName = std::pair<String, String>;
-
-// std::optional<QualifiedName> mappedTable(Context & context, const String & database_name, const String & table_name)
-// {
-//     auto mapped_db = mappedDatabase(context, database_name);
-
-//     TMTContext & tmt = context.getTMTContext();
-//     auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
-//     if (storage == nullptr){
-//         //std::cout << "storage is null" << std::endl;
-//         return std::nullopt;
-//     }
-
-//     return std::make_pair(storage->getDatabaseName(), storage->getTableName());
-// }
 
 void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
@@ -120,7 +102,6 @@ BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
         throw Exception("Args not matched, should be: query, database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
 
     auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    LOG_INFO(Logger::get("hyy"), "query is {}", query);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     if (args.size() == 3)
@@ -130,13 +111,10 @@ BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
         if (mapped == std::nullopt)
         {
             std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>("Error");
-            LOG_INFO(Logger::get("hyy"), "Table {} not found.", database_name + "." + table_name);
-            //res->append("Table " + database_name + "." + table_name + " not found.");
             return res;
         }
         boost::algorithm::replace_all(query, "$d", mapped->first);
         boost::algorithm::replace_all(query, "$t", mapped->second);
-        LOG_INFO(Logger::get("hyy"), "after replace query is {}", query);
     }
     else
     {
@@ -144,8 +122,6 @@ BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
         if (mapped == std::nullopt)
         {
             std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>("Error");
-            LOG_INFO(Logger::get("hyy"), "Database {} not found.", database_name);
-            //res->append("Database " + database_name + " not found.");
             return res;
         }
         boost::algorithm::replace_all(query, "$d", mapped.value());

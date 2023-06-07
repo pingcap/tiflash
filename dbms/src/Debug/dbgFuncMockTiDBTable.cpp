@@ -14,6 +14,7 @@
 
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -27,8 +28,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
-
-#include "Debug/dbgTools.h"
 
 namespace DB
 {

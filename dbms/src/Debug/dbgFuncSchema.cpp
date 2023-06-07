@@ -16,6 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
@@ -30,10 +31,6 @@
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
-#include <ostream>
-
-#include "Debug/dbgTools.h"
-#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -97,9 +94,7 @@ void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker:
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto mapped_db = mappedDatabase(context, database_name);
-    // if (mapped_db == std::nullopt){
-    //     return;
-    // }
+
     TMTContext & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
     if (storage == nullptr)
@@ -223,9 +218,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     {
         const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
         auto mapped_table_name = mappedTable(context, database_name, table_name, true).second;
-        LOG_INFO(Logger::get("hyy"), "dbgFuncIsTombstone mapped_table_name is {} with table_name is {}", mapped_table_name, table_name);
         auto mapped_database_name = mappedDatabase(context, database_name);
-        LOG_INFO(Logger::get("hyy"), "dbgFuncIsTombstone mapped_database_name is {}", mapped_database_name);
         auto storage = context.getTable(mapped_database_name, mapped_table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         if (!managed_storage)

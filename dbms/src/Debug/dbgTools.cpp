@@ -607,7 +607,6 @@ TableID getTableID(Context & context, const std::string & database_name, const s
     auto mapped_table_name = mappedTable(context, database_name, table_name).second;
     auto mapped_database_name = mappedDatabase(context, database_name);
     auto storage = context.getTable(mapped_database_name, mapped_table_name);
-    //auto storage = context.getTable(database_name, table_name);
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     auto table_info = managed_storage->getTableInfo();
     return table_info.id;
@@ -631,7 +630,6 @@ const TiDB::TableInfo & getTableInfo(Context & context, const String & database_
     auto mapped_table_name = mappedTable(context, database_name, table_name).second;
     auto mapped_database_name = mappedDatabase(context, database_name);
     auto storage = context.getTable(mapped_database_name, mapped_table_name);
-    //auto storage = context.getTable(database_name, table_name);
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     return managed_storage->getTableInfo();
 }
@@ -668,7 +666,6 @@ std::optional<QualifiedName> mappedTableWithOptional(Context & context, const St
     auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
     if (storage == nullptr)
     {
-        //std::cout << "storage is null" << std::endl;
         return std::nullopt;
     }
 

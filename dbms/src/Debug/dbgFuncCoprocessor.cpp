@@ -16,14 +16,11 @@
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Debug/dbgQueryExecutor.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include "Common/Exception.h"
-#include "Debug/dbgFuncSchemaName.h"
-#include "Debug/dbgTools.h"
 
 namespace DB
 {
@@ -49,14 +46,12 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     DAGProperties properties = getDAGProperties(prop_string);
     properties.start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    // try {
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
         context,
         query,
         [&](const String & database_name, const String & table_name) {
             auto mapped_database_name = mappedDatabase(context, database_name);
             auto mapped_table_name = mappedTable(context, database_name, table_name);
-            LOG_INFO(Logger::get("hyy"), "mapped_database_name is {}, mapped_table_name is {}", mapped_database_name, mapped_table_name);
             auto storage = context.getTable(mapped_database_name, mapped_table_name.second);
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
             if (!managed_storage //
@@ -67,16 +62,6 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
         },
         properties);
     return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
-    // } catch (const Exception & e) {
-    //     if (e.code() == ErrorCodes::UNKNOWN_TABLE) {
-    //         return nullptr;
-    //     }
-    //     e.rethrow();
-    // }
-    // return nullptr;
-
-
-    //return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
@@ -102,8 +87,6 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
         context,
         query,
         [&](const String & database_name, const String & table_name) {
-            // auto mapped_database_name = mappedDatabase(context, database_name);
-            // auto mapped_table_name = mappedTable(context, database_name, table_name).second;
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         properties);
