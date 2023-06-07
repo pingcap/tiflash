@@ -25,7 +25,7 @@ namespace DB::DM::Remote
 {
 
 RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
-    const LoggerPtr & log,
+    const LoggerPtr & table_log,
     const Context & db_context,
     const ScanContextPtr & scan_context,
     const RemotePb::RemoteSegment & proto,
@@ -47,6 +47,7 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         read_ranges[i] = RowKeyRange::deserialize(rb);
     }
 
+    auto tracing_id = fmt::format("{} segment_id={}", table_log->identifier(), proto.segment_id());
     auto dm_context = std::make_shared<DMContext>(
         db_context,
         /* path_pool */ nullptr,
@@ -57,10 +58,11 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),
-        scan_context);
+        scan_context,
+        tracing_id);
 
     auto segment = std::make_shared<Segment>(
-        log,
+        Logger::get(),
         /*epoch*/ 0,
         segment_range,
         proto.segment_id(),
@@ -94,12 +96,9 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     }
 
     LOG_DEBUG(
-        log,
-        "Build RNReadSegmentTask, segment_id={} store_id={} keyspace_id={} table_id={} memtable_cfs={} persisted_cfs={}",
+        table_log,
+        "Build RNReadSegmentTask, segment_id={} memtable_cfs={} persisted_cfs={}",
         proto.segment_id(),
-        store_id,
-        keyspace_id,
-        physical_table_id,
         segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
         segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
 
