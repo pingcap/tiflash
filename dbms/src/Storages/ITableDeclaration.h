@@ -67,7 +67,7 @@ public:
     virtual ~ITableDeclaration() = default;
 
 private:
-    ColumnsDescription columns; // 是不是不用写本地的文件的时候，就可以捅掉了
+    ColumnsDescription columns;
 
     OrderedNameSet empty_names;
 

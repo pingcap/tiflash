@@ -17,7 +17,7 @@
 #include <Storages/Transaction/Types.h>
 
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <unordered_map>
 
 namespace DB
