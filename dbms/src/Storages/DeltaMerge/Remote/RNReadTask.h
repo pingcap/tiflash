@@ -89,10 +89,11 @@ public:
     String info() const
     {
         return fmt::format(
-            "ReadSegmentTask<store_id={} seg_id={} table_id={}>",
+            "ReadSegmentTask<store_id={} keyspace_id={} table_id={} segment_id={}>",
             meta.store_id,
-            meta.segment_id,
-            meta.physical_table_id);
+            meta.keyspace_id,
+            meta.physical_table_id,
+            meta.segment_id);
     }
 
     /// Called from WorkerFetchPages.
