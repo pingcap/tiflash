@@ -146,8 +146,11 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
 {
-    if (!dag_context.getInBoundIOInputStreamsMap().empty())
+    switch (dag_context.getExecuteMode())
     {
+    case ExecuteMode::None:
+        break;
+    case ExecuteMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
             for (const auto & io_stream : map_entry.second)
@@ -162,9 +165,8 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
                 }
             }
         }
-    }
-    else
-    {
+        break;
+    case ExecuteMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)
@@ -175,6 +177,7 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
                     remote_input_bytes += profile_info->bytes;
             }
         }
+        break;
     }
 }
 } // namespace DB

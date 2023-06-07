@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
+#include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB
 {
@@ -46,7 +47,12 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
 
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
-    if (tryTransformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
+    switch (dag_context.getExecuteMode())
+    {
+    case ExecuteMode::None:
+        break;
+    case ExecuteMode::Stream:
+        transformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             const auto * cop_stream = dynamic_cast<const CoprocessorBlockInputStream *>(&stream);
             /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
             const auto * exchange_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream);
@@ -69,17 +75,17 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 /// Streams like: NullBlockInputStream.
             }
-        }))
-    {
-        return;
+        });
+        break;
+    case ExecuteMode::Pipeline:
+        transformInBoundIOForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+            if (profile_info.is_local)
+                local_table_scan_detail.bytes += profile_info.bytes;
+            else
+                updateTableScanDetail(profile_info.connection_profile_infos);
+        });
+        break;
     }
-
-    tryTransformInBoundIOForOperator(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
-        if (profile_info.is_local)
-            local_table_scan_detail.bytes += profile_info.bytes;
-        else
-            updateTableScanDetail(profile_info.connection_profile_infos);
-    });
 }
 
 TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

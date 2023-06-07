@@ -14,6 +14,7 @@
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
+#include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB
 {
@@ -52,18 +53,23 @@ void ExchangeReceiverStatistics::updateExchangeReceiveDetail(const std::vector<C
 
 void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
 {
-    if (tryTransformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
+    switch (dag_context.getExecuteMode())
+    {
+    case ExecuteMode::None:
+        break;
+    case ExecuteMode::Stream:
+        transformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
             if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream); exchange_receiver_stream)
                 updateExchangeReceiveDetail(exchange_receiver_stream->getConnectionProfileInfos());
-        }))
-    {
-        return;
+        });
+        break;
+    case ExecuteMode::Pipeline:
+        transformInBoundIOForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+            updateExchangeReceiveDetail(profile_info.connection_profile_infos);
+        });
+        break;
     }
-
-    tryTransformInBoundIOForOperator(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
-        updateExchangeReceiveDetail(profile_info.connection_profile_infos);
-    });
 }
 
 ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

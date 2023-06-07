@@ -125,6 +125,13 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+enum class ExecuteMode
+{
+    None,
+    Stream,
+    Pipeline,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -288,6 +295,19 @@ public:
 
     RU getReadRU() const;
 
+    void switchToStreamMode()
+    {
+        RUNTIME_CHECK(execute_mode == ExecuteMode::None);
+        execute_mode = ExecuteMode::Stream;
+    }
+    void switchToPipelineMode()
+    {
+        RUNTIME_CHECK(execute_mode == ExecuteMode::None);
+        execute_mode = ExecuteMode::Pipeline;
+    }
+    ExecuteMode getExecuteMode() const { return execute_mode; }
+
+public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -385,6 +405,8 @@ private:
 
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
+
+    ExecuteMode execute_mode;
 };
 
 } // namespace DB

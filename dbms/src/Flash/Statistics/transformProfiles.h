@@ -21,7 +21,7 @@
 namespace DB
 {
 template <typename FF>
-bool tryTransformForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & profile_streams_map = dag_context.getProfileStreamsMap();
     auto it = profile_streams_map.find(executor_id);
@@ -34,13 +34,11 @@ bool tryTransformForStream(DAGContext & dag_context, const String & executor_id,
                 ff(*p_stream);
             }
         }
-        return true;
     }
-    return false;
 }
 
 template <typename FF>
-void tryTransformForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
     auto it = operator_profiles_map.find(executor_id);
@@ -52,7 +50,7 @@ void tryTransformForOperator(DAGContext & dag_context, const String & executor_i
 }
 
 template <typename FF>
-bool tryTransformInBoundIOForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformInBoundIOForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
     auto it = io_stream_map.find(executor_id);
@@ -60,13 +58,11 @@ bool tryTransformInBoundIOForStream(DAGContext & dag_context, const String & exe
     {
         for (const auto & io_stream : it->second)
             ff(*io_stream);
-        return true;
     }
-    return false;
 }
 
 template <typename FF>
-void tryTransformInBoundIOForOperator(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformInBoundIOForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & operator_profiles_map = dag_context.getInboundIOOperatorProfileInfosMap();
     auto it = operator_profiles_map.find(executor_id);

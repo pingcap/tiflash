@@ -32,8 +32,11 @@ namespace
 RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
 {
     RemoteExecutionSummary exchange_execution_summary;
-    if (!dag_context.getInBoundIOInputStreamsMap().empty())
+    switch (dag_context.getExecuteMode())
     {
+    case ExecuteMode::None:
+        break;
+    case ExecuteMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
             for (const auto & stream_ptr : map_entry.second)
@@ -42,9 +45,8 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
                     exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
             }
         }
-    }
-    else
-    {
+        break;
+    case ExecuteMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)
@@ -53,6 +55,7 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
                     exchange_execution_summary.merge(profile_info->remote_execution_summary);
             }
         }
+        break;
     }
     return exchange_execution_summary;
 }
