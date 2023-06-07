@@ -47,7 +47,7 @@ try
         ASSERT_EQ(!cache.check(MPPGatherId(i, MPPQueryId(1, 2, 3, 4))).empty(), true);
     }
     cache.add(MPPGatherId(capacity, MPPQueryId(1, 2, 3, 4)), "");
-    ASSERT_EQ(cache.check(MPPGatherId(0, MPPQueryId(1, 2, 3, 4))).empty(), false);
+    ASSERT_EQ(!cache.check(MPPGatherId(0, MPPQueryId(1, 2, 3, 4))).empty(), false);
     for (size_t i = 0; i < capacity; i++)
     {
         ASSERT_EQ(!cache.check(MPPGatherId(i + 1, MPPQueryId(1, 2, 3, 4))).empty(), true);
