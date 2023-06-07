@@ -443,7 +443,7 @@ StableValueSpace::Snapshot::getInputStream(
     const std::vector<IdSetPtr> & read_packs,
     bool need_row_id)
 {
-    LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(log, "start_ts: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
     std::vector<size_t> rows;
     streams.reserve(stable->files.size());

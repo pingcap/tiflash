@@ -59,6 +59,7 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <numeric>
 
 namespace pingcap::kv
@@ -366,7 +367,53 @@ void StorageDisaggregated::buildDisaggTask(
     std::unique_lock lock(store_read_tasks_lock);
     store_read_tasks.emplace_back(std::make_shared<DM::RNRemoteStoreReadTask>(resp->store_id(), remote_seg_tasks));
 
+<<<<<<< HEAD
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_task).Observe(watch.elapsedSeconds());
+=======
+void StorageDisaggregated::buildReadTaskForWriteNodeTable(
+    const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
+    const DM::DisaggTaskId & snapshot_id,
+    StoreID store_id,
+    const String & store_address,
+    const String & serialized_physical_table,
+    std::mutex & output_lock,
+    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+{
+    DB::DM::RemotePb::RemotePhysicalTable table;
+    auto parse_ok = table.ParseFromString(serialized_physical_table);
+    RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
+
+    auto thread_manager = newThreadManager();
+    auto n = static_cast<size_t>(table.segments().size());
+
+    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace_id={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
+    for (size_t idx = 0; idx < n; ++idx)
+    {
+        const auto & remote_seg = table.segments(idx);
+
+        thread_manager->schedule(
+            true,
+            "buildRNReadSegmentTask",
+            [&] {
+                auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
+                    table_tracing_logger,
+                    db_context,
+                    scan_context,
+                    remote_seg,
+                    snapshot_id,
+                    store_id,
+                    store_address,
+                    table.keyspace_id(),
+                    table.table_id());
+
+                std::lock_guard lock(output_lock);
+                output_seg_tasks.push_back(seg_read_task);
+            });
+    }
+
+    thread_manager->wait();
+>>>>>>> 132b6cf245 (Add some logging for locating bug (#7606))
 }
 
 /**
@@ -510,7 +557,13 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         *column_defines,
         db_context,
         log);
+<<<<<<< HEAD
     auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+=======
+    const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
+    LOG_DEBUG(log, "Building segment input streams, read_mode={} is_fast_scan={} keep_order={}", magic_enum::enum_name(read_mode), table_scan.isFastScan(), table_scan.keepOrder());
+>>>>>>> 132b6cf245 (Add some logging for locating bug (#7606))
 
     auto sub_streams_size = io_concurrency / num_streams;
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
