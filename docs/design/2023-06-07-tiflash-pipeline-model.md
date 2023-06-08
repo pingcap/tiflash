@@ -51,7 +51,7 @@ The pipeline will be instantiated into several tasks according to the query conc
 │                            │
 └────────────────────────────┘
 ```
-The task will dynamically switch the component in the task scheduler where it is executed based on the different execution logic.
+The task will dynamically switch the component in the task scheduler where it is executed on based on the different execution logic.
 
 #### CPU Task Thread Pool
 
