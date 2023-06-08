@@ -14,6 +14,7 @@
 
 #include <Flash/Statistics/JoinImpl.h>
 #include <Interpreters/Join.h>
+
 #include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB

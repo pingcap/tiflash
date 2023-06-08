@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
+
 #include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB

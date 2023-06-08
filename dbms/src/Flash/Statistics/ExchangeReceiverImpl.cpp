@@ -14,6 +14,7 @@
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
+
 #include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB
