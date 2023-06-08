@@ -13,7 +13,7 @@
 
 Currently, TiFlash's parallel execution model is a thread scheduling execution model, where each query will independently apply for several threads to perform collaborative execution.
 The thread scheduling model has two problems: 
-- In high-concurrency scenarios, too many threads will cause many context switches and incur high thread scheduling costs. When the number of threads reaches a certain number, the application of threads will report an error `thread constructor failed: Resource temporarily unavailable`. 
+- In high-concurrency scenarios, too many threads are spawned which will cause many context switches and incur high thread scheduling costs for OS. When the number of threads reaches a certain number, the application of threads will report an error `thread constructor failed: Resource temporarily unavailable`. 
 - The current thread scheduling model can‘t measures the resource usage of the query or perform fine-grained resource control.
 
 Although TiFlash has introduced several features to reduce the impact of high concurrency on the thread scheduling model, such as `DynamicThreadPool`, `Async GRPC`, and `MinTsoScheduler`, we can still improve the existing parallel execution model to better adapt to high-concurrency scenarios and support future resource control functionalities.
