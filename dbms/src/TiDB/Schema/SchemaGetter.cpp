@@ -16,8 +16,6 @@
 #include <Storages/Transaction/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
 
-#include "Storages/Transaction/Types.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -138,13 +136,6 @@ public:
                 max_ts = ts;
             }
         }
-
-        LOG_INFO(Logger::get("hyy"), "=======");
-        for (const auto & value : values)
-        {
-            LOG_INFO(Logger::get("hyy"), "in mvccGet timestamp is {}, value: {}", value.start_ts(), value.value());
-        }
-        LOG_INFO(Logger::get("hyy"), "=======");
 
         return target_value;
     }
@@ -286,23 +277,6 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     return db_info;
 }
 
-void compare(String table_info_json, String latest_table_info_json, KeyspaceID keyspace_id)
-{
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
-    TiDB::TableInfoPtr latest_table_info = std::make_shared<TiDB::TableInfo>(latest_table_info_json, keyspace_id);
-    table_info->update_timestamp = 0;
-    latest_table_info->update_timestamp = 0;
-    if (table_info->serialize() == latest_table_info->serialize())
-    {
-        LOG_INFO(Logger::get("hyy"), " hyy table_info is the same");
-    }
-    else
-    {
-        LOG_INFO(Logger::get("hyy"), " hyy table_info is not the same, table_info is {}, latest_table_info is {}", table_info_json, latest_table_info_json);
-    }
-}
-
-// TODO:要处理一下 nullptr 的可能性。看看会有什么问题么
 TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id)
 {
     String db_key = getDBKey(db_id);
@@ -315,7 +289,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
     if (table_info_json.empty())
     {
-        LOG_INFO(log, "The table {} is dropped in TiKV, try to get the latest table_info", table_id);
+        LOG_WARNING(log, "The table {} is dropped in TiKV, try to get the latest table_info", table_id);
         table_info_json = TxnStructure::mvccGet(snap, db_key, table_key);
         if (table_info_json.empty())
         {
@@ -326,8 +300,6 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
 
-
-    // compare(table_info_json,latest_table_info_json, keyspace_id);
     return table_info;
 }
 
@@ -354,7 +326,6 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        // throw TiFlashException("DB Not Exists!", Errors::Table::SyncError);
         LOG_ERROR(log, "DB {} Not Exists!", db_id);
         return {};
     }
