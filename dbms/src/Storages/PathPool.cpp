@@ -26,7 +26,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 

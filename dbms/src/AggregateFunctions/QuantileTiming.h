@@ -23,7 +23,6 @@
 #include <IO/WriteHelpers.h>
 
 
-
 namespace DB
 {
 namespace ErrorCodes

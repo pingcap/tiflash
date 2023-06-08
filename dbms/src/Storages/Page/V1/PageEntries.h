@@ -20,7 +20,6 @@
 #include <Storages/Page/V1/Page.h>
 #include <Storages/Page/V1/mvcc/VersionSet.h>
 #include <Storages/Page/V1/mvcc/VersionSetWithDelta.h>
-
 #include <common/logger_useful.h>
 
 #include <cassert>

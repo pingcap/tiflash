@@ -16,7 +16,6 @@
 
 #include <Common/Arena.h>
 
-
 #include <cstdlib>
 #include <ext/bit_cast.h>
 #include <ext/range.h>

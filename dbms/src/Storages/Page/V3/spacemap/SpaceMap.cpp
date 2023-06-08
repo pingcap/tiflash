@@ -16,7 +16,6 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
-
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -14,7 +14,6 @@
 
 #include <IO/LinearMemoryWriteBuffer.h>
 
-
 #include <boost/noncopyable.hpp>
 
 namespace DB

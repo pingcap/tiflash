@@ -19,7 +19,6 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
-
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>

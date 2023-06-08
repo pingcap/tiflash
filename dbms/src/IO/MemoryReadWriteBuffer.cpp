@@ -14,7 +14,6 @@
 
 #include <IO/MemoryReadWriteBuffer.h>
 
-
 #include <boost/noncopyable.hpp>
 
 

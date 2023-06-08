@@ -18,7 +18,6 @@
 #include <Encryption/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <boost_wrapper/string.h>
-
 #include <common/logger_useful.h>
 
 #include <cassert>

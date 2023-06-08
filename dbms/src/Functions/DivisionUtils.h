@@ -16,7 +16,6 @@
 
 #include <Common/Exception.h>
 
-
 #include <limits>
 namespace DB
 {

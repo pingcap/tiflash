@@ -25,7 +25,6 @@
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 
-
 #include <sstream>
 
 namespace DB

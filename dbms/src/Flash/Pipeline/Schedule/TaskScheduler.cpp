@@ -17,7 +17,6 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 
-
 #include <magic_enum.hpp>
 
 namespace DB

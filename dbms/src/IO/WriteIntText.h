@@ -17,7 +17,6 @@
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
 
-
 #include <limits>
 #include <type_traits>
 

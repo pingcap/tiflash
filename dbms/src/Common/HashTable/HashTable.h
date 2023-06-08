@@ -25,7 +25,6 @@
 #include <IO/VarInt.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
-
 #include <math.h>
 #include <string.h>
 
