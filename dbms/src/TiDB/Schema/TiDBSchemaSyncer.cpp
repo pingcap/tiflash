@@ -17,20 +17,15 @@
 #include <mutex>
 #include <shared_mutex>
 
-#include "Common/Logger.h"
-
 namespace DB
 {
-
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
-    // TODO:修一下 -1 的问题
-    LOG_INFO(log, "Start syncSchemas");
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
-    LOG_ERROR(log, "syncSchemas version: {}, cur_version is {}", version, cur_version);
+
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
@@ -79,7 +74,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
             // X-1 is aborted and we can safely ignore it.
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
-            Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version); // 如何处理失败的问题
+            Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version);
             if (version_after_load_diff != -1)
             {
                 cur_version = version_after_load_diff;
@@ -99,10 +94,8 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 template <bool mock_getter, bool mock_mapper>
 Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version)
 {
-    LOG_DEBUG(log, "Try load schema diffs.");
-
     Int64 used_version = cur_version;
-    // TODO:改并行
+    // TODO:try to use parallel to speed up
     while (used_version < latest_version)
     {
         used_version++;
@@ -116,7 +109,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
 
         if (!diff)
         {
-            LOG_INFO(log, "Diff in version {} is empty", used_version);
+            LOG_ERROR(log, "Diff in version {} is empty", used_version);
             continue;
         }
 
@@ -133,11 +126,9 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
     return used_version;
 }
 
-// just use when cur_version = 0
 template <bool mock_getter, bool mock_mapper>
 Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & context, Getter & getter, Int64 version)
 {
-    //获取所有 db 和 table，set table_id_to_database_id,更新 cur_version
     if (!getter.checkSchemaDiffExists(version))
     {
         --version;
@@ -153,17 +144,14 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 {
     std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
 
-    for (auto & pair : partition_id_to_logical_id)
-    {
-        LOG_INFO(Logger::get("hyy"), "findDatabaseIDAndTableID partition_id_to_logical_id pair:{}.{}", pair.first, pair.second);
-    }
     auto database_iter = table_id_to_database_id.find(table_id_);
     DatabaseID database_id;
     TableID table_id = table_id_;
     bool find = false;
     if (database_iter == table_id_to_database_id.end())
     {
-        // 找不到 db，先尝试看看自己是不是 partition_table_id
+        /// if we can't find table_id in table_id_to_database_id,
+        /// we should first try to find it in partition_id_to_logical_id because it could be the pysical table_id of partition tables
         auto logical_table_iter = partition_id_to_logical_id.find(table_id_);
         if (logical_table_iter != partition_id_to_logical_id.end())
         {
@@ -190,15 +178,17 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
     return std::make_tuple(false, 0, 0);
 }
 
+/// Help: do we need a lock for syncTableSchema for each table?
+/// I roughly think we don't need a lock here, because we will catch the lock for storage later.
+/// but i'm not quite sure.
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID table_id_)
 {
     LOG_INFO(log, "Start sync table schema, table_id: {}", table_id_);
-    // 通过获取 table_id 对应的 database_id，获取到目前的 TableInfo 来更新表的 schema
     auto getter = createSchemaGetter(keyspace_id);
-    // TODO:怎么感觉 单表的 schema_version 没有什么用
 
-    // 1. get table_id and database_id, 如果是分区表的话，table_id_ != table_id
+    // get table_id(logical_table_id) and database_id based on table_id_,
+    // if the table is a partition table, table_id != table_id_, otherwise, table_id = table_id_;
     auto [find, database_id, table_id] = findDatabaseIDAndTableID(table_id_);
     if (!find)
     {
@@ -211,9 +201,8 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
             return false;
         }
     }
-    // 2. 获取 tableInfo
+
     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
-    // 如果不是分区表，table_id 和 table_id_ 是一样的，是分区的话，table_id 是 table_id_表的逻辑表
     builder.applyTable(database_id, table_id, table_id_);
 
     return true;

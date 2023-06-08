@@ -184,7 +184,6 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
             {
                 // Only keep a weak_ptr on storage so that the memory can be free as soon as
                 // it is dropped.
-                LOG_INFO(log, "add storage with table id {} into storages_to_gc", managed_storage->getTableInfo().id);
                 storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
             }
         }

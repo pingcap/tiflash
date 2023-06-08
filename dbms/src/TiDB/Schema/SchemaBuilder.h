@@ -37,7 +37,7 @@ struct SchemaBuilder
 
     std::shared_mutex & shared_mutex_for_table_id_map;
 
-    std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id; // 这个我们只存分区表的对应关系
+    std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id;
 
     const KeyspaceID keyspace_id;
 
@@ -95,6 +95,13 @@ private:
     void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
 
     void applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id);
+
+    // not safe for concurrent use, please acquire shared_mutex_for_table_id_map lock first
+    void emplacePartitionTableID(TableID partition_id, TableID table_id);
+
+    void applyCreateTable(DatabaseID database_id, TableID table_id);
+
+    void applyExchangeTablePartiton(const SchemaDiff & diff);
 };
 
 } // namespace DB

@@ -47,8 +47,6 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
-    virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs(KeyspaceID keyspace_id) = 0;
-
     virtual void removeTableID(TableID table_id) = 0;
 
     virtual void dropAllSchema(Context & context) = 0;

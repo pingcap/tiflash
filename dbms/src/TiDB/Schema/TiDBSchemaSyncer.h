@@ -48,19 +48,22 @@ private:
 
     Int64 cur_version;
 
-    std::mutex mutex_for_sync_table_schema; // for syncTableSchema
+    // for syncSchemas
+    std::mutex mutex_for_sync_schema;
 
-    std::mutex mutex_for_sync_schema; // for syncSchemas
-
-    std::shared_mutex shared_mutex_for_databases; // mutex for databases
+    // mutex for databases
+    std::shared_mutex shared_mutex_for_databases;
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
-    std::shared_mutex shared_mutex_for_table_id_map; // mutex for table_id_to_database_id and partition_id_to_logical_id;
+    // mutex for table_id_to_database_id and partition_id_to_logical_id;
+    std::shared_mutex shared_mutex_for_table_id_map;
 
     std::unordered_map<DB::TableID, DB::DatabaseID> table_id_to_database_id;
 
-    std::unordered_map<DB::TableID, DB::TableID> partition_id_to_logical_id; // 这个我们只存分区表的对应关系，不存这个的话，如果分区表写入的时候，你只知道分表的 table_id，没有 table_info 的时候会拿不到 tableInfo
+    /// we have to store partition_id --> logical_id here,
+    /// otherwise, when the first written to a partition table, we can't get the table_info based on its table_id
+    std::unordered_map<DB::TableID, DB::TableID> partition_id_to_logical_id;
 
     LoggerPtr log;
 
@@ -77,12 +80,6 @@ private:
         }
     }
 
-    std::vector<TiDB::DBInfoPtr> fetchAllDBs(KeyspaceID keyspace_id) override
-    {
-        auto getter = createSchemaGetter(keyspace_id);
-        return getter.listDBs();
-    }
-
     std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID table_id_);
 
 public:
@@ -95,10 +92,8 @@ public:
 
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
 
-    // 多个 syncTableSchema 会调用这个，不能一起跑，要加锁保证
     bool syncSchemas(Context & context) override;
 
-    // just use when cur_version = 0
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     bool syncTableSchema(Context & context, TableID table_id_) override;
@@ -109,7 +104,7 @@ public:
         auto it = table_id_to_database_id.find(table_id);
         if (it == table_id_to_database_id.end())
         {
-            LOG_ERROR(log, "table_id {} is already moved in schemaSyncer", table_id);
+            LOG_WARNING(log, "table_id {} is already moved in schemaSyncer", table_id);
         }
         else
         {
@@ -124,13 +119,7 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        LOG_INFO(log, "into getDBInfoByName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        for (auto & database : databases)
-        {
-            LOG_INFO(log, "getDBInfoByName hyy database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
-        }
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
         if (it == databases.end())
@@ -140,13 +129,7 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
-        LOG_INFO(log, "into getDBInfoByMappedName with keyspace id {}", keyspace_id);
         std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-
-        for (auto database : databases)
-        {
-            LOG_INFO(log, "database id: {},  info id {}, name: {}", database.first, database.second->id, database.second->name);
-        }
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
