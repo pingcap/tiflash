@@ -74,6 +74,10 @@ public:
         current_memory_tracker = nullptr;
     }
 
+    std::string getResourceGroupName() const
+    {
+        return resource_group_name;
+    }
 public:
     LoggerPtr log;
 
@@ -104,6 +108,9 @@ protected:
     ExecTaskStatus task_status{ExecTaskStatus::INIT};
 
     bool is_finalized = false;
+
+    // gjt todo
+    std::string resource_group_name;
 };
 using TaskPtr = std::unique_ptr<Task>;
 
