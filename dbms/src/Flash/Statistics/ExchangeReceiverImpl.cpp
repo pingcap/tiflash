@@ -15,8 +15,6 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 
-#include "Flash/Coprocessor/DAGContext.h"
-
 namespace DB
 {
 String ExchangeReceiveDetail::toJson() const
@@ -59,14 +57,14 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
     case ExecuteMode::None:
         break;
     case ExecuteMode::Stream:
-        transformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
+        transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
             if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream); exchange_receiver_stream)
                 updateExchangeReceiveDetail(exchange_receiver_stream->getConnectionProfileInfos());
         });
         break;
     case ExecuteMode::Pipeline:
-        transformInBoundIOForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
             updateExchangeReceiveDetail(profile_info.connection_profile_infos);
         });
         break;

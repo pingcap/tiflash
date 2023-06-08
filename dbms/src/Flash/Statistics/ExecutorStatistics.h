@@ -86,12 +86,12 @@ public:
         case ExecuteMode::None:
             break;
         case ExecuteMode::Stream:
-            transformForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) { base.append(p_stream.getProfileInfo()); });
+            transformProfileForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) { base.append(p_stream.getProfileInfo()); });
             // Special handling of join build time is only required for streams.
             collectJoinBuildTime();
             break;
         case ExecuteMode::Pipeline:
-            transformForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) { base.append(profile_info); });
+            transformProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) { base.append(profile_info); });
             break;
         }
 

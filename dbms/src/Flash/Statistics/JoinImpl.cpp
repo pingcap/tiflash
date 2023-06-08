@@ -15,8 +15,6 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Interpreters/Join.h>
 
-#include "Flash/Coprocessor/DAGContext.h"
-
 namespace DB
 {
 void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const

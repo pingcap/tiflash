@@ -323,13 +323,13 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     case ExecuteMode::None:
         break;
     case ExecuteMode::Stream:
-        transformForStream(*this, table_scan_executor_id, [&](const IProfilingBlockInputStream & p_stream) {
+        transformProfileForStream(*this, table_scan_executor_id, [&](const IProfilingBlockInputStream & p_stream) {
             time_processed_ns = std::max(time_processed_ns, p_stream.getProfileInfo().execution_time);
             num_produced_bytes += p_stream.getProfileInfo().bytes;
         });
         break;
     case ExecuteMode::Pipeline:
-        transformForPipeline(*this, table_scan_executor_id, [&](const OperatorProfileInfo & profile_info) {
+        transformProfileForPipeline(*this, table_scan_executor_id, [&](const OperatorProfileInfo & profile_info) {
             time_processed_ns = std::max(time_processed_ns, profile_info.execution_time);
             num_produced_bytes += profile_info.bytes;
         });

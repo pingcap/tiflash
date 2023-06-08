@@ -16,8 +16,6 @@
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
 
-#include "Flash/Coprocessor/DAGContext.h"
-
 namespace DB
 {
 String TableScanDetail::toJson() const
@@ -53,7 +51,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
     case ExecuteMode::None:
         break;
     case ExecuteMode::Stream:
-        transformInBoundIOForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
+        transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             const auto * cop_stream = dynamic_cast<const CoprocessorBlockInputStream *>(&stream);
             /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
             const auto * exchange_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream);
@@ -79,7 +77,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         });
         break;
     case ExecuteMode::Pipeline:
-        transformInBoundIOForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
             if (profile_info.is_local)
                 local_table_scan_detail.bytes += profile_info.bytes;
             else

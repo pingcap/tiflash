@@ -21,7 +21,7 @@
 namespace DB
 {
 template <typename FF>
-void transformForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformProfileForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & profile_streams_map = dag_context.getProfileStreamsMap();
     auto it = profile_streams_map.find(executor_id);
@@ -38,7 +38,7 @@ void transformForStream(DAGContext & dag_context, const String & executor_id, FF
 }
 
 template <typename FF>
-void transformForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformProfileForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & operator_profiles_map = dag_context.getOperatorProfileInfosMap();
     auto it = operator_profiles_map.find(executor_id);
@@ -50,7 +50,7 @@ void transformForPipeline(DAGContext & dag_context, const String & executor_id, 
 }
 
 template <typename FF>
-void transformInBoundIOForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformInBoundIOProfileForStream(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
     auto it = io_stream_map.find(executor_id);
@@ -62,7 +62,7 @@ void transformInBoundIOForStream(DAGContext & dag_context, const String & execut
 }
 
 template <typename FF>
-void transformInBoundIOForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
+void transformInBoundIOProfileForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
     const auto & operator_profiles_map = dag_context.getInboundIOOperatorProfileInfosMap();
     auto it = operator_profiles_map.find(executor_id);
