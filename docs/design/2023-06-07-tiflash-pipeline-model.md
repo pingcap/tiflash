@@ -55,7 +55,7 @@ The task will dynamically switch the component in the task scheduler where it is
 
 #### CPU Task Thread Pool
 
-CPU Task Thread Pool performs CPU-intensive calculation logic in operators, such as executing filters, projections, join probes, etc. Usually, most of the logic in an operator is CPU-intensive calculation logic.
+CPU Task Thread Pool performs CPU-intensive calculation logic in operators, such as executing filters, projections, join probes, etc. Usually, most of the logic in an operator is CPU-intensive.
 
 #### IO Task Thread Pool
 
