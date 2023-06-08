@@ -20,13 +20,12 @@
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Interpreters/Settings.h>
 
 #include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
-
-#include "Interpreters/Settings.h"
 
 namespace DB
 {
