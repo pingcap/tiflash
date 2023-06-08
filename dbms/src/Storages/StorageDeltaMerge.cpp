@@ -1372,7 +1372,6 @@ try
         }
     }
 
-    std::unique_lock<std::mutex> lock(table_info_mutex);
     if (table_info)
     {
         LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.value().get().serialize());
@@ -1450,7 +1449,6 @@ void StorageDeltaMerge::updateTableInfo(
     const String & database_name,
     const String & table_name)
 {
-    std::unique_lock<std::mutex> lock(table_info_mutex);
     tidb_table_info = table_info;
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
@@ -1476,8 +1474,7 @@ void StorageDeltaMerge::alterSchemaChange(
     /// 2. update table info
     /// 3. update store's columns
     /// 4. update create table statement
-
-    std::unique_lock<std::mutex> lock(table_info_mutex);
+    LOG_ERROR(log, "StorageDeltaMerge::alterSchemaChange for table {}", table_info.id);
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info);
 
