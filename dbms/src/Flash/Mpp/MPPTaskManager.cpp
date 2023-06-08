@@ -34,19 +34,9 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
-namespace
-{
-String getAbortedMessage(MPPQueryTaskSetPtr & query)
-{
-    if (query == nullptr || query->error_message.empty())
-        return "query is aborted";
-    return query->error_message;
-}
-} // namespace
-
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
-    , aborted_query_gather_cache(1000)
+    , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
 {}
@@ -82,13 +72,13 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
     String req_info = fmt::format("tunnel{}+{}", request->sender_meta().task_id(), request->receiver_meta().task_id());
 
     std::unique_lock lock(mu);
-    auto [query_set, already_aborted] = getQueryTaskSetWithoutLock(id.query_id);
-    if (already_aborted)
+    auto [query_set, error_msg] = getQueryTaskSetWithoutLock(id.query_id);
+    if (!error_msg.empty())
     {
         /// if the query is aborted, return the error message
         LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
         /// meet error
-        return {nullptr, getAbortedMessage(query_set)};
+        return {nullptr, error_msg};
     }
 
     if (query_set == nullptr || query_set->task_map.find(id) == query_set->task_map.end())
@@ -143,13 +133,13 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     String error_message;
     std::unique_lock lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
-        auto [query_set, already_aborted] = getQueryTaskSetWithoutLock(id.query_id);
-        if (already_aborted)
+        auto [query_set, error_msg] = getQueryTaskSetWithoutLock(id.query_id);
+        if (!error_msg.empty())
         {
             /// if the query is aborted, return true to stop waiting timeout.
             LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.query_id.toString()));
             cancelled = true;
-            error_message = getAbortedMessage(query_set);
+            error_message = error_msg;
             return true;
         }
         if (query_set == nullptr)
@@ -181,7 +171,7 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
         /// one without holding the lock
         std::lock_guard lock(mu);
         /// gather_id is not set by TiDB, so use 0 instead
-        aborted_query_gather_cache.add(MPPGatherId(0, query_id));
+        aborted_query_gather_cache.add(MPPGatherId(0, query_id), reason);
         auto it = mpp_query_map.find(query_id);
         if (it == mpp_query_map.end())
         {
@@ -240,10 +230,10 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
         FAIL_POINT_PAUSE(FailPoints::pause_before_register_non_root_mpp_task);
     }
     std::unique_lock lock(mu);
-    auto [query_set, already_aborted] = getQueryTaskSetWithoutLock(task->id.query_id);
-    if (already_aborted)
+    auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task->id.query_id);
+    if (!error_msg.empty())
     {
-        return {false, fmt::format("query is being aborted, error message = {}", getAbortedMessage(query_set))};
+        return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
     }
     if (query_set != nullptr && query_set->task_map.find(task->id) != query_set->task_map.end())
     {
@@ -303,23 +293,24 @@ String MPPTaskManager::toString()
     return res + ")";
 }
 
-std::pair<MPPQueryTaskSetPtr, bool> MPPTaskManager::getQueryTaskSetWithoutLock(const MPPQueryId & query_id)
+std::pair<MPPQueryTaskSetPtr, String> MPPTaskManager::getQueryTaskSetWithoutLock(const MPPQueryId & query_id)
 {
     auto it = mpp_query_map.find(query_id);
     /// gather_id is not set by TiDB, so use 0 instead
-    bool already_aborted = aborted_query_gather_cache.exists(MPPGatherId(0, query_id));
+    auto reason = aborted_query_gather_cache.check(MPPGatherId(0, query_id));
     if (it != mpp_query_map.end())
     {
-        already_aborted |= !it->second->isInNormalState();
-        return std::make_pair(it->second, already_aborted);
+        if (!it->second->isInNormalState() && reason.empty())
+            reason = it->second->error_message;
+        return std::make_tuple(it->second, reason);
     }
     else
     {
-        return std::make_pair(nullptr, already_aborted);
+        return std::make_tuple(nullptr, reason);
     }
 }
 
-std::pair<MPPQueryTaskSetPtr, bool> MPPTaskManager::getQueryTaskSet(const MPPQueryId & query_id)
+std::pair<MPPQueryTaskSetPtr, String> MPPTaskManager::getQueryTaskSet(const MPPQueryId & query_id)
 {
     std::lock_guard lock(mu);
     return getQueryTaskSetWithoutLock(query_id);

@@ -23,14 +23,19 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num)
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id)
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
-    properties.local_query_id = properties.start_ts;
+    if (local_query_id >= 0)
+        properties.local_query_id = local_query_id;
+    else
+        properties.local_query_id = properties.start_ts;
+    if (tidb_server_id >= 0)
+        properties.server_id = tidb_server_id;
     return properties;
 }
 
@@ -83,27 +88,25 @@ void MPPTaskTestUtils::setCancelTest()
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
 }
 
-std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareAndRunMPPStreams(DAGRequestBuilder builder)
+BlockInputStreamPtr MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties)
 {
-    auto [properties, tasks] = prepareMPPStreams(builder);
-    auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
-    return {MPPQueryId(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts), res};
+    auto tasks = prepareMPPTasks(builder, properties);
+    return executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
 }
 
-std::tuple<DAGProperties, std::vector<QueryTask>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
+std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties)
 {
-    auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
-    return {properties, tasks};
+    return tasks;
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
-    return readBlocks(res);
+    return readBlock(res);
 }
 
 ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<tipb::SelectResponse> & dag_response)
