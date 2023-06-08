@@ -23,8 +23,12 @@
 
 namespace DB::tests
 {
+<<<<<<< HEAD
 
 DAGProperties getDAGPropertiesForTest(int server_num);
+=======
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -81,9 +85,20 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
+<<<<<<< HEAD
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+=======
+    BlockInputStreamPtr prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties);
+
+    std::vector<QueryTask> prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties);
+
+    static void setCancelTest();
+
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties);
+    ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
