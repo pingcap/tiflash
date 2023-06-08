@@ -285,7 +285,7 @@ BlockInputStreamPtr executeMPPQueryWithMultipleContext(const DAGProperties & pro
         auto partition_id = root_task_partition_ids[i];
         res.emplace_back(prepareRootExchangeReceiverWithMultipleContext(TiFlashTestEnv::getGlobalContext(TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
     }
-    auto top_stream = std::make_shared<UnionBlockInputStream<>>(res, BlockInputStreams{}, res.size(), "mpp_root");
+    auto top_stream = std::make_shared<UnionBlockInputStream<>>(res, BlockInputStreams{}, res.size(), 0, "mpp_root");
     return top_stream;
 }
 
