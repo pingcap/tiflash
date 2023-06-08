@@ -50,7 +50,7 @@
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
-extern const Metric PSWriterQueueSize;
+extern const Metric PSPendingWriterNum;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -1481,6 +1481,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
     GET_METRIC(tiflash_storage_page_command_count, type_write).Increment();
+    CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
     Writer w;
     w.edit = &edit;
 
@@ -1492,7 +1493,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
     writers.push_back(&w);
     SYNC_FOR("after_PageDirectory::enter_write_group");
-    CurrentMetrics::set(CurrentMetrics::PSWriterQueueSize, writers.size());
     w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
