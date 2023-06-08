@@ -414,6 +414,13 @@ public:
         return u;
     }
 
+    // `writers` should be used under the protection of apply_mutex
+    // So don't use this function in production code
+    size_t getWritersQueueSizeForTest()
+    {
+        return writers.size();
+    }
+
     // No copying and no moving
     DISALLOW_COPY_AND_MOVE(PageDirectory);
 
