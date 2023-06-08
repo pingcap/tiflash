@@ -311,8 +311,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
-    // 空 snapshot 就不用转了呀，直接返回空
-    // TODO:不确定对后面有什么影响
+    // if it's only a empty snapshot, we don't create the Storage object, but return directly.
     if (snaps.len == 0)
     {
         return {};
@@ -410,10 +409,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                Stopwatch watch;
                 tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
-                auto schema_sync_cost = watch.elapsedSeconds();
-                LOG_INFO(log, "[hyy] in preHandleSSTsToDTFiles Sync table schema {} cost {} ms", physical_table_id, schema_sync_cost);
                 // Next time should force_decode
                 force_decode = true;
 

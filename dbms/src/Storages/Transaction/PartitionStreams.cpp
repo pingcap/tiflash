@@ -33,8 +33,6 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
-#include "Common/Stopwatch.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -60,7 +58,6 @@ static void writeRegionDataToStorage(
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log)
 {
-    LOG_INFO(log, "hyy into writeRegionDataToStorage with table_id is {}", region->getMappedTableID());
     constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
     auto keyspace_id = region->getKeyspaceID();
@@ -189,11 +186,8 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
-        Stopwatch watch;
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
-        auto schema_sync_cost = watch.elapsedMilliseconds();
-        LOG_INFO(log, "[hyy] in writeRegionDataToStorage Sync table schema {} cost {} ms", table_id, schema_sync_cost);
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
@@ -404,8 +398,6 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 {
-    // StackTrace stack_trace;
-    // LOG_INFO(Logger::get("hyy"), "stack trace is {}", stack_trace.toString());
     TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
@@ -435,11 +427,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     if (!atomic_get(false))
     {
-        Stopwatch watch;
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
-        auto schema_sync_cost = watch.elapsedMilliseconds();
-        LOG_INFO(Logger::get("hyy"), "[hyy] in AtomicGetStorageSchema Sync table schema {} cost {} ms", table_id, schema_sync_cost);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",

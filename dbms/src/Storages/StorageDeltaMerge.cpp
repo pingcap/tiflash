@@ -1472,7 +1472,11 @@ void StorageDeltaMerge::alterSchemaChange(
     const String & table_name,
     const Context & context)
 {
-    // 1. 更新 table_info ; 2. 更新 columns ; 3. 更新 create table statement ; 4. 更新 store 的 columns
+    /// 1. update columnsDescription of ITableDeclaration
+    /// 2. update table info
+    /// 3. update store's columns
+    /// 4. update create table statement
+
     std::unique_lock<std::mutex> lock(table_info_mutex);
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info);
