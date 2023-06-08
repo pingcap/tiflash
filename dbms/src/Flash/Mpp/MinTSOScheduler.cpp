@@ -70,9 +70,15 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
     {
         return true;
     }
+<<<<<<< HEAD
     const auto & id = task->getId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
     if (nullptr == query_task_set || query_task_set->to_be_cancelled)
+=======
+    const auto & id = schedule_entry.getMPPTaskId();
+    auto [query_task_set, aborted_reason] = task_manager.getQueryTaskSetWithoutLock(id.query_id);
+    if (nullptr == query_task_set || !aborted_reason.empty())
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
     {
         LOG_FMT_WARNING(log, "{} is scheduled with miss or cancellation.", id.toString());
         return true;

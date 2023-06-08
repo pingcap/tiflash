@@ -36,6 +36,60 @@ struct MPPQueryTaskSet
     MPPTaskMap task_map;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
+<<<<<<< HEAD
+=======
+    bool isInNormalState() const
+    {
+        return state == Normal;
+    }
+    bool allowUnregisterTask() const
+    {
+        return state == Normal || state == Aborted;
+    }
+};
+
+/// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
+static const size_t ABORTED_MPPGATHER_CACHE_SIZE = 1000;
+static const size_t MAX_ABORTED_REASON_LENGTH = 500;
+/// the cache size is about (2 * sizeof(MPPGatherId) + MAX_ABORTED_REASON_LENGTH) * ABORTED_MPPGATHER_CACHE_SIZE, it should be less than 1MB
+class AbortedMPPGatherCache
+{
+private:
+    std::deque<MPPGatherId> gather_ids;
+    std::unordered_map<MPPGatherId, String, MPPGatherIdHash> gather_ids_set;
+    size_t capacity;
+
+public:
+    AbortedMPPGatherCache(size_t capacity_)
+        : capacity(capacity_)
+    {}
+    /// return aborted_reason if the mpp gather is aborted, otherwise, return empty string
+    String check(const MPPGatherId & id)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return gather_ids_set[id];
+        else
+            return "";
+    }
+    void add(const MPPGatherId & id, const String abort_reason)
+    {
+        assert(gather_ids_set.size() == gather_ids.size());
+        if (gather_ids_set.find(id) != gather_ids_set.end())
+            return;
+        if (gather_ids_set.size() >= capacity)
+        {
+            auto evicted_id = gather_ids.back();
+            gather_ids.pop_back();
+            gather_ids_set.erase(evicted_id);
+        }
+        gather_ids.push_front(id);
+        if unlikely (abort_reason.empty())
+            gather_ids_set[id] = "query is aborted";
+        else
+            gather_ids_set[id] = abort_reason.substr(0, MAX_ABORTED_REASON_LENGTH);
+    }
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 };
 
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
@@ -69,9 +123,15 @@ public:
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
+<<<<<<< HEAD
     bool registerTask(MPPTaskPtr task);
 
     void unregisterTask(MPPTask * task);
+=======
+    std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSetWithoutLock(const MPPQueryId & query_id);
+
+    std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
