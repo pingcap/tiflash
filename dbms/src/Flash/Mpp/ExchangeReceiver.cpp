@@ -25,6 +25,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Interpreters/Settings.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
