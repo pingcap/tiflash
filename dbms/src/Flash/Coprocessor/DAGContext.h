@@ -125,7 +125,7 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
-enum class ExecuteMode
+enum class ExecutionMode
 {
     None,
     Stream,
@@ -297,15 +297,15 @@ public:
 
     void switchToStreamMode()
     {
-        RUNTIME_CHECK(execute_mode == ExecuteMode::None);
-        execute_mode = ExecuteMode::Stream;
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Stream;
     }
     void switchToPipelineMode()
     {
-        RUNTIME_CHECK(execute_mode == ExecuteMode::None);
-        execute_mode = ExecuteMode::Pipeline;
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Pipeline;
     }
-    ExecuteMode getExecuteMode() const { return execute_mode; }
+    ExecutionMode getExecutionMode() const { return execution_mode; }
 
 public:
     DAGRequest dag_request;
@@ -406,7 +406,11 @@ private:
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
 
-    ExecuteMode execute_mode;
+    // Used to determine the execution mode
+    // - None: request has not been executed yet
+    // - Stream: execute with block input stream
+    // - Pipeline: execute with pipeline model
+    ExecutionMode execution_mode;
 };
 
 } // namespace DB

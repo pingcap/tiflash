@@ -52,18 +52,18 @@ void ExchangeReceiverStatistics::updateExchangeReceiveDetail(const std::vector<C
 
 void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
 {
-    switch (dag_context.getExecuteMode())
+    switch (dag_context.getExecutionMode())
     {
-    case ExecuteMode::None:
+    case ExecutionMode::None:
         break;
-    case ExecuteMode::Stream:
+    case ExecutionMode::Stream:
         transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
             if (const auto * exchange_receiver_stream = dynamic_cast<const ExchangeReceiverInputStream *>(&stream); exchange_receiver_stream)
                 updateExchangeReceiveDetail(exchange_receiver_stream->getConnectionProfileInfos());
         });
         break;
-    case ExecuteMode::Pipeline:
+    case ExecutionMode::Pipeline:
         transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
             updateExchangeReceiveDetail(profile_info.connection_profile_infos);
         });

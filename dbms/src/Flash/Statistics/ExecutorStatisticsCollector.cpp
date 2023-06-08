@@ -32,11 +32,11 @@ namespace
 RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
 {
     RemoteExecutionSummary exchange_execution_summary;
-    switch (dag_context.getExecuteMode())
+    switch (dag_context.getExecutionMode())
     {
-    case ExecuteMode::None:
+    case ExecutionMode::None:
         break;
-    case ExecuteMode::Stream:
+    case ExecutionMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
             for (const auto & stream_ptr : map_entry.second)
@@ -46,7 +46,7 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
             }
         }
         break;
-    case ExecuteMode::Pipeline:
+    case ExecutionMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)

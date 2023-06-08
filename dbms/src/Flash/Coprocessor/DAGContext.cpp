@@ -318,17 +318,17 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     // collect table scan metrics
     UInt64 time_processed_ns = 0;
     UInt64 num_produced_bytes = 0;
-    switch (getExecuteMode())
+    switch (getExecutionMode())
     {
-    case ExecuteMode::None:
+    case ExecutionMode::None:
         break;
-    case ExecuteMode::Stream:
+    case ExecutionMode::Stream:
         transformProfileForStream(*this, table_scan_executor_id, [&](const IProfilingBlockInputStream & p_stream) {
             time_processed_ns = std::max(time_processed_ns, p_stream.getProfileInfo().execution_time);
             num_produced_bytes += p_stream.getProfileInfo().bytes;
         });
         break;
-    case ExecuteMode::Pipeline:
+    case ExecutionMode::Pipeline:
         transformProfileForPipeline(*this, table_scan_executor_id, [&](const OperatorProfileInfo & profile_info) {
             time_processed_ns = std::max(time_processed_ns, profile_info.execution_time);
             num_produced_bytes += profile_info.bytes;

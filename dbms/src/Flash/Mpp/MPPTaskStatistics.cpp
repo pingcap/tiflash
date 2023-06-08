@@ -146,11 +146,11 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
 {
-    switch (dag_context.getExecuteMode())
+    switch (dag_context.getExecutionMode())
     {
-    case ExecuteMode::None:
+    case ExecutionMode::None:
         break;
-    case ExecuteMode::Stream:
+    case ExecutionMode::Stream:
         for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
         {
             for (const auto & io_stream : map_entry.second)
@@ -166,7 +166,7 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
             }
         }
         break;
-    case ExecuteMode::Pipeline:
+    case ExecutionMode::Pipeline:
         for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)

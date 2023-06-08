@@ -46,11 +46,11 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
 
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
-    switch (dag_context.getExecuteMode())
+    switch (dag_context.getExecutionMode())
     {
-    case ExecuteMode::None:
+    case ExecutionMode::None:
         break;
-    case ExecuteMode::Stream:
+    case ExecutionMode::Stream:
         transformInBoundIOProfileForStream(dag_context, executor_id, [&](const IBlockInputStream & stream) {
             const auto * cop_stream = dynamic_cast<const CoprocessorBlockInputStream *>(&stream);
             /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
@@ -76,7 +76,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             }
         });
         break;
-    case ExecuteMode::Pipeline:
+    case ExecutionMode::Pipeline:
         transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
             if (profile_info.is_local)
                 local_table_scan_detail.bytes += profile_info.bytes;

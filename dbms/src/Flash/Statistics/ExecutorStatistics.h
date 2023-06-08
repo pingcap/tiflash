@@ -81,16 +81,16 @@ public:
 
     void collectRuntimeDetail() override
     {
-        switch (dag_context.getExecuteMode())
+        switch (dag_context.getExecutionMode())
         {
-        case ExecuteMode::None:
+        case ExecutionMode::None:
             break;
-        case ExecuteMode::Stream:
+        case ExecutionMode::Stream:
             transformProfileForStream(dag_context, executor_id, [&](const IProfilingBlockInputStream & p_stream) { base.append(p_stream.getProfileInfo()); });
             // Special handling of join build time is only required for streams.
             collectJoinBuildTime();
             break;
-        case ExecuteMode::Pipeline:
+        case ExecutionMode::Pipeline:
             transformProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) { base.append(profile_info); });
             break;
         }
