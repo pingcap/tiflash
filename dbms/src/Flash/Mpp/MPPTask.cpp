@@ -50,6 +50,8 @@ extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
+extern const char exception_during_mpp_non_root_task_run[];
+extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
 namespace
@@ -433,6 +435,17 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
+
+#ifndef NDEBUG
+        if (isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+        }
+        else
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+        }
+#endif
 
         auto result = query_executor_holder->execute();
         LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);

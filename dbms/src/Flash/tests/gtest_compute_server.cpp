@@ -797,6 +797,7 @@ CATCH
 TEST_F(ComputeServerRunner, testErrorMessage)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     setCancelTest();
     std::vector<String> failpoint_names{
@@ -841,6 +842,7 @@ try
             GTEST_FAIL();
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 

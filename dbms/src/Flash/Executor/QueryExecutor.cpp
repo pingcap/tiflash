@@ -12,18 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Executor/QueryExecutor.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char hang_in_execution[];
+} // namespace FailPoints
+
 ExecutionResult QueryExecutor::execute()
 {
+    FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
     return execute(ResultHandler{});
 }
 
 ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
 {
+    FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
     return execute(ResultHandler{handler});
 }
 
