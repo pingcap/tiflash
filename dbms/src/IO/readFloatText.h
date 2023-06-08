@@ -16,7 +16,7 @@
 
 #include <Core/Defines.h>
 #include <IO/ReadHelpers.h>
-#include <common/likely.h>
+
 #include <common/shift10.h>
 #include <double-conversion/double-conversion.h>
 

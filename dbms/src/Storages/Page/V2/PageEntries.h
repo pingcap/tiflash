@@ -20,7 +20,7 @@
 #include <Storages/Page/Config.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageDefines.h>
-#include <common/likely.h>
+
 #include <common/logger_useful.h>
 
 #include <cassert>

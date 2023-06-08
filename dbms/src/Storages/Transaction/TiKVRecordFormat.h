@@ -24,7 +24,7 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
-#include <common/likely.h>
+
 
 #include <sstream>
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Mpp/MPPTaskId.h>
-#include <common/likely.h>
+
 #include <fmt/core.h>
 
 namespace DB

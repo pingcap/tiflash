@@ -14,7 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/FilterConditions.h>
-#include <common/likely.h>
+
 
 namespace DB
 {

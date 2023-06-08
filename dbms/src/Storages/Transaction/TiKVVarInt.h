@@ -17,7 +17,7 @@
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
-#include <common/likely.h>
+
 #include <iostream>
 
 namespace DB::ErrorCodes

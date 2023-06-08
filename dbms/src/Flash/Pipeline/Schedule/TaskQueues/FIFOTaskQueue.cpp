@@ -14,7 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
-#include <common/likely.h>
+
 
 namespace DB
 {
