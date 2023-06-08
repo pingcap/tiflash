@@ -18,6 +18,18 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_before_mpp_register_non_root_mpp_task[];
+extern const char exception_before_mpp_register_root_mpp_task[];
+extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
+extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
+extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
+extern const char exception_before_mpp_non_root_task_run[];
+extern const char exception_before_mpp_root_task_run[];
+extern const char exception_during_mpp_non_root_task_run[];
+extern const char exception_during_mpp_root_task_run[];
+} // namespace FailPoints
 namespace tests
 {
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
@@ -520,14 +532,48 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
+<<<<<<< HEAD
         auto [query_id, res] = prepareMPPStreams(context
                                                      .scan("test_db", "test_table_1")
                                                      .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                                                      .project({"max(s1)"}));
+=======
+        /// case 1, cancel after dispatch MPPTasks
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        auto res = prepareMPPStreams(context
+                                         .scan("test_db", "test_table_1")
+                                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                         .project({"max(s1)"}),
+                                     properties);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+<<<<<<< HEAD
+=======
+    {
+        /// case 2, cancel before dispatch MPPTasks
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        auto tasks = prepareMPPTasks(context
+                                         .scan("test_db", "test_table_1")
+                                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                         .project({"max(s1)"}),
+                                     properties);
+        EXPECT_TRUE(!assertQueryActive(query_id));
+        MockComputeServerManager::instance().cancelQuery(query_id);
+        try
+        {
+            executeMPPTasks(tasks, properties);
+        }
+        catch (...)
+        {
+        }
+        EXPECT_TRUE(assertQueryCancelled(query_id));
+    }
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
     WRAP_FOR_SERVER_TEST_END
 }
 CATCH
@@ -538,9 +584,19 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
+<<<<<<< HEAD
         auto [query_id, res] = prepareMPPStreams(context
                                                      .scan("test_db", "l_table")
                                                      .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+=======
+        setCancelTest();
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        auto res = prepareMPPStreams(context
+                                         .scan("test_db", "l_table")
+                                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                     properties);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
@@ -555,11 +611,23 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
+<<<<<<< HEAD
         auto [query_id, _] = prepareMPPStreams(context
                                                    .scan("test_db", "l_table")
                                                    .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                                                    .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                                                    .project({col("max(l_table.s)"), col("l_table.s")}));
+=======
+        setCancelTest();
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        auto stream = prepareMPPStreams(context
+                                            .scan("test_db", "l_table")
+                                            .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                            .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                            .project({col("max(l_table.s)"), col("l_table.s")}),
+                                        properties);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
         EXPECT_TRUE(assertQueryActive(query_id));
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
@@ -574,6 +642,7 @@ try
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
+<<<<<<< HEAD
         auto [query_id1, res1] = prepareMPPStreams(context
                                                        .scan("test_db", "l_table")
                                                        .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
@@ -582,6 +651,22 @@ try
                                                        .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                                                        .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                                                        .project({col("max(l_table.s)"), col("l_table.s")}));
+=======
+        auto properties1 = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id1(properties1.query_ts, properties1.local_query_id, properties1.server_id, properties1.start_ts);
+        auto res1 = prepareMPPStreams(context
+                                          .scan("test_db", "l_table")
+                                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                      properties1);
+        auto properties2 = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id2(properties2.query_ts, properties2.local_query_id, properties2.server_id, properties2.start_ts);
+        auto res2 = prepareMPPStreams(context
+                                          .scan("test_db", "l_table")
+                                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                          .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                          .project({col("max(l_table.s)"), col("l_table.s")}),
+                                      properties2);
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 
         EXPECT_TRUE(assertQueryActive(query_id1));
         MockComputeServerManager::instance().cancelQuery(query_id1);
@@ -594,12 +679,18 @@ try
 
     // start 10 queries
     {
-        std::vector<std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>>> queries;
+        std::vector<std::tuple<MPPQueryId, BlockInputStreamPtr>> queries;
         for (size_t i = 0; i < 10; ++i)
         {
+<<<<<<< HEAD
             queries.push_back(prepareMPPStreams(context
                                                     .scan("test_db", "l_table")
                                                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})));
+=======
+            auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+            MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+            queries.push_back(std::make_tuple(query_id, prepareMPPStreams(context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}), properties)));
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
         }
         for (size_t i = 0; i < 10; ++i)
         {
@@ -699,6 +790,101 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(ComputeServerRunner, randomFailpointForPipeline)
+try
+{
+    enablePipeline(true);
+    startServers(3);
+    std::vector<String> failpoints{
+        "random_pipeline_model_task_run_failpoint-0.8",
+        "random_pipeline_model_task_construct_failpoint-1.0",
+        "random_pipeline_model_event_schedule_failpoint-1.0",
+        // Because the mock table scan will always output data, there will be no event triggering onEventFinish, so the query will not terminate.
+        // "random_pipeline_model_event_finish_failpoint-0.99",
+        "random_pipeline_model_operator_run_failpoint-0.8",
+        "random_pipeline_model_cancel_failpoint-0.8",
+        "random_pipeline_model_execute_prefix_failpoint-1.0",
+        "random_pipeline_model_execute_suffix_failpoint-1.0"};
+    for (const auto & failpoint : failpoints)
+    {
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
+        initRandomFailPoint(config_str);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        try
+        {
+            BlockInputStreamPtr tmp = prepareMPPStreams(context
+                                                            .scan("test_db", "l_table")
+                                                            .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                            .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                            .project({col("max(l_table.s)"), col("l_table.s")}),
+                                                        properties);
+        }
+        catch (...)
+        {
+            // Only consider whether a crash occurs
+            ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+        // Check if the query is stuck
+        EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+        disableRandomFailPoint(config_str);
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, testErrorMessage)
+try
+{
+    startServers(3);
+    setCancelTest();
+    std::vector<String> failpoint_names{
+        FailPoints::exception_before_mpp_register_non_root_mpp_task,
+        FailPoints::exception_before_mpp_register_root_mpp_task,
+        FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task,
+        FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task,
+        FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task,
+        FailPoints::exception_before_mpp_non_root_task_run,
+        FailPoints::exception_before_mpp_root_task_run,
+        FailPoints::exception_during_mpp_non_root_task_run,
+        FailPoints::exception_during_mpp_root_task_run,
+    };
+    size_t query_index = 0;
+    for (const auto & failpoint : failpoint_names)
+    {
+        query_index++;
+        for (size_t i = 0; i < 5; ++i)
+        {
+            auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), query_index, i);
+            MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+            /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
+            FailPointHelper::enableFailPoint(failpoint);
+            try
+            {
+                auto tasks = prepareMPPTasks(context
+                                                 .scan("test_db", "l_table")
+                                                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                 .project({col("max(l_table.s)"), col("l_table.s")}),
+                                             properties);
+                executeMPPTasks(tasks, properties);
+            }
+            catch (...)
+            {
+                auto error_message = getCurrentExceptionMessage(false);
+                ASSERT_TRUE(error_message.find(failpoint) != std::string::npos) << " error message is " << error_message << " failpoint is " << failpoint;
+                MockComputeServerManager::instance().cancelQuery(query_id);
+                EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+                FailPointHelper::disableFailPoint(failpoint);
+                continue;
+            }
+            GTEST_FAIL();
+        }
+    }
+}
+CATCH
+
+>>>>>>> 306d6b785e (Fix unstable tests and add more ut (#7613))
 #undef WRAP_FOR_SERVER_TEST_BEGIN
 #undef WRAP_FOR_SERVER_TEST_END
 
