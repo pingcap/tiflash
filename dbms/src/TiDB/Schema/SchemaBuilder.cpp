@@ -1140,16 +1140,12 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
         auto orig_table_info = storage->getTableInfo();
 
-        // because there may a lot of syncTableSchema for one table, we check again to avoid unnecessary alter
-        if (table_info->update_timestamp != orig_table_info.update_timestamp)
-        {
-            storage->alterSchemaChange(
-                alter_lock,
-                *table_info,
-                name_mapper.mapDatabaseName(database_id, keyspace_id),
-                name_mapper.mapTableName(*table_info),
-                context);
-        }
+        storage->alterSchemaChange(
+            alter_lock,
+            *table_info,
+            name_mapper.mapDatabaseName(database_id, keyspace_id),
+            name_mapper.mapTableName(*table_info),
+            context);
     }
 }
 

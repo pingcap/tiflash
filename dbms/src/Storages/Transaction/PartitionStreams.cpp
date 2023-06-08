@@ -68,12 +68,9 @@ static void writeRegionDataToStorage(
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
-        if (storage == nullptr || storage->isTombstone())
+        if (storage == nullptr)
         {
-            if (!force_decode) // Need to update.
-                return false;
-            if (storage == nullptr) // Table must have just been GC-ed.
-                return true;
+            return force_decode;
         }
 
         /// Get a structure read lock throughout decode, during which schema must not change.

@@ -1474,7 +1474,6 @@ void StorageDeltaMerge::alterSchemaChange(
     /// 2. update table info
     /// 3. update store's columns
     /// 4. update create table statement
-    LOG_ERROR(log, "StorageDeltaMerge::alterSchemaChange for table {}", table_info.id);
 
     ColumnsDescription new_columns = getNewColumnsDescription(table_info);
 
