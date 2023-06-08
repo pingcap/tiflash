@@ -32,7 +32,7 @@ After the query is split into a pipeline dag, it will be submitted to the task s
 
 ### Schedule and execute task
 
-The pipeline will be instantiated into several tasks according to the query concurrency and then executed in a fixed-size thread pool.
+The pipeline will be instantiated into several tasks according to the query concurrency and then executed in a fixed-sized thread pool.
 ```
 ┌────────────────────────────┐
 │      task scheduler        │
