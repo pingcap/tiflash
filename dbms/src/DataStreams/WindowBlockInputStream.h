@@ -18,12 +18,36 @@
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+#include <Common/Decimal.h>
+#include <common/types.h>
 
 #include <deque>
 #include <memory>
 
 namespace DB
 {
+namespace Window
+{
+enum class ColumnType
+{
+    UnInitialized = 0,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    Decimal32,
+    Decimal64,
+    Decimal128,
+    Decimal256
+};
+} // namespace Window
+
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
 {
@@ -72,10 +96,21 @@ struct RowNumber
 struct WindowTransformAction
 {
 private:
-    // Used for calculating the frame start
-    RowNumber stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
-    // Used for calculating the frame end
-    std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame);
+    // Used for calculating the frame start for rows frame type
+    RowNumber stepToFrameStartForRows(const RowNumber & current_row);
+    // Used for calculating the frame end for rows frame type
+    std::tuple<RowNumber, bool> stepToFrameEndForRows(const RowNumber & current_row);
+
+    // Used for calculating the frame start for range frame type
+    RowNumber stepToFrameStartForRange(const RowNumber & current_row);
+    // Used for calculating the frame end for range frame type
+    std::tuple<RowNumber, bool> stepToFrameEndForRange(const RowNumber & current_row);
+
+    template <typename T>
+    RowNumber stepToFrameStartForRangeImpl(const RowNumber & current_row);
+
+    template <typename T>
+    RowNumber stepToFrameEndForRangeImpl(const RowNumber & current_row);
 
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
@@ -181,7 +216,7 @@ public:
 
     // Indices of the PARTITION BY columns in block.
     std::vector<size_t> partition_column_indices;
-    // Indices of the ORDER BY columns in block;
+    // Indices of the ORDER BY columns in block.
     std::vector<size_t> order_column_indices;
 
     // Per-window-function scratch spaces.
@@ -241,6 +276,13 @@ public:
     // aggregate function. We use them to determine how to update the aggregation
     // state after we find the new frame.
     RowNumber prev_frame_start;
+
+    // Auxiliary variable for range frame type when calculating frame_end
+    RowNumber prev_frame_end;
+
+    // Mark the order by column type to avoid type judge
+    // each time we update the start/end frame position.
+    Window::ColumnType col_type;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;

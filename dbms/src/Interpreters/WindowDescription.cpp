@@ -15,15 +15,42 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+#include <tipb/expression.pb.h>
 
 #include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
+
+namespace
+{
+double getBoundryRangeVal(const tipb::WindowFrameBound & bound)
+{
+    if (bound.calcfuncs_size() == 0)
+        return 0;
+    else if (bound.calcfuncs_size() != 1)
+        throw Exception("We only one boundry range value");
+
+    tipb::Expr expr = bound.calcfuncs()[0];
+    auto expr_type = expr.tp();
+    if (expr_type != tipb::Int64
+        && expr_type != tipb::Uint64
+        && expr_type != tipb::Float32
+        && expr_type != tipb::Float64)
+        throw Exception("Range value should be numeric");
+
+    const auto & val = expr.val();
+    if (expr_type == tipb::Int64 || expr_type == tipb::Uint64)
+        return std::stoi(val);
+
+    return std::stod(val);
 }
+} // namespace
 
 WindowFrame::BoundaryType getBoundaryTypeFromTipb(const tipb::WindowFrameBound & bound)
 {
@@ -57,9 +84,11 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.type = getFrameTypeFromTipb(frame_.type());
     frame.begin_offset = frame_.start().offset();
     frame.begin_type = getBoundaryTypeFromTipb(frame_.start());
+    frame.begin_range = getBoundryRangeVal(frame_.start());
     frame.begin_preceding = (frame_.start().type() == tipb::WindowBoundType::Preceding);
     frame.end_offset = frame_.end().offset();
     frame.end_type = getBoundaryTypeFromTipb(frame_.end());
+    frame.end_range = getBoundryRangeVal(frame_.end());
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
     frame.is_default = false;
 }

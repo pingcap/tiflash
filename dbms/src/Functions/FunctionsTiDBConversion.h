@@ -1203,7 +1203,7 @@ struct TiDBConvertToDecimal
         {
             /// cast string as decimal
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;

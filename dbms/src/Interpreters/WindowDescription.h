@@ -62,10 +62,12 @@ struct WindowFrame
 
     BoundaryType begin_type = BoundaryType::Unbounded;
     UInt64 begin_offset = 0;
+    double begin_range = 0;
     bool begin_preceding = true;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
+    double end_range = 0;
     bool end_preceding = false;
 
     bool operator==(const WindowFrame & other) const
