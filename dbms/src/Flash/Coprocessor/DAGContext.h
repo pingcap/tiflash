@@ -410,7 +410,7 @@ private:
     // - None: request has not been executed yet
     // - Stream: execute with block input stream
     // - Pipeline: execute with pipeline model
-    ExecutionMode execution_mode;
+    ExecutionMode execution_mode = ExecutionMode::None;
 };
 
 } // namespace DB
