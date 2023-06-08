@@ -30,7 +30,9 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
+extern const char exception_during_query_run[];
 } // namespace FailPoints
+
 namespace tests
 {
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
@@ -810,6 +812,7 @@ try
         FailPoints::exception_before_mpp_root_task_run,
         FailPoints::exception_during_mpp_non_root_task_run,
         FailPoints::exception_during_mpp_root_task_run,
+        FailPoints::exception_during_query_run,
     };
     size_t query_index = 0;
     for (const auto & failpoint : failpoint_names)
