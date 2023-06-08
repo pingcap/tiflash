@@ -17,6 +17,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 
+#include <cstring>
+
 namespace DB
 {
 using NullMap = ColumnUInt8::Container;
@@ -85,7 +87,9 @@ public:
     {
         getNestedColumn().insertManyDefaults(length);
         auto & map = getNullMapData();
-        map.resize_fill(map.size() + length, 1);
+        size_t old_size = map.size();
+        map.resize(old_size + length);
+        memset(map.data() + old_size, 1, length);
     }
 
     void popBack(size_t n) override;
