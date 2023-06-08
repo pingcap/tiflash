@@ -199,7 +199,8 @@ void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorPro
 void DAGContext::addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
 {
     std::lock_guard lock(operator_profile_infos_map_mu);
-    inbound_io_input_operator_profile_infos_map[executor_id] = std::move(profile_infos);
+    if (inbound_io_input_operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
+        inbound_io_input_operator_profile_infos_map[executor_id] = std::move(profile_infos);
 }
 
 std::unordered_map<String, OperatorProfileInfos> & DAGContext::getInboundIOOperatorProfileInfosMap()

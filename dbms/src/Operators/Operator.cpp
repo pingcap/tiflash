@@ -55,8 +55,16 @@ OperatorStatus Operator::await()
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
-    // When `op_status` turns to `OperatorStatus::WAITING`, `profile_info.update()` must be called,
-    // which means that `OperatorProfileInfo::StopWatch::last_ts` has been reseted, so there is no need to call `profile_info.anchor()`.
+
+    // During the period when op_status changes from non-waiting to waiting, and from waiting to non-waiting, await will be called continuously.
+    // Therefore, directly measuring this period is equivalent to measuring the time consumed by await.
+    //
+    // When op_status changes to waiting, profile_info.update has already been called, meaning that profile_info::StopWatch::last_ns has been updated to that moment in time.
+    // When op_status changes to non-waiting, calling profile_info.update record the time of waiting.
+    //
+    //    ┌─────────────────────waiting time────────────────────────┐
+    // [non-waiting, waiting, waiting, waiting, .., waiting, non-waiting]
+
     if (op_status != OperatorStatus::WAITING)
         profile_info.update();
     return op_status;
