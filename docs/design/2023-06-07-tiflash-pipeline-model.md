@@ -18,7 +18,7 @@ The thread scheduling model has two problems:
 
 Although TiFlash has introduced several features to reduce the impact of high concurrency on the thread scheduling model, such as DynamicThreadPool, Async GRPC, and MinTsoScheduler, we can still improve the existing parallel execution model to better adapt to high-concurrency scenarios and support future resource control functions.
 
-Referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://15721.courses.cs.cmu.edu/spring2016/papers/p743-leis.pdf), we introduce a new concurrent execution model pipeline model and use a more efficient task scheduling mechanism.
+By referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://15721.courses.cs.cmu.edu/spring2016/papers/p743-leis.pdf), we introduce a new concurrent execution model `pipeline model` and use a more efficient task scheduling mechanism.
 
 ## Detailed Design
 
