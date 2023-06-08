@@ -16,7 +16,7 @@ The thread scheduling model has two problems:
 - In high-concurrency scenarios, too many threads will cause many context switches and incur high thread scheduling costs. When the number of threads reaches a certain number, the application of threads will report an error `thread constructor failed: Resource temporarily unavailable`. 
 - The thread scheduling model cannot accurately measure the resource usage of the query or perform fine-grained resource control.
 
-Although TiFlash has introduced several features to reduce the impact of high concurrency on the thread scheduling model, such as DynamicThreadPool, Async GRPC, and MinTsoScheduler, we can still improve the existing parallel execution model to better adapt to high-concurrency scenarios and support future resource control functions.
+Although TiFlash has introduced several features to reduce the impact of high concurrency on the thread scheduling model, such as `DynamicThreadPool`, `Async GRPC`, and `MinTsoScheduler`, we can still improve the existing parallel execution model to better adapt to high-concurrency scenarios and support future resource control functionalities.
 
 By referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://15721.courses.cs.cmu.edu/spring2016/papers/p743-leis.pdf), we introduce a new concurrent execution model `pipeline model` and use a more efficient task scheduling mechanism.
 
