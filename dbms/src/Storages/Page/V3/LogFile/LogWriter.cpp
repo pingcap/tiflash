@@ -15,6 +15,8 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -69,7 +71,7 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush(const WriteLimiterPtr & write_limiter, bool background)
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, bool background, bool sync)
 {
     if (write_buffer.offset() == 0)
     {
@@ -84,7 +86,10 @@ void LogWriter::flush(const WriteLimiterPtr & write_limiter, bool background)
                         /*background=*/background,
                         /*truncate_if_failed=*/false,
                         /*enable_failpoint=*/false);
-    log_file->fsync();
+    if (sync)
+    {
+        log_file->fsync();
+    }
     written_bytes += write_buffer.offset();
 
     // reset the write_buffer
@@ -115,7 +120,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
         if (unlikely(buffer_size - write_buffer.offset() < leftover))
         {
-            flush(write_limiter, background);
+            flush(write_limiter, background, false);
         }
         writeString(MAX_ZERO_HEADER, leftover, write_buffer);
         block_offset = 0;
@@ -141,7 +146,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         // Check available space in write_buffer before writing
         if (buffer_size - write_buffer.offset() < fragment_length + header_size)
         {
-            flush(write_limiter, background);
+            flush(write_limiter, background, false);
         }
         try
         {
@@ -158,10 +163,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         begin = false;
     } while (payload.hasPendingData());
 
-    if (!manual_flush)
-    {
-        flush(write_limiter, background);
-    }
+    flush(write_limiter, background, !manual_flush);
 }
 
 void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
