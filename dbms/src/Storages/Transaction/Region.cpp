@@ -49,7 +49,7 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
 
 RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.readDataByWriteIt(write_it, need_value);
+    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex());
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
@@ -533,9 +533,10 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log,
-                      "{} need to wait learner index {}",
+                      "{} need to wait learner index {} timeout {}",
                       toString(),
-                      index);
+                      index,
+                      timeout_ms);
             auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
@@ -579,7 +580,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
@@ -804,11 +804,19 @@ UInt64 RegionRaftCommandDelegate::appliedIndex()
 {
     return meta.makeRaftCommandDelegate().applyState().applied_index();
 }
-metapb::Region Region::getMetaRegion() const
+metapb::Region Region::cloneMetaRegion() const
+{
+    return meta.cloneMetaRegion();
+}
+const metapb::Region & Region::getMetaRegion() const
 {
     return meta.getMetaRegion();
 }
-raft_serverpb::MergeState Region::getMergeState() const
+raft_serverpb::MergeState Region::cloneMergeState() const
+{
+    return meta.cloneMergeState();
+}
+const raft_serverpb::MergeState & Region::getMergeState() const
 {
     return meta.getMergeState();
 }

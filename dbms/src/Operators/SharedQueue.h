@@ -57,7 +57,7 @@ public:
     {
     }
 
-    ~SharedQueueSinkOp()
+    ~SharedQueueSinkOp() override
     {
         shared_queue->producerFinish();
     }
@@ -72,8 +72,6 @@ public:
     OperatorStatus writeImpl(Block && block) override;
 
     OperatorStatus awaitImpl() override;
-
-    bool isAwaitable() const override { return true; }
 
 private:
     std::optional<Block> res;
@@ -102,8 +100,6 @@ public:
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
-
-    bool isAwaitable() const override { return true; }
 
 private:
     std::optional<Block> res;

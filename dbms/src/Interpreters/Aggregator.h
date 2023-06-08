@@ -1008,13 +1008,14 @@ public:
         size_t getGroupByTwoLevelThreshold() const { return group_by_two_level_threshold; }
         size_t getGroupByTwoLevelThresholdBytes() const { return group_by_two_level_threshold_bytes; }
         size_t getMaxBytesBeforeExternalGroupBy() const { return max_bytes_before_external_group_by; }
+        void setMaxBytesBeforeExternalGroupBy(size_t threshold) { max_bytes_before_external_group_by = threshold; }
 
     private:
         /// Note these thresholds should not be used directly, they are only used to
         /// init the threshold in Aggregator
         const size_t group_by_two_level_threshold;
         const size_t group_by_two_level_threshold_bytes;
-        const size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
+        size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
     };
 
 

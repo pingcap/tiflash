@@ -1022,25 +1022,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// get CPU/memory/disk info of this server
-    if (tiflash_instance_wrap.proxy_helper)
-    {
-        diagnosticspb::ServerInfoRequest request;
-        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-        diagnosticspb::ServerInfoResponse response;
-        std::string req = request.SerializeAsString();
-        auto * helper = tiflash_instance_wrap.proxy_helper;
-        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
-        server_info.parseSysInfo(response);
-        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-        computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
-    }
-    else
-    {
-        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
-        computeAndSetNumberOfPhysicalCPUCores(std::thread::hardware_concurrency(), std::thread::hardware_concurrency() / 2);
-        LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
-    }
+    diagnosticspb::ServerInfoRequest request;
+    diagnosticspb::ServerInfoResponse response;
+    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+    std::string req = request.SerializeAsString();
+    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
+    server_info.parseSysInfo(response);
+    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
+    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
+    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
@@ -1506,8 +1496,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // For test mode, TaskScheduler is controlled by test case.
-    bool enable_pipeline = (settings.enable_pipeline || settings.enforce_enable_pipeline) && !global_context->isTest();
-    if (enable_pipeline)
+    bool is_prod = !global_context->isTest();
+    if (is_prod)
     {
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
@@ -1516,11 +1506,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), settings.pipeline_cpu_task_thread_pool_queue_type},
             {get_pool_size(settings.pipeline_io_task_thread_pool_size), settings.pipeline_io_task_thread_pool_queue_type},
         };
-        assert(!TaskScheduler::instance);
+        RUNTIME_CHECK(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+        LOG_INFO(log, "init pipeline task scheduler");
     }
     SCOPE_EXIT({
-        if (enable_pipeline)
+        if (is_prod)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();

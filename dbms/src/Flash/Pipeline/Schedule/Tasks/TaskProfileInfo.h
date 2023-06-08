@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <fmt/format.h>
 
 #include <atomic>
@@ -66,6 +67,8 @@ public:
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
         cpu_execute_time_ns += value;
+        if (value > cpu_execute_max_time_ns_per_round)
+            cpu_execute_max_time_ns_per_round = value;
     }
 
     ALWAYS_INLINE void elapsedCPUPendingTime()
@@ -76,6 +79,8 @@ public:
     ALWAYS_INLINE void addIOExecuteTime(UInt64 value)
     {
         io_execute_time_ns += value;
+        if (value > io_execute_max_time_ns_per_round)
+            io_execute_max_time_ns_per_round = value;
     }
 
     ALWAYS_INLINE void elapsedIOPendingTime()
@@ -88,8 +93,52 @@ public:
         await_time_ns += elapsedFromPrev();
     }
 
+    ALWAYS_INLINE void reportMetrics() const
+    {
+#ifdef __APPLE__
+#define REPORT_DURATION_METRICS(type, value_ns)                                          \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)            \
+    {                                                                                    \
+        GET_METRIC(tiflash_pipeline_task_duration_seconds, type).Observe(value_seconds); \
+    }
+#define REPORT_ROUND_METRICS(type, value_ns)                                                               \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)                              \
+    {                                                                                                      \
+        GET_METRIC(tiflash_pipeline_task_execute_max_time_seconds_per_round, type).Observe(value_seconds); \
+    }
+#else
+#define REPORT_DURATION_METRICS(type, value_ns)                                                \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)                  \
+    {                                                                                          \
+        thread_local auto & metric = GET_METRIC(tiflash_pipeline_task_duration_seconds, type); \
+        metric.Observe(value_seconds);                                                         \
+    }
+#define REPORT_ROUND_METRICS(type, value_ns)                                                                     \
+    if (auto value_seconds = (value_ns) / 1'000'000'000.0; value_seconds > 0)                                    \
+    {                                                                                                            \
+        thread_local auto & metric = GET_METRIC(tiflash_pipeline_task_execute_max_time_seconds_per_round, type); \
+        metric.Observe(value_seconds);                                                                           \
+    }
+#endif
+
+        REPORT_DURATION_METRICS(type_cpu_execute, cpu_execute_time_ns);
+        REPORT_DURATION_METRICS(type_cpu_queue, cpu_pending_time_ns);
+        REPORT_DURATION_METRICS(type_io_execute, io_execute_time_ns);
+        REPORT_DURATION_METRICS(type_io_queue, io_pending_time_ns);
+        REPORT_DURATION_METRICS(type_await, await_time_ns);
+
+        REPORT_ROUND_METRICS(type_cpu, cpu_execute_max_time_ns_per_round);
+        REPORT_ROUND_METRICS(type_io, io_execute_max_time_ns_per_round);
+
+#undef REPORT_METRICS
+#undef REPORT_ROUND_METRICS
+    }
+
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+
+    UInt64 cpu_execute_max_time_ns_per_round = 0;
+    UInt64 io_execute_max_time_ns_per_round = 0;
 };
 
 class QueryProfileInfo : public ProfileInfo<std::atomic_uint64_t>

@@ -275,11 +275,16 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
-    // Generate place delta index tasks
-    for (auto & [end, segment] : segments)
+    // Under disagg mode, a write node could serve large amount of data, place delta index tasks
+    // after restart is useless and waste of S3 reading. Only do it when deployed non-disagg mode.
+    if (global_context.getSharedContextDisagg()->notDisaggregatedMode())
     {
-        (void)end;
-        checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        // Generate place delta index tasks
+        for (auto & [end, segment] : segments)
+        {
+            (void)end;
+            checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        }
     }
 
     // Wake up to do place delta index tasks.

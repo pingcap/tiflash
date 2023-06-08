@@ -58,16 +58,34 @@ inline metapb::Peer createPeer(UInt64 id, bool)
     return peer;
 }
 
-inline metapb::Region createRegionInfo(UInt64 id, const std::string start_key, const std::string end_key)
+inline metapb::Region createRegionInfo(UInt64 id, const std::string start_key, const std::string end_key, std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt, std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
 {
     metapb::Region region_info;
     region_info.set_id(id);
     region_info.set_start_key(start_key);
     region_info.set_end_key(end_key);
-    region_info.mutable_region_epoch()->set_version(5);
-    region_info.mutable_region_epoch()->set_version(6);
-    *(region_info.mutable_peers()->Add()) = createPeer(1, true);
-    *(region_info.mutable_peers()->Add()) = createPeer(2, false);
+    if (maybe_epoch)
+    {
+        *region_info.mutable_region_epoch() = (maybe_epoch.value());
+    }
+    else
+    {
+        region_info.mutable_region_epoch()->set_version(5);
+        region_info.mutable_region_epoch()->set_version(6);
+    }
+    if (maybe_peers)
+    {
+        auto & peers = maybe_peers.value();
+        for (auto it = peers.begin(); it != peers.end(); it++)
+        {
+            *(region_info.mutable_peers()->Add()) = *it;
+        }
+    }
+    else
+    {
+        *(region_info.mutable_peers()->Add()) = createPeer(1, true);
+        *(region_info.mutable_peers()->Add()) = createPeer(2, false);
+    }
 
     return region_info;
 }

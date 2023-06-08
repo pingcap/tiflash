@@ -16,16 +16,10 @@
 
 #include <memory>
 
-namespace DB::DM
+namespace DB::DM::Remote
 {
 
-class RNRemoteReadTask;
-using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
-class RNRemoteStoreReadTask;
-using RNRemoteStoreReadTaskPtr = std::shared_ptr<RNRemoteStoreReadTask>;
-class RNRemotePhysicalTableReadTask;
-using RNRemotePhysicalTableReadTaskPtr = std::shared_ptr<RNRemotePhysicalTableReadTask>;
-class RNRemoteSegmentReadTask;
-using RNRemoteSegmentReadTaskPtr = std::shared_ptr<RNRemoteSegmentReadTask>;
+class RNWorkers;
+using RNWorkersPtr = std::shared_ptr<RNWorkers>;
 
-} // namespace DB::DM
+} // namespace DB::DM::Remote

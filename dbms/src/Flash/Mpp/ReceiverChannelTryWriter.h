@@ -25,33 +25,22 @@
 
 namespace DB
 {
-
-using RecvMsgPtr = std::shared_ptr<ReceivedMessage>;
-
 class ReceiverChannelTryWriter : public ReceiverChannelBase
 {
 public:
-    ReceiverChannelTryWriter(std::vector<GRPCReceiveQueue<RecvMsgPtr>> & grpc_recv_queues_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
-        : ReceiverChannelBase(grpc_recv_queues_.size(), req_info_, log_, data_size_in_queue_, mode_)
-        , grpc_recv_queues(grpc_recv_queues_)
+    ReceiverChannelTryWriter(ReceivedMessageQueue * received_message_queue, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
+        : ReceiverChannelBase(received_message_queue, req_info_, log_, data_size_in_queue_, mode_)
     {}
 
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
 
-    template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryReWrite();
 
 private:
-    GRPCReceiveQueueRes tryWriteFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
-    GRPCReceiveQueueRes tryWriteNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr);
-
-    GRPCReceiveQueueRes tryWriteImpl(size_t index, RecvMsgPtr && msg);
-    GRPCReceiveQueueRes tryRewriteImpl(size_t index, RecvMsgPtr & msg);
-
-    std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queues;
+    GRPCReceiveQueueRes tryWriteImpl(ReceivedMessagePtr & msg);
+    GRPCReceiveQueueRes tryRewriteImpl(ReceivedMessagePtr & msg);
 
     // Push data may fail, so we need to save the message and re-push it at the proper time.
-    std::map<size_t, RecvMsgPtr> rewrite_msgs;
+    ReceivedMessagePtr rewrite_msg;
 };
 } // namespace DB

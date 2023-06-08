@@ -18,6 +18,7 @@
 #include <Common/UniThreadPool.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -109,7 +110,8 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
-    void ingestFiles(
+    /// Return the 'ingtested bytes'.
+    UInt64 ingestFiles(
         const DM::RowKeyRange & range,
         const std::vector<DM::ExternalDTFileInfo> & external_files,
         bool clear_data_in_range,
@@ -235,7 +237,7 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
-    DM::RSOperatorPtr buildRSOperator(const SelectQueryInfo & query_info,
+    DM::RSOperatorPtr buildRSOperator(const std::unique_ptr<DAGQueryInfo> & dag_query,
                                       const DM::ColumnDefines & columns_to_read,
                                       const Context & context,
                                       const LoggerPtr & tracing_logger);
@@ -250,6 +252,9 @@ private:
                                         const Context & context,
                                         const String & req_id,
                                         const LoggerPtr & tracing_logger);
+
+    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

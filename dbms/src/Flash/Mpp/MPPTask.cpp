@@ -85,6 +85,20 @@ void injectFailPointDuringRegisterTunnel(bool is_root_task)
 }
 } // namespace
 
+void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_)
+{
+    manager = manager_;
+    task_unique_id = task_unique_id_;
+    manager->addMonitoredTask(task_unique_id);
+    initialized = true;
+}
+
+MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
+{
+    if (initialized)
+        manager->removeMonitoredTask(task_unique_id);
+}
+
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
@@ -95,6 +109,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
 {
     current_memory_tracker = nullptr;
+    mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
 
 MPPTask::~MPPTask()
@@ -436,9 +451,10 @@ void MPPTask::runImpl()
             // finish receiver
             receiver_set->close();
         }
-        auto ru = query_executor_holder->collectRequestUnit();
-        LOG_INFO(log, "mpp finish with request unit: {}", ru);
-        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
+        auto cpu_ru = query_executor_holder->collectRequestUnit();
+        auto read_ru = dag_context->getReadRU();
+        LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
 
         mpp_task_statistics.collectRuntimeStatistics();
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
@@ -61,6 +62,10 @@ extern const int NOT_IMPLEMENTED;
 extern const int UNKNOWN_EXCEPTION;
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char exception_when_fetch_disagg_pages[];
+} // namespace FailPoints
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -139,6 +144,7 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+        std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
@@ -759,6 +765,8 @@ grpc::Status FlashService::FetchDisaggPages(
         RUNTIME_CHECK_MSG(snap != nullptr, "Can not find disaggregated task, task_id={}", task_id);
         auto task = snap->popSegTask(request->table_id(), request->segment_id());
         RUNTIME_CHECK(task.isValid(), task.err_msg);
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_when_fetch_disagg_pages);
 
         PageIdU64s read_ids;
         read_ids.reserve(request->page_ids_size());

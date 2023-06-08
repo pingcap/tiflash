@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -81,7 +82,7 @@ try
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, to_err)
+TEST_F(PipelineExecutorStatusTestRunner, toErr)
 try
 {
     auto test = [](std::string && err_msg) {
@@ -102,6 +103,22 @@ try
     };
     test("throw exception");
     test("");
+}
+CATCH
+
+TEST_F(PipelineExecutorStatusTestRunner, consumeThrowError)
+try
+{
+    PipelineExecutorStatus status;
+    auto ret_queue = status.toConsumeMode(1);
+    ret_queue->push(Block{});
+    ResultHandler handler{[](const Block &) {
+        throw Exception("for test");
+    }};
+    status.consume(handler);
+    ASSERT_TRUE(status.getExceptionPtr());
+    auto actual_err_msg = status.getExceptionMsg();
+    ASSERT_EQ(actual_err_msg, "for test");
 }
 CATCH
 

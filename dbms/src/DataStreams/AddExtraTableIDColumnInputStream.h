@@ -42,6 +42,7 @@ protected:
     Block readImpl() override;
 
 private:
+    const TableID physical_table_id;
     AddExtraTableIDColumnTransformAction action;
 };
 

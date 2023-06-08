@@ -20,8 +20,9 @@ namespace DB
 AddExtraTableIDColumnInputStream::AddExtraTableIDColumnInputStream(
     BlockInputStreamPtr input,
     int extra_table_id_index,
-    TableID physical_table_id)
-    : action(input->getHeader(), extra_table_id_index, physical_table_id)
+    TableID physical_table_id_)
+    : physical_table_id(physical_table_id_)
+    , action(input->getHeader(), extra_table_id_index)
 {
     children.push_back(input);
 }
@@ -32,7 +33,7 @@ Block AddExtraTableIDColumnInputStream::readImpl()
     if (!res)
         return res;
 
-    auto ok = action.transform(res);
+    auto ok = action.transform(res, physical_table_id);
     if (!ok)
         return {};
 

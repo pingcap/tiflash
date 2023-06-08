@@ -40,6 +40,7 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -64,6 +65,7 @@ extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_with_alter_locks_acquired[];
 extern const char force_remote_read_for_batch_cop[];
+extern const char force_remote_read_for_batch_cop_once[];
 extern const char pause_after_copr_streams_acquired[];
 extern const char pause_after_copr_streams_acquired_once[];
 } // namespace FailPoints
@@ -118,6 +120,10 @@ MakeRegionQueryInfos(
             ImutRegionRangePtr region_range{nullptr};
             auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
             fiu_do_on(FailPoints::force_remote_read_for_batch_cop, {
+                if (batch_cop)
+                    status = RegionException::RegionReadStatus::NOT_FOUND;
+            });
+            fiu_do_on(FailPoints::force_remote_read_for_batch_cop_once, {
                 if (batch_cop)
                     status = RegionException::RegionReadStatus::NOT_FOUND;
             });
@@ -454,7 +460,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle filter conditions for local and remote table scan.
-    if (filter_conditions.hasValue())
+    /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
+    /// todo add runtime filter in Filter input stream
+    if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
     {
         ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, filter_conditions.executor_id);
@@ -510,8 +518,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         // local sources
         while (i < remote_read_start_index)
         {
-            auto & group = group_builder.getCurGroup()[i++];
-            group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            auto & builder = group_builder.getCurBuilder(i++);
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
         }
     }
 }
@@ -757,6 +765,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.conditions,
             table_scan.getPushedDownFilters(),
             table_scan.getColumns(),
+            table_scan.getRuntimeFilterIDs(),
+            table_scan.getMaxWaitTimeMs(),
             context.getTimezoneInfo());
         query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
@@ -1015,6 +1025,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
+    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
@@ -1031,7 +1042,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         {
             disaggregated_snap->addTask(table_id, std::move(table_snap));
         }
-
         if (has_multiple_partitions)
             stream_pool->addPartitionStreams(current_pipeline.streams);
         else
@@ -1075,6 +1085,7 @@ void DAGStorageInterpreter::buildLocalExec(
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
+    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
 
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
@@ -1312,6 +1323,11 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : table_scan.getPushedDownFilters())
         getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    {
+        for (const auto & expr : filter_conditions.conditions)
+            getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+    }
     std::vector<UInt8> may_need_add_cast_column_tmp;
     may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
     // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
@@ -1325,8 +1341,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::ScanContextPtr & scan_context)
 {
     std::vector<RemoteRequest> remote_requests;
-    std::unordered_map<Int64, Int64> region_id_to_table_id_map;
-    std::unordered_map<Int64, RegionRetryList> retry_regions_map;
+    std::unordered_map<RegionID, TableID> region_id_to_table_id_map;
+    std::unordered_map<TableID, RegionRetryList> retry_regions_map;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);

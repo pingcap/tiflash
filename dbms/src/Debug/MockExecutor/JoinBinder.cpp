@@ -24,6 +24,12 @@
 
 namespace DB::mock
 {
+
+void JoinBinder::addRuntimeFilter(MockRuntimeFilter & rf)
+{
+    rf_list.push_back(std::make_shared<MockRuntimeFilter>(rf));
+}
+
 void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
 {
     std::unordered_set<String> left_columns;
@@ -180,6 +186,12 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     {
         tipb::Expr * cond = join->add_other_eq_conditions_from_in();
         astToPB(merged_children_schema, expr, cond, collator_id, context);
+    }
+
+    // add runtime filter
+    for (const auto & rf : rf_list)
+    {
+        rf->toPB(children[1]->output_schema, children[0]->output_schema, collator_id, context, join->add_runtime_filter_list());
     }
 
     auto * left_child_executor = join->add_children();
