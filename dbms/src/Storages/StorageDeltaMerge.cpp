@@ -1428,15 +1428,15 @@ NamesAndTypes getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 
 ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info)
 {
-    auto columns = getColumnsFromTableInfo(table_info); // 其实就都是 ordinary 了
-    // TODO:这边 先暴力转成 columnDescritpion 的 ordinary，后面再看看有什么要考虑的部分
+    auto columns = getColumnsFromTableInfo(table_info);
+
     ColumnsDescription new_columns;
     for (const auto & column : columns)
     {
         new_columns.ordinary.emplace_back(std::move(column));
     }
 
-    // TODO:会前面的 materialized 是空么？
+    // Question: Could the previous columns with empty materialized
     new_columns.materialized = getColumns().materialized;
 
     return new_columns;
@@ -1451,13 +1451,8 @@ void StorageDeltaMerge::updateTableInfo(
     const String & table_name)
 {
     std::unique_lock<std::mutex> lock(table_info_mutex);
-    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
+    tidb_table_info = table_info;
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
-    // if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED) // TODO:这个有没有必要
-    // {
-    //     auto & tmt_context = context.getTMTContext();
-    //     tidb_table_info.engine_type = tmt_context.getEngineType();
-    // }
 
     updateDeltaMergeTableCreateStatement(
         database_name,
@@ -1477,27 +1472,23 @@ void StorageDeltaMerge::alterSchemaChange(
     const String & table_name,
     const Context & context)
 {
-    LOG_INFO(log, "alterSchemaChange: {}", table_name);
     // 1. 更新 table_info ; 2. 更新 columns ; 3. 更新 create table statement ; 4. 更新 store 的 columns
-    // TODO:TableInfo 感觉很多部分是冗余的，其实是可以不用存的
-
-    ColumnsDescription new_columns = getNewColumnsDescription(table_info); // TODO: check 一下 column 的 default value 的问题
-
     std::unique_lock<std::mutex> lock(table_info_mutex);
+
+    ColumnsDescription new_columns = getNewColumnsDescription(table_info);
 
     setColumns(std::move(new_columns));
 
-    tidb_table_info = table_info; // TODO:这个操作就很危险, 多check一下
-    //LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
-    LOG_DEBUG(log, "alterSchemaChange Update table_info");
+    tidb_table_info = table_info;
+    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
     {
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
-            _store->applyAlters(table_info);
+            _store->applySchemaChanges(table_info);
         }
-        else // 理论上我觉得应该不会有没有创建的情况。因为只要有数据写入了就会创建了，而没有数据写入的时候，也不会进行 alterSchemaChange 操作
+        else // it seems we will never come into this branch ?
         {
             updateTableColumnInfo();
         }
@@ -1506,8 +1497,7 @@ void StorageDeltaMerge::alterSchemaChange(
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();
-    // TiDB::TableInfo table_info_from_store;
-    // table_info_from_store.name = table_name_;
+
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
@@ -1519,14 +1509,6 @@ void StorageDeltaMerge::alterSchemaChange(
         table_info,
         getTombstone(),
         context);
-
-    // // TODO:这边应该有些字段要改？
-
-    // if (tidb_table_info.engine_type == TiDB::StorageEngine::UNSPECIFIED)
-    // {
-    //     auto & tmt_context = context.getTMTContext();
-    //     tidb_table_info.engine_type = tmt_context.getEngineType();
-    // }
 }
 
 ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const

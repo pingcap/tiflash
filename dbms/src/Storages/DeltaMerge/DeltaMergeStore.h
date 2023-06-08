@@ -444,8 +444,8 @@ public:
      */
     std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
 
-    /// Apply DDL `commands` on `table_columns`
-    void applyAlters(TableInfo & table_info);
+    /// Apply schema change on `table_columns`
+    void applySchemaChanges(TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {

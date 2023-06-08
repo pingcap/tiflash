@@ -237,9 +237,8 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 
-        auto lock = storage_tmp->lockForShare(context.getCurrentQueryId());
+        table_lock = storage_tmp->lockForShare(context.getCurrentQueryId());
         storage = storage_tmp;
-        table_lock = lock;
     }
 }
 

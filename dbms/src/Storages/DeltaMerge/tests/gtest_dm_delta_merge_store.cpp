@@ -40,8 +40,6 @@
 #include <iterator>
 #include <random>
 
-#include "Storages/Transaction/Types.h"
-
 namespace DB
 {
 
@@ -1609,7 +1607,7 @@ try
     {"cols":[{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"i8","O":"i8"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1694,7 +1692,7 @@ try
             {"cols":[],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1767,7 +1765,7 @@ try
     {"cols":[{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"i8","O":"i8"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":3,"Tp":1}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"i32","O":"i32"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1837,7 +1835,7 @@ try
     {"cols":[{"comment":"","default":"1.123456","default_bit":null,"id":2,"name":{"L":"f64","O":"f64"},"offset":0,"origin_default":"1.123456","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":22,"Tp":5}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -1891,7 +1889,7 @@ CATCH
 //             )";
 //         new_table_info.deserialize(json_table_info);
 
-//         store->applyAlters(new_table_info);
+//         store->applySchemaChanges(new_table_info);
 //     }
 
 //     // try read
@@ -1939,7 +1937,7 @@ try
     {"cols":[{"comment":"","default":"1.125","default_bit":null,"id":2,"name":{"L":"f32","O":"f32"},"offset":0,"origin_default":"1.125","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -1988,7 +1986,7 @@ try
     {"cols":[{"comment":"","default":"1","default_bit":null,"id":2,"name":{"L":"Int8","O":"Int8"},"offset":0,"origin_default":"1","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":1,"Flen":4,"Tp":1}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2037,7 +2035,7 @@ try
     {"cols":[{"comment":"","default":"1","default_bit":null,"id":2,"name":{"L":"UInt8","O":"UInt8"},"offset":0,"origin_default":"1","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":33,"Flen":3,"Tp":1}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2086,7 +2084,7 @@ try
     {"cols":[{"comment":"","default":"1999-09-09 12:34:56","default_bit":null,"id":2,"name":{"L":"dt","O":"dt"},"offset":0,"origin_default":"1999-09-09 12:34:56","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":129,"Flen":19,"Tp":12}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2141,7 +2139,7 @@ try
     {"cols":[{"comment":"","default":"test_add_string_col","default_bit":null,"id":2,"name":{"L":"string","O":"string"},"offset":0,"origin_default":"test_add_string_col","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":1,"Flen":100,"Tp":15}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2217,7 +2215,7 @@ try
     {"cols":[{"comment":"","default":"","default_bit":null,"id":2,"name":{"L":"i8_tmp","O":"i8_tmp"},"offset":0,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -2316,7 +2314,7 @@ try
             table_info.deserialize(json_table_info);
             ASSERT_TRUE(table_info.pk_is_handle);
         }
-        store->applyAlters(table_info);
+        store->applySchemaChanges(table_info);
     }
 
     {
@@ -2447,7 +2445,7 @@ try
     {"cols":[{"comment":"","default":"1.125","default_bit":null,"id":2,"name":{"L":"f32","O":"f32"},"offset":0,"origin_default":"1.125","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
             )";
         new_table_info.deserialize(json_table_info);
-        store->applyAlters(new_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read

@@ -1638,8 +1638,7 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applyAlters(
-    TableInfo & table_info)
+void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 
@@ -1660,50 +1659,39 @@ void DeltaMergeStore::applyAlters(
         auto iter = original_columns_index_map.find(column_id);
         if (iter == original_columns_index_map.end())
         {
-            // 创建新的列
+            // create a new column
             ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
             define.default_value = column.defaultValueToField();
-
             new_original_table_columns.emplace_back(std::move(define));
         }
         else
         {
-            // 更新列, 包括 rename column(同时要改 index 里的，虽然觉得没什么必要的样子）, type change,
+            // check whether we need update the column's name or type or default value
             auto & original_column = new_original_table_columns[iter->second];
-            auto new_data_type = getDataTypeByColumnInfo(column)->getName();
-            original_column.default_value = column.defaultValueToField();
-            if (original_column.name == column.name and original_column.type->getName() == new_data_type)
-            {
-                // 啥也不需要改
-                continue;
-            }
-            // 改 name 和 type，可以进一步确认一下哪些要改，也可以直接暴力都改
+            auto new_data_type = getDataTypeByColumnInfo(column);
 
-            if (original_column.name != column.name && table_info.is_common_handle)
+            if (original_column.default_value != column.defaultValueToField())
             {
-                /// TiDB only saves column name(not column id) in index info, so have to update primary
-                /// index info when rename column
-                // TODO:更新这个没必要吧？tidbInfo 本身就更新了呀
-                auto & index_info = table_info.getPrimaryIndexInfo();
-                for (auto & col : index_info.idx_cols)
-                {
-                    if (col.name == original_column.name)
-                    {
-                        col.name = column.name;
-                        break;
-                    }
-                }
+                original_column.default_value = column.defaultValueToField();
             }
-            original_column.name = column.name;
-            original_column.type = getDataTypeByColumnInfo(column);
+
+            if (original_column.name != column.name)
+            {
+                original_column.name = column.name;
+            }
+
+            if (original_column.type->getName() != new_data_type->getName())
+            {
+                original_column.type = new_data_type;
+            }
         }
     }
 
-    // 删除列
+    // remove extra columns
     auto iter = new_original_table_columns.begin();
     while (iter != new_original_table_columns.end())
     {
-        // 把三大列排除
+        // remove the extra columns
         if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
         {
             iter++;
@@ -1720,7 +1708,6 @@ void DeltaMergeStore::applyAlters(
     }
 
     // Update primary keys from TiDB::TableInfo when pk_is_handle = true
-    // todo update the column name in rowkey_columns
     std::vector<String> pk_names;
     for (const auto & col : table_info.columns)
     {
