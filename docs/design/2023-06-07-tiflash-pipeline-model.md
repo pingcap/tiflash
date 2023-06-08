@@ -12,7 +12,7 @@
 ## Motivation or Background
 
 Currently, TiFlash's parallel execution model is a thread scheduling execution model, where each query will independently apply for several threads to perform collaborative execution.
-The thread scheduling model has two problems: 
+The thread scheduling model has two drawbacks: 
 - In high-concurrency scenarios, too many threads are spawned which will cause many context switches and incur high thread scheduling costs for OS. When the number of threads reaches a certain number, the application of threads will report an error `thread constructor failed: Resource temporarily unavailable`. 
 - The current thread scheduling model can‘t measures the resource usage of the query or perform fine-grained resource control.
 
