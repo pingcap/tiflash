@@ -87,7 +87,7 @@ public:
 
     void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
 
-    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
+    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false, bool sync = true);
 
     void close();
 

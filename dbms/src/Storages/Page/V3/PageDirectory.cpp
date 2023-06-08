@@ -50,6 +50,7 @@
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
+extern const Metric PSWriterQueueSize;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -1484,6 +1485,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
 
     writers.push_back(&w);
+    CurrentMetrics::set(CurrentMetrics::PSWriterQueueSize, writers.size());
     w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
@@ -1504,7 +1506,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         // group owner, others just return an empty set.
         return {};
     }
-
     auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock();
 
