@@ -29,6 +29,24 @@ By referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framew
 The plan tree sent to the query is divided into several pipelines according to the pipeline breaker and then assembled into a directed acyclic graph based on the dependency relationship. The definition of pipeline and pipeline breaker can refer to [Efficiently Compiling Efficient Query Plans for Modern Hardware](https://www.vldb.org/pvldb/vol4/p539-neumann.pdf).
 
 After the query is split into a pipeline dag, it will be submitted to the task scheduler for execution in sequence according to the DAG relationship.
+The pipeline DAG is transformed into an event DAG where the dependencies between events correspond to the dependencies between pipelines.
+Source events, i.e. events without upstream dependencies, are submitted directly to the task scheduler for execution.
+After an event is completed, downstream events are triggered for execution.
+An event is only submitted to the task scheduler for execution when all its upstream dependencies have completed.
+```
+             generate                submit              |
+pipeline dag ────────►  event1 ────────────────────────► |
+                                                         |
+                          │  completed and then trigger  |
+                          ▼                              |
+                                     submit              |
+                        event2 ────────────────────────► | task scheduler
+                                                         |
+                          │  completed and then trigger  |
+                          ▼                              |
+                                     submit              |
+                        event3 ────────────────────────► |
+```
 
 ### Schedule and execute task
 
