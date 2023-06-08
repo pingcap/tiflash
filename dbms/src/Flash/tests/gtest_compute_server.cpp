@@ -814,10 +814,11 @@ try
     for (const auto & failpoint : failpoint_names)
     {
         query_index++;
-        for (size_t i = 0; i < 5; i++)
+        for (size_t i = 0; i < 5; ++i)
         {
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), query_index, i);
             MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+            /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
             FailPointHelper::enableFailPoint(failpoint);
             try
             {
@@ -834,11 +835,11 @@ try
                 ASSERT_TRUE(error_message.find(failpoint) != std::string::npos) << " error message is " << error_message << " failpoint is " << failpoint;
                 MockComputeServerManager::instance().cancelQuery(query_id);
                 EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+                FailPointHelper::disableFailPoint(failpoint);
                 continue;
             }
             GTEST_FAIL();
         }
-        FailPointHelper::disableFailPoint(failpoint);
     }
 }
 CATCH
