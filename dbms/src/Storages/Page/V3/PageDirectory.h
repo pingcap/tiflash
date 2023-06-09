@@ -462,7 +462,8 @@ private:
         std::condition_variable cv;
     };
 
-    // return the last writer in the group
+    // Return the last writer in the group
+    // All the edit in the write group will be merged into `first->edit`.
     Writer * buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/);
 
 private:
