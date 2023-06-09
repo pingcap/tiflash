@@ -35,7 +35,11 @@ public:
         : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, fine_grained_shuffle_, req_id, child_)
         , join_ptr(join_ptr_)
         , prepare_actions(prepare_actions_)
-    {}
+    {
+        // The profile info of Join is collected by PhysicalJoinProbe,
+        // so calling notTiDBoPerator for PhysicalJoinBuild to skip collecting profile info.
+        notTiDBOperator();
+    }
 
 private:
     void buildPipelineExecGroupImpl(

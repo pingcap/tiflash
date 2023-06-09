@@ -48,7 +48,11 @@ public:
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
         , aggregate_context(aggregate_context_)
-    {}
+    {
+        // The profile info of Aggregation is collected by PhysicalAggregationConvergent,
+        // so calling notTiDBoPerator for PhysicalAggregationBuild to skip collecting profile info.
+        notTiDBOperator();
+    }
 
 private:
     void buildPipelineExecGroupImpl(

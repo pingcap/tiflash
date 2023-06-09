@@ -260,7 +260,6 @@ void PhysicalJoin::buildPipeline(
         build(),
         join_ptr,
         build_side_prepare_actions);
-    join_build->notTiDBOperator();
     auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
     build()->buildPipeline(join_build_builder, context, exec_status);

@@ -27,7 +27,10 @@ using IOProfileInfos = std::vector<IOProfileInfoPtr>;
 /// Record the statistics of the IO operator.
 struct IOProfileInfo
 {
-    IOProfileInfo(const OperatorProfileInfoPtr & operator_info_, bool is_local_): operator_info(operator_info_), is_local(is_local_) {}
+    IOProfileInfo(const OperatorProfileInfoPtr & operator_info_, bool is_local_)
+        : operator_info(operator_info_)
+        , is_local(is_local_)
+    {}
 
     static IOProfileInfoPtr createForLocal(const OperatorProfileInfoPtr & profile_info)
     {

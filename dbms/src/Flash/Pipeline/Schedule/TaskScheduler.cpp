@@ -46,7 +46,6 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         return;
 
     cpu_task_thread_pool.submit(tasks);
-    tasks.clear();
 }
 
 void TaskScheduler::submitToWaitReactor(TaskPtr && task)
