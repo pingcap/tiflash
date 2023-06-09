@@ -76,6 +76,9 @@ int DataStreamExecutor::estimateNewThreadCount()
     return estimate_thread_cnt;
 }
 
+// TODO fix the data race on BlockStreamProfileInfo when the stream throws an error
+// and remove `race:dbms/src/DataStreams/BlockStreamProfileInfo.h` in tests/sanitize/tsan.suppression.
+// https://github.com/pingcap/tiflash/issues/7631
 RU DataStreamExecutor::collectRequestUnit()
 {
     // The cputime returned by BlockInputSrream is a count of the execution time of each thread.

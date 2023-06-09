@@ -30,7 +30,9 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
+extern const char exception_during_query_run[];
 } // namespace FailPoints
+
 namespace tests
 {
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
@@ -797,6 +799,7 @@ CATCH
 TEST_F(ComputeServerRunner, testErrorMessage)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     setCancelTest();
     std::vector<String> failpoint_names{
@@ -809,6 +812,7 @@ try
         FailPoints::exception_before_mpp_root_task_run,
         FailPoints::exception_during_mpp_non_root_task_run,
         FailPoints::exception_during_mpp_root_task_run,
+        FailPoints::exception_during_query_run,
     };
     size_t query_index = 0;
     for (const auto & failpoint : failpoint_names)
@@ -841,6 +845,7 @@ try
             GTEST_FAIL();
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
