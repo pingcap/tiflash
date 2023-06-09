@@ -577,18 +577,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         while (true)
         {
             // Find the segment according to current start_key
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(start_key);
-                if (segment_it == segments.end())
-                {
-                    // todo print meaningful start row key
-                    throw Exception(fmt::format("Failed to locate segment begin with start: {}", start_key.toDebugString()), ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto segment = getSegmentByStartKey(start_key, /*throw_on_error*/ true);
 
             FAIL_POINT_PAUSE(FailPoints::pause_when_writing_to_dt_store);
 
@@ -698,19 +687,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         // Keep trying until succeeded.
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto segment = getSegmentByStartKey(cur_range.getStart(), /*throw_on_error*/ true);
 
             waitForDeleteRange(dm_context, segment);
             if (segment->hasAbandoned())
@@ -753,19 +730,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
         // Keep trying until succeeded if needed.
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto segment = getSegmentByStartKey(cur_range.getStart(), /*throw_on_error*/ true);
             segment_range = segment->getRowKeyRange();
 
             if (segment->flushCache(*dm_context))
@@ -831,15 +796,10 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
 
     while (true)
     {
-        SegmentPtr segment;
+        auto segment = getSegmentByStartKey(start_key.toRowKeyValueRef(), /*throw_on_error*/ false);
+        if (segment == nullptr)
         {
-            std::shared_lock lock(read_write_mutex);
-            const auto segment_it = segments.upper_bound(start_key.toRowKeyValueRef());
-            if (segment_it == segments.end())
-            {
-                return std::nullopt;
-            }
-            segment = segment_it->second;
+            return std::nullopt;
         }
 
         if (segment->flushCache(*dm_context))
@@ -885,19 +845,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
         // Keep trying until succeeded.
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto segment = getSegmentByStartKey(cur_range.getStart(), /*throw_on_error*/ true);
             segment_range = segment->getRowKeyRange();
 
             // compact could fail.
@@ -1821,6 +1769,24 @@ String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
     else
     {
         return fmt::format("table_id={}", physical_table_id);
+    }
+}
+
+SegmentPtr DeltaMergeStore::getSegmentByStartKey(const RowKeyValueRef & start_key, bool throw_on_error)
+{
+    std::shared_lock lock(read_write_mutex);
+    auto seg_it = segments.upper_bound(start_key);
+    if (likely(seg_it != segments.end()))
+    {
+        return seg_it->second;
+    }
+    if (throw_on_error)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to locate segment begin with start in range: {}", start_key.toDebugString());
+    }
+    else
+    {
+        return nullptr;
     }
 }
 } // namespace DM

@@ -688,6 +688,7 @@ private:
 private:
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);
+    SegmentPtr getSegmentByStartKey(const RowKeyValueRef & start_key, bool throw_on_error);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
