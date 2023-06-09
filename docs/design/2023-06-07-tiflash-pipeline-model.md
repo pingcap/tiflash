@@ -26,7 +26,9 @@ By referring to [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framew
 
 ### Generate pipeline dag
 
-The plan tree sent to the query is divided into several pipelines according to the pipeline breaker and then assembled into a directed acyclic graph based on the dependency relationship. The definition of pipeline and pipeline breaker can refer to [Efficiently Compiling Efficient Query Plans for Modern Hardware](https://www.vldb.org/pvldb/vol4/p539-neumann.pdf).
+The plan tree sent to the query is divided into several pipelines according to the pipeline breaker and then assembled into a directed acyclic graph based on the dependency relationship.
+TODO
+For more details, please refer to [Efficiently Compiling Efficient Query Plans for Modern Hardware](https://www.vldb.org/pvldb/vol4/p539-neumann.pdf).
 
 After the query is split into a pipeline dag, it will be submitted to the task scheduler for execution in sequence according to the DAG relationship.
 The pipeline DAG is transformed into an event DAG where the dependencies between events correspond to the dependencies between pipelines.
@@ -50,7 +52,7 @@ pipeline dag ────────►  event1 ──────────�
 
 ### Schedule and execute task
 
-The pipeline will be instantiated into several tasks according to the query concurrency and then executed in a fixed-sized thread pool.
+The pipeline will be instantiated into several tasks according to the query concurrency and then executed in fixed-sized thread pools.
 ```
 ┌────────────────────────────┐
 │      task scheduler        │
