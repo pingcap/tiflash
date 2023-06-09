@@ -920,6 +920,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             params,
             final,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
@@ -1137,6 +1138,7 @@ void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
             pipeline.streams,
             BlockInputStreams{},
             max_streams,
+            0,
             /*req_id=*/"");
         ;
 

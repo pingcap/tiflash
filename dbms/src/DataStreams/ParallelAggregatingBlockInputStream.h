@@ -37,6 +37,7 @@ public:
         const Aggregator::Params & params_,
         bool final_,
         size_t max_threads_,
+        Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
         const String & req_id);
 
@@ -69,6 +70,7 @@ private:
     Aggregator aggregator;
     bool final;
     size_t max_threads;
+    Int64 max_buffered_bytes;
     size_t temporary_data_merge_threads;
 
     size_t keys_size;

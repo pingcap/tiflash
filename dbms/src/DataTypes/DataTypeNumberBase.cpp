@@ -207,7 +207,7 @@ void DataTypeNumberBase<T>::deserializeBinary(Field & field, ReadBuffer & istr) 
 {
     typename ColumnVector<T>::value_type x;
     readBinary(x, istr);
-    field = typename NearestFieldType<FieldType>::Type(x);
+    field = static_cast<typename NearestFieldType<FieldType>::Type>(x);
 }
 
 template <typename T>

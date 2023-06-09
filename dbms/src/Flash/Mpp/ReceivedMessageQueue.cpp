@@ -110,7 +110,7 @@ GRPCReceiveQueueRes ReceivedMessageQueue::pushToGRPCReceiveQueue(ReceivedMessage
 ReceivedMessageQueue::ReceivedMessageQueue(
     const AsyncRequestHandlerWaitQueuePtr & conn_wait_queue,
     const LoggerPtr & log_,
-    size_t max_buffer_size,
+    const CapacityLimits & queue_limits,
     bool enable_fine_grained,
     size_t fine_grained_channel_size_)
     : fine_grained_channel_size(enable_fine_grained ? fine_grained_channel_size_ : 0)
@@ -125,17 +125,20 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         /// use pushcallback to make sure that the order of messages in msg_channels_for_fine_grained_shuffle is exactly the same as it in msg_channel,
         /// because pop from msg_channel rely on this assumption. An alternative is to make msg_channel a set/map of messages for fine grained shuffle, but
         /// it need many more changes
-        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size, [this](const ReceivedMessagePtr & element) {
-            for (size_t i = 0; i < fine_grained_channel_size; ++i)
-            {
-                auto result = msg_channels_for_fine_grained_shuffle[i]->forcePush(element);
-                RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
-            }
-        });
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(
+            queue_limits,
+            [](const ReceivedMessagePtr & message) { return message->getPacket().ByteSizeLong(); },
+            [this](const ReceivedMessagePtr & element) {
+                for (size_t i = 0; i < fine_grained_channel_size; ++i)
+                {
+                    auto result = msg_channels_for_fine_grained_shuffle[i]->forcePush(element);
+                    RUNTIME_CHECK_MSG(result == MPMCQueueResult::OK, "push to fine grained channel must success");
+                }
+            });
     }
     else
     {
-        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(max_buffer_size);
+        msg_channel = std::make_shared<LooseBoundedMPMCQueue<ReceivedMessagePtr>>(queue_limits, [](const ReceivedMessagePtr & message) { return message->getPacket().ByteSizeLong(); });
     }
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }
