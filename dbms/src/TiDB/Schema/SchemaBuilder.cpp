@@ -357,9 +357,21 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
                         {
                             auto new_part_table_info = latest_table_info->producePartitionTableInfo(part_def.id, name_mapper);
                             auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
-
-                            auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
-                            part_storage->updateTableInfo(alter_lock, *new_part_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info));
+                            if (part_storage != nullptr)
+                            {
+                                auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
+                                part_storage->updateTableInfo(alter_lock, *new_part_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info));
+                            }
+                            else
+                            {
+                                std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+                                if (partition_id_to_logical_id.find(part_def.id) == partition_id_to_logical_id.end())
+                                {
+                                    partition_id_to_logical_id.emplace(part_def.id, table_id);
+                                }
+                            }
+                            // auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
+                            // part_storage->updateTableInfo(alter_lock, *new_part_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info));
                         }
                     }
                     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
@@ -374,7 +386,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
         }
         else
         {
-            std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+            std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
             if (table_id_to_database_id.find(table_id) == table_id_to_database_id.end())
             {
                 lock.unlock();
@@ -1090,8 +1102,6 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id)
 {
-    LOG_INFO(log, "apply table: {}, {}, {}", database_id, table_id, partition_table_id);
-
     auto table_info = getter.getTableInfo(database_id, table_id);
     if (table_info == nullptr)
     {
