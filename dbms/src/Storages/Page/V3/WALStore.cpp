@@ -107,7 +107,7 @@ Format::LogNumberType WALStore::rollToNewLogWriter(const std::lock_guard<std::mu
 
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-    bool manual_flush)
+    bool temp_file)
 {
     String path;
 
@@ -130,7 +130,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     path += wal_folder_prefix;
 
     LogFilename log_filename = LogFilename{
-        (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
+        (temp_file ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,
         0,
@@ -139,12 +139,13 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto fullname = log_filename.fullname(log_filename.stage);
     // TODO check whether the file already existed
     LOG_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
+    // if it is a temp file, we will manually sync it after writing snapshot
     auto log_writer = std::make_unique<LogWriter>(
         fullname,
         provider,
         new_log_lvl.first,
         /*recycle*/ true,
-        /*manual_flush*/ manual_flush);
+        /*manual_sync*/ temp_file);
     return {std::move(log_writer), log_filename};
 }
 
@@ -218,13 +219,13 @@ bool WALStore::saveSnapshot(
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     // Create a temporary file for saving directory snapshot
-    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
+    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*temp_file*/ true);
 
     // TODO: split the snap into multiple records in LogFile so that the memory
     //       consumption could be more smooth.
     ReadBufferFromString payload(serialized_snap);
     compact_log->addRecord(payload, serialized_snap.size(), write_limiter, /*background*/ true);
-    compact_log->flush(write_limiter, /*background*/ true);
+    compact_log->sync();
     compact_log.reset(); // close fd explicitly before renaming file.
 
     // Rename it to be a normal log file.
