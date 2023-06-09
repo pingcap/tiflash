@@ -368,6 +368,13 @@ public:
         return u;
     }
 
+    // `writers` should be used under the protection of apply_mutex
+    // So don't use this function in production code
+    size_t getWritersQueueSizeForTest()
+    {
+        return writers.size();
+    }
+
     // No copying and no moving
     DISALLOW_COPY_AND_MOVE(PageDirectory);
 
@@ -397,6 +404,22 @@ private:
         return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
 
+<<<<<<< HEAD
+=======
+    struct Writer
+    {
+        PageEntriesEdit * edit;
+        bool done = false; // The work has been performed by other thread
+        bool success = false; // The work complete successfully
+        std::unique_ptr<DB::Exception> exception;
+        std::condition_variable cv;
+    };
+
+    // Return the last writer in the group
+    // All the edit in the write group will be merged into `first->edit`.
+    Writer * buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/);
+
+>>>>>>> 5b90c7ead6 (avoid unnecessary fsync in ps (#7616))
 private:
     PageId max_page_id;
     std::atomic<UInt64> sequence;
