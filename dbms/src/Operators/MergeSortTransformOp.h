@@ -45,10 +45,10 @@ public:
         return "MergeSortTransformOp";
     }
 
+protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-protected:
     OperatorStatus transformImpl(Block & block) override;
     OperatorStatus tryOutputImpl(Block & block) override;
 

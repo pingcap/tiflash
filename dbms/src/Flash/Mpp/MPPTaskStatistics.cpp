@@ -167,14 +167,14 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
         }
         break;
     case ExecutionMode::Pipeline:
-        for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
+        for (const auto & map_entry : dag_context.getInboundIOProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)
             {
                 if (profile_info->is_local)
-                    local_input_bytes += profile_info->bytes;
+                    local_input_bytes += profile_info->operator_info->bytes;
                 else
-                    remote_input_bytes += profile_info->bytes;
+                    remote_input_bytes += profile_info->operator_info->bytes;
             }
         }
         break;

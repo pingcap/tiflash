@@ -196,16 +196,16 @@ void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorPro
         operator_profile_infos_map[executor_id] = std::move(profile_infos);
 }
 
-void DAGContext::addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
+void DAGContext::addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos)
 {
     std::lock_guard lock(operator_profile_infos_map_mu);
-    if (inbound_io_input_operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
-        inbound_io_input_operator_profile_infos_map[executor_id] = std::move(profile_infos);
+    if (inbound_io_profile_infos_map.find(executor_id) == inbound_io_profile_infos_map.end())
+        inbound_io_profile_infos_map[executor_id] = std::move(io_profile_infos);
 }
 
-std::unordered_map<String, OperatorProfileInfos> & DAGContext::getInboundIOOperatorProfileInfosMap()
+std::unordered_map<String, IOProfileInfos> & DAGContext::getInboundIOProfileInfosMap()
 {
-    return inbound_io_input_operator_profile_infos_map;
+    return inbound_io_profile_infos_map;
 }
 
 void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)

@@ -64,7 +64,7 @@ void transformInBoundIOProfileForStream(DAGContext & dag_context, const String &
 template <typename FF>
 void transformInBoundIOProfileForPipeline(DAGContext & dag_context, const String & executor_id, FF && ff)
 {
-    const auto & operator_profiles_map = dag_context.getInboundIOOperatorProfileInfosMap();
+    const auto & operator_profiles_map = dag_context.getInboundIOProfileInfosMap();
     auto it = operator_profiles_map.find(executor_id);
     if (it != operator_profiles_map.end())
     {

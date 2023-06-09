@@ -64,7 +64,7 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
         });
         break;
     case ExecutionMode::Pipeline:
-        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const IOProfileInfo & profile_info) {
             updateExchangeReceiveDetail(profile_info.connection_profile_infos);
         });
         break;

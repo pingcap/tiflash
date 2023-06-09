@@ -47,7 +47,7 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
         }
         break;
     case ExecutionMode::Pipeline:
-        for (const auto & map_entry : dag_context.getInboundIOOperatorProfileInfosMap())
+        for (const auto & map_entry : dag_context.getInboundIOProfileInfosMap())
         {
             for (const auto & profile_info : map_entry.second)
             {

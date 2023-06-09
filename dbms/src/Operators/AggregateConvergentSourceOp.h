@@ -35,9 +35,9 @@ public:
         return "AggregateConvergentSourceOp";
     }
 
+protected:
     void operateSuffixImpl() override;
 
-protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:

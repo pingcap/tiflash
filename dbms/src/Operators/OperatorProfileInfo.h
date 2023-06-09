@@ -35,18 +35,6 @@ struct OperatorProfileInfo
     // execution time is the total time spent on current Operator
     UInt64 execution_time = 0;
 
-    // Some special fields, used by ExchangeReceive/RemoteTableScan
-    bool is_local = true;
-    std::vector<ConnectionProfileInfo> connection_profile_infos;
-    RemoteExecutionSummary remote_execution_summary;
-
-    // Used by ExchangeReceive/RemoteTableScan.
-    ALWAYS_INLINE void initForRemote(size_t connections)
-    {
-        is_local = false;
-        connection_profile_infos.resize(connections);
-    }
-
     ALWAYS_INLINE void anchor()
     {
         total_stopwatch.start();

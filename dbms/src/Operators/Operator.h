@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
 #include <memory>
@@ -84,6 +85,8 @@ public:
     }
 
     const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
+
+    virtual IOProfileInfoPtr getIOProfileInfo() const { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
     virtual void operatePrefixImpl() {}

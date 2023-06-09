@@ -37,10 +37,10 @@ public:
         return "BlockInputStreamSourceOp";
     }
 
+protected:
     void operatePrefixImpl() override;
     void operateSuffixImpl() override;
 
-protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:

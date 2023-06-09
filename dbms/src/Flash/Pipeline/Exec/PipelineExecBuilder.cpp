@@ -58,6 +58,19 @@ OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
     }
 }
 
+IOProfileInfoPtr PipelineExecBuilder::getCurIOProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getIOProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getIOProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getIOProfileInfo();
+    }
+}
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -118,6 +131,14 @@ OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const
     OperatorProfileInfos ret;
     for (const auto & builder : getCurGroup())
         ret.push_back(builder.getCurProfileInfo());
+    return ret;
+}
+
+IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
+{
+    IOProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurIOProfileInfo());
     return ret;
 }
 } // namespace DB

@@ -71,10 +71,10 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 
             /// only the last response contains execution summaries
             if (result.resp != nullptr)
-                profile_info.remote_execution_summary.add(*result.resp);
+                io_profile_info->remote_execution_summary.add(*result.resp);
 
             const auto & decode_detail = result.decode_detail;
-            auto & connection_profile_info = profile_info.connection_profile_infos[result.call_index];
+            auto & connection_profile_info = io_profile_info->connection_profile_infos[result.call_index];
             connection_profile_info.packets += decode_detail.packets;
             connection_profile_info.bytes += decode_detail.packet_bytes;
 

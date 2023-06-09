@@ -77,9 +77,9 @@ void TableScanStatistics::collectExtraRuntimeDetail()
         });
         break;
     case ExecutionMode::Pipeline:
-        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const OperatorProfileInfo & profile_info) {
+        transformInBoundIOProfileForPipeline(dag_context, executor_id, [&](const IOProfileInfo & profile_info) {
             if (profile_info.is_local)
-                local_table_scan_detail.bytes += profile_info.bytes;
+                local_table_scan_detail.bytes += profile_info.operator_info->bytes;
             else
                 updateTableScanDetail(profile_info.connection_profile_infos);
         });

@@ -33,6 +33,8 @@ struct PipelineExecBuilder
     PipelineExecPtr build();
 
     OperatorProfileInfoPtr getCurProfileInfo() const;
+
+    IOProfileInfoPtr getCurIOProfileInfo() const;
 };
 
 class PipelineExecGroupBuilder
@@ -79,6 +81,8 @@ public:
     Block getCurrentHeader();
 
     OperatorProfileInfos getCurProfileInfos() const;
+
+    IOProfileInfos getCurIOProfileInfos() const;
 
 private:
     BuilderGroup & getCurGroup()

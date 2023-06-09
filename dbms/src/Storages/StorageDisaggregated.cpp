@@ -360,7 +360,7 @@ void StorageDisaggregated::buildReceiverSources(
                 /*stream_id=*/0));
     }
     const String & executor_id = table_scan.getTableScanExecutorID();
-    context.getDAGContext()->addInboundIOOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
+    context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
     context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 

@@ -33,6 +33,7 @@
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -163,9 +164,9 @@ public:
 
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
 
-    std::unordered_map<String, OperatorProfileInfos> & getInboundIOOperatorProfileInfosMap();
+    std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
 
-    void addInboundIOOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
+    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos);
 
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
@@ -378,9 +379,9 @@ private:
     /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
-    /// inbound_io_input_operator_profile_infos_map is a map that maps from executor_id (table_scan / exchange_receiver) to OperatorProfileInfos.
-    /// OperatorProfileInfos are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
-    std::unordered_map<String, OperatorProfileInfos> inbound_io_input_operator_profile_infos_map;
+    /// inbound_io_profile_infos_map is a map that maps from executor_id (table_scan / exchange_receiver) to IOProfileInfos.
+    /// IOProfileInfos are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
+    std::unordered_map<String, IOProfileInfos> inbound_io_profile_infos_map;
 
     UInt64 flags;
     UInt64 sql_mode;
