@@ -77,8 +77,8 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTa
         return true;
     }
     const auto & id = schedule_entry.getMPPTaskId();
-    auto [query_task_set, already_aborted] = task_manager.getQueryTaskSetWithoutLock(id.query_id);
-    if (nullptr == query_task_set || already_aborted)
+    auto [query_task_set, aborted_reason] = task_manager.getQueryTaskSetWithoutLock(id.query_id);
+    if (nullptr == query_task_set || !aborted_reason.empty())
     {
         LOG_WARNING(log, "{} is scheduled with miss or abort.", id.toString());
         return true;

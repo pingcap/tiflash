@@ -195,6 +195,9 @@ namespace DB
         F(type_fullgc_commit, {{"type", "fullgc_commit"}},         ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
+    M(tiflash_storage_page_command_count, "Total number of PageStorage's command, such as write / read / scan / snapshot", Counter,                 \
+        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),                                                                           \
+        F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                                                                     \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                                    \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                                  \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                                   \
@@ -423,7 +426,12 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
+    M(tiflash_storage_io_limiter_pending_seconds, "I/O limiter pending duration in seconds", Histogram,                                             \
+        F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 
