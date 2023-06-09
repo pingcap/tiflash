@@ -85,7 +85,7 @@ void PhysicalTopN::buildPipelineExecGroup(
     {
         executeFinalSort(exec_status, group_builder, order_descr, limit, context, log);
         if (is_restore_concurrency)
-            restoreConcurrency(exec_status, group_builder, concurrency, log);
+            restoreConcurrency(exec_status, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 
