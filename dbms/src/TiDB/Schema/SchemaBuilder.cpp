@@ -360,7 +360,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
                             if (part_storage != nullptr)
                             {
                                 auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
-                                part_storage->updateTableInfo(alter_lock, *new_part_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info));
+                                part_storage->alterSchemaChange(alter_lock, *new_part_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info), context);
                             }
                             else
                             {
@@ -370,12 +370,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
                                     partition_id_to_logical_id.emplace(part_def.id, table_id);
                                 }
                             }
-                            // auto alter_lock = part_storage->lockForAlter(getThreadNameAndID());
-                            // part_storage->updateTableInfo(alter_lock, *new_part_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*new_part_table_info));
                         }
                     }
                     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-                    storage->updateTableInfo(alter_lock, *latest_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*latest_table_info));
+                    storage->alterSchemaChange(alter_lock, *latest_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*latest_table_info), context);
                 }
                 return;
             }
@@ -489,7 +487,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     }
 
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-    storage->updateTableInfo(alter_lock, updated_table_info, context, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(updated_table_info));
+    storage->alterSchemaChange(alter_lock, updated_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(updated_table_info), context);
 
     LOG_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
@@ -670,7 +668,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverPhysicalTable(const TiDB::DB
             commands.emplace_back(std::move(command));
         }
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-        storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+        storage->updateTombstone(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
         LOG_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
         return;
     }
@@ -911,7 +909,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const TiDB::DBI
                 commands.emplace_back(std::move(command));
             }
             auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-            storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+            storage->updateTombstone(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
             LOG_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             return;
         }
@@ -971,7 +969,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         commands.emplace_back(std::move(command));
     }
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-    storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
+    storage->updateTombstone(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 }
 

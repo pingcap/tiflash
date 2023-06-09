@@ -1276,7 +1276,7 @@ void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version
 //==========================================================================================
 // DDL methods.
 //==========================================================================================
-void StorageDeltaMerge::alterFromTiDB(
+void StorageDeltaMerge::updateTombstone(
     const TableLockHolder &,
     const AlterCommands & commands,
     const String & database_name,
@@ -1288,7 +1288,6 @@ void StorageDeltaMerge::alterFromTiDB(
         commands,
         database_name,
         name_mapper.mapTableName(table_info),
-        std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info),
         context);
 }
 
@@ -1303,7 +1302,6 @@ void StorageDeltaMerge::alter(
         commands,
         database_name,
         table_name_,
-        std::nullopt,
         context);
 }
 
@@ -1349,15 +1347,8 @@ void StorageDeltaMerge::alterImpl(
     const AlterCommands & commands,
     const String & database_name,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info,
     const Context & context)
-try
 {
-    std::unordered_set<String> cols_drop_forbidden;
-    cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
-    cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
-    cols_drop_forbidden.insert(TAG_COLUMN_NAME);
-
     auto tombstone = getTombstone();
 
     for (const auto & command : commands)
@@ -1372,36 +1363,16 @@ try
         }
     }
 
-    if (table_info)
-    {
-        LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.value().get().serialize());
-        tidb_table_info = table_info.value();
-    }
-
-    SortDescription pk_desc = getPrimarySortDescription();
-    ColumnDefines store_columns = getStoreColumnDefines();
-    TiDB::TableInfo table_info_from_store;
-    table_info_from_store.name = table_name_;
-    // after update `new_columns` and store's table columns, we need to update create table statement,
-    // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
         database_name,
         table_name_,
-        pk_desc,
+        getPrimarySortDescription(),
         getColumns(),
         hidden_columns,
-        getTableInfoForCreateStatement(table_info, table_info_from_store, store_columns, hidden_columns),
+        getTableInfo(),
         tombstone,
         context);
     setTombstone(tombstone);
-}
-catch (Exception & e)
-{
-    e.addMessage(fmt::format(
-        " table name: {}, table id: {}",
-        table_name_,
-        (table_info ? DB::toString(table_info.value().get().id) : "unknown")));
-    throw;
 }
 
 NamesAndTypes getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
@@ -1439,28 +1410,6 @@ ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::Table
     new_columns.materialized = getColumns().materialized;
 
     return new_columns;
-}
-
-
-void StorageDeltaMerge::updateTableInfo(
-    const TableLockHolder &,
-    TiDB::TableInfo & table_info,
-    const Context & context,
-    const String & database_name,
-    const String & table_name)
-{
-    tidb_table_info = table_info;
-    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
-
-    updateDeltaMergeTableCreateStatement(
-        database_name,
-        table_name,
-        getPrimarySortDescription(),
-        getColumns(),
-        hidden_columns,
-        table_info,
-        getTombstone(),
-        context);
 }
 
 void StorageDeltaMerge::alterSchemaChange(

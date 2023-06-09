@@ -139,8 +139,7 @@ public:
         const String & table_name,
         const Context & context) override;
 
-    // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(
+    void updateTombstone(
         const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
@@ -154,13 +153,6 @@ public:
         const String & database_name,
         const String & table_name,
         const Context & context) override;
-
-    void updateTableInfo(
-        const TableLockHolder &,
-        TiDB::TableInfo & table_info,
-        const Context & context,
-        const String & database_name,
-        const String & table_name) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
@@ -236,7 +228,6 @@ private:
         const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
-        DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
