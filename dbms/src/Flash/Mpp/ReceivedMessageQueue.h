@@ -64,7 +64,7 @@ public:
     ReceivedMessageQueue(
         const AsyncRequestHandlerWaitQueuePtr & conn_wait_queue,
         const LoggerPtr & log_,
-        size_t max_buffer_size,
+        const CapacityLimits & queue_limits,
         bool enable_fine_grained,
         size_t fine_grained_channel_size_);
 
