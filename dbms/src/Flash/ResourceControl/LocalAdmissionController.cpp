@@ -25,7 +25,7 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     if (group != nullptr)
         return group;
 
-    ::resource_manager::GetResourceGroupRequest req;
+    resource_manager::GetResourceGroupRequest req;
     req.set_resource_group_name(name);
     auto resp = cluster->pd_client->getResourceGroup(req);
     if (resp.has_error())
@@ -35,25 +35,6 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     return addResourceGroup(resp.group()).first;
 }
 
-ResourceGroupPtr LocalAdmissionController::getResourceGroupByPriority()
-{
-    ResourceGroupPtr highest_resource_group;
-    double max_priority = 0.0;
-    std::lock_guard lock(mu);
-    for (const auto & resource_group : resource_groups)
-    {
-        double ru = resource_group->getRU();
-        double cpu_time = resource_group->getCPUTime();
-        double priority = calcPriority(ru, cpu_time);
-        if (max_priority < priority)
-        {
-            max_priority = priority;
-            highest_resource_group = resource_group;
-        }
-    }
-    return highest_resource_group;
-}
-
 void LocalAdmissionController::startBackgroudJob()
 {
     while (!stopped.load())
@@ -61,7 +42,8 @@ void LocalAdmissionController::startBackgroudJob()
         {
             auto now = std::chrono::steady_clock::now();
             std::unique_lock<std::mutex> lock(mu);
-            cv.wait_until(lock, now + std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL));
+            if (cv.wait_until(lock, now + std::chrono::seconds(DEFAULT_FETCH_GAC_INTERVAL), [this]() { return stopped.load(); }))
+                return;
         }
 
         // Prepare req.
@@ -74,6 +56,7 @@ void LocalAdmissionController::startBackgroudJob()
             for (const auto & resource_group : resource_groups)
             {
                 double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED);
+                // gjt todo maybe always <= 0.0
                 if (token_need_from_gac <= 0.0)
                     continue;
                 bool ok = need_tokens.insert(std::make_pair(resource_group->getName(), token_need_from_gac)).second;
@@ -81,8 +64,7 @@ void LocalAdmissionController::startBackgroudJob()
             }
         }
         
-        // gjt todo: call pd_client API to
-        ::resource_manager::TokenBucketsRequest gac_req;
+        resource_manager::TokenBucketsRequest gac_req;
         // gjt todo: client_unique_id target_request_period_ms
         gac_req.set_client_unique_id(100);
         gac_req.set_target_request_period_ms(100);
@@ -93,37 +75,82 @@ void LocalAdmissionController::startBackgroudJob()
             single_group_req->set_resource_group_name(ele.first);
             auto * ru_items = single_group_req->mutable_ru_items();
             auto * req_ru = ru_items->add_request_r_u();
-            req_ru->set_type(::resource_manager::RequestUnitType::RU);
+            req_ru->set_type(resource_manager::RequestUnitType::RU);
             req_ru->set_value(ele.second);
         }
-        ::resource_manager::TokenBucketsResponse resp = cluster->pd_client->acquireTokenBuckets(gac_req);
 
-        // Handle resp.
-        if unlikely (resp.has_error())
+        auto grpc_reader_writer = cluster->pd_client->acquireTokenBuckets();
+        bool succ = grpc_reader_writer->Write(gac_req);
+        if (succ)
         {
-            // gjt todo handle error
-            handleBackgroundError(resp.error().message());
-        }
-
-        if (resp.responses().empty())
-        {
-            LOG_DEBUG(log, "got empty TokenBuckets resp from GAC");
+            handleBackgroundError("write grpc stream failed when send TokenBucketsRequest to GAC");
             continue;
         }
+        grpc_reader_writer->WritesDone();
 
-        for (const ::resource_manager::TokenBucketResponse & one_resp : resp.responses())
+        resource_manager::TokenBucketsResponse resp;
+        while (grpc_reader_writer->Read(&resp))
+        {
+            // gjt todo only handle once?
+            handleTokenBucketsResp(resp);
+        }
+        grpc_reader_writer->Finish();
+    }
+}
+
+void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp)
+{
+    if unlikely (resp.has_error())
+    {
+        // gjt todo handle error
+        handleBackgroundError(resp.error().message());
+    }
+    else if (resp.responses().empty())
+    {
+        LOG_DEBUG(log, "got empty TokenBuckets resp from GAC");
+    }
+    else
+    {
+        for (const resource_manager::TokenBucketResponse & one_resp : resp.responses())
         {
             // For each resource group.
             if unlikely (!one_resp.granted_resource_tokens().empty())
                 handleBackgroundError("GAC return RAW granted tokens, but LAC expect RU tokens");
 
-            for (const ::resource_manager::GrantedRUTokenBucket & granted_token_bucket : one_resp.granted_r_u_tokens())
+            for (const resource_manager::GrantedRUTokenBucket & granted_token_bucket : one_resp.granted_r_u_tokens())
             {
                 // For each granted token bucket.
-                if unlikely (granted_token_bucket.type() != ::resource_manager::RequestUnitType::RU)
+                if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
+                {
                     handleBackgroundError("unexpected request type");
-                // gjt todo
-                // handleResp();
+                    continue;
+                }
+
+                // gjt todo watch out unit?
+                int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
+                RUNTIME_CHECK(trickle_ms >= 0);
+
+                double added_tokens = granted_token_bucket.granted_tokens().tokens();
+                RUNTIME_CHECK(added_tokens >= 0);
+
+                int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
+                RUNTIME_CHECK(capacity >= 0);
+                
+                RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
+
+                auto resource_group = getOrCreateResourceGroup(one_resp.resource_group_name());
+
+                if (trickle_ms == 0)
+                {
+                    // GAC has enough tokens for LAC.
+                    resource_group->reConfigTokenBucketInNormalMode(added_tokens);
+                }
+                else
+                {
+                    // GAC doesn't have enough tokens for LAC, start to trickle.
+                    // gjt todo maybe new group?
+                    resource_group->reConfigTokenBucketInTrickleMode(added_tokens, capacity, trickle_ms);
+                }
             }
         }
     }

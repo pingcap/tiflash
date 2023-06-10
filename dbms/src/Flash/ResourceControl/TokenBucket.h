@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <chrono>
 #include <memory>
 
@@ -20,18 +19,22 @@ namespace DB
 {
 
 // There are two mode of TokenBucket:
-// 1. refill_rate == 0: bucket is static, a.k.a stops filling token.
-// 2. refill_rate > 0: bucket is dynamic.
+// 1. fill_rate == 0: bucket is static, a.k.a stops filling token.
+// 2. fill_rate > 0: bucket is dynamic.
 // NOTE: not thread safe!
 class TokenBucket final
 {
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
 
-    TokenBucket(double refill_rate_, double init_tokens_, double capacity_ = std::numeric_limits<double>::max())
-        : refill_rate(refill_rate_)
+    TokenBucket(double fill_rate_, double init_tokens_, double capacity_ = std::numeric_limits<double>::max())
+        : fill_rate(fill_rate_)
         , tokens(init_tokens_)
-        , capacity(capacity_) {}
+        , capacity(capacity_)
+        , last_compact_timepoint(std::chrono::steady_clock::time_point::min())
+        , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
+        , last_get_avg_speed_tokens(init_tokens_)
+        , avg_speed_per_sec(0.0) {}
 
     ~TokenBucket() = default;
 
@@ -44,41 +47,30 @@ public:
     bool consume(double n);
 
     // Returns current tokens.
-    double peek() const
-    {
-        return peek(std::chrono::steady_clock::now());
-    }
+    double peek() const { return peek(std::chrono::steady_clock::now()); }
 
-    double peek(const TimePoint & timepoint) const
-    {
-        return tokens + getDynamicTokens(timepoint);
-    }
+    double peek(const TimePoint & timepoint) const { return tokens + getDynamicTokens(timepoint); }
 
-    // Reconfig refill rate and capacity.
-    void reConfig(double new_refill_rate, double new_capacity);
+    void reConfig(double new_tokens, double new_fill_rate, double new_capacity);
+
+    std::tuple<double, double, double> getCurrentConfig() const { return std::make_tuple(tokens, fill_rate, capacity); }
+
+    double getAvgSpeedPerSec();
 
 private:
-    double getDynamicTokens(const TokenBucket::TimePoint & timepoint) const 
-    {
-        RUNTIME_CHECK(timepoint >= last_compact_timepoint);
-        auto elspased = timepoint - last_compact_timepoint;
-        auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
-        return elapsed_second * refill_rate;
-    }
+    double getDynamicTokens(const TokenBucket::TimePoint & timepoint) const;
 
-    void compact(const TokenBucket::TimePoint & timepoint)
-    {
-        tokens += getDynamicTokens(timepoint);
-        if (tokens >= capacity)
-            tokens = capacity;
-        last_compact_timepoint = timepoint;
-    }
+    void compact(const TokenBucket::TimePoint & timepoint);
 
-    double refill_rate;
+    double fill_rate;
     double tokens;
     double capacity;
 
     TimePoint last_compact_timepoint;
+
+    TimePoint last_get_avg_speed_timepoint;
+    double last_get_avg_speed_tokens;
+    double avg_speed_per_sec;
 };
 
 using TokenBucketPtr = std::unique_ptr<TokenBucket>;

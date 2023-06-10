@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/ResourceControl/TokenBucket.h>
-#include <pingcap/kv/Cluster.h>
-#include <Common/ThreadManager.h>
-
 #include <kvproto/resource_manager.pb.h>
+#include <pingcap/kv/Cluster.h>
 
 #include <atomic>
 #include <memory>
@@ -31,6 +31,7 @@ class ResourceGroup final
 public:
     explicit ResourceGroup(const ::resource_manager::ResourceGroup & group_pb_)
         : name(group_pb_.name())
+        , user_priority(group_pb_.priority())
         , group_pb(group_pb_)
         , cpu_time(0)
     {
@@ -49,6 +50,7 @@ public:
         return bucket->consume(ru);
     }
 
+    // Get remaining RU of this resource group.
     double getRU() const
     { 
         std::lock_guard lock(mu);
@@ -60,46 +62,73 @@ public:
         return cpu_time.load();
     }
 
-    double getAcquireRUNum() const
+    double getAcquireRUNum(uint32_t avg_token_speed_duration) const
     {
-        // gjt todo
+        double avg_speed = 0.0;
+        {
+            std::lock_guard lock(mu);
+            avg_speed = bucket->getAvgSpeedPerSec();
+        }
+        return avg_speed * avg_token_speed_duration;
     }
 
-    // gjt todo
+    // Positive: Less number means higher priority.
+    // Negative means has no RU left, will not schedule this resource group.
     double getPriority() const
     {
+        RUNTIME_ASSERT(user_priority == 1 || user_priority == 8 || user_priority == 16);
+        {
+            std::lock_guard lock(mu);
+            if (bucket->peek() <= 0.0)
+                return -1.0;
+        }
+        return ((user_priority - 1) << 60) | cpu_time;
     }
 
-    // // Pipeline tasks are for computing layer, other tasks can add here later.
-    // void addPipelineTask(TaskPtr && task);
-    // void addPipelineTask(std::vector<TaskPtr> & tasks);
-    // bool getPipelineTaskByMLFQ(TaskPtr & task);
-
-    // 1. New tokens fetched from GAC, update remaining tokens.
-    // 2. Tokens of GAC is not enough, enter trickling mode.
-    // 3. If we have network problem with GAC, enter degrade mode.
-    void reConfigTokenBucket(double refill_rate, double capacity)
+    // New tokens fetched from GAC, update remaining tokens.
+    // gjt todo new_capacity < 0? ==0? >0?
+    void reConfigTokenBucketInNormalMode(double add_tokens)
     {
         std::lock_guard lock(mu);
-        bucket->reConfig(refill_rate, capacity);
+        auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
+        bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
+    }
+
+    // Tokens of GAC is not enough, enter trickling mode.
+    void reConfigTokenBucketInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
+    {
+        std::lock_guard lock(mu);
+        double new_tokens = bucket->peek() + add_tokens;
+        double new_fill_rate = new_tokens / trickle_ms;
+        bucket->reConfig(new_tokens, new_fill_rate, new_capacity);
+    }
+
+    // If we have network problem with GAC, enter degrade mode.
+    void reConfigTokenBucketInDegradeMode()
+    {
+        std::lock_guard lock(mu);
+        double avg_speed = bucket->getAvgSpeedPerSec();
+        auto [ori_tokens, _, ori_capacity] = bucket->getCurrentConfig();
+        bucket->reConfig(ori_tokens, avg_speed, ori_capacity);
     }
 
 private:
-    mutable std::mutex mu;
+    const std::string name;
 
-    std::string name;
+    // Priority of resource group set by user.
+    // This is corresponding to tidb code:
+    // 1. LowPriorityValue is 1.
+    // 2. MediumPriorityValue is 8.
+    // 3. HighPriorityValue is 16.
+    uint32_t user_priority;
     
     // Definition of the RG, e.g. RG settings, priority etc.
     ::resource_manager::ResourceGroup group_pb;
 
+    mutable std::mutex mu;
+
     // Local token bucket.
     TokenBucketPtr bucket;
-
-    // // All pipeline tasks of queries within this group.
-    // std::vector<TaskPtr> pipeline_tasks;
-
-    // // So pipeline tasks can run considering CPU time.
-    // CPUMultiLevelFeedbackQueue pipeline_task_queue;
 
     // Total used cpu_time of this ResourceGroup.
     std::atomic<uint64_t> cpu_time;
@@ -132,9 +161,6 @@ public:
     // Get ResourceGroup by name, if not exist, fetch from PD.
     ResourceGroupPtr getOrCreateResourceGroup(const std::string & name);
 
-    // Get highest priority of ResourceGroup.
-    ResourceGroupPtr getResourceGroupByPriority();
-
     static std::unique_ptr<LocalAdmissionController> global_instance;
 
 private:
@@ -157,16 +183,12 @@ private:
             if (group->getName() == new_group_pb.name())
                 return std::make_pair(group, false);
         }
-
         
         resource_groups.emplace_back(std::make_shared<ResourceGroup>(new_group_pb));
         return std::make_pair(resource_groups.back(), true);
     }
 
-    double calcPriority(double ru, double cpu_time) const
-    {
-        // gjt todo
-    }
+    void handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
 
     void handleBackgroundError(const std::string & err_msg);
 
@@ -177,8 +199,6 @@ private:
     static const uint64_t DEFAULT_TOKEN_FETCH_ESAPSED = 5;
 
     void startBackgroudJob();
-
-    void fetchFromGAC();
 
     std::mutex mu;
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/ResourceControl/TokenBucket.h>
 
 namespace DB
@@ -37,16 +38,44 @@ bool TokenBucket::consume(double n)
     return true;
 }
 
-void TokenBucket::reConfig(double new_refill_rate, double new_capacity)
+void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_capacity)
 {
-    RUNTIME_CHECK(new_refill_rate >= 0.0);
+    RUNTIME_CHECK(new_fill_rate >= 0.0);
     RUNTIME_CHECK(new_capacity >= 0.0);
 
-    auto now = std::chrono::steady_clock::now();
-    compact(now);
-
-    refill_rate = new_refill_rate;
+    tokens = new_tokens;
+    fill_rate = new_fill_rate;
     capacity = new_capacity;
     compact(std::chrono::steady_clock::now());
+
+    last_get_avg_speed_tokens = tokens;
+    last_get_avg_speed_timepoint = std::chrono::steady_clock::now();
+}
+
+double TokenBucket::getAvgSpeedPerSec()
+{
+    auto now = std::chrono::steady_clock::now();
+    auto dura = std::chrono::duration_cast<std::chrono::seconds>(now - last_get_avg_speed_timepoint);
+    double token_changed = last_get_avg_speed_tokens - tokens;
+
+    if (dura.count() >= 1)
+        avg_speed_per_sec = token_changed / dura.count();
+    return avg_speed_per_sec;
+}
+
+double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) const 
+{
+    RUNTIME_CHECK(timepoint >= last_compact_timepoint);
+    auto elspased = timepoint - last_compact_timepoint;
+    auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
+    return elapsed_second * fill_rate;
+}
+
+void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
+{
+    tokens += getDynamicTokens(timepoint);
+    if (tokens >= capacity)
+        tokens = capacity;
+    last_compact_timepoint = timepoint;
 }
 } // namespace DB
