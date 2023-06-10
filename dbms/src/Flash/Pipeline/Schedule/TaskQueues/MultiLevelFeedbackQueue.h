@@ -106,6 +106,9 @@ public:
 
     bool take(TaskPtr & task) override;
 
+    // gjt todo
+    bool tryTake(TaskPtr & task);
+
     void updateStatistics(const TaskPtr & task, size_t inc_value) override;
 
     bool empty() const override;

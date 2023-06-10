@@ -85,7 +85,7 @@ public:
     }
 
 private:
-    std::mutex mu;
+    mutable std::mutex mu;
 
     std::string name;
     

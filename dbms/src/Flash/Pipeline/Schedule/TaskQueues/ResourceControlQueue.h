@@ -18,6 +18,7 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -39,17 +40,36 @@ public:
     void finish() override;
 
 private:
-    using PipelineTasks = std::vector<std::shared_ptr<CPUMultiLevelFeedbackQueue>>;
+    // <resource_group_name, pipeline_tasks>
+    using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<CPUMultiLevelFeedbackQueue>>;
+
     // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name>
-    using ResourceGroupQueue = std::priority_queue<std::tuple<double, std::shared_ptr<CPUMultiLevelFeedbackQueue>, std::string>>;
+    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<CPUMultiLevelFeedbackQueue>, std::string>;
+    using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo>;
+    using ResourceGroupNameSet = std::unordered_set<std::string>;
 
-    std::mutex mu;
+    // Update used cpu time of resource group.
+    void updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time);
 
-    bool is_finished;
+    // Update resource_group_infos, will reorder resource group by priority.
+    // NOTE: not thread safe!
+    void updateResourceGroupInfos();
+    // NOTE: not thread safe!
+    void doFinish();
+
+    mutable std::mutex mu;
+
+    // gjt todo: finish
+    std::atomic<bool> is_finished = false;
 
     std::condition_variable cv;
 
-    ResourceGroupQueue resource_groups;
+    // gjt todo resource_group_infos?
+    ResourceGroupInfoQueue resource_group_infos;
     PipelineTasks pipeline_tasks;
+
+    // <resource_group_name, acculumated_cpu_time>
+    // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group then set it to 0.
+    std::unordered_map<std::string, UInt64> resource_group_statics;
 };
 } // namespace DB

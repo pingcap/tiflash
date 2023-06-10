@@ -12,33 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Executor/toRU.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
+void ResourceControlQueue::doFinish()
+{
+    for (auto & ele : pipeline_tasks)
+    {
+        ele.second->finish();
+    }
+}
+
 void ResourceControlQueue::submit(TaskPtr && task)
 {
-    ResourceGroupPipelineTasks::iterator iter;
-    const std::string & name = task->getResourceGroupName();
+    if unlikely (is_finished)
     {
-        std::lock_guard lock(mu);
-        iter = pipeline_tasks.find(name);
-    }
-
-    ResourceGroupPtr resource_group;
-    if (iter == pipeline_tasks.end())
-    {
-        resource_group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(name);
-        {
-            std::lock_guard lock(mu);
-            std::vector<TaskPtr> task_vec;
-            task_vec.emplace_back(std::move(task));
-            pipeline_tasks.insert({resource_group->getName(), std::move(task_vec)});
-        }
+        doFinish();
     }
     else
     {
-        iter->second.emplace_back(std::move(task));
+        const std::string & name = task->getResourceGroupName();
+        std::lock_guard lock(mu);
+
+        auto iter = pipeline_tasks.find(name);
+        if (iter == pipeline_tasks.end())
+        {
+            ResourceGroupPtr group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(name);
+            auto task_queue = std::make_shared<CPUMultiLevelFeedbackQueue>();
+            task_queue->submit(std::move(task));
+            resource_group_infos.push({group->getPriority(), task_queue, name});
+            pipeline_tasks.insert({name, task_queue});
+        }
+        else
+        {
+            iter->second->submit(std::move(task));
+        }
     }
 }
 
@@ -46,15 +57,15 @@ void ResourceControlQueue::submit(std::vector<TaskPtr> & tasks)
 {
     for (auto & task : tasks)
     {
+        if unlikely (is_finished)
+        {
+            doFinish();
+            break;
+        }
         // Each task may belong to different resource group,
         // so there is no better way to submit batch tasks at once.
         submit(std::move(task));
     }
-}
-
-void ResourceControlQueue::updateResourceGroupQueue()
-{
-
 }
 
 bool ResourceControlQueue::take(TaskPtr & task)
@@ -65,59 +76,92 @@ bool ResourceControlQueue::take(TaskPtr & task)
     {
         std::unique_lock lock(mu);
 
-        // Wakeup when: resource_groups not empty and top priority of resource group is greater than zero(a.k.a. RU > 0)
-        cv.wait(lock, [this] {
-            if (resource_groups.empty())
-              return false;
-            ResourceGroupPtr resource_group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(std::get<2>(resource_groups.top()));
-            return resource_group->getPriority() >= 0.0;
+        // Wakeup when:
+        // 1. resource_groups not empty and
+        // 2. top priority of resource group is greater than zero(a.k.a. RU > 0)
+        cv.wait(lock, [this, &task_queue] {
+            if unlikely (is_finished)
+                return true;
+
+            if (resource_group_infos.empty())
+                return false;
+
+            ResourceGroupInfo group_info = resource_group_infos.top();
+            ResourceGroupPtr resource_group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(std::get<2>(group_info));
+            task_queue = std::get<1>(group_info);
+            return resource_group->getPriority() >= 0.0 && !task_queue->empty();
         });
-
-        task_queue = std::get<1>(resource_groups.top());
-        name = std::get<2>(resource_groups.top());
     }
 
-    task_queue->take(task);
-
-    // Remove resource group when pipeline task is empty.
-    if (task_queue->empty())
+    if unlikely (is_finished)
     {
-        std::lock_guard lock(mu);
-        ResourceGroupQueue new_resource_groups;
-        while (!resource_groups.empty())
-        {
-            const auto & ele = resource_groups.top();
-            resource_groups.pop();
-            if (std::get<2>(ele) != name)
-                new_resource_groups.push(ele);
-        }
-        resource_groups = new_resource_groups;
+        doFinish();
+        return false;
     }
+
+    return task_queue->take(task);
 }
 
 void ResourceControlQueue::updateStatistics(const TaskPtr & task, size_t inc_value)
 {
     assert(task);
-    auto & resource_group = getOrCreateResourceGroup(task.getResourceGroupName());
-    // gjt todo
-    resource_group.consumeRU(cpu_ru);
+    std::string name = task->getResourceGroupName();
+
+    auto iter = resource_group_statics.find(name);
+    if (iter == resource_group_statics.end())
+    {
+        UInt64 accumulated_cpu_time = inc_value;
+        if unlikely (pipelineTaskTimeExceedThreshold(accumulated_cpu_time))
+        {
+            updateResourceGroupResource(name, accumulated_cpu_time);
+            accumulated_cpu_time = 0;
+        }
+        resource_group_statics.insert({name, accumulated_cpu_time});
+    }
+    else
+    {
+        iter->second += inc_value;
+        if (pipelineTaskTimeExceedThreshold(iter->second))
+        {
+            updateResourceGroupResource(name, iter->second);
+            iter->second = 0;
+        }
+    }
+}
+
+void ResourceControlQueue::updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time)
+{
+    LocalAdmissionController::global_instance->getOrCreateResourceGroup(name)->consumeResource(toRU(consumed_cpu_time), consumed_cpu_time);
+    {
+        std::lock_guard lock(mu);
+        updateResourceGroupInfos();
+    }
+}
+
+void ResourceControlQueue::updateResourceGroupInfos()
+{
+    ResourceGroupInfoQueue new_resource_group_infos;
+    while (!resource_group_infos.empty())
+    {
+        const auto & group_info = resource_group_infos.top();
+        auto new_priority = LocalAdmissionController::global_instance->getOrCreateResourceGroup(std::get<2>(group_info))->getPriority();
+        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<1>(group_info), std::get<2>(group_info)));
+    }
+    resource_group_infos = new_resource_group_infos;
 }
 
 bool ResourceControlQueue::empty() const
 {
     std::lock_guard lock(mu);
 
-    if (resource_groups.empty())
+    if (pipeline_tasks.empty())
         return true;
 
     bool empty = true;
-    for (const auto & resource_group : resource_groups)
+    for (const auto & task_queue_iter : pipeline_tasks)
     {
-        if (!resource_group.pipelineTaskEmpty())
-        {
+        if (!task_queue_iter.second->empty())
             empty = false;
-            break;
-        }
     }
     return empty;
 }

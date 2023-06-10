@@ -18,7 +18,7 @@
 
 namespace DB
 {
-using RU = UInt64;
+using RU = double;
 // Convert cpu time nanoseconds to Request Unit.
 RU toRU(UInt64 cpu_time_ns);
 } // namespace DB
