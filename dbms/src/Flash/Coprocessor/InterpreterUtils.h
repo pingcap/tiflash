@@ -128,10 +128,6 @@ void executeGeneratedColumnPlaceholder(
     LoggerPtr log,
     DAGPipeline & pipeline);
 
-NamesWithAliases buildTableScanProjectionCols(
-    const NamesAndTypes & schema,
-    const NamesAndTypes & storage_schema);
-
 void executeGeneratedColumnPlaceholder(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,

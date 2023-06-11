@@ -25,9 +25,47 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
+#include "Common/TiFlashException.h"
 
 namespace DB
 {
+namespace
+{
+NamesWithAliases buildTableScanProjectionCols(
+    const NamesAndTypes & schema,
+    const NamesAndTypes & storage_schema)
+{
+    if unlikely (schema.size() != storage_schema.size())
+        throw TiFlashException(
+            fmt::format(
+                "The scan schema size ({}) from tidb is difference from the storage schema size ({}) from tiflash",
+                schema.size(),
+                storage_schema.size()),
+            Errors::Planner::BadRequest);
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        const auto & scan_col_name = schema[i].name;
+        const auto & scan_col_type = schema[i].type;
+        const auto & storage_col_name = storage_schema[i].name;
+        const auto & storage_col_type = storage_schema[i].type;
+        if unlikely (!scan_col_type->equals(*storage_col_type))
+            throw TiFlashException(
+                fmt::format(
+                    "The data type({}) from tidb scan schema cols[{}]({}) is difference from the data type({}) from tiflash storage schema cols[{}]({})",
+                    scan_col_type->getName(),
+                    i,
+                    scan_col_name,
+                    storage_col_type->getName(),
+                    i,
+                    storage_col_name),
+                Errors::Planner::BadRequest);
+        schema_project_cols.emplace_back(storage_col_name, scan_col_name);
+    }
+    return schema_project_cols;
+}
+}
+
 PhysicalTableScan::PhysicalTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
