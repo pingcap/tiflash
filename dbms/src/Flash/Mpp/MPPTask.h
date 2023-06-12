@@ -37,6 +37,7 @@
 namespace DB
 {
 class MPPTaskManager;
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 class DAGContext;
 class ProcessListEntry;
 
@@ -123,6 +124,8 @@ private:
 
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
+    void initMemoryTracker(MPPTaskManagerPtr & task_manager);
+
     void initExchangeReceivers();
 
     String getErrString() const;
@@ -137,6 +140,7 @@ private:
     mpp::TaskMeta meta;
     MPPTaskId id;
 
+    MemoryTrackerPtr memory_tracker;
     ContextPtr context;
 
     MPPTaskManager * manager;

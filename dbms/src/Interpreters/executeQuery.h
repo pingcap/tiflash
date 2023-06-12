@@ -55,7 +55,8 @@ BlockIO executeQuery(
 std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
-    const IAST * ast);
+    const IAST * ast,
+    bool use_current_memory_tracker = false);
 
 void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in);
 

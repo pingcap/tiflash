@@ -302,6 +302,16 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
+void MPPTask::initMemoryTracker(MPPTaskManagerPtr & task_manager)
+{
+    auto [query_memory_tracker, aborted_reason] = task_manager->getOrCreateQueryMemoryTracker(id.query_id, context);
+    if (!aborted_reason.empty())
+        throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
+    /// all the mpp tasks of the same mpp query shares the same memory tracker
+    memory_tracker = query_memory_tracker;
+    current_memory_tracker = memory_tracker.get();
+}
+
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
@@ -358,13 +368,17 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
-    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
+
+    auto task_manager = tmt_context.getMPPTaskManager();
+    initMemoryTracker(task_manager);
+
+    /// todo remove process list related code for MPP query
+    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get(), true);
     dag_context->setProcessListEntry(process_list_entry);
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
-    auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());

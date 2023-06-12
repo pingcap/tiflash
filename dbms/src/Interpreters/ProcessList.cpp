@@ -83,7 +83,8 @@ ProcessList::EntryPtr ProcessList::insert(
     const IAST * ast,
     const ClientInfo & client_info,
     const Settings & settings,
-    const UInt64 total_memory)
+    const UInt64 total_memory,
+    bool use_current_memory_tracker)
 {
     EntryPtr res;
 
@@ -141,7 +142,7 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
-        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority), use_current_memory_tracker));
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());

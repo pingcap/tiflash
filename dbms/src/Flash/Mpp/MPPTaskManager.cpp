@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Interpreters/Context.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
@@ -291,6 +292,26 @@ String MPPTaskManager::toString()
             res += it.first.toString() + ", ";
     }
     return res + ")";
+}
+
+std::pair<MemoryTrackerPtr, String> MPPTaskManager::getOrCreateQueryMemoryTracker(const MPPQueryId & query_id, const ContextPtr & context)
+{
+    std::lock_guard lock(mu);
+    auto [query_set, abort_reason] = getQueryTaskSetWithoutLock(query_id);
+    if (!abort_reason.empty())
+        return {nullptr, abort_reason};
+    if (query_set == nullptr)
+        query_set = addMPPQueryTaskSet(query_id);
+    if (query_set->memory_tracker == nullptr)
+    {
+        const auto & settings = context->getSettingsRef();
+        auto total_memory = context->getServerInfo().has_value() ? context->getServerInfo()->memory_info.capacity : 0;
+        query_set->memory_tracker = MemoryTracker::create(settings.max_memory_usage.getActualBytes(total_memory));
+        query_set->memory_tracker->setDescription("(for mpp query)");
+        if (settings.memory_tracker_fault_probability)
+            query_set->memory_tracker->setFaultProbability(settings.memory_tracker_fault_probability);
+    }
+    return {query_set->memory_tracker, ""};
 }
 
 std::pair<MPPQueryTaskSetPtr, String> MPPTaskManager::getQueryTaskSetWithoutLock(const MPPQueryId & query_id)

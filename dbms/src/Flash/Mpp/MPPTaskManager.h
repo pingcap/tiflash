@@ -40,6 +40,7 @@ struct MPPQueryTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
+    MemoryTrackerPtr memory_tracker;
     MPPTaskMap task_map;
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
@@ -192,6 +193,8 @@ public:
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
+
+    std::pair<MemoryTrackerPtr, String> getOrCreateQueryMemoryTracker(const MPPQueryId & query_id, const ContextPtr & context);
 
     String toString();
 

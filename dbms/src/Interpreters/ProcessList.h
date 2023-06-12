@@ -113,16 +113,25 @@ public:
         const ClientInfo & client_info_,
         size_t max_memory_usage,
         double memory_tracker_fault_probability,
-        QueryPriorities::Handle && priority_handle_)
+        QueryPriorities::Handle && priority_handle_,
+        bool use_current_memory_tracker)
         : query(query_)
         , client_info(client_info_)
-        , memory_tracker(MemoryTracker::create(max_memory_usage))
         , priority_handle(std::move(priority_handle_))
     {
-        memory_tracker->setDescription("(for query)");
-        current_memory_tracker = memory_tracker.get();
-        if (memory_tracker_fault_probability)
-            memory_tracker->setFaultProbability(memory_tracker_fault_probability);
+        if (!use_current_memory_tracker)
+        {
+            memory_tracker = MemoryTracker::create(max_memory_usage);
+            memory_tracker->setDescription("(for query)");
+            current_memory_tracker = memory_tracker.get();
+            if (memory_tracker_fault_probability)
+                memory_tracker->setFaultProbability(memory_tracker_fault_probability);
+        }
+        else
+        {
+            RUNTIME_CHECK_MSG(current_memory_tracker != nullptr, "current_memory_tracker should not be nullptr when use_current_memory_tracker is true in ProcessListElement");
+            memory_tracker = current_memory_tracker->shared_from_this();
+        }
     }
 
     ~ProcessListElement()
@@ -310,7 +319,7 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
-    EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings, const UInt64 total_memory);
+    EntryPtr insert(const String & query_, const IAST * ast, const ClientInfo & client_info, const Settings & settings, const UInt64 total_memory, bool use_current_memory_tracker);
 
     /// Number of currently executing queries.
     size_t size() const { return cur_size; }

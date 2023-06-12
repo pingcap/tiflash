@@ -401,7 +401,8 @@ void prepareForInputStream(
 std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
-    const IAST * ast)
+    const IAST * ast,
+    bool use_current_memory_tracker)
 {
     assert(ast);
     auto total_memory = context.getServerInfo().has_value() ? context.getServerInfo()->memory_info.capacity : 0;
@@ -410,7 +411,8 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
         ast,
         context.getClientInfo(),
         context.getSettingsRef(),
-        total_memory);
+        total_memory,
+        use_current_memory_tracker);
     context.setProcessListElement(&process_list_entry->get());
     return process_list_entry;
 }
