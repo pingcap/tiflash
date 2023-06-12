@@ -54,20 +54,16 @@ public:
         return "UnorderedSourceOp";
     }
 
-    void operatePrefix() override
-    {
-        addReadTaskPoolToScheduler();
-    }
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
-    OperatorStatus readImpl(Block & block) override;
-    OperatorStatus awaitImpl() override;
-
-private:
-    void addReadTaskPoolToScheduler()
+    void operatePrefixImpl() override
     {
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
     }
+
+    OperatorStatus readImpl(Block & block) override;
+    OperatorStatus awaitImpl() override;
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
