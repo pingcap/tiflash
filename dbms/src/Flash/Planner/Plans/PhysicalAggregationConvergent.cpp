@@ -19,7 +19,7 @@
 
 namespace DB
 {
-void PhysicalAggregationConvergent::buildPipelineExecGroup(
+void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

@@ -109,6 +109,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
+    dag_context.switchToStreamMode();
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
@@ -147,6 +148,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+    dag_context.switchToPipelineMode();
     return {std::move(executor)};
 }
 

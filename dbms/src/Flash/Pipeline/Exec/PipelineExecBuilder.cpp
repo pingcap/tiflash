@@ -45,6 +45,32 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
+OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getProfileInfo();
+    }
+}
+
+IOProfileInfoPtr PipelineExecBuilder::getCurIOProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getIOProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getIOProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getIOProfileInfo();
+    }
+}
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -98,5 +124,21 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
     auto & cur_group = getCurGroup();
     RUNTIME_CHECK(!cur_group.empty());
     return cur_group.back().getCurrentHeader();
+}
+
+OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const
+{
+    OperatorProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurProfileInfo());
+    return ret;
+}
+
+IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
+{
+    IOProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurIOProfileInfo());
+    return ret;
 }
 } // namespace DB
