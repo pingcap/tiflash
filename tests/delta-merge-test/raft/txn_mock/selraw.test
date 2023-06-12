@@ -29,7 +29,6 @@
 
 => DBGInvoke __try_flush_region(4)
 
-#=> selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from default.test
 => DBGInvoke query_mapped('selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
 │ test1 │     1 │          50 │                 0 │

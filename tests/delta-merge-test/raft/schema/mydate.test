@@ -70,7 +70,6 @@
 └───────────────────────┴─────────────┘
 
 => DBGInvoke query_mapped('select ConvertTimeZoneFromUTC(col_1, ''Asia/Shanghai'') as col_1 , _tidb_rowid from \$d.\$t', default, test)
-#=> select ConvertTimeZoneFromUTC(col_1, 'Asia/Shanghai') as col_1 , _tidb_rowid from default.test
 ┌───────────────col_1───┬─_tidb_rowid─┐
 │ 1991-11-12 19:12:13.2 │          51 │
 │ 1991-01-14 19:00:01.0 │          52 │
@@ -79,6 +78,5 @@
 └───────────────────────┴─────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-#=> drop table if exists default.test
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __enable_schema_sync_service('true')

@@ -21,7 +21,7 @@
 ## create table
 => DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', '', 'dt')
 => DBGInvoke __refresh_mapped_table_schema(default, test_dm)
-#=> select database,name,engine from system.tables where database='default' and name='test_dm'
+
 => DBGInvoke query_mapped('select tidb_database,tidb_name,engine from system.tables where database=''\$d'' and name=''\$t''', default, test_dm)
 ┌─database─┬─name────┬─engine─────┐
 │ default  │ test_dm │ DeltaMerge │
@@ -65,13 +65,11 @@
 └───────┴─────────────┘
 
 ## read with specify tso
-#=> select * from default.test_dm " --read_tso "20000000
 >> DBGInvoke query_mapped('select * from \$d.\$t', default, test_dm) " --read_tso "20000000
 ┌─col_1─┬─_tidb_rowid─┐
 │    11 │           2 │
 └───────┴─────────────┘
 
-#=> select * from default.test_dm " --read_tso "20000003
 >> DBGInvoke query_mapped('select * from \$d.\$t', default, test_dm) " --read_tso "20000003
 ┌─col_1─┬─_tidb_rowid─┐
 │    13 │           1 │

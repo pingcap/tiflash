@@ -204,7 +204,7 @@
 ┌─database─┬─name─┬─engine─────┐
 │ default  │ test │ DeltaMerge │
 └──────────┴──────┴────────────┘
-#=> select a, b from default.test order by _tidb_rowid
+
 => DBGInvoke query_mapped('select a,b from \$d.\$t order by _tidb_rowid', default, test)
 ┌─a────┬─b─┐
 │ test │ 1 │
