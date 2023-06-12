@@ -62,7 +62,8 @@ OperatorStatus Operator::await()
     // When op_status changes to waiting, profile_info.update has already been called, meaning that profile_info::StopWatch::last_ns has been updated to that moment in time.
     // When op_status changes to non-waiting, calling profile_info.update record the time of waiting.
     //
-    //    ┌─────────────────────waiting time────────────────────────┐
+    //      profile_info.update()                   profile_info.update()
+    //             ┌────────────────waiting time───────────┐
     // [non-waiting, waiting, waiting, waiting, .., waiting, non-waiting]
 
     if (op_status != OperatorStatus::WAITING)
