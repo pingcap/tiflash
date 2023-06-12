@@ -94,6 +94,11 @@ ExecTaskStatus EventTask::awaitImpl()
     EXECUTE(doAwaitImpl);
 }
 
+UInt64 EventTask::getScheduleDuration() const
+{
+    return event->getScheduleDuration();
+}
+
 #undef EXECUTE
 
 } // namespace DB

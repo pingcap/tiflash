@@ -45,7 +45,7 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
     header_ = join->joinBlock(header_probe_process_info, true);
 }
 
-void HashJoinProbeTransformOp::operateSuffix()
+void HashJoinProbeTransformOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
 }

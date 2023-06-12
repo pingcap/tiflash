@@ -26,6 +26,9 @@ void AggregateFinalSpillEvent::scheduleImpl()
 
 void AggregateFinalSpillEvent::finishImpl()
 {
+    auto dur = getFinishDuration();
+    for (const auto & profile_info : profile_infos)
+        profile_info->execution_time += dur;
     agg_context.reset();
 }
 } // namespace DB

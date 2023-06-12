@@ -163,7 +163,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
-void PhysicalAggregation::buildPipelineExecGroup(
+void PhysicalAggregation::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

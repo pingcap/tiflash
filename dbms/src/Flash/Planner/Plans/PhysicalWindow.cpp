@@ -89,7 +89,7 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
-void PhysicalWindow::buildPipelineExecGroup(
+void PhysicalWindow::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
