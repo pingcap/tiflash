@@ -155,14 +155,12 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartiton(const SchemaD
     {
         // rename old_table_id(non-partition table)
         {
-            auto new_table_info = getter.getTableInfo(diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id);
+            auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id);
             if (new_table_info == nullptr)
             {
                 LOG_ERROR(log, "miss table in TiKV: {}", diff.affected_opts[0].table_id);
                 return;
             }
-
-            auto new_db_info = getter.getDatabase(diff.affected_opts[0].schema_id);
 
             auto & tmt_context = context.getTMTContext();
             auto storage = tmt_context.getStorages().get(keyspace_id, diff.old_table_id);
@@ -178,14 +176,12 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartiton(const SchemaD
 
         // rename table_id(the exchanged partition table)
         {
-            auto new_table_info = getter.getTableInfo(diff.schema_id, diff.table_id);
+            auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(diff.schema_id, diff.table_id);
             if (new_table_info == nullptr)
             {
                 LOG_ERROR(log, "miss table in TiKV: {}", diff.table_id);
                 return;
             }
-
-            auto new_db_info = getter.getDatabase(diff.schema_id);
 
             auto & tmt_context = context.getTMTContext();
             auto storage = tmt_context.getStorages().get(keyspace_id, diff.table_id);
@@ -265,13 +261,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::TruncateTablePartition:
     case SchemaActionType::ActionReorganizePartition:
     {
-        auto db_info = getter.getDatabase(diff.schema_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "miss database: {}", diff.schema_id);
-            return;
-        }
-        applyPartitionDiff(db_info, diff.table_id, shared_mutex_for_table_id_map);
+        applyPartitionDiff(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::ExchangeTablePartition:
@@ -282,13 +272,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::SetTiFlashReplica:
     case SchemaActionType::UpdateTiFlashReplicaStatus:
     {
-        auto db_info = getter.getDatabase(diff.schema_id);
-        if (db_info == nullptr)
-        {
-            LOG_ERROR(log, "miss database: {}", diff.schema_id);
-            return;
-        }
-        applySetTiFlashReplica(db_info, diff.table_id);
+        applySetTiFlashReplica(diff.schema_id, diff.table_id);
         break;
     }
     default:
@@ -308,20 +292,20 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID database_id, TableID table_id)
 {
-    auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
-    if (unlikely(latest_table_info == nullptr))
+    auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
+    if (unlikely(table_info == nullptr))
     {
         LOG_ERROR(log, "miss old table id in TiKV {}", table_id);
         return;
     }
 
-    if (latest_table_info->replica_info.count == 0)
+    if (table_info->replica_info.count == 0)
     {
         // if set 0, drop table in TiFlash
         auto & tmt_context = context.getTMTContext();
-        auto storage = tmt_context.getStorages().get(keyspace_id, latest_table_info->id);
+        auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
             LOG_ERROR(log, "miss table in TiFlash {}", table_id);
@@ -334,24 +318,24 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
     {
         // if set not 0, we first check whether the storage exists, and then check the replica_count and available
         auto & tmt_context = context.getTMTContext();
-        auto storage = tmt_context.getStorages().get(keyspace_id, latest_table_info->id);
+        auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (storage != nullptr)
         {
             if (storage->getTombstone() == 0)
             {
                 auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
                 auto storage_replica_info = managed_storage->getTableInfo().replica_info;
-                if (storage_replica_info.count == latest_table_info->replica_info.count && storage_replica_info.available == latest_table_info->replica_info.available)
+                if (storage_replica_info.count == table_info->replica_info.count && storage_replica_info.available == table_info->replica_info.available)
                 {
                     return;
                 }
                 else
                 {
-                    if (latest_table_info->isLogicalPartitionTable())
+                    if (table_info->isLogicalPartitionTable())
                     {
-                        for (const auto & part_def : latest_table_info->partition.definitions)
+                        for (const auto & part_def : table_info->partition.definitions)
                         {
-                            auto new_part_table_info = latest_table_info->producePartitionTableInfo(part_def.id, name_mapper);
+                            auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
                             auto part_storage = tmt_context.getStorages().get(keyspace_id, new_part_table_info->id);
                             if (part_storage != nullptr)
                             {
@@ -366,7 +350,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
                         }
                     }
                     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-                    storage->alterSchemaChange(alter_lock, *latest_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*latest_table_info), context);
+                    storage->alterSchemaChange(alter_lock, *table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*latest_table_info), context);
                 }
                 return;
             }
@@ -388,9 +372,9 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInf
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id, std::shared_mutex & shared_mutex_for_table_id_map)
+void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_id, TableID table_id)
 {
-    auto table_info = getter.getTableInfo(db_info->id, table_id);
+    auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (table_info == nullptr)
     {
         LOG_ERROR(log, "miss old table id in TiKV {}", table_id);
@@ -410,11 +394,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
         return;
     }
 
-    applyPartitionDiff(db_info, table_info, storage, shared_mutex_for_table_id_map);
+    applyPartitionDiff(db_info, table_info, storage);
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage, std::shared_mutex & shared_mutex_for_table_id_map)
+void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage)
 {
     const auto & orig_table_info = storage->getTableInfo();
     if (!orig_table_info.isLogicalPartitionTable())
@@ -479,14 +463,12 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id, TableID table_id)
 {
-    auto new_table_info = getter.getTableInfo(database_id, table_id);
+    auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (new_table_info == nullptr)
     {
         LOG_ERROR(log, "miss table in TiKV: {}", table_id);
         return;
     }
-
-    auto new_db_info = getter.getDatabase(database_id);
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
@@ -589,15 +571,13 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id)
 {
-    auto table_info = getter.getTableInfo(database_id, table_id);
+    auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (table_info == nullptr)
     {
         // this table is dropped.
         LOG_DEBUG(log, "Table {} not found, may have been dropped.", table_id);
         return;
     }
-
-    auto db_info = getter.getDatabase(database_id);
 
     if (table_info->isLogicalPartitionTable())
     {

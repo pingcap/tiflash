@@ -84,9 +84,9 @@ private:
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
-    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id, std::shared_mutex & shared_mutex_for_table_id_map);
+    void applyPartitionDiff(DatabaseID database_id, TableID table_id);
 
-    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage, std::shared_mutex & shared_mutex_for_table_id_map);
+    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 
     void applyRenameTable(DatabaseID database_id, TiDB::TableID table_id);
 
@@ -94,7 +94,7 @@ private:
 
     void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
 
-    void applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applySetTiFlashReplica(DatabaseID database_id, TableID table_id);
 
     // not safe for concurrent use, please acquire shared_mutex_for_table_id_map lock first
     void emplacePartitionTableID(TableID partition_id, TableID table_id);
