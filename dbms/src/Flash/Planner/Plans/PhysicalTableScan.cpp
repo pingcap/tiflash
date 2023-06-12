@@ -25,6 +25,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
+
 #include "Common/TiFlashException.h"
 
 namespace DB
@@ -64,7 +65,7 @@ NamesWithAliases buildTableScanProjectionCols(
     }
     return schema_project_cols;
 }
-}
+} // namespace
 
 PhysicalTableScan::PhysicalTableScan(
     const String & executor_id_,
