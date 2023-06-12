@@ -446,17 +446,18 @@ try
     ASSERT_EQ(5, files.size());
 
     auto delegator = storage->getAndMaybeInitStore()->path_pool->getStableDiskDelegator();
+    std::unordered_map<UInt64, String> file_id_to_path;
     for (const auto & file : files)
     {
         auto parent_path = delegator.getDTFilePath(file.id);
         auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        file_id_to_path.emplace(file.id, file_path);
         ASSERT_TRUE(Poco::File(file_path).exists());
     }
     stream->cancel(); // remove all data
     for (const auto & file : files)
     {
-        auto parent_path = delegator.getDTFilePath(file.id);
-        auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        auto file_path = file_id_to_path[file.id];
         ASSERT_FALSE(Poco::File(file_path).exists());
     }
 }
