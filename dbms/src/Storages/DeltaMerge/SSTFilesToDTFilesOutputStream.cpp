@@ -323,6 +323,9 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
     {
         try
         {
+            // If DMFile has pre-ingested, remove it.
+            storage->getStore()->removePreIngestFile(file->fileId(), /*throw_on_not_exist*/false);
+            // Remove local DMFile.
             file->remove(context.getFileProvider());
         }
         catch (...)

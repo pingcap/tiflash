@@ -1298,32 +1298,21 @@ try
 
     auto fnames0 = list_files(tmp_path);
 
-    Poco::File(cp_dir1).createDirectories();
-    Poco::File(cp_dir2).createDirectories();
-    Poco::File(tmp_path + "/" + "not_checkpoint").createDirectories();
+    auto create_dir = [](const String & name) {
+        Poco::File f(name);
+        f.createDirectories();
+        ASSERT_TRUE(f.exists()) << name;
+    };
 
-    {
-        auto fnames1 = list_files(tmp_path);
-        std::vector<String> diff;
-        std::set_difference(fnames1.begin(), fnames1.end(), fnames0.begin(), fnames0.end(), std::inserter(diff, diff.begin()));
-        ASSERT_EQ(diff.size(), 3) << fmt::format("fnames1: {}, fnames0: {}, diff: {}", fnames1, fnames0, diff);
-        std::sort(diff.begin(), diff.end());
-        ASSERT_EQ(diff[0], cp_dir1.getFileName());
-        ASSERT_EQ(diff[1], cp_dir2.getFileName());
-        ASSERT_EQ(diff[2], "not_checkpoint");
-    }
+    create_dir(cp_dir1);
+    create_dir(cp_dir2);
+    create_dir(tmp_path + "/" + "not_checkpoint");
 
     uni_ps_service->removeAllLocalCheckpointFiles();
 
-    {
-        auto fnames2 = list_files(tmp_path);
-        std::vector<String> diff;
-        std::set_difference(fnames2.begin(), fnames2.end(), fnames0.begin(), fnames0.end(), std::inserter(diff, diff.begin()));
-        ASSERT_EQ(diff.size(), 1) << fmt::format("fnames2: {}, fnames0: {}, diff: {}", fnames2, fnames0, diff);
-        ;
-        std::sort(diff.begin(), diff.end());
-        ASSERT_EQ(diff[0], "not_checkpoint");
-    }
+    ASSERT_FALSE(Poco::File(cp_dir1).exists()) << cp_dir1;
+    ASSERT_FALSE(Poco::File(cp_dir2).exists()) << cp_dir2;
+    ASSERT_TRUE(Poco::File(tmp_path + "/" + "not_checkpoint").exists()) << tmp_path;
 }
 CATCH
 

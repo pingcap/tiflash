@@ -550,11 +550,17 @@ bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
     return true;
 }
 
-void StableDiskDelegator::removeDTFile(UInt64 file_id)
+void StableDiskDelegator::removeDTFile(UInt64 file_id, bool throw_on_not_exist)
 {
     std::lock_guard lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
-    RUNTIME_CHECK_MSG(iter != pool.dt_file_path_map.end(), "Cannot find DMFile when removing, file_id={}", file_id);
+    if (iter == pool.dt_file_path_map.end())
+    {
+        if (throw_on_not_exist)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find DMFile when removing, file_id={}", file_id);
+        else
+            return;
+    }
     UInt32 index = iter->second;
     const auto file_size = pool.main_path_infos[index].file_size_map.at(file_id);
     pool.dt_file_path_map.erase(file_id);
@@ -596,11 +602,17 @@ void StableDiskDelegator::enableGCForRemoteDTFile(UInt64 local_page_id)
     }
 }
 
-void StableDiskDelegator::removeRemoteDTFile(UInt64 local_external_id)
+void StableDiskDelegator::removeRemoteDTFile(UInt64 local_external_id, bool throw_on_not_exist)
 {
     std::lock_guard lock{pool.mutex};
     auto iter = pool.remote_dt_file_size_map.find(local_external_id);
-    RUNTIME_CHECK(iter != pool.remote_dt_file_size_map.end());
+    if (iter == pool.remote_dt_file_size_map.end())
+    {
+        if (throw_on_not_exist)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find remote DMFile when removing, file_id={}", local_external_id);
+        else
+            return;
+    }
     // update global used size
     pool.global_capacity->freeRemoteUsedSize(pool.keyspace_id, iter->second.second);
     pool.remote_dt_file_size_map.erase(iter);
