@@ -35,6 +35,8 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     return addResourceGroup(resp.group()).first;
 }
 
+// gjt todo: low token notify
+// cleanup resource group
 void LocalAdmissionController::startBackgroudJob()
 {
     while (!stopped.load())
