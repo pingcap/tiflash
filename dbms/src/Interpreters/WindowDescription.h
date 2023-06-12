@@ -26,7 +26,7 @@
 
 
 namespace DB
-{
+{    
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
@@ -62,13 +62,15 @@ struct WindowFrame
 
     BoundaryType begin_type = BoundaryType::Unbounded;
     UInt64 begin_offset = 0;
-    double begin_range = 0;
+    double begin_range = 0; // TODO delete this field
     bool begin_preceding = true;
+    Int32 begin_range_auxiliary_column_index = -1;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
-    double end_range = 0;
+    double end_range = 0; // TODO delete this field
     bool end_preceding = false;
+    Int32 end_range_auxiliary_column_index = -1;
 
     bool operator==(const WindowFrame & other) const
     {

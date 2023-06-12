@@ -39,6 +39,12 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Columns/IColumn.h>
+#include <tipb/executor.pb.h>
+#include <tipb/expression.pb.h>
+#include <Functions/minus.h>
+#include <Functions/plus.h>
 
 
 namespace DB
@@ -58,6 +64,12 @@ extern const String sum_on_partial_result;
 
 namespace
 {
+inline const String BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME = "begin_range_frame_auxiliary_cal_numeric";
+inline const String END_FRAME_AUX_CALCU_CONST_COL_NAME = "end_range_frame_auxiliary_cal_numeric";
+    
+inline const String BEGIN_FRAME_AUX_RES_COL_NAME = "begin_aux_res_col_name";
+inline const String END_FRAME_AUX_RES_COL_NAME = "end_aux_res_col_name";
+
 bool isUInt8Type(const DataTypePtr & type)
 {
     return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
@@ -191,6 +203,112 @@ void appendWindowDescription(
     window_description.window_functions_descriptions.emplace_back(std::move(window_function_description));
     window_columns.emplace_back(func_string, result_type);
     source_columns.emplace_back(func_string, result_type);
+}
+
+template <bool is_begin>
+ColumnWithTypeAndName createAuxiliaryColumnAndName(const ColumnWithTypeAndName & order_by_col_type_and_name, const Field & const_val)
+{
+    ColumnPtr auxiliary_col = order_by_col_type_and_name.type->createColumnConst(1, const_val);
+    ColumnWithTypeAndName auxiliary_col_and_name;
+    auxiliary_col_and_name.column = auxiliary_col;
+    auxiliary_col_and_name.type = order_by_col_type_and_name.type;
+
+    if constexpr (is_begin)
+        auxiliary_col_and_name.name = BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME;
+    else
+        auxiliary_col_and_name.name = END_FRAME_AUX_CALCU_CONST_COL_NAME;
+    
+    return auxiliary_col_and_name;
+}
+
+template <bool is_begin, bool is_desc>
+FunctionBuilderPtr getFunctionBuilderPtr(const Context & context)
+{
+    String aux_func_name;
+    if ((is_desc && is_begin) || (!is_desc && !is_begin))
+        aux_func_name = NameMinus::name;
+    else if ((is_desc && !is_begin) || (!is_desc && is_begin))
+        aux_func_name = NamePlus::name;
+    
+    String res_col_name;
+    if constexpr (is_begin)
+        res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
+    else
+        res_col_name = END_FRAME_AUX_RES_COL_NAME;
+    
+    return FunctionFactory::instance().get(aux_func_name, context);
+}
+
+template <bool is_begin>
+void addRangeFrameAuxiliaryFunctionImpl(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
+{
+    // Prepare something
+    bool is_desc = (window_desc.order_by[0].direction == -1);
+    const Block & sample_block = actions->getSampleBlock();
+    const String & order_by_col_name = window_desc.order_by[0].column_name;
+    const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
+
+    // sql: .... XXX preceding and YYY following ...
+    // const_val is the numeric 'XXX' or 'YYY'
+    Field const_val;
+    if constexpr (is_begin)
+        const_val = decodeLiteral(window.frame().start().calcfuncs()[0]); // TODO this `calcfuncs` name will be changed
+    else
+        const_val = decodeLiteral(window.frame().end().calcfuncs()[0]); // TODO this `calcfuncs` name will be changed
+
+    String res_col_name;
+    if constexpr (is_begin)
+        res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
+    else
+        res_col_name = END_FRAME_AUX_RES_COL_NAME;
+    
+    // Add the auxiliary const column
+    //
+    // Before executing window function, we need to execute an arithmatic function that calculates
+    // the order_by_column with a const number.
+    // This const number should be contained in a const column and the following piece of codes
+    // are for creating this const column.
+    ColumnWithTypeAndName auxiliary_col_and_name = createAuxiliaryColumnAndName<is_begin>(order_by_col_type_and_name, const_val);
+    auto begin_add_col_action = ExpressionAction::addColumn(auxiliary_col_and_name);
+    actions->add(begin_add_col_action);
+
+    // Get the auxiliary function
+    FunctionBuilderPtr function_builder;
+    if (is_desc)
+        function_builder = getFunctionBuilderPtr<is_begin, true>(context);
+    else
+        function_builder = getFunctionBuilderPtr<is_begin, false>(context);
+    const ExpressionAction & aux_func = ExpressionAction::applyFunction(function_builder, {order_by_col_name, auxiliary_col_and_name.name}, res_col_name);
+    actions->add(aux_func);
+}
+
+std::pair<size_t, size_t> getAuxiliaryColumnIndexs(ExpressionActionsPtr & actions)
+{
+    Block tmp_block = actions->getSampleBlock();
+    actions->execute(tmp_block);
+    size_t begin_aux_col_idx = tmp_block.getPositionByName(BEGIN_FRAME_AUX_RES_COL_NAME);
+    size_t end_aux_col_idx = tmp_block.getPositionByName(END_FRAME_AUX_RES_COL_NAME);
+    return std::make_pair(begin_aux_col_idx, end_aux_col_idx);
+}
+
+// Add a function generating a new auxiliary column that help the implementation of range frame type
+void addRangeFrameAuxiliaryFunction(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
+{
+    // Execute this function only when the frame type is Range
+    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+        return;
+    
+    assert(window_desc.order_by.size() == 1);
+    assert(window.frame().start().calcfuncs().size() == 1);
+
+    // For begin frame
+    addRangeFrameAuxiliaryFunctionImpl<true>(window_desc, actions, window, context);
+    // For end frame
+    addRangeFrameAuxiliaryFunctionImpl<false>(window_desc, actions, window, context);
+
+    auto aux_col_idxs = getAuxiliaryColumnIndexs(actions);
+    window_desc.frame.begin_range_auxiliary_column_index = aux_col_idxs.first;
+    window_desc.frame.end_range_auxiliary_column_index = aux_col_idxs.second;
 }
 } // namespace
 
@@ -638,6 +756,9 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     {
         window_description.setWindowFrame(window.frame());
     }
+
+    // Prepare auxiliary function for range frame type
+    addRangeFrameAuxiliaryFunction(window_description, step.actions, window, context);
 
     appendWindowColumns(window_description, window, step.actions);
     // set required output for window funcs's arguments.
