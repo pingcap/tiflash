@@ -86,7 +86,7 @@ public:
 
     const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
 
-    virtual IOProfileInfoPtr getIOProfileInfo() const { return IOProfileInfo::createForLocal(profile_info_ptr); }
+    virtual IOProfileInfoPtr getIOProfileInfo() const { throw Exception("Unsupport"); }
 
 protected:
     virtual void operatePrefixImpl() {}

@@ -44,6 +44,8 @@ public:
 
     String getName() const override;
 
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
 protected:
     void operateSuffixImpl() override;
 

@@ -54,6 +54,8 @@ public:
         return "UnorderedSourceOp";
     }
 
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
 protected:
     void operatePrefixImpl() override
     {
