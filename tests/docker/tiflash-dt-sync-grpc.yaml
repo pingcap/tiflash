@@ -20,7 +20,7 @@ services:
   tiflash0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
-      - ./config/tiflash_dt_async_grpc.toml:/config.toml:ro
+      - ./config/tiflash_dt_sync_grpc.toml:/config.toml:ro
       - ./data/tiflash:/tmp/tiflash/data
       - ./log/tiflash:/tmp/tiflash/log
       - ..:/tests
