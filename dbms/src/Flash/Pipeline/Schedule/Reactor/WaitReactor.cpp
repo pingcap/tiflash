@@ -105,8 +105,7 @@ void WaitReactor::tryYield()
         if (spin_count == 640)
         {
             spin_count = 0;
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(2ms);
+            sched_yield();
         }
     }
 }
