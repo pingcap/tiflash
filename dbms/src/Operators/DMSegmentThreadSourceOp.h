@@ -44,9 +44,11 @@ public:
 
     String getName() const override;
 
-    void operateSuffix() override;
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
+    void operateSuffixImpl() override;
+
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus executeIOImpl() override;

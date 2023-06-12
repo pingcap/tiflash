@@ -54,7 +54,6 @@ void recordJoinExecuteInfo(
     RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(

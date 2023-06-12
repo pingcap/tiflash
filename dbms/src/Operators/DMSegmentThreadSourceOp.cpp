@@ -53,7 +53,7 @@ String DMSegmentThreadSourceOp::getName() const
     return NAME;
 }
 
-void DMSegmentThreadSourceOp::operateSuffix()
+void DMSegmentThreadSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
 }
