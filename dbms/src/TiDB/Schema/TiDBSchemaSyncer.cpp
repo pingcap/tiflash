@@ -180,30 +180,30 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 
 /// Help: do we need a lock for syncTableSchema for each table?
 /// I roughly think we don't need a lock here, because we will catch the lock for storage later.
-/// but i'm not quite sure.
+/// but I'm not quite sure.
 template <bool mock_getter, bool mock_mapper>
-bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID table_id_)
+bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID physical_table_id)
 {
-    LOG_INFO(log, "Start sync table schema, table_id: {}", table_id_);
+    LOG_INFO(log, "Start sync table schema, table_id: {}", physical_table_id);
     auto getter = createSchemaGetter(keyspace_id);
 
-    // get table_id(logical_table_id) and database_id based on table_id_,
-    // if the table is a partition table, table_id != table_id_, otherwise, table_id = table_id_;
-    auto [find, database_id, table_id] = findDatabaseIDAndTableID(table_id_);
+    // get logical_table_id and database_id based on physical_table_id,
+    // if the table is a partition table, logical_table_id != physical_table_id, otherwise, logical_table_id = physical_table_id;
+    auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
     if (!find)
     {
-        LOG_WARNING(log, "Can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", table_id_);
+        LOG_WARNING(log, "Can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", physical_table_id);
         syncSchemas(context);
-        std::tie(find, database_id, table_id) = findDatabaseIDAndTableID(table_id_);
+        std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
         {
-            LOG_ERROR(log, "Still can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id", table_id_);
+            LOG_ERROR(log, "Still can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id", physical_table_id);
             return false;
         }
     }
 
     SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
-    builder.applyTable(database_id, table_id, table_id_);
+    builder.applyTable(database_id, logical_table_id, physical_table_id);
 
     return true;
 }

@@ -96,7 +96,7 @@ public:
 
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
-    bool syncTableSchema(Context & context, TableID table_id_) override;
+    bool syncTableSchema(Context & context, TableID physical_table_id) override;
 
     void removeTableID(TableID table_id) override
     {

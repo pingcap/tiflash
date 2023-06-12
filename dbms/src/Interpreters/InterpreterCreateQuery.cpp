@@ -559,7 +559,10 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                                 wait_useconds / 1000);
                             usleep(wait_useconds); // sleep 20ms
                         }
-                        return {};
+                        else
+                        {
+                            return {};
+                        }
                     }
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for retry 20 times");
                     e.rethrow();

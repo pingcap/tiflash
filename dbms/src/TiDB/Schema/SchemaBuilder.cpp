@@ -1098,16 +1098,16 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, TableID table_id, TableID partition_table_id)
+void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, TableID logical_table_id, TableID physical_table_id)
 {
-    auto table_info = getter.getTableInfo(database_id, table_id);
+    auto table_info = getter.getTableInfo(database_id, logical_table_id);
     if (table_info == nullptr)
     {
-        LOG_ERROR(log, "miss table in TiFlash : {}.{}", database_id, table_id);
+        LOG_ERROR(log, "miss table in TiFlash : {}.{}", database_id, logical_table_id);
         return;
     }
 
-    if (table_id != partition_table_id)
+    if (logical_table_id != physical_table_id)
     {
         if (!table_info->isLogicalPartitionTable())
         {
@@ -1116,7 +1116,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
         }
         try
         {
-            table_info = table_info->producePartitionTableInfo(partition_table_id, name_mapper);
+            table_info = table_info->producePartitionTableInfo(physical_table_id, name_mapper);
         }
         catch (const Exception & e)
         {
@@ -1129,7 +1129,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     }
 
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(keyspace_id, partition_table_id);
+    auto storage = tmt_context.getStorages().get(keyspace_id, physical_table_id);
     if (storage == nullptr)
     {
         auto db_info = getter.getDatabase(database_id);
