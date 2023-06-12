@@ -350,7 +350,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
                         }
                     }
                     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-                    storage->alterSchemaChange(alter_lock, *table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*latest_table_info), context);
+                    storage->alterSchemaChange(alter_lock, *table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(*table_info), context);
                 }
                 return;
             }
