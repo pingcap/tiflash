@@ -289,6 +289,7 @@ std::vector<TableID> MockTiDB::newTables(
 {
     std::lock_guard lock(tables_mutex);
     std::vector<TableID> table_ids;
+    table_ids.reserve(tables.size());
     if (databases.find(database_name) == databases.end())
     {
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);

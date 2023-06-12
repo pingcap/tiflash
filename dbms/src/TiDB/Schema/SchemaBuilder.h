@@ -98,6 +98,7 @@ private:
 
     // not safe for concurrent use, please acquire shared_mutex_for_table_id_map lock first
     void emplacePartitionTableID(TableID partition_id, TableID table_id);
+    void emplaceTableID(TableID table_id, DatabaseID database_id);
 
     void applyCreateTable(DatabaseID database_id, TableID table_id);
 

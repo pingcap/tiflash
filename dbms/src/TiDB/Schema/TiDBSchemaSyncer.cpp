@@ -26,6 +26,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
     auto getter = createSchemaGetter(keyspace_id);
     Int64 version = getter.getVersion();
 
+    // TODO: we need support metrics contains keyspace info.
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
@@ -55,15 +56,12 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
 
         LOG_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
-        GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
 
         if (cur_version <= 0)
         {
             // first load all db and tables
             Int64 version_after_load_all = syncAllSchemas(context, getter, version);
-
             cur_version = version_after_load_all;
-            GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
         }
         else
         {
@@ -105,12 +103,6 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
         {
             --used_version;
             break;
-        }
-
-        if (!diff)
-        {
-            LOG_ERROR(log, "Diff in version {} is empty", used_version);
-            continue;
         }
 
         if (diff->regenerate_schema_map)

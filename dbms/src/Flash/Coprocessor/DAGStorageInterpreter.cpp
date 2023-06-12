@@ -478,7 +478,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const LoggerPtr & log)
 {
-    auto columns = table_scan.getColumns();
+    const auto & columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
     for (const auto & column : cur_columns)
     {
