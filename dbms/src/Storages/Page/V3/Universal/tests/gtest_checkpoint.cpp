@@ -1304,14 +1304,14 @@ try
         ASSERT_TRUE(f.exists()) << name;
     };
 
-    create_dir(cp_dir1);
-    create_dir(cp_dir2);
+    create_dir(cp_dir1.getFileName());
+    create_dir(cp_dir2.getFileName());
     create_dir(tmp_path + "/" + "not_checkpoint");
 
     uni_ps_service->removeAllLocalCheckpointFiles();
 
-    ASSERT_FALSE(Poco::File(cp_dir1).exists()) << cp_dir1;
-    ASSERT_FALSE(Poco::File(cp_dir2).exists()) << cp_dir2;
+    ASSERT_FALSE(Poco::File(cp_dir1).exists()) << cp_dir1.getFileName();
+    ASSERT_FALSE(Poco::File(cp_dir2).exists()) << cp_dir2.getFileName();
     ASSERT_TRUE(Poco::File(tmp_path + "/" + "not_checkpoint").exists()) << tmp_path;
 }
 CATCH
