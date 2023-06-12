@@ -471,7 +471,12 @@ try
         page_storage->write(std::move(batch));
     }
     // mock that local files are generated, but uploading to remote data source is failed
-    dumpCheckpoint(/*upload_success*/ false);
+    try
+    {
+        dumpCheckpoint(/*upload_success*/ false);
+        FAIL() << "Uploading checkpoint failed would throw exception, should not come here.";
+    }
+    catch (...)
     {
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
@@ -1301,7 +1306,7 @@ try
         auto fnames1 = list_files(tmp_path);
         std::vector<String> diff;
         std::set_difference(fnames1.begin(), fnames1.end(), fnames0.begin(), fnames0.end(), std::inserter(diff, diff.begin()));
-        ASSERT_EQ(diff.size(), 3);
+        ASSERT_EQ(diff.size(), 3) << fmt::format("fnames1: {}, fnames0: {}, diff: {}", fnames1, fnames0, diff);
         std::sort(diff.begin(), diff.end());
         ASSERT_EQ(diff[0], cp_dir1.getFileName());
         ASSERT_EQ(diff[1], cp_dir2.getFileName());
@@ -1314,7 +1319,8 @@ try
         auto fnames2 = list_files(tmp_path);
         std::vector<String> diff;
         std::set_difference(fnames2.begin(), fnames2.end(), fnames0.begin(), fnames0.end(), std::inserter(diff, diff.begin()));
-        ASSERT_EQ(diff.size(), 1);
+        ASSERT_EQ(diff.size(), 1) << fmt::format("fnames2: {}, fnames0: {}, diff: {}", fnames2, fnames0, diff);
+        ;
         std::sort(diff.begin(), diff.end());
         ASSERT_EQ(diff[0], "not_checkpoint");
     }
