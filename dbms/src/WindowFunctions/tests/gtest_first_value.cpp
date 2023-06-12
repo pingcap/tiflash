@@ -112,13 +112,23 @@ public:
              toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
              toNullableVec<FloatType>(/*value*/ {{}, {}, 3, 4, 5, {}, 7, 8, 9, 10, {}, 12, 13})});
     }
+
+    template <typename Type>
+    void testSimpleNumeriicType()
+    {
+        MockWindowFrame frame;
+        frame.type = tipb::WindowFrameType::Ranges;
+        frame.start = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
+
+        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
+    }
 };
 
-TEST_F(FirstValue, firstValue)
+TEST_F(FirstValue, firstValueWithRowsFrameType)
 try
 {
     {
-        // frame type: unbounded
+        // boundry type: unbounded
         executeFunctionAndAssert(
             toVec<String>({"1", "2", "2", "2", "2", "6", "6", "6", "6", "6", "11", "11", "11"}),
             FirstValue(value_col),
@@ -135,7 +145,7 @@ try
     }
 
     {
-        // frame type: offset
+        // boundry type: offset
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Rows;
         frame.start = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
