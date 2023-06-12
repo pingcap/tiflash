@@ -457,6 +457,7 @@ try
     stream->cancel(); // remove all data
     for (const auto & file : files)
     {
+        ASSERT_TRUE(delegator.getDTFilePath(file.id, /*throw_on_not_exists*/ false).empty());
         auto file_path = file_id_to_path[file.id];
         ASSERT_FALSE(Poco::File(file_path).exists());
     }
