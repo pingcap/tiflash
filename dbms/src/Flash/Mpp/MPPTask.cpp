@@ -304,12 +304,13 @@ void MPPTask::unregisterTask()
 
 void MPPTask::initMemoryTracker(MPPTaskManagerPtr & task_manager)
 {
+    /// all the mpp tasks of the same mpp query shares the same memory tracker
     auto [query_memory_tracker, aborted_reason] = task_manager->getOrCreateQueryMemoryTracker(id.query_id, context);
     if (!aborted_reason.empty())
         throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
-    /// all the mpp tasks of the same mpp query shares the same memory tracker
-    memory_tracker = query_memory_tracker;
-    current_memory_tracker = memory_tracker.get();
+    assert(query_memory_tracker != nullptr);
+    /// set query_memory_tracker to current_memory_tracker, and it will eventually be saved in `process_list_entry`
+    current_memory_tracker = query_memory_tracker.get();
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)

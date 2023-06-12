@@ -140,7 +140,6 @@ private:
     mpp::TaskMeta meta;
     MPPTaskId id;
 
-    MemoryTrackerPtr memory_tracker;
     ContextPtr context;
 
     MPPTaskManager * manager;
