@@ -49,9 +49,6 @@
 #include <mutex>
 #include <tuple>
 
-#include "Storages/Transaction/RegionCFDataBase.h"
-#include "Storages/Transaction/Types.h"
-
 namespace DB
 {
 using namespace TiDB;
