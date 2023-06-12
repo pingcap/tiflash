@@ -19,18 +19,18 @@
 
 namespace DB
 {
-SharedQueuePtr SharedQueue::build(size_t producer, size_t consumer)
+SharedQueuePtr SharedQueue::build(size_t producer, size_t consumer, Int64 max_buffered_bytes)
 {
     RUNTIME_CHECK(producer > 0 && consumer > 0);
     // The queue size is same as UnionBlockInputStream = concurrency * 5.
-    size_t queue_size = std::max(producer, consumer) * 5;
-    return std::make_shared<SharedQueue>(queue_size, producer);
+    CapacityLimits queue_limits(std::max(producer, consumer) * 5, max_buffered_bytes);
+    return std::make_shared<SharedQueue>(queue_limits, producer);
 }
 
 SharedQueue::SharedQueue(
-    size_t queue_size,
+    CapacityLimits queue_limits,
     size_t init_producer)
-    : queue(queue_size)
+    : queue(queue_limits, [](const Block & block) { return block.allocatedBytes(); })
     , active_producer(init_producer)
 {
 }

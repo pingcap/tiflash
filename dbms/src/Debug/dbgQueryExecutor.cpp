@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/UnionBlockInputStream.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
-#include <Flash/Mpp/MPPTask.h>
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/KVStore.h>
@@ -72,9 +72,7 @@ BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::Exc
             /*req_id=*/"",
             /*executor_id=*/"",
             /*fine_grained_shuffle_stream_count=*/0,
-            context.getSettings().local_tunnel_version,
-            context.getSettings().async_recv_version,
-            context.getSettings().recv_queue_size);
+            context.getSettingsRef());
     BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
     return ret;
 }
@@ -263,7 +261,7 @@ BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, co
     return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
 }
 
-std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+BlockInputStreamPtr executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
@@ -287,7 +285,8 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
         auto partition_id = root_task_partition_ids[i];
         res.emplace_back(prepareRootExchangeReceiverWithMultipleContext(TiFlashTestEnv::getGlobalContext(TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
     }
-    return res;
+    auto top_stream = std::make_shared<UnionBlockInputStream<>>(res, BlockInputStreams{}, res.size(), 0, "mpp_root");
+    return top_stream;
 }
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)

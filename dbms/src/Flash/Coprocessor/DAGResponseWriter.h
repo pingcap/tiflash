@@ -42,7 +42,6 @@ public:
     /// flush cached blocks for batch writer
     virtual void flush() = 0;
     virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;

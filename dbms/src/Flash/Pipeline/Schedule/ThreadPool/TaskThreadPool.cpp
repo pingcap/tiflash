@@ -64,12 +64,13 @@ void TaskThreadPool<Impl>::loop(size_t thread_no)
 template <typename Impl>
 void TaskThreadPool<Impl>::doLoop(size_t thread_no)
 {
+    setThreadName(Impl::NAME);
+
     metrics.incThreadCnt();
     SCOPE_EXIT({ metrics.decThreadCnt(); });
 
     auto thread_no_str = fmt::format("thread_no={}", thread_no);
     auto thread_logger = logger->getChild(thread_no_str);
-    setThreadName(thread_no_str.c_str());
     LOG_INFO(thread_logger, "start loop");
 
     TaskPtr task;
@@ -102,10 +103,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
         if (status != Impl::TargetStatus || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
-        {
-            metrics.updateTaskMaxtimeOnRound(total_time_spent);
             break;
-        }
     }
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();

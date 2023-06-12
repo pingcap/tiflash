@@ -87,7 +87,7 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 

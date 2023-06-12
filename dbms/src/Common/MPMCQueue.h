@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/CapacityLimits.h>
 #include <Common/Exception.h>
 #include <Common/SimpleIntrusiveNode.h>
 #include <Common/nocopyable.h>
@@ -132,27 +133,18 @@ public:
     using Result = MPMCQueueResult;
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
 
-    explicit MPMCQueue(size_t capacity_)
-        : capacity(capacity_)
-        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
-        , get_auxiliary_memory_usage([](const T &) { return 0; })
-        , element_auxiliary_memory(capacity, 0)
-        , data(capacity * sizeof(T))
-    {
-    }
-
-    /// max_auxiliary_memory_usage_ <= 0 means no limit on auxiliary memory usage
-    MPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
-        : capacity(capacity_)
-        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+    MPMCQueue(
+        const CapacityLimits & capacity_limits_,
+        ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; })
+        : capacity_limits(capacity_limits_)
         , get_auxiliary_memory_usage(
-              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+              capacity_limits.max_bytes == std::numeric_limits<Int64>::max()
                   ? [](const T &) {
                         return 0;
                     }
                   : std::move(get_auxiliary_memory_usage_))
-        , element_auxiliary_memory(capacity, 0)
-        , data(capacity * sizeof(T))
+        , element_auxiliary_memory(capacity_limits.max_size, 0)
+        , data(capacity_limits.max_size * sizeof(T))
     {
     }
 
@@ -291,7 +283,7 @@ public:
     {
         std::unique_lock lock(mu);
         assert(write_pos >= read_pos && current_auxiliary_memory_usage >= 0);
-        return (write_pos - read_pos >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage);
+        return (write_pos - read_pos >= capacity_limits.max_size || current_auxiliary_memory_usage >= capacity_limits.max_bytes);
     }
 
     const String & getCancelReason() const
@@ -366,7 +358,7 @@ private:
             ///    This need carefully procesing in `assignObj`.
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
-            if (current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+            if (current_auxiliary_memory_usage < capacity_limits.max_bytes)
                 writer_head.notifyNext();
             return Result::OK;
         }
@@ -395,7 +387,7 @@ private:
         if constexpr (need_wait)
         {
             auto pred = [&] {
-                return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage) || !isNormal();
+                return (write_pos - read_pos < capacity_limits.max_size && current_auxiliary_memory_usage < capacity_limits.max_bytes) || !isNormal();
             };
             if (!wait(lock, writer_head, pred, deadline))
                 is_timeout = true;
@@ -403,7 +395,7 @@ private:
 
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
-        if (isNormal() && (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage))
+        if (isNormal() && (write_pos - read_pos < capacity_limits.max_size && current_auxiliary_memory_usage < capacity_limits.max_bytes))
         {
             void * addr = getObjAddr(write_pos);
             assigner(addr);
@@ -414,7 +406,7 @@ private:
 
             /// See comments in `popObj`.
             reader_head.notifyNext();
-            if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && current_auxiliary_memory_usage < max_auxiliary_memory_usage && write_pos - read_pos < capacity)
+            if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && current_auxiliary_memory_usage < capacity_limits.max_bytes && write_pos - read_pos < capacity_limits.max_size)
                 writer_head.notifyNext();
             return Result::OK;
         }
@@ -458,7 +450,7 @@ private:
 
     ALWAYS_INLINE void * getObjAddr(Int64 pos)
     {
-        pos = (pos % capacity) * sizeof(T);
+        pos = (pos % capacity_limits.max_size) * sizeof(T);
         return &data[pos];
     }
 
@@ -502,7 +494,7 @@ private:
     {
         if constexpr (read)
         {
-            auto & elem_value = element_auxiliary_memory[pos % capacity];
+            auto & elem_value = element_auxiliary_memory[pos % capacity_limits.max_size];
             current_auxiliary_memory_usage -= elem_value;
             elem_value = 0;
         }
@@ -510,22 +502,21 @@ private:
         {
             auto auxiliary_memory = get_auxiliary_memory_usage(getObj(pos));
             current_auxiliary_memory_usage += auxiliary_memory;
-            element_auxiliary_memory[pos % capacity] = auxiliary_memory;
+            element_auxiliary_memory[pos % capacity_limits.max_size] = auxiliary_memory;
         }
     }
 
 private:
-    const Int64 capacity;
-    /// max_auxiliary_memory_usage is the bound of all the element's auxiliary memory
+    /// capacity_limits.max_bytes is the bound of all the element's auxiliary memory
     /// for an element stored in the queue, it will take two kinds of memory
     /// 1. the memory took by the element itself: sizeof(T) bytes, it is a constant value and already reserved in `data`
     /// 2. the auxiliary memory of the element, for example, if the element type is std::vector<Int64>,
     ///    then the auxiliary memory for each element is sizeof(Int64) * element.capacity()
     /// If the element stored in the queue has auxiliary memory usage, and the user wants to set a bound for the total
     /// auxiliary memory usage, then the user should provide the function to calculate the auxiliary memory usage
-    /// Note: unlike capacity, max_auxiliary_memory_usage is actually a soft-limit because we need to make at least
-    /// one element can be pushed to the queue even if its auxiliary memory exceeds max_auxiliary_memory_usage
-    const Int64 max_auxiliary_memory_usage;
+    /// Note: unlike capacity, capacity_limits.max_bytes is actually a soft-limit because we need to make at least
+    /// one element can be pushed to the queue even if its auxiliary memory exceeds capacity_limits.max_bytes
+    const CapacityLimits capacity_limits;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
 
     mutable std::mutex mu;

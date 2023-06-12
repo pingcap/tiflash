@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -81,12 +80,9 @@ private:
 
     BlockInputStreams mock_streams;
 
-
     const Int64 table_id;
 
     const bool keep_order;
-
-    SourceOps source_ops;
 
     std::vector<Int32> runtime_filter_ids;
 

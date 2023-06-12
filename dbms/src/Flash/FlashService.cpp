@@ -144,6 +144,7 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+        std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
