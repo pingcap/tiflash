@@ -428,7 +428,8 @@ void initAfterWindow(
 
 ExpressionActionsChain::Step createStepForBuildingWindowDescription(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
 {
-    ExpressionActionsChain::Step & step = analyzer->initAndGetLastStep(chain);
+    analyzer->initChain<true>(chain);
+    ExpressionActionsChain::Step & step = chain.getLastStep();
     analyzer->appendSourceColumnsToRequireOutput(step);
     return step;
 }
@@ -436,7 +437,7 @@ ExpressionActionsChain::Step createStepForBuildingWindowDescription(DAGExpressio
 
 ExpressionActionsChain::Step & DAGExpressionAnalyzer::initAndGetLastStep(ExpressionActionsChain & chain) const
 {
-    initChain(chain);
+    initChain<false>(chain);
     return chain.getLastStep();
 }
 
@@ -1279,7 +1280,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
 {
-    initChain(chain);
+    initChain<false>(chain);
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
@@ -1637,22 +1638,39 @@ String DAGExpressionAnalyzer::alignReturnType(
     return updated_name;
 }
 
+template <bool need_col_ptr>
 void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain) const
 {
     if (chain.steps.empty())
     {
         const auto & columns = getCurrentInputColumns();
-        NamesAndTypesList column_list;
         std::unordered_set<String> column_name_set;
-        for (const auto & col : columns)
+        if constexpr (need_col_ptr)
         {
-            if (column_name_set.find(col.name) == column_name_set.end())
+            ColumnsWithTypeAndName columns_with_type_and_name;
+            for (const auto & col : columns)
             {
-                column_list.emplace_back(col.name, col.type);
-                column_name_set.emplace(col.name);
+                if (column_name_set.find(col.name) == column_name_set.end())
+                {
+                    columns_with_type_and_name.emplace_back(col.type, col.name);
+                    column_name_set.emplace(col.name);
+                }
+                chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns_with_type_and_name));
             }
         }
-        chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list));
+        else
+        {
+            NamesAndTypesList column_list;
+            for (const auto & col : columns)
+            {
+                if (column_name_set.find(col.name) == column_name_set.end())
+                {
+                    column_list.emplace_back(col.name, col.type);
+                    column_name_set.emplace(col.name);
+                }
+            }
+            chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list));
+        }
     }
 }
 

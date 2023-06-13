@@ -114,14 +114,36 @@ public:
     }
 
     template <typename Type>
-    void testSimpleNumeriicType()
+    void testIntForRangeFrame()
     {
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Ranges;
-        frame.start = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
+        frame.start = std::make_tuple(tipb::WindowBoundType::Preceding, false, 0);
+        frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
 
-        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
+        std::vector<Int64> frame_start_range{0, 1, 3, 10};
+        std::vector<std::vector<Int64>> res{
+            {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+            {0, 1, 1, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+            {0, 1, 1, 1, 8, 0, 0, 10, 10, 13, 1, 1, 3, 9, 15, 20, 31},
+            {0, 1, 1, 1, 1, 0, 0, 0, 3, 10, 1, 1, 1, 1, 5, 15, 31}};
+
+        for (size_t i = 0; i < frame_start_range.size(); ++i)
+        {
+            frame.start = std::make_tuple(tipb::WindowBoundType::Preceding, false, frame_start_range[i]);
+            executeFunctionAndAssert(
+                toVec<Type>(res[i]),
+                FirstValue(value_col),
+                {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
+                 toVec<Type>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
+                 toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
+                frame);
+        }
     }
+
+    template <typename Type>
+    void testDecimalType()
+    {}
 };
 
 TEST_F(FirstValue, firstValueWithRowsFrameType)
@@ -192,6 +214,14 @@ try
 
     testFloat<Float32>();
     testFloat<Float64>();
+}
+CATCH
+
+TEST_F(FirstValue, firstValueWithRangeFrameType)
+try
+{
+    // TODO support unsigned int.
+    testIntForRangeFrame<Int8>();
 }
 CATCH
 
