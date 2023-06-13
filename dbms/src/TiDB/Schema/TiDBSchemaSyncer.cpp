@@ -132,23 +132,23 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
 }
 
 template <bool mock_getter, bool mock_mapper>
-std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID table_id_)
+std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID physical_table_id)
 {
     std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
 
-    auto database_iter = table_id_to_database_id.find(table_id_);
+    auto database_iter = table_id_to_database_id.find(physical_table_id);
     DatabaseID database_id;
-    TableID table_id = table_id_;
+    TableID logical_table_id = physical_table_id;
     bool find = false;
     if (database_iter == table_id_to_database_id.end())
     {
-        /// if we can't find table_id in table_id_to_database_id,
-        /// we should first try to find it in partition_id_to_logical_id because it could be the pysical table_id of partition tables
-        auto logical_table_iter = partition_id_to_logical_id.find(table_id_);
+        /// if we can't find physical_table_id in table_id_to_database_id,
+        /// we should first try to find it in partition_id_to_logical_id because it could be the pysical_table_id of partition tables
+        auto logical_table_iter = partition_id_to_logical_id.find(physical_table_id);
         if (logical_table_iter != partition_id_to_logical_id.end())
         {
-            table_id = logical_table_iter->second;
-            database_iter = table_id_to_database_id.find(table_id);
+            logical_table_id = logical_table_iter->second;
+            database_iter = table_id_to_database_id.find(logical_table_id);
             if (database_iter != table_id_to_database_id.end())
             {
                 database_id = database_iter->second;
@@ -164,7 +164,7 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 
     if (find)
     {
-        return std::make_tuple(true, database_id, table_id);
+        return std::make_tuple(true, database_id, logical_table_id);
     }
 
     return std::make_tuple(false, 0, 0);
@@ -184,12 +184,12 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
     if (!find)
     {
-        LOG_WARNING(log, "Can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", physical_table_id);
+        LOG_WARNING(log, "Can't find physical_table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", physical_table_id);
         syncSchemas(context);
         std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
         {
-            LOG_ERROR(log, "Still can't find table_id {} in table_id_to_database_id and map partition_id_to_logical_id", physical_table_id);
+            LOG_ERROR(log, "Still can't find physical_table_id {} in table_id_to_database_id and map partition_id_to_logical_id", physical_table_id);
             return false;
         }
     }

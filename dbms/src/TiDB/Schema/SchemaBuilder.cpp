@@ -1055,7 +1055,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
             /// when we do a ddl and insert, then we do reorganize partition.
             /// Besides, reorganize reach tiflash before insert, so when insert,
             /// the old partition_id is not exist, so we just ignore it.
-            LOG_ERROR(log, "producePartitionTableInfo meet exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "producePartitionTableInfo meet exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return;
         }
     }
@@ -1078,7 +1078,6 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
         LOG_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));
 
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
-        auto orig_table_info = storage->getTableInfo();
 
         storage->alterSchemaChange(
             alter_lock,

@@ -80,7 +80,7 @@ private:
         }
     }
 
-    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID table_id_);
+    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID pysical_table_id);
 
 public:
     TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
