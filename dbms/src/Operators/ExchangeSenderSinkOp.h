@@ -37,10 +37,10 @@ public:
         return "ExchangeSenderSinkOp";
     }
 
-    void operatePrefix() override;
-    void operateSuffix() override;
-
 protected:
+    void operatePrefixImpl() override;
+    void operateSuffixImpl() override;
+
     OperatorStatus writeImpl(Block && block) override;
 
     OperatorStatus prepareImpl() override;

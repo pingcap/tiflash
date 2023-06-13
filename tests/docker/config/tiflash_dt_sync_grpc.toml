@@ -51,5 +51,5 @@ ignore_databases = "system,default"
 [profiles]
 [profiles.default]
 enable_local_tunnel = 0
-enable_async_grpc_client = 1
+enable_async_grpc_client = 0
 # max_memory_usage = 0

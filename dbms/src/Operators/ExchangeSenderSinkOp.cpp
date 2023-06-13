@@ -16,12 +16,12 @@
 
 namespace DB
 {
-void ExchangeSenderSinkOp::operatePrefix()
+void ExchangeSenderSinkOp::operatePrefixImpl()
 {
     writer->prepare(getHeader());
 }
 
-void ExchangeSenderSinkOp::operateSuffix()
+void ExchangeSenderSinkOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish write with {} rows", total_rows);
 }

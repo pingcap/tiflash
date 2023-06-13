@@ -48,12 +48,6 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & /*exec_status*/,
-        PipelineExecGroupBuilder & group_builder,
-        Context & /*context*/,
-        size_t /*concurrency*/) override;
-
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
@@ -61,6 +55,13 @@ public:
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
+
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
     void buildProjection(
         PipelineExecutorStatus & exec_status,

@@ -31,7 +31,7 @@ void GeneratedColumnPlaceHolderTransformOp::transformHeaderImpl(Block & header_)
     header_ = action.getHeader();
 }
 
-void GeneratedColumnPlaceHolderTransformOp::operatePrefix()
+void GeneratedColumnPlaceHolderTransformOp::operatePrefixImpl()
 {
     action.checkColumn();
 }

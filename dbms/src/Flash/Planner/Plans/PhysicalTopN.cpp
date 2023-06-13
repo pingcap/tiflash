@@ -67,7 +67,7 @@ void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
     orderStreams(pipeline, max_streams, order_descr, limit, false, context, log);
 }
 
-void PhysicalTopN::buildPipelineExecGroup(
+void PhysicalTopN::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

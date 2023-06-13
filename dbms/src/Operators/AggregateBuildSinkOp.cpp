@@ -45,7 +45,7 @@ OperatorStatus AggregateBuildSinkOp::executeIOImpl()
         : OperatorStatus::NEED_INPUT;
 }
 
-void AggregateBuildSinkOp::operateSuffix()
+void AggregateBuildSinkOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish build with {} rows", total_rows);
 }

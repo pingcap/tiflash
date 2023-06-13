@@ -54,7 +54,7 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
     }
 }
 
-void PhysicalLimit::buildPipelineExecGroup(
+void PhysicalLimit::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
