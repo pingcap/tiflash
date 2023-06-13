@@ -19,6 +19,8 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/Operator.h>
 
+#include "Common/MPMCQueue.h"
+
 namespace DB
 {
 class ExchangeReceiverSourceOp : public SourceOp
@@ -63,7 +65,9 @@ private:
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
     std::queue<Block> block_queue;
-    std::optional<ReceiveResult> recv_res;
+
+    ReceivedMessagePtr recv_msg = nullptr;
+    ReceiveStatus receive_status = ReceiveStatus::empty;
 
     size_t stream_id;
 

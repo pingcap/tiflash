@@ -54,7 +54,7 @@ class ReceivedMessageQueue
 
 public:
     template <bool need_wait>
-    std::pair<MPMCQueueResult, ReceivedMessagePtr> pop(size_t stream_id);
+    MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
     bool pushToMessageChannel(ReceivedMessagePtr & received_message, ReceiverMode mode);

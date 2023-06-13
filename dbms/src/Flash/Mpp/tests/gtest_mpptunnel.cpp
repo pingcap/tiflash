@@ -208,11 +208,12 @@ public:
     {
         while (true)
         {
-            auto pop_result = received_message_queue.pop<true>(0);
-            switch (pop_result.first)
+            ReceivedMessagePtr recv_msg;
+            auto pop_result = received_message_queue.pop<true>(0, recv_msg);
+            switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:
-                received_msgs.push_back(pop_result.second);
+                received_msgs.push_back(recv_msg);
                 break;
             default:
                 return;

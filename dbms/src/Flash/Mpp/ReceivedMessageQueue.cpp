@@ -45,10 +45,9 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
 } // namespace
 
 template <bool need_wait>
-std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
+MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
     MPMCQueueResult res;
-    ReceivedMessagePtr recv_msg;
     if (fine_grained_channel_size > 0)
     {
         if constexpr (need_wait)
@@ -63,13 +62,10 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
         {
             if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
             {
-                ReceivedMessagePtr original_msg;
-                auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
                 /// so even use tryPop, the result must not be empty
+                auto pop_result [[maybe_unused]] = grpc_recv_queue->removeBack();
                 assert(pop_result != MPMCQueueResult::EMPTY);
-                if likely (original_msg != nullptr)
-                    RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
             }
         }
     }
@@ -84,7 +80,7 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
             res = grpc_recv_queue->tryPop(recv_msg);
         }
     }
-    return {res, recv_msg};
+    return res;
 }
 
 template <bool is_force>
@@ -143,8 +139,8 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }
 
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true>(size_t stream_id);
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false>(size_t stream_id);
+template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
+template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template bool ReceivedMessageQueue::pushToMessageChannel<true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 template bool ReceivedMessageQueue::pushToMessageChannel<false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 

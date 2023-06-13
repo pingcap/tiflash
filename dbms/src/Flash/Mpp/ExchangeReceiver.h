@@ -92,12 +92,6 @@ enum class ReceiveStatus
     eof,
 };
 
-struct ReceiveResult
-{
-    ReceiveStatus recv_status;
-    ReceivedMessagePtr recv_msg;
-};
-
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -121,12 +115,13 @@ public:
     void cancel();
     void close();
 
-    ReceiveResult receive(size_t stream_id);
-    ReceiveResult tryReceive(size_t stream_id);
+    ReceiveStatus receive(size_t stream_id, ReceivedMessagePtr & recv_msg);
+    ReceiveStatus tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     ExchangeReceiverResult toExchangeReceiveResult(
         size_t stream_id,
-        ReceiveResult & recv_result,
+        ReceiveStatus receive_status,
+        ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
@@ -187,7 +182,7 @@ private:
         const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(std::pair<MPMCQueueResult, ReceivedMessagePtr> && pop_result);
+    inline ReceiveStatus toReceiveStatus(MPMCQueueResult pop_result);
 
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);

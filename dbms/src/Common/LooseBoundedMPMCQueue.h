@@ -146,6 +146,22 @@ public:
         return MPMCQueueResult::OK;
     }
 
+    MPMCQueueResult removeBack()
+    {
+        std::lock_guard lock(mu);
+
+        if unlikely (status == MPMCQueueStatus::CANCELLED)
+            return MPMCQueueResult::CANCELLED;
+
+        if (queue.empty())
+            return status == MPMCQueueStatus::NORMAL
+                ? MPMCQueueResult::EMPTY
+                : MPMCQueueResult::FINISHED;
+
+        popBack();
+        return MPMCQueueResult::OK;
+    }
+
     size_t size() const
     {
         std::lock_guard lock(mu);

@@ -801,59 +801,59 @@ void ExchangeReceiverBase<RPCContext>::verifyStreamId(size_t stream_id) const
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(std::pair<MPMCQueueResult, ReceivedMessagePtr> && pop_result)
+ReceiveStatus ExchangeReceiverBase<RPCContext>::toReceiveStatus(MPMCQueueResult pop_result)
 {
-    switch (pop_result.first)
+    switch (pop_result)
     {
     case MPMCQueueResult::OK:
-        assert(pop_result.second);
-        return {ReceiveStatus::ok, std::move(pop_result.second)};
+        return ReceiveStatus::ok;
     case MPMCQueueResult::EMPTY:
-        return {ReceiveStatus::empty, nullptr};
+        return ReceiveStatus::empty;
     default:
-        return {ReceiveStatus::eof, nullptr};
+        return ReceiveStatus::eof;
     }
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
+ReceiveStatus ExchangeReceiverBase<RPCContext>::receive(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
     assert(received_message_queue != nullptr);
     verifyStreamId(stream_id);
-    return toReceiveResult(received_message_queue->pop<true>(stream_id));
+    return toReceiveStatus(received_message_queue->pop<true>(stream_id, recv_msg));
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
+ReceiveStatus ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
     assert(received_message_queue != nullptr);
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
-    return toReceiveResult(received_message_queue->pop<false>(stream_id));
+    return toReceiveStatus(received_message_queue->pop<false>(stream_id, recv_msg));
 }
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
     size_t stream_id,
-    ReceiveResult & recv_result,
+    ReceiveStatus receive_status,
+    ReceivedMessagePtr & recv_msg,
     std::queue<Block> & block_queue,
     const Block & header,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    switch (recv_result.recv_status)
+    switch (receive_status)
     {
     case ReceiveStatus::ok:
     {
-        assert(recv_result.recv_msg != nullptr);
-        if (unlikely(recv_result.recv_msg->getErrorPtr() != nullptr))
+        assert(recv_msg != nullptr);
+        if (unlikely(recv_msg->getErrorPtr() != nullptr))
             return ExchangeReceiverResult::newError(
-                recv_result.recv_msg->getSourceIndex(),
-                recv_result.recv_msg->getReqInfo(),
-                recv_result.recv_msg->getErrorPtr()->msg());
+                recv_msg->getSourceIndex(),
+                recv_msg->getReqInfo(),
+                recv_msg->getErrorPtr()->msg());
 
         ExchangeReceiverMetric::subDataSizeMetric(
             data_size_in_queue,
-            recv_result.recv_msg->getPacket().ByteSizeLong());
-        return toDecodeResult(stream_id, block_queue, header, recv_result.recv_msg, decoder_ptr);
+            recv_msg->getPacket().ByteSizeLong());
+        return toDecodeResult(stream_id, block_queue, header, recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:
         return handleUnnormalChannel(block_queue, decoder_ptr);
@@ -869,10 +869,12 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     size_t stream_id,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    auto recv_res = receive(stream_id);
+    ReceivedMessagePtr recv_msg;
+    auto recv_status = receive(stream_id, recv_msg);
     return toExchangeReceiveResult(
         stream_id,
-        recv_res,
+        recv_status,
+        recv_msg,
         block_queue,
         header,
         decoder_ptr);
