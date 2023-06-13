@@ -66,7 +66,7 @@ namespace
 {
 inline const String BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME = "begin_range_frame_auxiliary_cal_numeric";
 inline const String END_FRAME_AUX_CALCU_CONST_COL_NAME = "end_range_frame_auxiliary_cal_numeric";
-    
+
 inline const String BEGIN_FRAME_AUX_RES_COL_NAME = "begin_aux_res_col_name";
 inline const String END_FRAME_AUX_RES_COL_NAME = "end_aux_res_col_name";
 
@@ -217,7 +217,7 @@ ColumnWithTypeAndName createAuxiliaryColumnAndName(const ColumnWithTypeAndName &
         auxiliary_col_and_name.name = BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME;
     else
         auxiliary_col_and_name.name = END_FRAME_AUX_CALCU_CONST_COL_NAME;
-    
+
     return auxiliary_col_and_name;
 }
 
@@ -229,18 +229,18 @@ FunctionBuilderPtr getFunctionBuilderPtr(const Context & context)
         aux_func_name = NameMinus::name;
     else if ((is_desc && !is_begin) || (!is_desc && is_begin))
         aux_func_name = NamePlus::name;
-    
+
     String res_col_name;
     if constexpr (is_begin)
         res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
     else
         res_col_name = END_FRAME_AUX_RES_COL_NAME;
-    
+
     return FunctionFactory::instance().get(aux_func_name, context);
 }
 
 template <bool is_begin>
-void addRangeFrameAuxiliaryFunctionImpl(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
+void addRangeFrameAuxiliaryFunctionActionImpl(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
 {
     // Prepare something
     bool is_desc = (window_desc.order_by[0].direction == -1);
@@ -261,7 +261,7 @@ void addRangeFrameAuxiliaryFunctionImpl(WindowDescription & window_desc, Express
         res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
     else
         res_col_name = END_FRAME_AUX_RES_COL_NAME;
-    
+
     // Add the auxiliary const column
     //
     // Before executing window function, we need to execute an arithmatic function that calculates
@@ -292,23 +292,98 @@ std::pair<size_t, size_t> getAuxiliaryColumnIndexs(ExpressionActionsPtr & action
 }
 
 // Add a function generating a new auxiliary column that help the implementation of range frame type
-void addRangeFrameAuxiliaryFunction(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
+void addRangeFrameAuxiliaryFunctionAction(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
 {
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
-    
+
     assert(window_desc.order_by.size() == 1);
     assert(window.frame().start().calcfuncs().size() == 1);
 
     // For begin frame
-    addRangeFrameAuxiliaryFunctionImpl<true>(window_desc, actions, window, context);
+    addRangeFrameAuxiliaryFunctionActionImpl<true>(window_desc, actions, window, context);
     // For end frame
-    addRangeFrameAuxiliaryFunctionImpl<false>(window_desc, actions, window, context);
+    addRangeFrameAuxiliaryFunctionActionImpl<false>(window_desc, actions, window, context);
 
+    // Update index so that the window function could know the position of auxiliary columns
     auto aux_col_idxs = getAuxiliaryColumnIndexs(actions);
     window_desc.frame.begin_range_auxiliary_column_index = aux_col_idxs.first;
     window_desc.frame.end_range_auxiliary_column_index = aux_col_idxs.second;
+}
+
+// For implementing the range frame type, we add many auxiliary columns
+// and we will remove these columns after the window function.
+void removeAuxiliaryColumns(ExpressionActionsPtr & actions, const tipb::Window & window)
+{
+    // Execute this function only when the frame type is Range
+    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+        return;
+
+    actions->add(ExpressionAction::removeColumn(BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME));
+    actions->add(ExpressionAction::removeColumn(END_FRAME_AUX_CALCU_CONST_COL_NAME));
+    actions->add(ExpressionAction::removeColumn(BEGIN_FRAME_AUX_RES_COL_NAME));
+    actions->add(ExpressionAction::removeColumn(END_FRAME_AUX_RES_COL_NAME));
+}
+
+WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer , const tipb::Window & window)
+{
+    WindowDescription window_description;
+    window_description.partition_by = analyzer->getWindowSortDescription(window.partition_by());
+    window_description.order_by = analyzer->getWindowSortDescription(window.order_by());
+    if (window.has_frame())
+    {
+        window_description.setWindowFrame(window.frame());
+    }
+
+    return window_description;
+}
+
+void initBeforeWindow(
+    DAGExpressionAnalyzer * const analyzer,
+    WindowDescription & window_desc,
+    ExpressionActionsChain & chain,
+    const tipb::Window & window,
+    ExpressionActionsChain::Step & step)
+{
+    // Prepare auxiliary function for range frame type
+    addRangeFrameAuxiliaryFunctionAction(window_desc, step.actions, window, analyzer->context);
+
+    analyzer->appendWindowColumns(window_desc, window, step.actions);
+    // set required output for window funcs's arguments.
+    for (const auto & window_function_description : window_desc.window_functions_descriptions)
+    {
+        for (const auto & argument_name : window_function_description.argument_names)
+            step.required_output.push_back(argument_name);
+    }
+
+    window_desc.before_window = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+}
+
+void initAfterWindow(
+    DAGExpressionAnalyzer * const analyze,
+    WindowDescription & window_desc,
+    ExpressionActionsChain & chain,
+    const tipb::Window & window,
+    size_t source_size)
+{
+    auto & after_window_step = analyze->initAndGetLastStep(chain);
+    removeAuxiliaryColumns(after_window_step.actions, window);
+    analyze->appendCastAfterWindow(after_window_step.actions, window, source_size);
+    window_desc.after_window_columns = analyze->getCurrentInputColumns();
+    analyze->appendSourceColumnsToRequireOutput(after_window_step);
+    window_desc.after_window = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+}
+
+ExpressionActionsChain::Step createStepForBuildingWindowDescription(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
+{
+    ExpressionActionsChain::Step & step = analyzer->initAndGetLastStep(chain);
+    analyzer->appendSourceColumnsToRequireOutput(step);
+    return step;
 }
 } // namespace
 
@@ -745,41 +820,12 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
     ExpressionActionsChain chain;
-    ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
-    appendSourceColumnsToRequireOutput(step);
+    ExpressionActionsChain::Step step = createStepForBuildingWindowDescription(this, chain);
     size_t source_size = getCurrentInputColumns().size();
 
-    WindowDescription window_description;
-    window_description.partition_by = getWindowSortDescription(window.partition_by());
-    window_description.order_by = getWindowSortDescription(window.order_by());
-    if (window.has_frame())
-    {
-        window_description.setWindowFrame(window.frame());
-    }
-
-    // Prepare auxiliary function for range frame type
-    addRangeFrameAuxiliaryFunction(window_description, step.actions, window, context);
-
-    appendWindowColumns(window_description, window, step.actions);
-    // set required output for window funcs's arguments.
-    for (const auto & window_function_description : window_description.window_functions_descriptions)
-    {
-        for (const auto & argument_name : window_function_description.argument_names)
-            step.required_output.push_back(argument_name);
-    }
-
-    window_description.before_window = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-
-    auto & after_window_step = initAndGetLastStep(chain);
-    appendCastAfterWindow(after_window_step.actions, window, source_size);
-    window_description.after_window_columns = getCurrentInputColumns();
-    appendSourceColumnsToRequireOutput(after_window_step);
-    window_description.after_window = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
+    WindowDescription window_description = createAndInitWindowDesc(this, window);
+    initBeforeWindow(this, window_description, chain, window, step);
+    initAfterWindow(this, window_description, chain, window, source_size);
 
     return window_description;
 }
