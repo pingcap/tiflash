@@ -217,6 +217,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     auto local_dir_str = local_dir.toString() + "/";
     SCOPE_EXIT({
         // No matter the local checkpoint files are uploaded successfully or fails, delete them directly.
+        // Since the directory has been created before, it should exists.
         Poco::File(local_dir).remove(true);
     });
 
