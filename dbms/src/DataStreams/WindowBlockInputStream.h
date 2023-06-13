@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Common/Decimal.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
-#include <Common/Decimal.h>
 #include <common/types.h>
 
 #include <deque>
@@ -26,27 +26,6 @@
 
 namespace DB
 {
-namespace Window
-{
-enum class ColumnType
-{
-    UnInitialized = 0,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Float32,
-    Float64,
-    Decimal32,
-    Decimal64,
-    Decimal128,
-    Decimal256
-};
-} // namespace Window
 
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
@@ -95,26 +74,6 @@ struct RowNumber
 /* Implementation details.*/
 struct WindowTransformAction
 {
-private:
-    // Used for calculating the frame start for rows frame type
-    RowNumber stepToFrameStartForRows(const RowNumber & current_row);
-    // Used for calculating the frame end for rows frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRows(const RowNumber & current_row);
-
-    // Used for calculating the frame start for range frame type
-    RowNumber stepToFrameStartForRange(const RowNumber & current_row);
-    // Used for calculating the frame end for range frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRange(const RowNumber & current_row);
-
-    template <typename T>
-    RowNumber stepToFrameStartForRangeImpl(const RowNumber & current_row);
-
-    template <typename T>
-    RowNumber stepToFrameEndForRangeImpl(const RowNumber & current_row);
-
-    // distance is left - right.
-    UInt64 distance(RowNumber left, RowNumber right);
-
 public:
     WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
 
@@ -206,6 +165,39 @@ public:
 
     void appendInfo(FmtBuffer & buffer) const;
 
+private:
+    void stepToFrameStartWithOffsetBoundry();
+    void stepToFrameEndWithOffsetBoundary();
+
+    // Used for calculating the frame start for rows frame type
+    RowNumber stepToFrameStartForRows();
+    // Used for calculating the frame end for rows frame type
+    std::tuple<RowNumber, bool> stepToFrameEndForRows();
+
+    // Used for calculating the frame start for range frame type
+    RowNumber stepToFrameStartForRange();
+    // Used for calculating the frame end for range frame type
+    std::tuple<RowNumber, bool> stepToFrameEndForRange();
+
+    template <bool is_desc>
+    RowNumber stepToFrameStartForRange();
+
+    template <bool is_desc>
+    std::tuple<RowNumber, bool> stepToFrameEndForRange();
+
+    template <typename T, bool is_desc>
+    RowNumber stepToFrameStartForRangeImpl();
+
+    template <typename T, bool is_desc>
+    RowNumber stepToFrameEndForRangeImpl();
+
+    template <typename T, bool is_begin, bool is_desc>
+    RowNumber stepToFrameForRangeImpl();
+
+    // distance is left - right.
+    UInt64 distance(RowNumber left, RowNumber right);
+
+public:
     LoggerPtr log;
 
     bool input_is_finished = false;

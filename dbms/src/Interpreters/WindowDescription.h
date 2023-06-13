@@ -26,7 +26,29 @@
 
 
 namespace DB
-{    
+{
+namespace Window
+{
+enum class ColumnType
+{
+    UnInitialized = 0,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    Decimal32,
+    Decimal64,
+    Decimal128,
+    Decimal256
+};
+} // namespace Window
+
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
@@ -62,13 +84,11 @@ struct WindowFrame
 
     BoundaryType begin_type = BoundaryType::Unbounded;
     UInt64 begin_offset = 0;
-    double begin_range = 0; // TODO delete this field
     bool begin_preceding = true;
     Int32 begin_range_auxiliary_column_index = -1;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
-    double end_range = 0; // TODO delete this field
     bool end_preceding = false;
     Int32 end_range_auxiliary_column_index = -1;
 
@@ -112,6 +132,13 @@ struct WindowDescription
 
     // The window functions that are calculated for this window.
     WindowFunctionDescriptions window_functions_descriptions;
+
+    // Mark the order by column type to avoid type judge
+    // each time we update the start/end frame position.
+    Window::ColumnType col_type;
+
+    // ascending or descending for order by column
+    bool is_desc;
 
     void setWindowFrame(const tipb::WindowFrame & frame_);
 

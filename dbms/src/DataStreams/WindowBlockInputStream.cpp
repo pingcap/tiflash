@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/WindowBlockInputStream.h>
-#include <Interpreters/WindowDescription.h>
-#include <Core/Field.h>
-#include <common/UInt128.h>
-#include <common/types.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <Common/Decimal.h>
 #include <Common/typeid_cast.h>
-#include <Columns/ColumnVector.h>
-#include <Columns/IColumn.h>
+#include <Core/Field.h>
+#include <DataStreams/WindowBlockInputStream.h>
+#include <Interpreters/WindowDescription.h>
+#include <common/UInt128.h>
+#include <common/types.h>
 
 #include <magic_enum.hpp>
 #include <tuple>
@@ -41,58 +41,13 @@ namespace
 template <typename T>
 constexpr bool checkIfSimpleNumericType()
 {
-    return std::is_same_v<T, UInt8>
-        || std::is_same_v<T, UInt16>
-        || std::is_same_v<T, UInt32>
-        || std::is_same_v<T, UInt64>
-        || std::is_same_v<T, Int8>
-        || std::is_same_v<T, Int16>
-        || std::is_same_v<T, Int32>
-        || std::is_same_v<T, Int64>
-        || std::is_same_v<T, Float32>
-        || std::is_same_v<T, Float64>;
+    return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64> || std::is_same_v<T, Float32> || std::is_same_v<T, Float64>;
 }
 
 template <typename T>
 constexpr bool checkIfDecimalType()
 {
-    return std::is_same_v<T, Decimal32>
-        || std::is_same_v<T, Decimal64>
-        || std::is_same_v<T, Decimal128>
-        || std::is_same_v<T, Decimal256>;
-}
-
-Window::ColumnType getColumnType(const ColumnPtr & col_ptr)
-{
-    if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt8;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt16;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt32;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt64;
-    else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int8;
-    else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int16;
-    else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int32;
-    else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int64;
-    else if (const auto * ptr = typeid_cast<const ColumnFloat32 *>(&(*(col_ptr))))
-        return Window::ColumnType::Float32;
-    else if (const auto * ptr = typeid_cast<const ColumnFloat64 *>(&(*(col_ptr))))
-        return Window::ColumnType::Float64;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal32> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal32;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal64> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal64;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal128> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal128;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal256> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal256;
-    throw Exception("Unexpected column type!");
+    return std::is_same_v<T, Decimal32> || std::is_same_v<T, Decimal64> || std::is_same_v<T, Decimal128> || std::is_same_v<T, Decimal256>;
 }
 
 template <typename T>
@@ -117,44 +72,13 @@ T getValue(const ColumnPtr & col_ptr, size_t idx)
         throw Exception("Unexpected column type!");
 }
 
-using CalculateRetType = double;
-
-template <typename T>
-CalculateRetType minusAndAbsofTwoValueImpl(const T & v1, const T & v2)
+template <typename T, bool is_start, bool is_desc>
+bool isInRange(T cursor_value, T current_row_value)
 {
-    // Do not use std::abs as this may be a unsigned type
-    if (v1 > v2)
-        return static_cast<CalculateRetType>(v1 - v2);
-    return static_cast<CalculateRetType>(v2 - v1);
-}
-
-template <typename T>
-CalculateRetType minusAndAbsofTwoValueImpl(const T & v1, const T & v2, UInt32 scale)
-{
-    double v1_val = v1.template toFloat<double>(scale);
-    double v2_val = v2.template toFloat<double>(scale);
-    return std::abs(static_cast<CalculateRetType>(v1_val - v2_val));
-}
-
-// Minus two value and get the abs of the result
-template <typename T>
-CalculateRetType minusAndAbsofTwoValue(const T & v1, const T & v2, UInt32 scale)
-{
-    if constexpr (checkIfSimpleNumericType<T>())
-        return minusAndAbsofTwoValueImpl(v1, v2);
+    if constexpr ((is_start && is_desc) || (!is_start && !is_desc))
+        return cursor_value <= current_row_value;
     else
-        return minusAndAbsofTwoValueImpl(v1, v2, scale);
-}
-
-template <typename T>
-UInt32 getScale(const ColumnPtr & col_ptr)
-{
-    if constexpr (checkIfDecimalType<T>())
-    {
-        const auto * col = static_cast<const ColumnDecimal<T> *>(&(*col_ptr));
-        return col->getScale();
-    }
-    return 0;
+        return cursor_value >= current_row_value;
 }
 } // namespace
 
@@ -405,7 +329,7 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-RowNumber WindowTransformAction::stepToFrameStartForRows(const RowNumber & current_row)
+RowNumber WindowTransformAction::stepToFrameStartForRows()
 {
     auto step_num = window_description.frame.begin_offset;
     auto dist = distance(current_row, partition_start);
@@ -441,7 +365,7 @@ RowNumber WindowTransformAction::stepToFrameStartForRows(const RowNumber & curre
     return result_row;
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRows(const RowNumber & current_row)
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRows()
 {
     auto step_num = window_description.frame.end_offset;
     if (!partition_ended)
@@ -495,48 +419,78 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRows(const R
     return std::make_tuple(frame_end_row, true);
 }
 
-RowNumber WindowTransformAction::stepToFrameStartForRange(const RowNumber & current_row)
+void WindowTransformAction::stepToFrameStartWithOffsetBoundry()
 {
-    if (col_type == Window::ColumnType::UnInitialized)
-        // order_column_indices must contain value as tidb should ensure this.
-        col_type = getColumnType(inputAt(current_row)[order_column_indices[0]]);
+    if (window_description.frame.type == WindowFrame::FrameType::Rows)
+        frame_start = stepToFrameStartForRows();
+    else
+        frame_start = stepToFrameStartForRange();
+}
 
+void WindowTransformAction::stepToFrameEndWithOffsetBoundary()
+{
+    if (window_description.frame.type == WindowFrame::FrameType::Rows)
+        std::tie(frame_end, frame_ended) = stepToFrameEndForRows();
+    else
+        std::tie(frame_end, frame_ended) = stepToFrameEndForRange();
+}
+
+RowNumber WindowTransformAction::stepToFrameStartForRange()
+{
+    if (window_description.is_desc)
+        return stepToFrameStartForRange<true>();
+    else
+        return stepToFrameStartForRange<false>();
+}
+
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
+{
+    if (window_description.is_desc)
+        return stepToFrameEndForRange<true>();
+    else
+        return stepToFrameEndForRange<false>();
+}
+
+template <bool is_desc>
+RowNumber WindowTransformAction::stepToFrameStartForRange()
+{
     switch (col_type)
     {
     case Window::ColumnType::UInt8:
-        return stepToFrameStartForRangeImpl<UInt8>(current_row);
+        return stepToFrameStartForRangeImpl<UInt8, is_desc>();
     case Window::ColumnType::UInt16:
-        return stepToFrameStartForRangeImpl<UInt16>(current_row);
+        return stepToFrameStartForRangeImpl<UInt16, is_desc>();
     case Window::ColumnType::UInt32:
-        return stepToFrameStartForRangeImpl<UInt32>(current_row);
+        return stepToFrameStartForRangeImpl<UInt32, is_desc>();
     case Window::ColumnType::UInt64:
-        return stepToFrameStartForRangeImpl<UInt64>(current_row);
+        return stepToFrameStartForRangeImpl<UInt64, is_desc>();
     case Window::ColumnType::Int8:
-        return stepToFrameStartForRangeImpl<Int8>(current_row);
+        return stepToFrameStartForRangeImpl<Int8, is_desc>();
     case Window::ColumnType::Int16:
-        return stepToFrameStartForRangeImpl<Int16>(current_row);
+        return stepToFrameStartForRangeImpl<Int16, is_desc>();
     case Window::ColumnType::Int32:
-        return stepToFrameStartForRangeImpl<Int32>(current_row);
+        return stepToFrameStartForRangeImpl<Int32, is_desc>();
     case Window::ColumnType::Int64:
-        return stepToFrameStartForRangeImpl<Int64>(current_row);
+        return stepToFrameStartForRangeImpl<Int64, is_desc>();
     case Window::ColumnType::Float32:
-        return stepToFrameStartForRangeImpl<Float32>(current_row);
+        return stepToFrameStartForRangeImpl<Float32, is_desc>();
     case Window::ColumnType::Float64:
-        return stepToFrameStartForRangeImpl<Float64>(current_row);
+        return stepToFrameStartForRangeImpl<Float64, is_desc>();
     case Window::ColumnType::Decimal32:
-        return stepToFrameStartForRangeImpl<Decimal32>(current_row);
+        return stepToFrameStartForRangeImpl<Decimal32, is_desc>();
     case Window::ColumnType::Decimal64:
-        return stepToFrameStartForRangeImpl<Decimal64>(current_row);
+        return stepToFrameStartForRangeImpl<Decimal64, is_desc>();
     case Window::ColumnType::Decimal128:
-        return stepToFrameStartForRangeImpl<Decimal128>(current_row);
+        return stepToFrameStartForRangeImpl<Decimal128, is_desc>();
     case Window::ColumnType::Decimal256:
-        return stepToFrameStartForRangeImpl<Decimal256>(current_row);
+        return stepToFrameStartForRangeImpl<Decimal256, is_desc>();
     default:
         throw Exception("Unexpected column type!");
     }
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange(const RowNumber & current_row)
+template <bool is_desc>
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
 {
     if (!partition_ended)
         // If we find the frame end and the partition_ended is false.
@@ -544,86 +498,72 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange(const 
         // So, we shouldn't do anything before the partition_ended is true.
         return std::make_tuple(RowNumber(), false);
 
-    if (col_type == Window::ColumnType::UnInitialized)
-        // order_column_indices must contain value as tidb should ensure this.
-        col_type = getColumnType(inputAt(current_row)[order_column_indices[0]]);
-
     switch (col_type)
     {
     case Window::ColumnType::UInt8:
-        return std::make_tuple(stepToFrameEndForRangeImpl<UInt8>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<UInt8, is_desc>(), true);
     case Window::ColumnType::UInt16:
-        return std::make_tuple(stepToFrameEndForRangeImpl<UInt16>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<UInt16, is_desc>(), true);
     case Window::ColumnType::UInt32:
-        return std::make_tuple(stepToFrameEndForRangeImpl<UInt32>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<UInt32, is_desc>(), true);
     case Window::ColumnType::UInt64:
-        return std::make_tuple(stepToFrameEndForRangeImpl<UInt64>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<UInt64, is_desc>(), true);
     case Window::ColumnType::Int8:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Int8>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Int8, is_desc>(), true);
     case Window::ColumnType::Int16:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Int16>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Int16, is_desc>(), true);
     case Window::ColumnType::Int32:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Int32>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Int32, is_desc>(), true);
     case Window::ColumnType::Int64:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Int64>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Int64, is_desc>(), true);
     case Window::ColumnType::Float32:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Float32>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Float32, is_desc>(), true);
     case Window::ColumnType::Float64:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Float64>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Float64, is_desc>(), true);
     case Window::ColumnType::Decimal32:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal32>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal32, is_desc>(), true);
     case Window::ColumnType::Decimal64:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal64>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal64, is_desc>(), true);
     case Window::ColumnType::Decimal128:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal128>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal128, is_desc>(), true);
     case Window::ColumnType::Decimal256:
-        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal256>(current_row), true);
+        return std::make_tuple(stepToFrameEndForRangeImpl<Decimal256, is_desc>(), true);
     default:
         throw Exception("Unexpected column type!");
     }
 }
 
-template <typename T>
-RowNumber WindowTransformAction::stepToFrameStartForRangeImpl(const RowNumber & current_row)
+template <typename T, bool is_desc>
+RowNumber WindowTransformAction::stepToFrameStartForRangeImpl()
 {
-    RowNumber cursor = prev_frame_start;
-    const ColumnPtr & cur_row_order_column = inputAt(current_row)[order_column_indices[0]];
-    T current_row_value = getValue<T>(cur_row_order_column, current_row.row);
-
-    // This variable may be useless
-    UInt32 scale = getScale<T>(cur_row_order_column);
-
-    while (cursor < current_row)
-    {
-        const ColumnPtr & cursor_order_column = inputAt(cursor)[order_column_indices[0]];
-        T cursor_value = getValue<T>(cursor_order_column, cursor.row);
-        CalculateRetType res = minusAndAbsofTwoValue(current_row_value, cursor_value, scale);
-
-        if (res <= static_cast<CalculateRetType>(window_description.frame.begin_range))
-            return cursor;
-
-        advanceRowNumber(cursor);
-    }
-    return current_row;
+    return stepToFrameForRangeImpl<T, true, is_desc>();
 }
 
-template <typename T>
-RowNumber WindowTransformAction::stepToFrameEndForRangeImpl(const RowNumber & current_row)
+template <typename T, bool is_desc>
+RowNumber WindowTransformAction::stepToFrameEndForRangeImpl()
+{
+    return stepToFrameForRangeImpl<T, false, is_desc>();
+}
+
+template <typename T, bool is_begin, bool is_desc>
+RowNumber WindowTransformAction::stepToFrameForRangeImpl()
 {
     RowNumber cursor = prev_frame_end;
     const ColumnPtr & cur_row_order_column = inputAt(current_row)[order_column_indices[0]];
     T current_row_value = getValue<T>(cur_row_order_column, current_row.row);
+    size_t cursor_column_idx;
 
-    // This variable may be useless
-    UInt32 scale = getScale<T>(cur_row_order_column);
+    if constexpr (is_begin)
+        cursor_column_idx = window_description.frame.begin_range_auxiliary_column_index;
+    else
+        cursor_column_idx = window_description.frame.end_range_auxiliary_column_index;
 
     while (cursor < partition_end)
     {
-        const ColumnPtr & cursor_order_column = inputAt(cursor)[order_column_indices[0]];
-        T cursor_value = getValue<T>(cursor_order_column, cursor.row);
-        CalculateRetType res = minusAndAbsofTwoValue(current_row_value, cursor_value, scale);
+        const ColumnPtr & cursor_aux_column = inputAt(cursor)[cursor_column_idx];
+        T cursor_value = getValue<T>(cursor_aux_column, cursor.row);
 
-        if (res > static_cast<CalculateRetType>(window_description.frame.begin_range))
+        if (isInRange<T, is_begin, is_desc>(cursor_value, current_row_value))
             return cursor;
 
         advanceRowNumber(cursor);
@@ -674,10 +614,7 @@ void WindowTransformAction::advanceFrameStart()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
-        if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            frame_start = stepToFrameStartForRows(current_row);
-        else
-            frame_start = stepToFrameStartForRange(current_row);
+        stepToFrameStartWithOffsetBoundry();
         frame_started = true;
         break;
     default:
@@ -777,10 +714,7 @@ void WindowTransformAction::advanceFrameEnd()
     }
     case WindowFrame::BoundaryType::Offset:
     {
-        if (window_description.frame.type == WindowFrame::FrameType::Rows)
-            std::tie(frame_end, frame_ended) = stepToFrameEndForRows(current_row);
-        else
-            std::tie(frame_end, frame_ended) = stepToFrameEndForRange(current_row);
+        stepToFrameEndWithOffsetBoundary();
         break;
     }
     default:

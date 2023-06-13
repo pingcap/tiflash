@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
+#include <Columns/IColumn.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
@@ -31,20 +32,19 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
+#include <Functions/minus.h>
+#include <Functions/plus.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Expand.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Columns/IColumn.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
-#include <Functions/minus.h>
-#include <Functions/plus.h>
 
 
 namespace DB
@@ -205,6 +205,39 @@ void appendWindowDescription(
     source_columns.emplace_back(func_string, result_type);
 }
 
+Window::ColumnType getColumnType(const ColumnPtr & col_ptr)
+{
+    if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(col_ptr))))
+        return Window::ColumnType::UInt8;
+    else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(col_ptr))))
+        return Window::ColumnType::UInt16;
+    else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(col_ptr))))
+        return Window::ColumnType::UInt32;
+    else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(col_ptr))))
+        return Window::ColumnType::UInt64;
+    else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(col_ptr))))
+        return Window::ColumnType::Int8;
+    else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(col_ptr))))
+        return Window::ColumnType::Int16;
+    else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(col_ptr))))
+        return Window::ColumnType::Int32;
+    else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(col_ptr))))
+        return Window::ColumnType::Int64;
+    else if (const auto * ptr = typeid_cast<const ColumnFloat32 *>(&(*(col_ptr))))
+        return Window::ColumnType::Float32;
+    else if (const auto * ptr = typeid_cast<const ColumnFloat64 *>(&(*(col_ptr))))
+        return Window::ColumnType::Float64;
+    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal32> *>(&(*(col_ptr))))
+        return Window::ColumnType::Decimal32;
+    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal64> *>(&(*(col_ptr))))
+        return Window::ColumnType::Decimal64;
+    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal128> *>(&(*(col_ptr))))
+        return Window::ColumnType::Decimal128;
+    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal256> *>(&(*(col_ptr))))
+        return Window::ColumnType::Decimal256;
+    throw Exception("Unexpected column type!");
+}
+
 template <bool is_begin>
 ColumnWithTypeAndName createAuxiliaryColumnAndName(const ColumnWithTypeAndName & order_by_col_type_and_name, const Field & const_val)
 {
@@ -291,6 +324,20 @@ std::pair<size_t, size_t> getAuxiliaryColumnIndexs(ExpressionActionsPtr & action
     return std::make_pair(begin_aux_col_idx, end_aux_col_idx);
 }
 
+void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
+{
+    // Execute this function only when the frame type is Range
+    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+        return;
+
+    const Block & sample_block = actions->getSampleBlock();
+    const String & order_by_col_name = window_desc.order_by[0].column_name;
+    const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
+
+    window_desc.col_type = getColumnType(order_by_col_type_and_name.column);
+    window_desc.is_desc = (window_desc.order_by[0].direction == -1);
+}
+
 // Add a function generating a new auxiliary column that help the implementation of range frame type
 void addRangeFrameAuxiliaryFunctionAction(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
 {
@@ -326,7 +373,7 @@ void removeAuxiliaryColumns(ExpressionActionsPtr & actions, const tipb::Window &
     actions->add(ExpressionAction::removeColumn(END_FRAME_AUX_RES_COL_NAME));
 }
 
-WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer , const tipb::Window & window)
+WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer, const tipb::Window & window)
 {
     WindowDescription window_description;
     window_description.partition_by = analyzer->getWindowSortDescription(window.partition_by());
@@ -824,6 +871,7 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     size_t source_size = getCurrentInputColumns().size();
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
+    setOrderByColumnTypeAndDirection(window_description, step.actions, window);
     initBeforeWindow(this, window_description, chain, window, step);
     initAfterWindow(this, window_description, chain, window, source_size);
 
