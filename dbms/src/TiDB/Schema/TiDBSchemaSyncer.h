@@ -144,7 +144,8 @@ public:
         builder.dropAllSchema();
     }
 
-    // just for test
+    // clear all states. 
+    // just for testing restart
     void reset() override
     {
         std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
