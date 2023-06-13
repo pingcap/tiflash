@@ -62,7 +62,12 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
         {
             assert(recv_msg != nullptr);
             if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
-                grpc_recv_queue->dequeue();
+            {
+                auto pop_result [[maybe_unused]] = grpc_recv_queue->dequeue();
+                /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
+                /// so even use tryPop, the result must not be empty
+                assert(pop_result != MPMCQueueResult::EMPTY);
+            }
         }
         return res;
     }
