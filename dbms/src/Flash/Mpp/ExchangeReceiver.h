@@ -182,8 +182,6 @@ private:
         const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveStatus toReceiveStatus(MPMCQueueResult pop_result);
-
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
 
@@ -204,6 +202,8 @@ private:
     }
 
 private:
+    LoggerPtr exc_log;
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -217,8 +217,8 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    std::unique_ptr<ReceivedMessageQueue> received_message_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
+    ReceivedMessageQueue received_message_queue;
 
     std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
 
@@ -229,8 +229,6 @@ private:
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
-
-    LoggerPtr exc_log;
 
     bool collected = false;
     int thread_count = 0;
