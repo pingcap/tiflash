@@ -204,9 +204,9 @@ public:
         return ret;
     }
 
-    MPMCQueueResult removeBack()
+    MPMCQueueResult dequeue()
     {
-        auto ret = recv_queue->removeBack();
+        auto ret = recv_queue->dequeue();
         if (ret == MPMCQueueResult::OK)
             kickCompletionQueue();
         return ret;
