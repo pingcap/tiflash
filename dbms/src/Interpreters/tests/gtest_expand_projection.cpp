@@ -29,7 +29,7 @@ class ExpandProjectionTest : public DB::tests::ProjectionTest
 {
 };
 
-TEST_F(ExpandProjectionTest, literal_projection)
+TEST_F(ExpandProjectionTest, literalProjection)
 try
 {
     // Project literal(null) as nullable<String>

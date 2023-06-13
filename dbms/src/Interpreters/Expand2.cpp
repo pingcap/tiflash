@@ -45,7 +45,7 @@ Block Expand2::next(const Block & block_cache, size_t i_th_project)
     auto ith_projection = leveled_projections_actions[i_th_project];
     ith_projection->execute(cloned_block);
 
-    /// step3: change raw name to unified alias name.
+    /// step3: organize a new block with unified alias name.
     Block new_block;
     auto names_with_alias = leveled_alias_projections[i_th_project];
     for (auto & one_alias : names_with_alias)
