@@ -25,8 +25,9 @@ extern const char random_receiver_async_msg_push_failure_failpoint[];
 
 namespace
 {
-void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
+void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode [[maybe_unused]])
 {
+#ifndef NDEBUG
     switch (mode)
     {
     case ReceiverMode::Local:
@@ -41,6 +42,7 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
     default:
         RUNTIME_ASSERT(false, "Illegal ReceiverMode");
     }
+#endif
 }
 } // namespace
 
