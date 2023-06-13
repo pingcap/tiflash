@@ -324,7 +324,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
@@ -386,7 +386,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     else
     {
         /// If there are several streams, we merge them into one.
-        executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "merge into one for window input");
         assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
@@ -447,6 +447,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             params,
             true,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
@@ -758,7 +759,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams, log, false, "for partial limit");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
 }
@@ -819,7 +820,7 @@ void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
     if (query_block.can_restore_pipeline_concurrency)
-        restoreConcurrency(pipeline, dagContext().final_concurrency, log);
+        restoreConcurrency(pipeline, dagContext().final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()

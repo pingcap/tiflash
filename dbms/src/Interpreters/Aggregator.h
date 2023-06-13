@@ -283,7 +283,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
     ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
     {
         auto * column = static_cast<typename KeyType::ColumnType *>(key_column);
-        column->getData().resize_fill(rows, 0);
+        column->getData().resize_fill(rows);
     }
 
     ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn * key_column)

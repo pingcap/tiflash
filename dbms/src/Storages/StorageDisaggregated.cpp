@@ -308,9 +308,7 @@ void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndReg
         log->identifier(),
         executor_id,
         /*fine_grained_shuffle_stream_count=*/0,
-        context.getSettingsRef().local_tunnel_version,
-        context.getSettings().async_recv_version,
-        context.getSettings().recv_queue_size,
+        context.getSettingsRef(),
         dispatch_reqs);
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
@@ -361,6 +359,9 @@ void StorageDisaggregated::buildReceiverSources(
                 exchange_receiver,
                 /*stream_id=*/0));
     }
+    const String & executor_id = table_scan.getTableScanExecutorID();
+    context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
+    context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
 void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
@@ -383,6 +384,7 @@ void StorageDisaggregated::filterConditions(
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
 

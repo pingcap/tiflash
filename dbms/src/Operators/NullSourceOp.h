@@ -35,6 +35,9 @@ public:
         return "NullSourceOp";
     }
 
+    // When the storage layer data is empty, a NullSource will be filled, so override `getIOProfileInfo` is needed here.
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
 protected:
     OperatorStatus readImpl(Block & block) override
     {

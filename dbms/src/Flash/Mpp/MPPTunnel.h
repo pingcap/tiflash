@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/CapacityLimits.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
@@ -176,9 +177,9 @@ protected:
 class SyncTunnelSender : public TunnelSender
 {
 public:
-    SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    SyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(LooseBoundedMPMCQueue<TrackedMppDataPacketPtr>(queue_size))
+        , send_queue(LooseBoundedMPMCQueue<TrackedMppDataPacketPtr>(queue_limits))
     {}
 
     ~SyncTunnelSender() override;
@@ -220,15 +221,22 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_size, call_, log_)
+        , queue(
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
+              call_,
+              log_)
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_size, func)
+        , queue(
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
+              func)
     {}
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -401,9 +409,9 @@ public:
     using Base = TunnelSender;
     using Base::Base;
 
-    LocalTunnelSenderV1(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    LocalTunnelSenderV1(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(queue_size)
+        , send_queue(queue_limits)
     {}
 
     TrackedMppDataPacketPtr readForLocal();
@@ -478,7 +486,7 @@ public:
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);
@@ -487,7 +495,7 @@ public:
     MPPTunnel(
         const String & tunnel_id_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);
@@ -591,7 +599,7 @@ private:
     String tunnel_id;
 
     std::shared_ptr<MemoryTracker> mem_tracker;
-    const size_t queue_size;
+    const CapacityLimits queue_limit;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
     TunnelSenderMode mode; // Tunnel transfer data mode

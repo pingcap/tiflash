@@ -29,6 +29,7 @@
 namespace DB
 {
 constexpr Int32 batch_packet_count_v1 = 16;
+struct Settings;
 
 struct ExchangeReceiverResult
 {
@@ -112,9 +113,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        Int32 local_tunnel_version_,
-        Int32 async_recv_version_,
-        Int32 recv_queue_size,
+        const Settings & settings,
         const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();

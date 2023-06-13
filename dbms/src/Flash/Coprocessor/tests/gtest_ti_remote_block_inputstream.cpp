@@ -15,8 +15,8 @@
 #include <DataStreams/SquashingTransform.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
@@ -307,6 +307,7 @@ class TestTiRemoteBlockInputStream : public testing::Test
 protected:
     void SetUp() override
     {
+        context = TiFlashTestEnv::getContext();
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = true;
@@ -477,7 +478,8 @@ public:
     }
 
     static std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
-        PacketQueuePtr queue_ptr)
+        PacketQueuePtr queue_ptr,
+        const ContextPtr & context)
     {
         auto receiver = std::make_shared<MockExchangeReceiver>(
             std::make_shared<MockReceiverContext>(queue_ptr, makeFields()),
@@ -486,9 +488,7 @@ public:
             "mock_req_id",
             "mock_exchange_receiver_id",
             0,
-            2,
-            1,
-            0);
+            context->getSettingsRef());
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",
@@ -505,7 +505,7 @@ public:
         prepareQueue(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
 
-        auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr);
+        auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr, context);
         receiver_stream->readPrefix();
         std::vector<Block> decoded_blocks;
         while (const auto & block = receiver_stream->read())
@@ -521,7 +521,7 @@ public:
         auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr);
         prepareQueueV2(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
-        auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr);
+        auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr, context);
         receiver_stream->readPrefix();
         std::vector<Block> decoded_blocks;
         while (const auto & block = receiver_stream->read())
@@ -531,6 +531,7 @@ public:
     }
 
     std::unique_ptr<DAGContext> dag_context_ptr{};
+    ContextPtr context;
 };
 
 TEST_F(TestTiRemoteBlockInputStream, testNoChunkInResponse)

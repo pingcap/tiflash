@@ -133,7 +133,7 @@ public:
         else
         {
             BlockIO io = creator();
-            io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, /*req_id=*/"");
+            io.in = std::make_shared<SharedQueryBlockInputStream>(clients, 0, io.in, /*req_id=*/"");
             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
 
             LOG_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: 1", query_id, clients);
