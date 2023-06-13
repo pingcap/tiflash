@@ -43,7 +43,6 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
         auto await_status = awaitImpl();
         if (await_status == OperatorStatus::HAS_OUTPUT)
         {
-            assert(recv_msg);
             assert(receive_status != ReceiveStatus::empty);
             auto result = exchange_receiver->toExchangeReceiveResult(
                 stream_id,
