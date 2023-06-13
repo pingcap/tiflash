@@ -147,7 +147,7 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
 }
 
 std::tuple<ASTPtr, BlockIO> executeQueryImpl(
-    IQuerySource & query_src,
+    SQLQuerySource & query_src,
     Context & context,
     bool internal,
     QueryProcessingStage::Enum stage)
