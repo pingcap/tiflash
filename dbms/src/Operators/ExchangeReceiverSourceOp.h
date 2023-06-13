@@ -19,8 +19,6 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/Operator.h>
 
-#include "Common/MPMCQueue.h"
-
 namespace DB
 {
 class ExchangeReceiverSourceOp : public SourceOp
