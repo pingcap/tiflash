@@ -550,7 +550,11 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                     LOG_WARNING(Logger::get("InterpreterCreateQuery"), "createTable failed with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
                     for (int i = 0; i < 20; i++) // retry for 400ms
                     {
-                        if (!context.isTableExist(database_name, table_name))
+                        if (context.isTableExist(database_name, table_name))
+                        {
+                            return {};
+                        }
+                        else
                         {
                             const int wait_useconds = 20000;
                             LOG_ERROR(
@@ -558,10 +562,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                                 "createTable failed but table not exist now, \nWe will sleep for {} ms and try again.",
                                 wait_useconds / 1000);
                             usleep(wait_useconds); // sleep 20ms
-                        }
-                        else
-                        {
-                            return {};
                         }
                     }
                     LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for retry 20 times");
