@@ -134,6 +134,15 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
+RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr,
+                                              bool,
+                                              int64_t)
+{
+    auto & x = as_ref(ptr);
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! fn_get_cluster_raftstore_version {}", magic_enum::enum_name(x.cluster_ver));
+    return x.cluster_ver;
+}
+
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
     TiFlashRaftProxyHelper res{};
@@ -143,6 +152,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_make_async_waker = fn_make_async_waker;
     res.fn_handle_batch_read_index = fn_handle_batch_read_index;
     res.fn_get_region_local_state = fn_get_region_local_state;
+    res.fn_get_cluster_raftstore_version = fn_get_cluster_raftstore_version;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;
@@ -792,6 +802,7 @@ void MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 1");
     auto ingest_ids = kvs.preHandleSnapshotToFiles(
         new_kv_region,
         snaps,
@@ -799,10 +810,13 @@ void MockRaftStoreProxy::snapshot(
         term,
         tmt);
 
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 2");
     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
     new_kv_region->setApplied(index, term);
+
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 3");
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(

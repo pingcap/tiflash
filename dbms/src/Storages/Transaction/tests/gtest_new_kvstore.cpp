@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockTiDB.h>
 #include <Storages/Transaction/LearnerRead.h>
+#include <Storages/Transaction/RowCodec.h>
 
 #include "kvstore_helper.h"
 
@@ -526,7 +528,7 @@ try
             // Shall filter out of range kvs.
             // RegionDefaultCFDataTrait will "reconstruct" TiKVKey, without table_id, it is correct since different tables ares in different regions.
             // so we may find conflict if we set the same handle_id here.
-            // hall we remove this constraint?
+            // Shall we remove this constraint?
             auto klo = RecordKVFormat::genKey(table_id - 1, 1, 111);
             auto klo2 = RecordKVFormat::genKey(table_id - 1, 9999, 222);
             auto kro = RecordKVFormat::genKey(table_id + 1, 0, 333);
@@ -639,6 +641,153 @@ try
     auto mvcc_query_info2 = MvccQueryInfo(false, 10);
     mvcc_query_info2.regions_query_info.emplace_back(1, kvr1->version(), kvr1->confVer(), table_id, kvr1->getRange()->rawKeys());
     validateQueryInfo(mvcc_query_info2, regions_snapshot, ctx.getTMTContext(), log);
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, KVStoreExtraDataSnapshot1)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        // ctx.getTMTContext().debugSetKVStore(kvstore);
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        // See `decodeWriteCfValue`.
+        WriteBufferFromOwnString buff;
+        writeChar(RecordKVFormat::CFModifyFlag::PutFlag, buff);
+        EncodeVarUInt(111, buff);
+        std::string value_write = buff.releaseStr();
+        buff.restart();
+        auto && table_info = MockTiDB::instance().getTableInfoByID(table_id);
+        int64_t t = 999;
+        std::vector<Field> f{Field{std::move(t)}};
+        encodeRowV1(*table_info, f, buff);
+        std::string value_default = buff.releaseStr();
+
+        {
+            auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.insert_raw(k1, value_default);
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k1, value_write);
+            write_cf.insert_raw(k2, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
+            auto kvr1 = kvs.getRegion(region_id);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+            ASSERT_EQ(kvr1->writeCFCount(), 1); // k2
+        }
+        MockRaftStoreProxy::FailCond cond;
+        {
+            // Add a new key to trigger another row2col transform.
+            auto kvr1 = kvs.getRegion(region_id);
+            auto k = RecordKVFormat::genKey(table_id, 3, 111);
+            auto [index, term] = proxy_instance->rawWrite(region_id, {k}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            auto [index2, term2] = proxy_instance->rawWrite(region_id, {k}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+            ASSERT_EQ(kvr1->writeCFCount(), 1); // k2
+            UNUSED(term);
+            UNUSED(term2);
+        }
+        {
+            // A normal write to "save" the orphan key.
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            auto kvr1 = kvs.getRegion(region_id);
+            auto [index, term] = proxy_instance->rawWrite(region_id, {k2}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            // After applied this log, the write record is not orphan any more.
+            ASSERT_EQ(kvr1->writeCFCount(), 0);
+            auto [index2, term2] = proxy_instance->rawWrite(region_id, {k2}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(kvr1->writeCFCount(), 0);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 0);
+            UNUSED(term);
+            UNUSED(term2);
+        }
+        {
+            // A orphan key in normal write will still trigger a hard error.
+            auto k = RecordKVFormat::genKey(table_id, 4, 111);
+            auto [index, term2] = proxy_instance->rawWrite(region_id, {k}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            UNUSED(term2);
+            EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+        }
+    }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, KVStoreExtraDataSnapshot2)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    UInt64 region_id = 1;
+    TableID table_id;
+    {
+        region_id = 2;
+        initStorages();
+        KVStore & kvs = getKVS();
+        table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::make_pair(start.toString(), end.toString()));
+        auto r1 = proxy_instance->getRegion(region_id);
+
+        // See `decodeWriteCfValue`.
+        WriteBufferFromOwnString buff;
+        writeChar(RecordKVFormat::CFModifyFlag::PutFlag, buff);
+        EncodeVarUInt(111, buff);
+        std::string value_write = buff.releaseStr();
+
+        {
+            auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k1, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
+            auto kvr1 = kvs.getRegion(region_id);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
+        }
+        {
+            auto k2 = RecordKVFormat::genKey(table_id, 2, 111);
+            MockSSTReader::getMockSSTData().clear();
+            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+            default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            default_cf.freeze();
+            MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+            write_cf.insert_raw(k2, value_write);
+            write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+            write_cf.freeze();
+
+            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
+            auto kvr1 = kvs.getRegion(region_id);
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 2);
+        }
+    }
 }
 CATCH
 

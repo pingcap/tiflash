@@ -47,9 +47,9 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
     return data.removeDataByWriteIt(write_it);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
+std::optional<RegionDataReadInfo> Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error)
 {
-    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex());
+    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex(), hard_error);
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
@@ -70,6 +70,17 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
 
 void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "doInsert {} {}", magic_enum::enum_name(type), key.toDebugString());
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        if (type == ColumnFamilyType::Write)
+        {
+            if (orphanKeysInfo().observeKeyFromNormalWrite(key))
+            {
+                return;
+            }
+        }
+    }
     data.insert(type, std::move(key), std::move(value), mode);
 }
 
@@ -477,9 +488,9 @@ Timepoint Region::lastCompactLogTime() const
     return last_compact_log_time;
 }
 
-Region::CommittedScanner Region::createCommittedScanner(bool use_lock)
+Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
 {
-    return Region::CommittedScanner(this->shared_from_this(), use_lock);
+    return Region::CommittedScanner(this->shared_from_this(), use_lock, need_value);
 }
 
 Region::CommittedRemover Region::createCommittedRemover(bool use_lock)
@@ -495,6 +506,23 @@ std::string Region::toString(bool dump_status) const
 ImutRegionRangePtr Region::getRange() const
 {
     return meta.getRange();
+}
+
+RaftstoreVer Region::getClusterRaftstoreVer()
+{
+    RUNTIME_CHECK_MSG(proxy_helper, "proxy_helper must not be null");
+    return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
+}
+
+void Region::beforePrehandleSnapshot()
+{
+    data.orphan_keys_info.snapshot_index = appliedIndex();
+    data.orphan_keys_info.pre_handling = true;
+}
+
+void Region::afterPrehandleSnapshot()
+{
+    data.orphan_keys_info.pre_handling = false;
 }
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)

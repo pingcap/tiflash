@@ -88,6 +88,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
             persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
+        new_region->orphanKeysInfo().mergeFrom(old_region->orphanKeysInfo());
     }
 
     {
@@ -260,6 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     manage_lock.index.remove(range, region_id);
                 }
             }
+            // Reuse the old region for non-region-related data.
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
             {
@@ -289,15 +291,18 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     TMTContext & tmt)
 {
     std::vector<DM::ExternalDTFileInfo> external_files;
+    new_region->beforePrehandleSnapshot();
     try
     {
         external_files = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
     }
     catch (DB::Exception & e)
     {
+        new_region->afterPrehandleSnapshot();
         e.addMessage(fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }
+    new_region->afterPrehandleSnapshot();
     return external_files;
 }
 
@@ -353,6 +358,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 
             auto & global_settings = context.getGlobalContext().getSettingsRef();
 
+            LOG_DEBUG(&Poco::Logger::get("!!!! fdfd"), "iii");
+
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 log_prefix,
@@ -391,6 +398,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             };
             if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
             {
+                LOG_DEBUG(&Poco::Logger::get("!!!! fdfd"), "ggg");
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
                 try_clean_up();
@@ -412,6 +420,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             }
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
+                LOG_DEBUG(&Poco::Logger::get("!!!! fdfd"), "ggg222");
                 // We can ignore if storage is dropped.
                 LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
                 try_clean_up();

@@ -19,6 +19,8 @@
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
+#include <string_view>
+
 namespace DB
 {
 template <bool is_key>
@@ -147,3 +149,15 @@ private:
 };
 
 } // namespace DB
+
+namespace std
+{
+template <bool is_key>
+struct hash<DB::StringObject<is_key>>
+{
+    size_t operator()(const DB::StringObject<is_key> & k) const
+    {
+        return std::hash<std::string>()(k);
+    }
+};
+} // namespace std

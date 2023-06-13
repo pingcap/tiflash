@@ -540,7 +540,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         ASSERT_EQ(region->dataInfo(), "[write 1 lock 1 default 1 ]");
         {
             // There is a lock.
-            auto iter = region->createCommittedScanner();
+            auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
             auto k = lock->intoLockInfo();
@@ -556,7 +556,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         ASSERT_EQ(0, region->writeCFCount());
         {
             region->remove("lock", RecordKVFormat::genKey(table_id, 3));
-            auto iter = region->createCommittedScanner();
+            auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);
         }

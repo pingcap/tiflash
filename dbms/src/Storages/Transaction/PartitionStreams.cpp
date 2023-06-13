@@ -212,7 +212,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     RegionDataReadInfoList data_list_read;
     DecodedLockCFValuePtr lock_value;
     {
-        auto scanner = region->createCommittedScanner();
+        auto scanner = region->createCommittedScanner(true, need_data_value);
 
         /// Some sanity checks for region meta.
         {
@@ -253,12 +253,13 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
             if (!scanner.hasNext())
                 return data_list_read;
 
+            // If worked with raftstore v2, the final size may not equal to here.
             data_list_read.reserve(scanner.writeMapSize());
 
             // Tiny optimization for queries that need only handle, tso, delmark.
             do
             {
-                data_list_read.emplace_back(scanner.next(need_data_value));
+                data_list_read.emplace_back(scanner.next());
             } while (scanner.hasNext());
         }
     }
@@ -271,7 +272,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
-    auto scanner = region->createCommittedScanner(lock_region);
+    auto scanner = region->createCommittedScanner(lock_region, true);
 
     /// Some sanity checks for region meta.
     if (region->isPendingRemove())
@@ -287,6 +288,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
     do
     {
         data_list_read.emplace_back(scanner.next());
+        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "ReadRegionCommitCache {}", std::get<0>(data_list_read.back()));
     } while (scanner.hasNext());
     return data_list_read;
 }
@@ -299,7 +301,7 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     {
         std::ignore = write_type;
         std::ignore = value;
-
+        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "RemoveRegionCommitCache {} {} {}", handle, commit_ts, StackTrace().toString());
         remover.remove({handle, commit_ts});
     }
 }
@@ -484,13 +486,16 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
               { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 0");
     std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
 
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 1");
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
         return res_block;
 
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 2");
     {
         Stopwatch watch;
         {
@@ -504,10 +509,13 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
     }
 
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 3");
     res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap->column_defines));
 
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 4");
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
+    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 5");
 
     return res_block;
 }

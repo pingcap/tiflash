@@ -298,6 +298,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     {
         log = Logger::get("MockRaftStoreProxy");
         table_id = 1;
+        cluster_ver = RaftstoreVer::V1;
     }
 
     // Mock Proxy will drop read index requests to these regions
@@ -308,6 +309,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
     AsyncWaker::Notifier notifier;
     TableID table_id;
+    RaftstoreVer cluster_ver;
     LoggerPtr log;
 };
 
