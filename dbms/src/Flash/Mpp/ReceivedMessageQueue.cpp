@@ -47,9 +47,9 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
 template <bool need_wait>
 MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
-    MPMCQueueResult res;
     if (fine_grained_channel_size > 0)
     {
+        MPMCQueueResult res;
         if constexpr (need_wait)
         {
             res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
@@ -58,8 +58,9 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
         {
             res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
         }
-        if (recv_msg != nullptr)
+        if (res == MPMCQueueResult::OK)
         {
+            assert(recv_msg != nullptr);
             if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
             {
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
@@ -68,19 +69,19 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                 assert(pop_result != MPMCQueueResult::EMPTY);
             }
         }
+        return res;
     }
     else
     {
         if constexpr (need_wait)
         {
-            res = grpc_recv_queue->pop(recv_msg);
+            return grpc_recv_queue->pop(recv_msg);
         }
         else
         {
-            res = grpc_recv_queue->tryPop(recv_msg);
+            return grpc_recv_queue->tryPop(recv_msg);
         }
     }
-    return res;
 }
 
 template <bool is_force>
