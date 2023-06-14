@@ -19,7 +19,7 @@
 namespace DB
 {
 
-ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::string & name)
+ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::string & name, const KeyspaceID & keyspace_id)
 {
     ResourceGroupPtr group = findResourceGroup(name);
     if (group != nullptr)
@@ -33,12 +33,12 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
         LOG_ERROR(log, "got error when fetch resource group from GAC: {}", resp.error().message());
         return nullptr;
     }
-    return addResourceGroup(resp.group()).first;
+    return addResourceGroup(resp.group(), keyspace_id).first;
 }
 
-// gjt todo: in trickle mode, stop low token notify
 void LocalAdmissionController::startBackgroudJob()
 {
+    setupUniqueClientID();
     while (!stopped.load())
     {
         {
@@ -61,9 +61,8 @@ void LocalAdmissionController::fetchTokensFromGAC()
 {
     // Prepare req.
     // key: ResourceGroup name
-    // gjt todo: keyspace id and ru_consumption_delta
     // val: tuple<token_num_that_will_acquire_from_gac, ru_consumption_delta, keyspace_id
-    std::unordered_map<std::string, double> need_tokens;
+    std::vector<std::tuple<std::string, double, KeyspaceID, double>> need_tokens;
     {
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
@@ -72,24 +71,27 @@ void LocalAdmissionController::fetchTokensFromGAC()
             // gjt todo maybe always <= 0.0
             if (token_need_from_gac <= 0.0)
                 return;
-            bool ok = need_tokens.insert(std::make_pair(resource_group.first, token_need_from_gac)).second;
-            assert(ok);
+            need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getConsumptionDelta()));
         }
     }
     
     resource_manager::TokenBucketsRequest gac_req;
-    // gjt todo: client_unique_id target_request_period_ms
-    gac_req.set_client_unique_id(100);
-    gac_req.set_target_request_period_ms(100);
+    gac_req.set_client_unique_id(unique_client_id);
+    gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS);
 
     for (const auto & ele : need_tokens)
     {
         auto * single_group_req = gac_req.add_requests();
-        single_group_req->set_resource_group_name(ele.first);
+        single_group_req->set_resource_group_name(std::get<0>(ele));
         auto * ru_items = single_group_req->mutable_ru_items();
         auto * req_ru = ru_items->add_request_r_u();
         req_ru->set_type(resource_manager::RequestUnitType::RU);
-        req_ru->set_value(ele.second);
+        req_ru->set_value(std::get<1>(ele));
+
+        auto * tiflash_consumption = single_group_req->add_tiflash_consumption_since_last_request();
+        tiflash_consumption->set_keyspace_id(std::get<2>(ele));
+        auto * consumption = tiflash_consumption->mutable_tiflash_consumption();
+        consumption->set_r_r_u(std::get<3>(ele));
     }
 
     auto grpc_reader_writer = cluster->pd_client->acquireTokenBuckets();
@@ -144,7 +146,6 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                     continue;
                 }
 
-                // gjt todo watch out unit?
                 int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
                 RUNTIME_CHECK(trickle_ms >= 0);
 
@@ -156,7 +157,10 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                 
                 RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
 
-                auto resource_group = getOrCreateResourceGroup(one_resp.resource_group_name());
+                auto resource_group = findResourceGroup(one_resp.resource_group_name());
+
+                if (resource_group == nullptr)
+                    continue;
 
                 if (trickle_ms == 0)
                 {
@@ -166,7 +170,6 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                 else
                 {
                     // GAC doesn't have enough tokens for LAC, start to trickle.
-                    // gjt todo maybe new group?
                     resource_group->reConfigTokenBucketInTrickleMode(added_tokens, capacity, trickle_ms);
                 }
             }
@@ -221,6 +224,5 @@ void LocalAdmissionController::handleBackgroundError(const std::string & err_msg
     LOG_ERROR(log, err_msg);
 }
 
-// gjt todo init
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 } // namespace DB

@@ -39,15 +39,15 @@ void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
     else
     {
         const std::string & name = task->getResourceGroupName();
+        KeyspaceID keyspace_id = task->getKeyspaceID();
         std::lock_guard lock(mu);
 
         auto iter = pipeline_tasks.find(name);
         if (iter == pipeline_tasks.end())
         {
-            ResourceGroupPtr group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(name);
             auto task_queue = std::make_shared<NestedQueueType>();
             task_queue->submit(std::move(task));
-            resource_group_infos.push({group->getPriority(), task_queue, name});
+            resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name, keyspace_id), task_queue, name, keyspace_id});
             pipeline_tasks.insert({name, task_queue});
         }
         else
@@ -76,7 +76,8 @@ void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
 template<typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
-    std::string name;
+    std::string name = task->getResourceGroupName();
+    KeyspaceID keyspace_id = task->getKeyspaceID();
     std::shared_ptr<NestedQueueType> task_queue;
     {
         std::unique_lock lock(mu);
@@ -84,7 +85,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. resource_groups not empty and
         // 2. top priority of resource group is greater than zero(a.k.a. RU > 0)
-        cv.wait(lock, [this, &task_queue] {
+        cv.wait(lock, [this, &task_queue, name, keyspace_id] {
             if unlikely (is_finished)
                 return true;
 
@@ -92,9 +93,8 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 return false;
 
             ResourceGroupInfo group_info = resource_group_infos.top();
-            ResourceGroupPtr resource_group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(std::get<2>(group_info));
             task_queue = std::get<1>(group_info);
-            return resource_group->getPriority() >= 0.0 && !task_queue->empty();
+            return LocalAdmissionController::global_instance->getPriority(name, keyspace_id) >= 0.0 && !task_queue->empty();
         });
     }
 
@@ -112,6 +112,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
 {
     assert(task);
     std::string name = task->getResourceGroupName();
+    KeyspaceID keyspace_id = task->getKeyspaceID();
 
     auto iter = resource_group_statics.find(name);
     if (iter == resource_group_statics.end())
@@ -119,7 +120,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         UInt64 accumulated_cpu_time = inc_value;
         if unlikely (pipelineTaskTimeExceedThreshold(accumulated_cpu_time))
         {
-            updateResourceGroupResource(name, accumulated_cpu_time);
+            updateResourceGroupResource(name, keyspace_id, accumulated_cpu_time);
             accumulated_cpu_time = 0;
         }
         resource_group_statics.insert({name, accumulated_cpu_time});
@@ -129,16 +130,16 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         iter->second += inc_value;
         if (pipelineTaskTimeExceedThreshold(iter->second))
         {
-            updateResourceGroupResource(name, iter->second);
+            updateResourceGroupResource(name, keyspace_id, iter->second);
             iter->second = 0;
         }
     }
 }
 
 template<typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
-    LocalAdmissionController::global_instance->getOrCreateResourceGroup(name)->consumeResource(toRU(consumed_cpu_time), consumed_cpu_time);
+    LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
     {
         std::lock_guard lock(mu);
         updateResourceGroupInfos();
@@ -152,8 +153,8 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfos()
     while (!resource_group_infos.empty())
     {
         const auto & group_info = resource_group_infos.top();
-        auto new_priority = LocalAdmissionController::global_instance->getOrCreateResourceGroup(std::get<2>(group_info))->getPriority();
-        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<1>(group_info), std::get<2>(group_info)));
+        auto new_priority = LocalAdmissionController::global_instance->getPriority(std::get<2>(group_info), std::get<3>(group_info));
+        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<1>(group_info), std::get<2>(group_info), std::get<3>(group_info)));
     }
     resource_group_infos = new_resource_group_infos;
 }

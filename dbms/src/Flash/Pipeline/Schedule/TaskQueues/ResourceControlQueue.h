@@ -45,13 +45,13 @@ private:
     // <resource_group_name, pipeline_tasks>
     using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
-    // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name>
-    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string>;
+    // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name, keyspace_id>
+    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo>;
     using ResourceGroupNameSet = std::unordered_set<std::string>;
 
     // Update used cpu time of resource group.
-    void updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time);
+    void updateResourceGroupResource(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
     // NOTE: not thread safe!

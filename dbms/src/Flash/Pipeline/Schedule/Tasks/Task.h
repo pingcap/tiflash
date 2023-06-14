@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
+#include <Storages/Transaction/Types.h>
 #include <memory.h>
 
 namespace DB
@@ -78,6 +79,11 @@ public:
     {
         return resource_group_name;
     }
+
+    KeyspaceID getKeyspaceID() const
+    {
+        return keyspace_id;
+    }
 public:
     LoggerPtr log;
 
@@ -109,8 +115,9 @@ protected:
 
     bool is_finalized = false;
 
-    // gjt todo
     std::string resource_group_name;
+
+    KeyspaceID keyspace_id;
 };
 using TaskPtr = std::unique_ptr<Task>;
 
