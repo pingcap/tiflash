@@ -638,7 +638,7 @@ try
         }
         db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
-        SCOPE_EXIT({FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);});
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
         ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
         try
         {
@@ -716,10 +716,11 @@ try
                 col_i8_define.name,
                 col_i8_define.id));
         }
-
+        ASSERT_TRUE(store->segments.empty());
+        store->write(*db_context, db_context->getSettingsRef(), block); // Create first segment.
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
-        SCOPE_EXIT({FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);});
-        store->write(*db_context, db_context->getSettingsRef(), block);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
+        store->write(*db_context, db_context->getSettingsRef(), block); // Will not write PS.
         ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
         try
         {
