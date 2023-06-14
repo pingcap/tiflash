@@ -288,7 +288,6 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
     do
     {
         data_list_read.emplace_back(scanner.next());
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "ReadRegionCommitCache {}", std::get<0>(data_list_read.back()));
     } while (scanner.hasNext());
     return data_list_read;
 }
@@ -301,7 +300,6 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     {
         std::ignore = write_type;
         std::ignore = value;
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "RemoveRegionCommitCache {} {} {}", handle, commit_ts, StackTrace().toString());
         remover.remove({handle, commit_ts});
     }
 }

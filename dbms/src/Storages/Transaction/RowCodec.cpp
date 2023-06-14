@@ -538,7 +538,6 @@ bool appendRowV1ToBlock(
         if (f.isNull())
             break;
         ColumnID col_id = f.get<ColumnID>();
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "sd");
         decoded_fields.emplace(col_id, DecodeDatum(cursor, raw_value));
     }
     if (cursor != raw_value.size())

@@ -299,12 +299,10 @@ RegionData & RegionData::operator=(RegionData && rhs)
 void RegionData::OrphanKeysInfo::observeExtraKey(TiKVKey && key)
 {
     remained_keys.insert(std::move(key));
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! observeExtraKey {}", (uint64_t)this);
 }
 
 bool RegionData::OrphanKeysInfo::observeKeyFromNormalWrite(const TiKVKey & key)
 {
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! observeKeyFromNormalWrite");
     return remained_keys.erase(key);
 }
 
@@ -315,7 +313,6 @@ bool RegionData::OrphanKeysInfo::containsExtraKey(const TiKVKey & key)
 
 uint64_t RegionData::OrphanKeysInfo::remainedKeyCount() const
 {
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! remainedKeyCount {} x {} pre_handling {}", (uint64_t)this, remained_keys.size(), pre_handling);
     return remained_keys.size();
 }
 
@@ -323,10 +320,9 @@ uint64_t RegionData::OrphanKeysInfo::remainedKeyCount() const
 void RegionData::OrphanKeysInfo::mergeFrom(const RegionData::OrphanKeysInfo & other)
 {
     // TODO support move.
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! other.remained_keys {}", other.remained_keys.size());
-    for (auto iter = other.remained_keys.begin(); iter != other.remained_keys.end(); iter++)
+    for (const auto & remained_key : other.remained_keys)
     {
-        remained_keys.insert(TiKVKey::copyFrom(*iter));
+        remained_keys.insert(TiKVKey::copyFrom(remained_key));
     }
 }
 

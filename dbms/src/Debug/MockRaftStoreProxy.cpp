@@ -135,11 +135,10 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
 }
 
 RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr,
-                                              bool,
+                                              uint8_t,
                                               int64_t)
 {
     auto & x = as_ref(ptr);
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! fn_get_cluster_raftstore_version {}", magic_enum::enum_name(x.cluster_ver));
     return x.cluster_ver;
 }
 

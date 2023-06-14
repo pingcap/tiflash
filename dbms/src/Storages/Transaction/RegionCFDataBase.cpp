@@ -70,12 +70,10 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
     {
         prev_value = TiKVValue::copyFrom(getTiKVValue(kv_pair.second));
     }
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "RegionCFDataBase SSSSS {}", map.size());
     auto [it, ok] = map.emplace(std::move(kv_pair));
     // We support duplicated kv pairs if they are the same in snapshot.
     // This is because kvs in raftstore v2's snapshot may be overlapped.
     // However, we still not permit duplicated kvs from raft cmd.
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "RegionCFDataBase Insert {}", ok);
 
     if (!ok)
     {
