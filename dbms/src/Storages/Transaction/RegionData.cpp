@@ -129,14 +129,13 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
-        LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! hard_error {} orphan_keys_info.pre_handling {} pk {} data {}", hard_error, orphan_keys_info.pre_handling, pk, map.size());
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
             return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
         {
             if (!hard_error)
             {
-                LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! ddddd hard_error {} orphan_keys_info.pre_handling {}", hard_error, orphan_keys_info.pre_handling);
+                LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "hard_error {} orphan_keys_info.pre_handling {}", hard_error, orphan_keys_info.pre_handling);
                 // We are parsing a raftstore v2 snapshot.
                 if (orphan_keys_info.pre_handling)
                 {

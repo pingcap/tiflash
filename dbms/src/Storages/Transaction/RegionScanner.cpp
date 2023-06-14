@@ -45,20 +45,15 @@ bool Region::CommittedScanner::hasNext()
     }
     else
     {
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "hasNext 1 s {}", write_map_size);
         if (!write_map_size)
             return false;
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "hasNext 2");
         while (write_map_it != write_map_it_end)
         {
-            LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "hasNext 3");
             if (tryNext())
             {
-                LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "hasNext ok");
                 return true;
             }
         }
-        LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "hasNext fail");
         return false;
     }
 }
