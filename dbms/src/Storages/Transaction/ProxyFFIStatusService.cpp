@@ -86,7 +86,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     const size_t max_print_region = 30;
     static const std::chrono::minutes PRINT_LOG_INTERVAL = std::chrono::minutes{5};
     static Timepoint last_print_log_time = Clock::now();
-    // if storage is not created in ch, flash replica should not be available.
     // TODO(iosmanthus): TiDB should support tiflash replica.
     RegionTable & region_table = tmt.getRegionTable();
     region_table.handleInternalRegionsByTable(keyspace_id, table_id, [&](const RegionTable::InternalRegions & regions) {

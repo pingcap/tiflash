@@ -33,7 +33,8 @@ extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
 // TODO: make this interval configurable
-constexpr size_t interval_seconds = 60;
+// constexpr size_t interval_seconds = 60;
+// bg_ddl_sync_schema_interval
 
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_)
@@ -49,7 +50,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             return false;
         },
         false,
-        interval_seconds * 1000);
+        context.getSettingsRef().bg_ddl_sync_schema_interval * 1000);
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
@@ -101,7 +102,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     return false;
                 },
                 false,
-                interval_seconds * 1000);
+                context.getSettingsRef().bg_ddl_sync_schema_interval * 1000);
 
             keyspace_handle_map.emplace(keyspace, task_handle);
         }
