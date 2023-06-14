@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -64,14 +63,14 @@ public:
 
     void updateStreams(Context & context);
 
-    void buildPipelineExecGroup(
+private:
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus &,
         PipelineExecGroupBuilder & group_builder,
-        Context &,
+        Context & context,
         size_t) override;
-
-private:
-    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/ context, size_t /*max_streams*/) override;
 
     void buildRuntimeFilterInLocalStream(Context & context);
 
@@ -81,12 +80,9 @@ private:
 
     BlockInputStreams mock_streams;
 
-
     const Int64 table_id;
 
     const bool keep_order;
-
-    SourceOps source_ops;
 
     std::vector<Int32> runtime_filter_ids;
 

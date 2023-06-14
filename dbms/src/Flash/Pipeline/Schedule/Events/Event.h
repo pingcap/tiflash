@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
@@ -59,6 +60,10 @@ public:
     // return true for source event.
     bool prepare();
 
+    UInt64 getScheduleDuration() const;
+
+    UInt64 getFinishDuration() const;
+
 protected:
     // add task ready to be scheduled.
     void addTask(TaskPtr && task);
@@ -84,7 +89,7 @@ private:
 
     void switchStatus(EventStatus from, EventStatus to);
 
-    void assertStatus(EventStatus expect);
+    void assertStatus(EventStatus expect) const;
 
 protected:
     PipelineExecutorStatus & exec_status;
@@ -107,5 +112,9 @@ private:
 
     // is_source is true if and only if there is no input.
     bool is_source = true;
+
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    UInt64 schedule_duration = 0;
+    UInt64 finish_duration = 0;
 };
 } // namespace DB

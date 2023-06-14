@@ -102,7 +102,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
     }
 
-
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
@@ -110,6 +109,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
+    dag_context.switchToStreamMode();
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
@@ -120,9 +120,14 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 
-    if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
+    if unlikely (!TaskScheduler::instance)
     {
-        LOG_DEBUG(logger, "Can't run by pipeline model, fallback to block inputstream model");
+        LOG_WARNING(logger, "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
+        return {};
+    }
+    if (!Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
+    {
+        LOG_DEBUG(logger, "Can't executed by pipeline model due to unsupported operator, and then fallback to block inputstream model");
         return {};
     }
 
@@ -143,6 +148,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+    dag_context.switchToPipelineMode();
     return {std::move(executor)};
 }
 
@@ -165,6 +171,9 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     if (context.getSettingsRef().enforce_enable_pipeline)
     {
+        RUNTIME_CHECK_MSG(
+            TaskScheduler::instance,
+            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
         RUNTIME_CHECK_MSG(
             context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
             "The pipeline model does not support storage-computing separation with S3 mode, and an error is reported because the setting enforce_enable_pipeline is true.");

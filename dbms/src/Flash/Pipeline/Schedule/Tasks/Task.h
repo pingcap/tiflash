@@ -23,15 +23,15 @@
 namespace DB
 {
 /**
- *    CANCELLED/ERROR/FINISHED
- *               ▲
- *               │
- *  ┌────────────────────────┐
- *  │     ┌──►RUNNING◄──┐    │
- *  │     │             │    │
- *  │     ▼             ▼    │
- *  │ WATITING◄────────►IO   │
- *  └────────────────────────┘
+ *           CANCELLED/ERROR/FINISHED
+ *                      ▲
+ *                      │
+ *         ┌────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐    │
+ * INIT───►│     │             │    │
+ *         │     ▼             ▼    │
+ *         │ WATITING◄────────►IO   │
+ *         └────────────────────────┘
  */
 enum class ExecTaskStatus
 {
@@ -69,7 +69,7 @@ public:
         assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
         current_memory_tracker = mem_tracker_ptr;
     }
-    ALWAYS_INLINE void endTraceMemory()
+    ALWAYS_INLINE static void endTraceMemory()
     {
         CurrentMemoryTracker::submitLocalDeltaMemory();
         current_memory_tracker = nullptr;
@@ -108,7 +108,7 @@ public:
 protected:
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;
-    // To reduce the overheads of `mem_tracker.get()`
+    // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status{ExecTaskStatus::INIT};

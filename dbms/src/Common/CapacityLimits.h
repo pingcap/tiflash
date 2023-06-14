@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,17 @@
 
 #pragma once
 
-#include <memory>
+#include <common/types.h>
 
 namespace DB
 {
-class SourceOp;
-using SourceOpPtr = std::unique_ptr<SourceOp>;
-using SourceOps = std::vector<SourceOpPtr>;
+struct CapacityLimits
+{
+    Int64 max_size;
+    Int64 max_bytes;
+    CapacityLimits(Int64 max_size_, Int64 max_bytes_ = std::numeric_limits<Int64>::max())
+        : max_size(std::max(1, max_size_))
+        , max_bytes(max_bytes_ <= 0 ? std::numeric_limits<Int64>::max() : max_bytes_)
+    {}
+};
 } // namespace DB

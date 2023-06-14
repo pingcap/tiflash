@@ -58,7 +58,7 @@ void PhysicalWindowSort::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     orderStreams(pipeline, max_streams, order_descr, 0, fine_grained_shuffle.enable(), context, log);
 }
 
-void PhysicalWindowSort::buildPipelineExecGroup(
+void PhysicalWindowSort::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

@@ -31,12 +31,22 @@ namespace
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
 ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 {
+#ifdef __APPLE__
 #define M(expect_status, metric_name)                                                \
     case (expect_status):                                                            \
     {                                                                                \
         GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name).Increment(); \
         break;                                                                       \
     }
+#else
+#define M(expect_status, metric_name)                                                                                \
+    case (expect_status):                                                                                            \
+    {                                                                                                                \
+        thread_local auto & metrics_##metric_name = GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name); \
+        (metrics_##metric_name).Increment();                                                                         \
+        break;                                                                                                       \
+    }
+#endif
 
     // It is impossible for any task to change to init status.
     switch (to)
@@ -85,15 +95,8 @@ Task::~Task()
     }
 }
 
-#define CHECK_FINISHED                                        \
-    if unlikely (task_status == ExecTaskStatus::FINISHED      \
-                 || task_status == ExecTaskStatus::ERROR      \
-                 || task_status == ExecTaskStatus::CANCELLED) \
-        return task_status;
-
 ExecTaskStatus Task::execute()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
     switchStatus(executeImpl());
@@ -102,7 +105,6 @@ ExecTaskStatus Task::execute()
 
 ExecTaskStatus Task::executeIO()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
@@ -111,7 +113,6 @@ ExecTaskStatus Task::executeIO()
 
 ExecTaskStatus Task::await()
 {
-    CHECK_FINISHED
     assert(mem_tracker_ptr == current_memory_tracker);
     assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
@@ -128,12 +129,12 @@ void Task::finalize()
     is_finalized = true;
 
     finalizeImpl();
+
+    profile_info.reportMetrics();
 #ifndef NDEBUG
     LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
 #endif // !NDEBUG
 }
-
-#undef CHECK_FINISHED
 
 void Task::switchStatus(ExecTaskStatus to)
 {

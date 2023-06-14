@@ -1497,8 +1497,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // For test mode, TaskScheduler is controlled by test case.
-    bool enable_pipeline = (settings.enable_pipeline || settings.enforce_enable_pipeline) && !global_context->isTest();
-    if (enable_pipeline)
+    bool is_prod = !global_context->isTest();
+    if (is_prod)
     {
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
@@ -1507,11 +1507,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), settings.pipeline_cpu_task_thread_pool_queue_type},
             {get_pool_size(settings.pipeline_io_task_thread_pool_size), settings.pipeline_io_task_thread_pool_queue_type},
         };
-        assert(!TaskScheduler::instance);
+        RUNTIME_CHECK(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
+        LOG_INFO(log, "init pipeline task scheduler");
     }
     SCOPE_EXIT({
-        if (enable_pipeline)
+        if (is_prod)
         {
             assert(TaskScheduler::instance);
             TaskScheduler::instance.reset();

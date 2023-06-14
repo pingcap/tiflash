@@ -24,7 +24,7 @@
 
 namespace DB
 {
-void MergeSortTransformOp::operatePrefix()
+void MergeSortTransformOp::operatePrefixImpl()
 {
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
@@ -46,7 +46,7 @@ void MergeSortTransformOp::operatePrefix()
     }
 }
 
-void MergeSortTransformOp::operateSuffix()
+void MergeSortTransformOp::operateSuffixImpl()
 {
     if likely (merge_impl)
         merge_impl->readSuffix();

@@ -31,7 +31,7 @@ void WindowTransformOp::transformHeaderImpl(Block & header_)
     header_ = action->output_header;
 }
 
-void WindowTransformOp::operateSuffix()
+void WindowTransformOp::operateSuffixImpl()
 {
     if likely (action)
         action->cleanUp();

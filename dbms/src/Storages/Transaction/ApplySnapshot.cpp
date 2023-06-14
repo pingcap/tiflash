@@ -139,6 +139,14 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
+std::pair<UInt64, bool> getTiFlashReplicaSyncInfo(StorageDeltaMergePtr & dm_storage)
+{
+    auto struct_lock = dm_storage->lockStructureForShare(getThreadNameAndID());
+    const auto & replica_info = dm_storage->getTableInfo().replica_info;
+    auto is_syncing = replica_info.count > 0 && replica_info.available.has_value() && !(*replica_info.available);
+    return {replica_info.count, is_syncing};
+}
+
 template <typename RegionPtrWrap>
 void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
@@ -178,7 +186,13 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
                 {
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
-                    dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
+                    auto ingested_bytes = dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
+                    if (auto [count, is_syncing] = getTiFlashReplicaSyncInfo(dm_storage); is_syncing)
+                    {
+                        // For write, 1 RU per KB. Reference: https://docs.pingcap.com/tidb/v7.0/tidb-resource-control
+                        // Only calculate RU of one replica. So each replica reports 1/count consumptions.
+                        TiFlashMetrics::instance().addReplicaSyncRU(keyspace_id, std::ceil(static_cast<double>(ingested_bytes) / 1024.0 / count));
+                    }
                 }
                 else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
                 {
@@ -371,15 +385,16 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         }
         catch (DB::Exception & e)
         {
-            auto try_clean_up = [&stream]() -> void {
-                if (stream != nullptr)
-                    stream->cancel();
-            };
+            if (stream != nullptr)
+            {
+                // Remove all DMFiles.
+                stream->cancel();
+            }
+
             if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
             {
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
-                try_clean_up();
 
                 if (force_decode)
                 {
@@ -400,7 +415,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             {
                 // We can ignore if storage is dropped.
                 LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
-                try_clean_up();
                 break;
             }
             else
