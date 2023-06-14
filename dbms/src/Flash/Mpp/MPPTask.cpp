@@ -597,7 +597,7 @@ void MPPTask::reportStatus(const String & err_msg)
         }
 
         pingcap::kv::RpcCall<mpp::ReportTaskStatusRequest> rpc_call(req);
-        auto cluster = context->getTMTContext().getKVCluster();
+        auto * cluster = context->getTMTContext().getKVCluster();
         cluster->rpc_client->sendRequest(meta.coordinator_address(), rpc_call, /*timeout=*/3);
         const auto & resp = rpc_call.getResp();
         if (resp->has_error())
