@@ -331,7 +331,6 @@ std::vector<TableID> MockTiDB::newTables(
     diff.version = version;
     version_diff[version] = diff;
 
-
     return table_ids;
 }
 
@@ -654,7 +653,6 @@ TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const St
 {
     String qualified_name = database_name + "." + table_name;
     auto it = tables_by_name.find(qualified_name);
-
     if (it == tables_by_name.end())
     {
         throw Exception("Mock TiDB table " + qualified_name + " does not exists", ErrorCodes::UNKNOWN_TABLE);

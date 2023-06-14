@@ -112,7 +112,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
             return -1;
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
         builder.applyDiff(*diff);
     }
     return used_version;
@@ -125,7 +125,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
     {
         --version;
     }
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
     builder.syncAllSchema();
 
     return version;
@@ -134,35 +134,18 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncAllSchemas(Context & conte
 template <bool mock_getter, bool mock_mapper>
 std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>::findDatabaseIDAndTableID(TableID physical_table_id)
 {
-    std::shared_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
-
-    auto database_iter = table_id_to_database_id.find(physical_table_id);
-    DatabaseID database_id;
+    auto database_id = table_id_map.findTableIDInDatabaseMap(physical_table_id);
     TableID logical_table_id = physical_table_id;
-    bool find = false;
-    if (database_iter == table_id_to_database_id.end())
+    if (database_id == -1)
     {
         /// if we can't find physical_table_id in table_id_to_database_id,
         /// we should first try to find it in partition_id_to_logical_id because it could be the pysical_table_id of partition tables
-        auto logical_table_iter = partition_id_to_logical_id.find(physical_table_id);
-        if (logical_table_iter != partition_id_to_logical_id.end())
-        {
-            logical_table_id = logical_table_iter->second;
-            database_iter = table_id_to_database_id.find(logical_table_id);
-            if (database_iter != table_id_to_database_id.end())
-            {
-                database_id = database_iter->second;
-                find = true;
-            }
-        }
-    }
-    else
-    {
-        database_id = database_iter->second;
-        find = true;
+        logical_table_id = table_id_map.findTableIDInPartitionMap(physical_table_id);
+        if (logical_table_id != -1)
+            database_id = table_id_map.findTableIDInDatabaseMap(logical_table_id);
     }
 
-    if (find)
+    if (database_id != -1 and logical_table_id != -1)
     {
         return std::make_tuple(true, database_id, logical_table_id);
     }
@@ -184,17 +167,17 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
     if (!find)
     {
-        LOG_WARNING(log, "Can't find physical_table_id {} in table_id_to_database_id and map partition_id_to_logical_id, try to syncSchemas", physical_table_id);
+        LOG_WARNING(log, "Can't find physical_table_id {} in table_id_map, try to syncSchemas", physical_table_id);
         syncSchemas(context);
         std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
         {
-            LOG_ERROR(log, "Still can't find physical_table_id {} in table_id_to_database_id and map partition_id_to_logical_id", physical_table_id);
+            LOG_ERROR(log, "Still can't find physical_table_id {} in table_id_map", physical_table_id);
             return false;
         }
     }
 
-    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_to_database_id, partition_id_to_logical_id, shared_mutex_for_table_id_map, shared_mutex_for_databases);
+    SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
     builder.applyTable(database_id, logical_table_id, physical_table_id);
 
     return true;
