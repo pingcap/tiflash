@@ -69,12 +69,12 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
     auto table_info = getter.getTableInfo(database_id, table_id);
     if (table_info == nullptr) // the database maybe dropped
     {
-        LOG_DEBUG(log, "Table {} not found, may have been dropped.", table_id);
+        LOG_DEBUG(log, "table is not exist in TiKV, may have been dropped, table_id={}", table_id);
         return;
     }
 
     table_id_map.emplaceTableID(table_id, database_id);
-    LOG_DEBUG(log, "table_id {} with database_id {} emplace table_id_to_database_id", table_id, database_id);
+    LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", database_id, table_id);
 
     if (table_info->isLogicalPartitionTable())
     {
@@ -110,7 +110,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(diff.affected_opts[0].schema_id, diff.affected_opts[0].table_id);
             if (new_table_info == nullptr)
             {
-                LOG_ERROR(log, "miss table in TiKV: {}", diff.affected_opts[0].table_id);
+                LOG_ERROR(log, "table is not exist in TiKV, table_id={}", diff.affected_opts[0].table_id);
                 return;
             }
 
@@ -118,7 +118,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             auto storage = tmt_context.getStorages().get(keyspace_id, diff.old_table_id);
             if (storage == nullptr)
             {
-                LOG_ERROR(log, "miss table in TiFlash: {}", diff.old_table_id);
+                LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", diff.old_table_id);
                 return;
             }
 
@@ -131,7 +131,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(diff.schema_id, diff.table_id);
             if (new_table_info == nullptr)
             {
-                LOG_ERROR(log, "miss table in TiKV: {}", diff.table_id);
+                LOG_ERROR(log, "table is not exist in TiKV, table_id={}", diff.table_id);
                 return;
             }
 
@@ -139,7 +139,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             auto storage = tmt_context.getStorages().get(keyspace_id, diff.table_id);
             if (storage == nullptr)
             {
-                LOG_ERROR(log, "miss table in TiFlash: {}", diff.old_table_id);
+                LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", diff.old_table_id);
                 return;
             }
 
@@ -234,8 +234,10 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             LOG_INFO(log, "Ignore change type: {}", magic_enum::enum_name(diff.type));
         }
         else
-        { // >= SchemaActionType::MaxRecognizedType
-            LOG_ERROR(log, "Unsupported change type: {}", magic_enum::enum_name(diff.type));
+        {
+            // >= SchemaActionType::MaxRecognizedType
+            // log down the Int8 value directly
+            LOG_ERROR(log, "Unsupported change type: {}", static_cast<Int8>(diff.type));
         }
 
         break;
@@ -249,7 +251,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (unlikely(table_info == nullptr))
     {
-        LOG_ERROR(log, "miss old table id in TiKV {}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
         return;
     }
 
@@ -260,7 +262,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(log, "miss table in TiFlash {}", table_id);
+            LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
             return;
         }
 
@@ -324,7 +326,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (table_info == nullptr)
     {
-        LOG_ERROR(log, "miss old table id in TiKV {}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
         return;
     }
     if (!table_info->isLogicalPartitionTable())
@@ -337,7 +339,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "miss table in TiFlash {}", table_id);
+        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
         return;
     }
 
@@ -411,7 +413,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto [new_db_info, new_table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
     if (new_table_info == nullptr)
     {
-        LOG_ERROR(log, "miss table in TiKV: {}", table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, table_id={}", table_id);
         return;
     }
 
@@ -419,7 +421,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto storage = tmt_context.getStorages().get(keyspace_id, table_id);
     if (storage == nullptr)
     {
-        LOG_ERROR(log, "miss table in TiFlash: {}", table_id);
+        LOG_ERROR(log, "table is not exist in TiFlash, table_id={}", table_id);
         return;
     }
 
@@ -444,7 +446,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
             auto part_storage = tmt_context.getStorages().get(keyspace_id, part_def.id);
             if (part_storage == nullptr)
             {
-                LOG_ERROR(log, "miss old table id in TiFlash: {}", part_def.id);
+                LOG_ERROR(log, "table is not exist in TiFlash, physical_table_id={}", part_def.id);
                 return;
             }
             auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
@@ -507,7 +509,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id
     if (table_info == nullptr)
     {
         // this table is dropped.
-        LOG_DEBUG(log, "Table {} not found, may have been dropped.", table_id);
+        LOG_DEBUG(log, "table is not exist in TiKV, may have been dropped, table_id={}", table_id);
         return;
     }
 
@@ -1003,7 +1005,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
         auto db_info = getter.getDatabase(database_id);
         if (db_info == nullptr)
         {
-            LOG_ERROR(log, "miss database: {}", database_id);
+            LOG_ERROR(log, "database is not exist in TiKV, database_id={}", database_id);
             return;
         }
 

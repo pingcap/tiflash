@@ -94,7 +94,7 @@ enum class SchemaActionType : Int8
     ActionAlterTTLRemove = 67,
 
 
-    // If we supporte new type from TiDB.
+    // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
     MaxRecognizedType = 68,
