@@ -311,6 +311,7 @@ void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
     assert(query_process_list_entry != nullptr);
     process_list_entry = query_process_list_entry;
     dag_context->setProcessListEntry(process_list_entry);
+    context->setProcessListElement(&process_list_entry->get());
     current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
 }
 
