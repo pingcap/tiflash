@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char invalid_mpp_version[];
@@ -53,6 +52,12 @@ void trimStackTrace(String & message)
 // Latest mpp-version supported by TiFlash
 static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
 static MppVersion MinMppVersion = MppVersion::MppVersionV0;
+
+// Use ReportStatus interface to report status, instead of passing execution summaries within data packet
+bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordinator_address)
+{
+    return mpp_version >= MppVersion::MppVersionV2 && !coordinator_address.empty();
+}
 
 // Check mpp-version is illegal
 bool CheckMppVersion(int64_t mpp_version)

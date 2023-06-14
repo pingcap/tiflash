@@ -133,6 +133,8 @@ private:
 
     MemoryTracker * getMemoryTracker() const;
 
+    void reportStatus(const String & err_msg);
+
 private:
     struct ProcessListEntryHolder
     {
