@@ -33,9 +33,9 @@ struct SchemaBuilder
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
 
-    std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id;
-
     std::shared_mutex & shared_mutex_for_table_id_map;
+
+    std::unordered_map<DB::TableID, DB::DatabaseID> & table_id_to_database_id;
 
     std::unordered_map<DB::TableID, DB::TableID> & partition_id_to_logical_id;
 
