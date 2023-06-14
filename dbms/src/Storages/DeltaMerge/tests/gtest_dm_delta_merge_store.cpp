@@ -1082,6 +1082,31 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, Empty)
+try
+{
+    ASSERT_TRUE(store->segments.empty());
+
+    auto settings = db_context->getSettings();
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*db_context,
+                                         settings,
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                         EMPTY_FILTER,
+                                         std::vector<RuntimeFilterPtr>{},
+                                         0,
+                                         TRACING_NAME,
+                                         /* keep_order= */ false,
+                                         /* is_fast_scan= */ false,
+                                         /* expected_block_size= */ 1024)[0];
+    auto b = in->read();
+    ASSERT_FALSE(static_cast<bool>(b));
+}
+CATCH
+
 TEST_P(DeltaMergeStoreRWTest, ReadWithSpecifyTso)
 try
 {
