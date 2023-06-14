@@ -205,7 +205,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         ProcessList::EntryPtr process_list_entry;
         if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
-            process_list_entry = setProcessListElement(context, query, ast.get());
+            process_list_entry = setProcessListElement(context, query, ast.get(), false);
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);

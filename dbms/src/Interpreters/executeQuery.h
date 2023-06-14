@@ -56,7 +56,7 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
     const IAST * ast,
-    bool use_current_memory_tracker = false);
+    bool is_dag_task);
 
 void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in);
 

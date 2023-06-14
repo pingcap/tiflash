@@ -99,7 +99,10 @@ void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const Strin
 MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 {
     if (initialized)
+    {
+        current_memory_tracker = nullptr;
         manager->removeMonitoredTask(task_unique_id);
+    }
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
