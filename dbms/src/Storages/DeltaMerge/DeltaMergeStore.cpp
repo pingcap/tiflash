@@ -250,11 +250,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
-            !first_segment_entry.isValid())
-        {
-            createFirstSegment(*dm_context, page_storage_run_mode);
-        }
-        else
+            first_segment_entry.isValid())
         {
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
 
@@ -323,6 +319,10 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
+        if (segments.empty())
+        {
+            return;
+        }
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
         std::stack<PageIdU64> segment_ids;
         while (segment_id != 0)
