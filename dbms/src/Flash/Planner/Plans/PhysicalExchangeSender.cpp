@@ -58,7 +58,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     child->buildBlockInputStream(pipeline, context, max_streams);
 
     auto & dag_context = *context.getDAGContext();
-    restoreConcurrency(pipeline, dag_context.final_concurrency, log);
+    restoreConcurrency(pipeline, dag_context.final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     String extra_info;
     if (fine_grained_shuffle.enable())
@@ -87,7 +87,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     });
 }
 
-void PhysicalExchangeSender::buildPipelineExecGroup(
+void PhysicalExchangeSender::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

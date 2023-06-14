@@ -103,6 +103,8 @@ struct DecodedTiKVKey : std::string
 
     KeyspaceID getKeyspaceID() const;
     std::string_view getUserKey() const;
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    std::string toDebugString() const;
     static std::string makeKeyspacePrefix(KeyspaceID keyspace_id);
 };
 

@@ -1745,23 +1745,45 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal() const
+void DeltaMergeStore::listLocalStableFiles(const std::function<void(UInt64, const String &)> & handle) const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
-    options.clean_up = true;
+    options.clean_up = true; // Clean not readable DMFiles.
     auto file_provider = global_context.getFileProvider();
     auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            //To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
-            //we just add the file to path_delegate with file_size = 0
-            //when we do DMFile::restore later, we then update the actually size of file.
-            path_delegate.addDTFile(file_id, 0, root_path);
+            handle(file_id, root_path);
         }
     }
+}
+
+void DeltaMergeStore::restoreStableFilesFromLocal() const
+{
+    auto path_delegate = path_pool->getStableDiskDelegator();
+    listLocalStableFiles([&path_delegate](UInt64 file_id, const String & root_path) {
+        // To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
+        // we just add the file to path_delegate with file_size = 0
+        // when we do DMFile::restore later, we then update the actually size of file.
+        path_delegate.addDTFile(file_id, 0, root_path);
+    });
+}
+
+// If TiFlash is running in disagg-mode, we can remove all local DMFiles directly.
+// Because they all not be written into PageStorage and no one reference them.
+void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
+{
+    listLocalStableFiles([](UInt64 file_id, const String & root_path) {
+        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        Poco::File file(path);
+        if (file.exists())
+        {
+            file.remove(true);
+        }
+    });
 }
 
 void DeltaMergeStore::restoreStableFiles() const
@@ -1771,6 +1793,10 @@ void DeltaMergeStore::restoreStableFiles() const
     if (!global_context.getSharedContextDisagg()->remote_data_store)
     {
         restoreStableFilesFromLocal();
+    }
+    else
+    {
+        removeLocalStableFilesIfDisagg();
     }
 }
 

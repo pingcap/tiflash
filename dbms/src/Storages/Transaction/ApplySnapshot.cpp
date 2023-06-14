@@ -390,15 +390,16 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         }
         catch (DB::Exception & e)
         {
-            auto try_clean_up = [&stream]() -> void {
-                if (stream != nullptr)
-                    stream->cancel();
-            };
+            if (stream != nullptr)
+            {
+                // Remove all DMFiles.
+                stream->cancel();
+            }
+
             if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
             {
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
-                try_clean_up();
 
                 if (force_decode)
                 {
@@ -419,7 +420,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             {
                 // We can ignore if storage is dropped.
                 LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
-                try_clean_up();
                 break;
             }
             else

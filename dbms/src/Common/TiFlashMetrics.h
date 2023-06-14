@@ -194,6 +194,9 @@ namespace DB
         F(type_fullgc_commit, {{"type", "fullgc_commit"}},         ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
+    M(tiflash_storage_page_command_count, "Total number of PageStorage's command, such as write / read / scan / snapshot", Counter,                 \
+        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),                                                                           \
+        F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                                                                     \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                                    \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                                  \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                                   \
@@ -370,9 +373,18 @@ namespace DB
         F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                                         \
         F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
         F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
-        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
-        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
-        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
+        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}))                                                                     \
+    M(tiflash_pipeline_task_duration_seconds, "Bucketed histogram of pipeline task duration in seconds",                                            \
+        Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */               \
+        F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets{0.005, 2, 20}),                                                                   \
+        F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.005, 2, 20}),                                                                     \
+        F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.005, 2, 20}),                                                                       \
+        F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.005, 2, 20}),                                                                         \
+        F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}))                                                                               \
+    M(tiflash_pipeline_task_execute_max_time_seconds_per_round, "Bucketed histogram of pipeline task execute max time per round in seconds",        \
+        Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */               \
+        F(type_cpu, {{"type", "cpu"}}, ExpBuckets{0.005, 2, 20}),                                                                                   \
+        F(type_io, {{"type", "io"}}, ExpBuckets{0.005, 2, 20}))                                                                                     \
     M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
         F(type_to_init, {"type", "to_init"}),                                                                                                       \
         F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
@@ -413,7 +425,12 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
+    M(tiflash_storage_io_limiter_pending_seconds, "I/O limiter pending duration in seconds", Histogram,                                             \
+        F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 
