@@ -484,7 +484,6 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
 
     for (const auto & column : columns)
     {
-        LOG_INFO(Logger::get("hyy"), "compare columns with id is {}", column.id);
         // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
         if (column.id < 0)
         {
@@ -1213,19 +1212,20 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
-        bool res = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
+        bool are_columns_matched = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
 
-        if (res)
+        if (are_columns_matched)
         {
             return std::make_tuple(table_store, lock);
         }
-        else
+
+        //// columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
+        if (schema_synced)
         {
-            if (schema_synced)
-            {
-                throw TiFlashException(fmt::format("Table {} schema is newer than query schema version", table_id), Errors::Table::SchemaVersionError);
-            }
+            throw TiFlashException(fmt::format("Table {} schema is newer than query schema version", table_id), Errors::Table::SchemaVersionError);
         }
+
+        // let caller sync schema
         return {nullptr, {}};
     };
 

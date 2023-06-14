@@ -121,35 +121,36 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartiton(const SchemaDiff & diff)
+void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const SchemaDiff & diff)
 {
     /// Table_id in diff is the partition id of which will be exchanged,
     /// Schema_id in diff is the non-partition table's schema id
     /// Old_table_id in diff is the non-partition table's table id
     /// Table_id in diff.affected_opts[0] is the table id of the partition table
     /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
+    {
+        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
 
-    std::unique_lock<std::shared_mutex> lock(shared_mutex_for_table_id_map);
+        if (table_id_to_database_id.find(diff.old_table_id) != table_id_to_database_id.end())
+        {
+            table_id_to_database_id.erase(diff.old_table_id);
+        }
+        else
+        {
+            LOG_ERROR(log, "table_id {} not in table_id_to_database_id", diff.old_table_id);
+        }
+        emplaceTableID(diff.table_id, diff.schema_id);
 
-    if (table_id_to_database_id.find(diff.old_table_id) != table_id_to_database_id.end())
-    {
-        table_id_to_database_id.erase(diff.old_table_id);
+        if (partition_id_to_logical_id.find(diff.table_id) != partition_id_to_logical_id.end())
+        {
+            partition_id_to_logical_id.erase(diff.table_id);
+        }
+        else
+        {
+            LOG_ERROR(log, "table_id {} not in partition_id_to_logical_id", diff.table_id);
+        }
+        emplacePartitionTableID(diff.old_table_id, diff.affected_opts[0].table_id);
     }
-    else
-    {
-        LOG_ERROR(log, "table_id {} not in table_id_to_database_id", diff.old_table_id);
-    }
-    emplaceTableID(diff.table_id, diff.schema_id);
-
-    if (partition_id_to_logical_id.find(diff.table_id) != partition_id_to_logical_id.end())
-    {
-        partition_id_to_logical_id.erase(diff.table_id);
-    }
-    else
-    {
-        LOG_ERROR(log, "table_id {} not in partition_id_to_logical_id", diff.table_id);
-    }
-    emplacePartitionTableID(diff.old_table_id, diff.affected_opts[0].table_id);
 
     if (diff.schema_id != diff.affected_opts[0].schema_id)
     {
@@ -266,7 +267,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     case SchemaActionType::ExchangeTablePartition:
     {
-        applyExchangeTablePartiton(diff);
+        applyExchangeTablePartition(diff);
         break;
     }
     case SchemaActionType::SetTiFlashReplica:
@@ -557,18 +558,6 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 }
 
 template <typename Getter, typename NameMapper>
-bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
-{
-    auto db = getter.getDatabase(schema_id);
-    if (db == nullptr)
-    {
-        return false;
-    }
-    applyCreateSchema(db);
-    return true;
-}
-
-template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRecoverTable(DatabaseID database_id, TiDB::TableID table_id)
 {
     auto [db_info, table_info] = getter.getDatabaseAndTableInfo(database_id, table_id);
@@ -661,6 +650,18 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 }
 
 template <typename Getter, typename NameMapper>
+bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
+{
+    auto db = getter.getDatabase(schema_id);
+    if (db == nullptr)
+    {
+        return false;
+    }
+    applyCreateSchema(db);
+    return true;
+}
+
+template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
@@ -675,8 +676,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
-    std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-    databases.emplace(db_info->id, db_info);
+    {
+        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+        databases.emplace(db_info->id, db_info);
+    }
 
     LOG_INFO(log, "Created database {}", name_mapper.debugDatabaseName(*db_info));
 }
@@ -684,41 +687,39 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 {
-    std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-    auto it = databases.find(schema_id);
-    if (unlikely(it == databases.end()))
+    TiDB::DBInfoPtr db_info;
     {
-        LOG_INFO(
-            log,
-            "Syncer wants to drop database [id={}], but database is not found, may has been dropped.",
-            schema_id);
-        return;
-    }
-    shared_lock.unlock();
-
-    std::shared_lock<std::shared_mutex> shared_lock_for_table_id_map(shared_mutex_for_table_id_map);
-    //TODO: it seems need a lot time, maybe we can do it in a background thread
-    for (const auto & pair : table_id_to_database_id)
-    {
-        if (pair.second == schema_id)
+        std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
+        auto it = databases.find(schema_id);
+        if (unlikely(it == databases.end()))
         {
-            applyDropTable(schema_id, pair.first);
+            LOG_INFO(
+                log,
+                "Syncer wants to drop database [id={}], but database is not found, may has been dropped.",
+                schema_id);
+            return;
+        }
+        db_info = it->second;
+    }
 
-            for (const auto & parition_pair : partition_id_to_logical_id)
+    {
+        std::shared_lock<std::shared_mutex> shared_lock_for_table_id_map(shared_mutex_for_table_id_map);
+        //TODO: it seems need a lot time, maybe we can do it in a background thread
+        for (const auto & pair : table_id_to_database_id)
+        {
+            if (pair.second == schema_id)
             {
-                if (parition_pair.second == pair.first)
-                {
-                    applyDropTable(schema_id, parition_pair.first);
-                }
+                applyDropTable(schema_id, pair.first);
             }
         }
     }
-    shared_lock_for_table_id_map.unlock();
 
-    applyDropSchema(name_mapper.mapDatabaseName(*it->second));
+    applyDropSchema(name_mapper.mapDatabaseName(*db_info));
 
-    std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
-    databases.erase(schema_id);
+    {
+        std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+        databases.erase(schema_id);
+    }
 }
 
 template <typename Getter, typename NameMapper>

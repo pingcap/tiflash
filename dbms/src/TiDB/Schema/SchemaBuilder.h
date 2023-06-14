@@ -102,7 +102,7 @@ private:
 
     void applyCreateTable(DatabaseID database_id, TableID table_id);
 
-    void applyExchangeTablePartiton(const SchemaDiff & diff);
+    void applyExchangeTablePartition(const SchemaDiff & diff);
 };
 
 } // namespace DB
