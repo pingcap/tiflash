@@ -971,7 +971,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     auto table_info = getter.getTableInfo(database_id, logical_table_id);
     if (table_info == nullptr)
     {
-        LOG_ERROR(log, "miss table in TiKV : {}.{}", database_id, logical_table_id);
+        LOG_ERROR(log, "table is not exist in TiKV, database_id={} logical_table_id={}", database_id, logical_table_id);
         return;
     }
 

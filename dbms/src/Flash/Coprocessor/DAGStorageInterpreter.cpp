@@ -249,12 +249,12 @@ String genErrMsgForLocalRead(
 {
     return table_id == logical_table_id
         ? fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id)
         : fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id={}, logical_table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id,
@@ -804,7 +804,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("(while doing learner read for table, logical table_id: {})", logical_table_id));
+            e.addMessage(fmt::format("(while doing learner read for table, logical table_id={})", logical_table_id));
             throw;
         }
     }
@@ -1239,7 +1239,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             return std::make_tuple(table_store, lock);
         }
 
-        //// columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
+        // columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
         if (schema_synced)
         {
             throw TiFlashException(fmt::format("Table {} schema is newer than query schema version", table_id), Errors::Table::SchemaVersionError);

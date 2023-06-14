@@ -38,14 +38,14 @@ public:
     virtual ~SchemaSyncer() = default;
 
     /*
-    sync all tables' schemas based on schema diff, but may not apply all diffs.
-    */
+     * Sync all tables' schemas based on schema diff, but may not apply all diffs.
+     */
     virtual bool syncSchemas(Context & context) = 0;
 
     /*
-    syncTableSchema sync the typical table's inner schema(like add columns, modify columns, etc) based on physical_table_id
-    syncTableSchema only be called when the schema not matches during reading or writing
-    */
+     * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
+     * This function will be called concurrently when the schema not matches during reading or writing
+     */
     virtual bool syncTableSchema(Context & context, TableID physical_table_id) = 0;
 
     virtual void reset() = 0;
