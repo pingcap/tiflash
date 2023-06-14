@@ -45,7 +45,6 @@ public:
 
     MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_, const String & resource_group_name = "", UInt64 resource_control_mpptask_hard_limit_ = 0);
 
-    bool resourceControlEnabled() const { return !resource_group_name.empty(); }
     String getResourceGroupName() const { return resource_group_name; }
     UInt64 getResourceControlMPPTaskHardLimit() const { return resource_control_mpptask_hard_limit; }
 
@@ -53,8 +52,8 @@ private:
     MPPTaskManager * manager;
     MPPTaskId id;
 
-    // When resource control is enabled, we have a MinTSOScheduler for each resource gorup.
-    // This is used to specify which MinTSOScheduler to schedule.
+    // When resource control is enabled, each resource gorup corresponds one MinTSOScheduler.
+    // This is used to specify which MinTSOScheduler to use.
     // If resource control is not enabled, it will be empty.
     String resource_group_name;
     UInt64 resource_control_mpptask_hard_limit;

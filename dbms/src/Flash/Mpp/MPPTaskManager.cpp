@@ -325,16 +325,19 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     {
         std::lock_guard lock(mu);
 
-        // Check global MPPTask hard limit.
+        // Check of global MPPTask hard limit.
         size_t mintso_active_set_size = 0;
         for (const auto & ele : resource_group_schedulers)
             mintso_active_set_size += ele.second->getActiveSetSize();
 
+        // This check helps reduce the contention of lock within resource group.
         if (mintso_active_set_size >= schedule_entry.getResourceControlMPPTaskHardLimit())
         {
             size_t non_throttled_rg_active_set_size = 0;
             for (const auto & ele : resource_group_schedulers)
             {
+                // Will ignore the group whose tokens have been exhausted,
+                // this can prevent tasks throllted by resource control from occupying too much hard limit proportion.
                 if (LocalAdmissionController::global_instance->isResourceGroupThrottled(ele.first))
                     continue;
 
@@ -352,6 +355,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
         auto iter = resource_group_schedulers.find(resource_group_name);
         if (iter == resource_group_schedulers.end())
         {
+            // For now, resource group MinTSO use same config as the global MinTSO.
             auto [thread_soft_limit, thread_hard_limit, active_set_soft_limit] = scheduler->getLimitConfig();
             MPPTaskSchedulerPtr resource_group_scheduler = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
             scheduled = iter->second->tryToSchedule(schedule_entry, *this);
@@ -371,7 +375,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduled;
 }
 
-void MPPTaskManager::removeResourceGroupMinTSOScheduler(const String & name)
+void MPPTaskManager::removeResourceGroupScheduler(const String & name)
 {
     std::lock_guard lock(mu);
     auto scheduler_iter = resource_group_schedulers.find(name);

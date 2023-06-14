@@ -201,10 +201,10 @@ public:
 
     String toString();
 
-    // This will be updated in LocalAdmissionController, will delete related MinTSO when resource group is deleted.
-    void removeResourceGroupMinTSOScheduler(const String & name);
+    // Will be called in LocalAdmissionController periodically to delete related scheduler when resource group is deleted.
+    void removeResourceGroupScheduler(const String & name);
 
-    // This is to clean resource group related scheduler periodicilly.
+    // Will be called in LocalAdmissionController periodically to really remove empty scheduler.
     void cleanDeletedResourceGroupScheduler();
 
 private:
