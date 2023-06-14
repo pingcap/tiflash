@@ -689,19 +689,17 @@ private:
                                           const SegmentIdSet & read_segments = {},
                                           bool try_split_task = true);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     void dropAllSegments(bool keep_first_segment);
     String getLogTracingId(const DMContext & dm_ctx);
     // Returns segment that contains start_key and whether 'segments' is empty.
     std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
     std::pair<SegmentPtr, bool> getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound);
     void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
-
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#else
-public:
-#endif
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

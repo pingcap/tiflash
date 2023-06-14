@@ -111,6 +111,10 @@ try
     // create table
     ASSERT_NE(store, nullptr);
 
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
     // Start a PageStorage gc and suspend it before clean external page
@@ -197,6 +201,10 @@ try
 {
     // create table
     ASSERT_NE(store, nullptr);
+
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
@@ -630,6 +638,7 @@ try
         }
         db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        SCOPE_EXIT({FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);});
         ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
         try
         {
@@ -641,7 +650,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -710,6 +718,7 @@ try
         }
 
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        SCOPE_EXIT({FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);});
         store->write(*db_context, db_context->getSettingsRef(), block);
         ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
         try
@@ -722,7 +731,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -3156,7 +3164,6 @@ try
                 false);
 
             store->write(*db_context, settings, block);
-
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
             auto segment_stats = store->getSegmentsStats();
