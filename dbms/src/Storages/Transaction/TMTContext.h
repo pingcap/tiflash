@@ -20,7 +20,6 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <TiDB/Schema/TiDBSchemaManager.h>
 
 namespace DB
 {

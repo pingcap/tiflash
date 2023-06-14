@@ -83,18 +83,18 @@ public:
         , table_id_map(log)
     {}
 
-    Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
-
     bool syncSchemas(Context & context) override;
-
-    Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     bool syncTableSchema(Context & context, TableID physical_table_id) override;
 
+private:
     void removeTableID(TableID table_id) override
     {
         table_id_map.erase(table_id);
     }
+
+    Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
+    Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
