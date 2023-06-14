@@ -99,8 +99,11 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 
 OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
 {
-    if (!block_queue.empty() || receive_status != ReceiveStatus::empty)
+    if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;
+    if unlikely (receive_status != ReceiveStatus::empty)
+        return OperatorStatus::HAS_OUTPUT;
+
     assert(!recv_msg);
     receive_status = exchange_receiver->tryReceive(stream_id, recv_msg);
     switch (receive_status)

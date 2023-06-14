@@ -57,8 +57,6 @@ private:
     Block popFromBlockQueue();
 
 private:
-    // TODO support ConnectionProfileInfo.
-    // TODO support RemoteExecutionSummary.
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
