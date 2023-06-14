@@ -543,13 +543,10 @@ public:
 
         std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
 
-        bool listen_try = config.getBool("listen_try", false);
         if (listen_hosts.empty())
-        {
             listen_hosts.emplace_back("0.0.0.0");
-            listen_try = true;
-        }
 
+#ifndef NDEBUG
         auto make_socket_address = [&](const std::string & host, UInt16 port) {
             Poco::Net::SocketAddress socket_address;
             try
@@ -603,80 +600,30 @@ public:
 
         for (const auto & listen_host : listen_hosts)
         {
-            /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
-            try
+            /// TCP
+            if (config.has("tcp_port"))
             {
-                /// TCP
-                if (config.has("tcp_port"))
+                if (security_config->hasTlsConfig())
                 {
-                    if (security_config->hasTlsConfig())
-                    {
-                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(new TCPHandlerFactory(server), server_pool, socket, new Poco::Net::TCPServerParams));
+                    LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                }
+                Poco::Net::ServerSocket socket;
+                auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
+                socket.setReceiveTimeout(settings.receive_timeout);
+                socket.setSendTimeout(settings.send_timeout);
+                servers.emplace_back(new TCPServer(new TCPHandlerFactory(server), server_pool, socket, new Poco::Net::TCPServerParams));
 
-                    LOG_INFO(log, "Listening tcp: {}", address.toString());
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port is closed because tls config is set");
-                }
-
-                /// TCP with SSL (Not supported yet)
-                if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
-                {
-#if Poco_NetSSL_FOUND
-                    auto [ca_path, cert_path, key_path] = security_config->getPaths();
-                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                                                                             key_path,
-                                                                             cert_path,
-                                                                             ca_path);
-                    CertificateReloader::initSSLCallback(context, server.global_context.get());
-                    Poco::Net::SecureServerSocket socket(context);
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server, /* secure= */ true),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
-                    LOG_INFO(log, "Listening tcp_secure: {}", address.toString());
-#else
-                    throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
-                                    ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
-                }
-
-                if (servers.empty())
-                    LOG_WARNING(log, "No TCP and HTTP servers are created");
+                LOG_INFO(log, "Listening tcp: {}", address.toString());
             }
-            catch (const Poco::Net::NetException & e)
+            else if (security_config->hasTlsConfig())
             {
-                if (listen_try)
-                    LOG_ERROR(
-                        log,
-                        "Listen [{}]: {}: {}: {}"
-                        "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
-                        "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
-                        "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
-                        " Example for disabled IPv4: <listen_host>::</listen_host>",
-                        listen_host,
-                        e.code(),
-                        e.what(),
-                        e.message());
-                else
-                    throw;
+                LOG_INFO(log, "tcp_port is closed because tls config is set");
             }
+
+            if (servers.empty())
+                LOG_INFO(log, "No TCP servers are created");
         }
+#endif
 
         for (auto & server : servers)
             server->start();
