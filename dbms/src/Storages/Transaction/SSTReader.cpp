@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 #include <Storages/Transaction/SSTReader.h>
 
+#include <magic_enum.hpp>
 #include <vector>
 
 namespace DB
@@ -62,7 +64,7 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     {
         auto && r = range->comparableKeys();
         auto start = r.first.key.toString();
-        LOG_DEBUG(log, "Seek cf {} to {}", static_cast<std::underlying_type<decltype(type)>::type>(type), Redact::keyToDebugString(start.data(), start.size()));
+        LOG_DEBUG(log, "Seek cf {} to {}", magic_enum::enum_name(type), Redact::keyToDebugString(start.data(), start.size()));
         if (!start.empty())
         {
             proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});

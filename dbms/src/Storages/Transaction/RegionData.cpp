@@ -38,7 +38,6 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value,
     {
     case ColumnFamilyType::Write:
     {
-        LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "RegionData::insert");
         cf_data_size += write_cf.insert(std::move(key), std::move(value), mode);
         return;
     }
@@ -143,7 +142,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
                 {
                     RUNTIME_CHECK_MSG(orphan_keys_info.snapshot_index.has_value(),
                                       "Snapshot index shall be set when Applying snapshot");
-                    orphan_keys_info.observeExtraKey(TiKVKey(key->data(), key->dataSize()));
+                    orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
                     return std::nullopt;
                 }
                 else
@@ -226,7 +225,9 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "assignRegionData {}", new_region_data.orphan_keys_info.remainedKeyCount());
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
+    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "orphan_keys_info {}", orphan_keys_info.remainedKeyCount());
 
     cf_data_size = new_region_data.cf_data_size.load();
 }
@@ -325,7 +326,7 @@ void RegionData::OrphanKeysInfo::mergeFrom(const RegionData::OrphanKeysInfo & ot
     LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! other.remained_keys {}", other.remained_keys.size());
     for (auto iter = other.remained_keys.begin(); iter != other.remained_keys.end(); iter++)
     {
-        remained_keys.insert(TiKVKey(iter->data(), iter->dataSize()));
+        remained_keys.insert(TiKVKey::copyFrom(*iter));
     }
 }
 

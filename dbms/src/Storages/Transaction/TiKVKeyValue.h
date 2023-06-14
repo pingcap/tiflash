@@ -48,6 +48,11 @@ public:
         : Base(str)
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
+    template <bool B>
+    static StringObject<B> copyFrom(const StringObject<B> & other)
+    {
+        return StringObject(other.data(), other.dataSize());
+    }
 
     DISALLOW_COPY(StringObject);
     StringObject & operator=(StringObject && a)

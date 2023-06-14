@@ -771,7 +771,7 @@ void MockRaftStoreProxy::Cf::insert_raw(std::string key, std::string val)
     kvs.emplace_back(std::move(key), std::move(val));
 }
 
-void MockRaftStoreProxy::snapshot(
+RegionPtr MockRaftStoreProxy::snapshot(
     KVStore & kvs,
     TMTContext & tmt,
     UInt64 region_id,
@@ -802,7 +802,6 @@ void MockRaftStoreProxy::snapshot(
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 1");
     auto ingest_ids = kvs.preHandleSnapshotToFiles(
         new_kv_region,
         snaps,
@@ -810,13 +809,13 @@ void MockRaftStoreProxy::snapshot(
         term,
         tmt);
 
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 2");
     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
     new_kv_region->setApplied(index, term);
 
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "!!!!! MockRaftStoreProxy::snapshot 3");
+    // Region changes during applying snapshot, must re-get.
+    return kvs.getRegion(region_id);
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(

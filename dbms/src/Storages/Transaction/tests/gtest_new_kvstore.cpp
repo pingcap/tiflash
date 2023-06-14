@@ -689,8 +689,7 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
-            auto kvr1 = kvs.getRegion(region_id);
+            auto kvr1 = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
             ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
             ASSERT_EQ(kvr1->writeCFCount(), 1); // k2
         }
@@ -768,8 +767,7 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
-            auto kvr1 = kvs.getRegion(region_id);
+            auto kvr1 = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
             ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
         }
         {
@@ -783,9 +781,9 @@ try
             write_cf.finish_file(SSTFormatKind::KIND_TABLET);
             write_cf.freeze();
 
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
-            auto kvr1 = kvs.getRegion(region_id);
-            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 2);
+            auto kvr1 = proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf, write_cf}, 0, 0);
+            // Every snapshot contains a full copy of this region. So we will drop all orphan keys in the previous region.
+            ASSERT_EQ(kvr1->orphanKeysInfo().remainedKeyCount(), 1);
         }
     }
 }

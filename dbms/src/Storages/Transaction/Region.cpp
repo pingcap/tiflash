@@ -70,13 +70,14 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
 
 void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "doInsert {} {}", magic_enum::enum_name(type), key.toDebugString());
     if (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         if (type == ColumnFamilyType::Write)
         {
             if (orphanKeysInfo().observeKeyFromNormalWrite(key))
             {
+                // We can't assert the key exists in write_cf here,
+                // since it may be already written into DeltaTree.
                 return;
             }
         }

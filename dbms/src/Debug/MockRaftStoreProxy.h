@@ -267,7 +267,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         bool freezed;
     };
 
-    void snapshot(
+    RegionPtr snapshot(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,

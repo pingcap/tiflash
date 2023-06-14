@@ -88,7 +88,6 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
             persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
-        new_region->orphanKeysInfo().mergeFrom(old_region->orphanKeysInfo());
     }
 
     {
@@ -264,6 +263,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             // Reuse the old region for non-region-related data.
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
+            LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "sdfs after copy {}", new_region->orphanKeysInfo().remainedKeyCount());
             {
                 // add index
                 auto manage_lock = genRegionMgrWriteLock(task_lock);

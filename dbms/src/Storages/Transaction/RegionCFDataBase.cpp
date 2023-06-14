@@ -44,11 +44,9 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "fd 1");
 
     if (!kv_pair)
         return 0;
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "fd 2");
 
     return insert(std::move(*kv_pair), mode);
 }
