@@ -78,4 +78,9 @@ void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
         tokens = capacity;
     last_compact_timepoint = timepoint;
 }
+
+double TokenBucket::peek(const TokenBucket::TimePoint & timepoint) const
+{
+    return tokens + getDynamicTokens(timepoint);
+}
 } // namespace DB

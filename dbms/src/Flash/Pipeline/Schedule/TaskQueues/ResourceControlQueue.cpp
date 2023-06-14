@@ -13,12 +13,15 @@
 // limitations under the License.
 
 #include <Flash/Executor/toRU.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
-void ResourceControlQueue::doFinish()
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::doFinish()
 {
     for (auto & ele : pipeline_tasks)
     {
@@ -26,7 +29,8 @@ void ResourceControlQueue::doFinish()
     }
 }
 
-void ResourceControlQueue::submit(TaskPtr && task)
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
 {
     if unlikely (is_finished)
     {
@@ -41,7 +45,7 @@ void ResourceControlQueue::submit(TaskPtr && task)
         if (iter == pipeline_tasks.end())
         {
             ResourceGroupPtr group = LocalAdmissionController::global_instance->getOrCreateResourceGroup(name);
-            auto task_queue = std::make_shared<CPUMultiLevelFeedbackQueue>();
+            auto task_queue = std::make_shared<NestedQueueType>();
             task_queue->submit(std::move(task));
             resource_group_infos.push({group->getPriority(), task_queue, name});
             pipeline_tasks.insert({name, task_queue});
@@ -53,7 +57,8 @@ void ResourceControlQueue::submit(TaskPtr && task)
     }
 }
 
-void ResourceControlQueue::submit(std::vector<TaskPtr> & tasks)
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
     for (auto & task : tasks)
     {
@@ -68,11 +73,11 @@ void ResourceControlQueue::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-bool ResourceControlQueue::take(TaskPtr & task)
+template<typename NestedQueueType>
+bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
-    // gjt todo: io?
     std::string name;
-    std::shared_ptr<CPUMultiLevelFeedbackQueue> task_queue;
+    std::shared_ptr<NestedQueueType> task_queue;
     {
         std::unique_lock lock(mu);
 
@@ -102,7 +107,8 @@ bool ResourceControlQueue::take(TaskPtr & task)
     return task_queue->take(task);
 }
 
-void ResourceControlQueue::updateStatistics(const TaskPtr & task, size_t inc_value)
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, size_t inc_value)
 {
     assert(task);
     std::string name = task->getResourceGroupName();
@@ -129,7 +135,8 @@ void ResourceControlQueue::updateStatistics(const TaskPtr & task, size_t inc_val
     }
 }
 
-void ResourceControlQueue::updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time)
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const std::string & name, UInt64 consumed_cpu_time)
 {
     LocalAdmissionController::global_instance->getOrCreateResourceGroup(name)->consumeResource(toRU(consumed_cpu_time), consumed_cpu_time);
     {
@@ -138,7 +145,8 @@ void ResourceControlQueue::updateResourceGroupResource(const std::string & name,
     }
 }
 
-void ResourceControlQueue::updateResourceGroupInfos()
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfos()
 {
     ResourceGroupInfoQueue new_resource_group_infos;
     while (!resource_group_infos.empty())
@@ -150,7 +158,8 @@ void ResourceControlQueue::updateResourceGroupInfos()
     resource_group_infos = new_resource_group_infos;
 }
 
-bool ResourceControlQueue::empty() const
+template<typename NestedQueueType>
+bool ResourceControlQueue<NestedQueueType>::empty() const
 {
     std::lock_guard lock(mu);
 
@@ -166,7 +175,8 @@ bool ResourceControlQueue::empty() const
     return empty;
 }
 
-void ResourceControlQueue::finish()
+template<typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::finish()
 {
     {
         std::lock_guard lock(mu);
@@ -175,4 +185,6 @@ void ResourceControlQueue::finish()
     cv.notify_all();
 }
 
+template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;
+template class ResourceControlQueue<FIFOTaskQueue>;
 } // namespace DB

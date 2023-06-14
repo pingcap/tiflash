@@ -310,8 +310,47 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(const MPPQueryId & query_id)
 
 bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 {
+    bool scheduled = false;
+    if (schedule_entry.resourceControlEnabled())
+    {
+        const String resrouce_group_name = "gjt todo";
+
+        std::lock_guard lock(mu);
+
+        // Check MPPTask hard limit.
+        size_t cur_active_set_size = 0;
+        for (const auto & ele : resource_group_schedulers)
+            cur_active_set_size += ele.second->getActiveSetSize();
+
+        if (cur_active_set_size >= schedule_entry.getResourceControlMPPTaskHardLimit())
+            throw Exception(fmt::format("too many running mpp tasks(hard limit: {}, current: {})", schedule_entry.getResourceControlMPPTaskHardLimit(), cur_active_set_size));
+
+        // MinTSO related check.
+        auto iter = resource_group_schedulers.find(resrouce_group_name);
+        if (iter == resource_group_schedulers.end())
+        {
+            auto [thread_soft_limit, thread_hard_limit, active_set_soft_limit] = scheduler->getLimitConfig();
+            MPPTaskSchedulerPtr resource_group_scheduler = std::make_unique<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
+            scheduled = iter->second->tryToSchedule(schedule_entry, *this);
+            resource_group_schedulers.insert({resrouce_group_name, std::move(resource_group_scheduler)});
+        }
+        else
+        {
+            scheduled = iter->second->tryToSchedule(schedule_entry, *this);
+        }
+    }
+    else
+    {
+        std::lock_guard lock(mu);
+        scheduled = scheduler->tryToSchedule(schedule_entry, *this);
+    }
+    return scheduled;
+}
+
+bool MPPTaskManager::removeResourceGroupMinTSOScheduler(const String & name)
+{
     std::lock_guard lock(mu);
-    return scheduler->tryToSchedule(schedule_entry, *this);
+    return resource_group_schedulers.erase(name) == 1;
 }
 
 void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)

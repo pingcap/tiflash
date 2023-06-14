@@ -109,6 +109,8 @@ class MPPTaskManager : private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
+    std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
+
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
@@ -149,6 +151,8 @@ public:
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
 
     String toString();
+
+    bool removeResourceGroupMinTSOScheduler(const String & name);
 
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);

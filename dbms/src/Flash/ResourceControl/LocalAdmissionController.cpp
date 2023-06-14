@@ -30,13 +30,13 @@ ResourceGroupPtr LocalAdmissionController::getOrCreateResourceGroup(const std::s
     auto resp = cluster->pd_client->getResourceGroup(req);
     if (resp.has_error())
     {
-        // gjt todo: if not found group is error or not?
+        LOG_ERROR(log, "got error when fetch resource group from GAC: {}", resp.error().message());
+        return nullptr;
     }
     return addResourceGroup(resp.group()).first;
 }
 
-// gjt todo: low token notify
-// cleanup resource group
+// gjt todo: in trickle mode, stop low token notify
 void LocalAdmissionController::startBackgroudJob()
 {
     while (!stopped.load())
@@ -48,55 +48,72 @@ void LocalAdmissionController::startBackgroudJob()
                 return;
         }
 
-        // Prepare req.
-        // key: ResourceGroup name
-        // gjt todo: keyspace id and ru_consumption_delta
-        // val: tuple<token_num_that_will_acquire_from_gac, ru_consumption_delta, keyspace_id
-        std::unordered_map<std::string, double> need_tokens;
-        {
-            std::lock_guard lock(mu);
-            for (const auto & resource_group : resource_groups)
-            {
-                double token_need_from_gac = resource_group->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED);
-                // gjt todo maybe always <= 0.0
-                if (token_need_from_gac <= 0.0)
-                    continue;
-                bool ok = need_tokens.insert(std::make_pair(resource_group->getName(), token_need_from_gac)).second;
-                assert(ok);
-            }
-        }
-        
-        resource_manager::TokenBucketsRequest gac_req;
-        // gjt todo: client_unique_id target_request_period_ms
-        gac_req.set_client_unique_id(100);
-        gac_req.set_target_request_period_ms(100);
+        fetchTokensFromGAC();
+        checkDegradeMode();
 
-        for (const auto & ele : need_tokens)
-        {
-            auto * single_group_req = gac_req.add_requests();
-            single_group_req->set_resource_group_name(ele.first);
-            auto * ru_items = single_group_req->mutable_ru_items();
-            auto * req_ru = ru_items->add_request_r_u();
-            req_ru->set_type(resource_manager::RequestUnitType::RU);
-            req_ru->set_value(ele.second);
-        }
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_cleanup_resource_group_timepoint >= CLEANUP_RESOURCE_GROUP_INTERVAL)
+            cleanupResourceGroups();
+    }
+}
 
-        auto grpc_reader_writer = cluster->pd_client->acquireTokenBuckets();
-        bool succ = grpc_reader_writer->Write(gac_req);
-        if (succ)
+void LocalAdmissionController::fetchTokensFromGAC()
+{
+    // Prepare req.
+    // key: ResourceGroup name
+    // gjt todo: keyspace id and ru_consumption_delta
+    // val: tuple<token_num_that_will_acquire_from_gac, ru_consumption_delta, keyspace_id
+    std::unordered_map<std::string, double> need_tokens;
+    {
+        std::lock_guard lock(mu);
+        for (const auto & resource_group : resource_groups)
         {
-            handleBackgroundError("write grpc stream failed when send TokenBucketsRequest to GAC");
-            continue;
+            double token_need_from_gac = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED);
+            // gjt todo maybe always <= 0.0
+            if (token_need_from_gac <= 0.0)
+                return;
+            bool ok = need_tokens.insert(std::make_pair(resource_group.first, token_need_from_gac)).second;
+            assert(ok);
         }
-        grpc_reader_writer->WritesDone();
+    }
+    
+    resource_manager::TokenBucketsRequest gac_req;
+    // gjt todo: client_unique_id target_request_period_ms
+    gac_req.set_client_unique_id(100);
+    gac_req.set_target_request_period_ms(100);
 
-        resource_manager::TokenBucketsResponse resp;
-        while (grpc_reader_writer->Read(&resp))
-        {
-            // gjt todo only handle once?
-            handleTokenBucketsResp(resp);
-        }
-        grpc_reader_writer->Finish();
+    for (const auto & ele : need_tokens)
+    {
+        auto * single_group_req = gac_req.add_requests();
+        single_group_req->set_resource_group_name(ele.first);
+        auto * ru_items = single_group_req->mutable_ru_items();
+        auto * req_ru = ru_items->add_request_r_u();
+        req_ru->set_type(resource_manager::RequestUnitType::RU);
+        req_ru->set_value(ele.second);
+    }
+
+    auto grpc_reader_writer = cluster->pd_client->acquireTokenBuckets();
+    bool succ = grpc_reader_writer->Write(gac_req);
+    if (!succ)
+    {
+        handleBackgroundError("write grpc stream failed when send TokenBucketsRequest to GAC");
+        return;
+    }
+    grpc_reader_writer->WritesDone();
+
+    resource_manager::TokenBucketsResponse resp;
+    while (grpc_reader_writer->Read(&resp))
+        handleTokenBucketsResp(resp);
+    grpc_reader_writer->Finish();
+}
+
+void LocalAdmissionController::checkDegradeMode()
+{
+    std::lock_guard lock(mu);
+    for (const auto & ele : resource_groups)
+    {
+        auto group = ele.second;
+        group->stepIntoDegradeModeIfNecessary(DEGRADE_MODE_DURATION);
     }
 }
 
@@ -104,12 +121,11 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
 {
     if unlikely (resp.has_error())
     {
-        // gjt todo handle error
         handleBackgroundError(resp.error().message());
     }
     else if (resp.responses().empty())
     {
-        LOG_DEBUG(log, "got empty TokenBuckets resp from GAC");
+        handleBackgroundError("got empty TokenBuckets resp from GAC");
     }
     else
     {
@@ -158,9 +174,51 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
     }
 }
 
+void LocalAdmissionController::cleanupResourceGroups()
+{
+    resource_manager::ListResourceGroupsRequest req;
+    auto resp = cluster->pd_client->listResourceGroups(req);
+    if (resp.has_error())
+    {
+        handleBackgroundError(resp.error().message());
+        return;
+    }
+    std::unordered_set<std::string> gac_resource_groups;
+    for (const auto & resource_group_pb : resp.groups())
+    {
+        auto insert_result = gac_resource_groups.insert(resource_group_pb.name());
+        assert(insert_result.second);
+    }
+
+    // Record all resource group name to remove instead of call removeResourceGroupMinTSOScheduler inside the follow lock scope.
+    // This is to avoid potential dead lock between LocalAdmissionController::mu and MPPTaskManager::mu.
+    std::unordered_set<std::string> remove_names;
+    {
+        std::lock_guard lock(mu);
+        for (auto iter = resource_groups.begin(); iter != resource_groups.end();)
+        {
+            if (!gac_resource_groups.contains(iter->first))
+            {
+                iter = resource_groups.erase(iter);
+                remove_names.insert(iter->first);
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+    }
+
+    for (const auto & remove_name : remove_names)
+        mpp_task_manager->removeResourceGroupMinTSOScheduler(remove_name);
+
+    last_cleanup_resource_group_timepoint = std::chrono::steady_clock::now();
+}
+
 void LocalAdmissionController::handleBackgroundError(const std::string & err_msg)
 {
-    // gjt todo
+    // Basically error is from GAC, cannot handle in tiflash.
+    LOG_ERROR(log, err_msg);
 }
 
 // gjt todo init

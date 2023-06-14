@@ -22,10 +22,12 @@
 
 namespace DB
 {
+template <typename NestedQueueType>
 class ResourceControlQueue : public TaskQueue
 {
 public:
-    ~ResourceControlQueue() override;
+    ResourceControlQueue() = default;
+    ~ResourceControlQueue() override {}
 
     void submit(TaskPtr && task) override;
 
@@ -41,10 +43,10 @@ public:
 
 private:
     // <resource_group_name, pipeline_tasks>
-    using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<CPUMultiLevelFeedbackQueue>>;
+    using PipelineTasks = std::unordered_map<std::string, std::shared_ptr<NestedQueueType>>;
 
     // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name>
-    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<CPUMultiLevelFeedbackQueue>, std::string>;
+    using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string>;
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo>;
     using ResourceGroupNameSet = std::unordered_set<std::string>;
 
@@ -59,12 +61,10 @@ private:
 
     mutable std::mutex mu;
 
-    // gjt todo: finish
     std::atomic<bool> is_finished = false;
 
     std::condition_variable cv;
 
-    // gjt todo resource_group_infos?
     ResourceGroupInfoQueue resource_group_infos;
     PipelineTasks pipeline_tasks;
 

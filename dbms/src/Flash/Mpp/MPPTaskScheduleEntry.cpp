@@ -19,9 +19,11 @@
 
 namespace DB
 {
-MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_)
+MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPTaskId & id_, const String & resource_group_name_, UInt64 resource_control_mpptask_hard_limit_)
     : manager(manager_)
     , id(id_)
+    , resource_group_name(resource_group_name_)
+    , resource_control_mpptask_hard_limit(resource_control_mpptask_hard_limit_)
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
     , log(Logger::get(id.toString()))

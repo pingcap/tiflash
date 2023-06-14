@@ -14,6 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 namespace DB
@@ -24,10 +25,14 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
     {
     // the default queue is mlfq queue.
     case TaskQueueType::DEFAULT:
+    case TaskQueueType::RCQ_MLFQ:
+        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
     case TaskQueueType::MLFQ:
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
     case TaskQueueType::FIFO:
         return std::make_unique<FIFOTaskQueue>();
+    case TaskQueueType::RCQ_FIFO:
+        return std::make_unique<ResourceControlQueue<FIFOTaskQueue>>();
     }
 }
 
@@ -37,10 +42,14 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
     {
     // the default queue is fifo queue.
     case TaskQueueType::DEFAULT:
+    case TaskQueueType::RCQ_FIFO:
+        return std::make_unique<ResourceControlQueue<FIFOTaskQueue>>();
     case TaskQueueType::FIFO:
         return std::make_unique<FIFOTaskQueue>();
     case TaskQueueType::MLFQ:
         return std::make_unique<IOMultiLevelFeedbackQueue>();
+    case TaskQueueType::RCQ_MLFQ:
+        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
     }
 }
 } // namespace DB

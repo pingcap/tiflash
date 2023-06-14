@@ -48,6 +48,14 @@ public:
     /// all scheduled tasks should finally call this function to release threads and schedule new tasks
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
+    std::tuple<UInt64, UInt64, UInt64> getLimitConfig() const
+    {
+        return {thread_soft_limit, thread_hard_limit, active_set_soft_limit};
+    }
+    size_t getActiveSetSize() const
+    {
+        return active_set.size();
+    }
 private:
     bool scheduleImp(const MPPQueryId & query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
     bool updateMinQueryId(const MPPQueryId & query_id, const bool retired, const String & msg);

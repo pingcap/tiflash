@@ -34,7 +34,8 @@ public:
         , last_compact_timepoint(std::chrono::steady_clock::time_point::min())
         , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
         , last_get_avg_speed_tokens(init_tokens_)
-        , avg_speed_per_sec(0.0) {}
+        , avg_speed_per_sec(0.0)
+        , low_token_threshold(0.8 * init_tokens_) {}
 
     ~TokenBucket() = default;
 
@@ -49,7 +50,7 @@ public:
     // Returns current tokens.
     double peek() const { return peek(std::chrono::steady_clock::now()); }
 
-    double peek(const TimePoint & timepoint) const { return tokens + getDynamicTokens(timepoint); }
+    double peek(const TimePoint & timepoint) const;
 
     void reConfig(double new_tokens, double new_fill_rate, double new_capacity);
 
@@ -57,8 +58,10 @@ public:
 
     double getAvgSpeedPerSec();
 
+    bool lowToken() const { return peek() <= low_token_threshold; }
+
 private:
-    double getDynamicTokens(const TokenBucket::TimePoint & timepoint) const;
+    double getDynamicTokens(const TimePoint & timepoint) const;
 
     void compact(const TokenBucket::TimePoint & timepoint);
 
@@ -71,6 +74,9 @@ private:
     TimePoint last_get_avg_speed_timepoint;
     double last_get_avg_speed_tokens;
     double avg_speed_per_sec;
+
+    // gjt todo init
+    double low_token_threshold;
 };
 
 using TokenBucketPtr = std::unique_ptr<TokenBucket>;
