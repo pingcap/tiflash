@@ -20,7 +20,7 @@
 namespace DB
 {
 class MinTSOScheduler;
-using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
+using MPPTaskSchedulerPtr = std::shared_ptr<MinTSOScheduler>;
 
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;

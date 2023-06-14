@@ -154,6 +154,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
 
+    std::unordered_map<MPPQueryId, MPPTaskSchedulerPtr, MPPQueryIdHash> resource_group_query_ids;
+
     std::mutex mu;
 
     MPPQueryMap mpp_query_map;
@@ -187,7 +189,7 @@ public:
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
-    void releaseThreadsFromScheduler(int needed_threads);
+    void releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads);
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
@@ -202,6 +204,20 @@ public:
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
     void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
+    MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id)
+    {
+        auto iter = resource_group_query_ids.find(query_id);
+        if (iter == resource_group_query_ids.end())
+            return scheduler;
+        return iter->second;
+    }
+    MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
+    {
+        auto iter = resource_group_schedulers.find(resource_group_name);
+        if (iter == resource_group_schedulers.end())
+            return scheduler;
+        return iter->second;
+    }
 };
 
 } // namespace DB

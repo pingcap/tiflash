@@ -32,7 +32,6 @@ UInt64 toCPUTimeMillisecond(UInt64 cpu_time_ns)
 } // namespace
 
 // 1 ru = 3 millisecond cpu time
-// gjt todo RU -> double
 RU toRU(UInt64 cpu_time_ns)
 {
     if (unlikely(cpu_time_ns == 0))

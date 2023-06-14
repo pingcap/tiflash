@@ -243,6 +243,16 @@ public:
         return group->getPriority();
     }
 
+    bool isResourceGroupThrottled(const std::string & name)
+    {
+        // todo: refine: ResourceControlQueue can record the statics of running pipeline task.
+        // If the proportion of scheduled pipeline task is less than 10%, we say this resource group is throttled.
+        ResourceGroupPtr group = findResourceGroup(name);
+        if (group == nullptr)
+            return false;
+        return group->getRU() <= 0.0;
+    }
+
     static std::unique_ptr<LocalAdmissionController> global_instance;
 
 private:
