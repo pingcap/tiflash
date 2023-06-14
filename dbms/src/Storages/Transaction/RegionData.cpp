@@ -135,7 +135,6 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
         {
             if (!hard_error)
             {
-                LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "hard_error {} orphan_keys_info.pre_handling {}", hard_error, orphan_keys_info.pre_handling);
                 // We are parsing a raftstore v2 snapshot.
                 if (orphan_keys_info.pre_handling)
                 {
@@ -224,9 +223,7 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "assignRegionData {}", new_region_data.orphan_keys_info.remainedKeyCount());
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
-    LOG_DEBUG(&Poco::Logger::get("!!!!! fff"), "orphan_keys_info {}", orphan_keys_info.remainedKeyCount());
 
     cf_data_size = new_region_data.cf_data_size.load();
 }
@@ -322,6 +319,19 @@ void RegionData::OrphanKeysInfo::mergeFrom(const RegionData::OrphanKeysInfo & ot
     for (const auto & remained_key : other.remained_keys)
     {
         remained_keys.insert(TiKVKey::copyFrom(remained_key));
+    }
+}
+
+void RegionData::OrphanKeysInfo::advanceAppliedIndex(uint64_t applied_index)
+{
+    if (deadline_index && snapshot_index)
+    {
+        auto count = remainedKeyCount();
+        if (applied_index >= deadline_index.value() && count)
+        {
+            auto one = remained_keys.begin()->toDebugString();
+            throw Exception(fmt::format("Orphan keys from snapshot at {} still exists at deadline {}. One of total {} is {}. [region_id={}]", snapshot_index.value(), deadline_index.value(), count, one, region_id));
+        }
     }
 }
 

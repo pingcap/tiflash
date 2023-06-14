@@ -907,6 +907,7 @@ try
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
         }
@@ -941,6 +942,7 @@ try
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 9,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(9), true);
         }
@@ -1011,6 +1013,7 @@ try
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
             try
@@ -1021,6 +1024,7 @@ try
                     {}, // empty snap files
                     6, // smaller index
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 ASSERT_TRUE(false);
             }
@@ -1039,6 +1043,7 @@ try
                     {},
                     9,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
             }
@@ -1050,6 +1055,7 @@ try
                     {},
                     9,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
                 ASSERT_TRUE(false);
@@ -1076,6 +1082,7 @@ try
                         {},
                         10,
                         5,
+                        std::nullopt,
                         ctx.getTMTContext());
                     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
                     ASSERT_TRUE(false);
@@ -1099,6 +1106,7 @@ try
                     {},
                     10,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
 

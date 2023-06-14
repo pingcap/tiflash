@@ -515,10 +515,12 @@ RaftstoreVer Region::getClusterRaftstoreVer()
     return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
 }
 
-void Region::beforePrehandleSnapshot()
+void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
 {
     data.orphan_keys_info.snapshot_index = appliedIndex();
     data.orphan_keys_info.pre_handling = true;
+    data.orphan_keys_info.deadline_index = deadline_index;
+    data.orphan_keys_info.region_id = region_id;
 }
 
 void Region::afterPrehandleSnapshot()

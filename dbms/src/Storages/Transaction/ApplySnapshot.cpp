@@ -287,10 +287,11 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     std::vector<DM::ExternalDTFileInfo> external_files;
-    new_region->beforePrehandleSnapshot();
+    new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     try
     {
         external_files = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
@@ -493,10 +494,11 @@ void KVStore::handleApplySnapshot(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 

@@ -120,7 +120,7 @@ public:
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, std::optional<uint64_t>, TMTContext & tmt);
 
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
@@ -129,6 +129,7 @@ public:
         SSTViewVec,
         uint64_t index,
         uint64_t term,
+        std::optional<uint64_t> deadline_index,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);

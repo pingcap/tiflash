@@ -203,7 +203,7 @@ public:
     RegionMeta & mutMeta() { return meta; }
 
     RaftstoreVer getClusterRaftstoreVer();
-    void beforePrehandleSnapshot();
+    void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
     void afterPrehandleSnapshot();
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }

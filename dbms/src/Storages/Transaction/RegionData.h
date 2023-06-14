@@ -86,10 +86,16 @@ public:
 
         void mergeFrom(const OrphanKeysInfo & other);
 
+        void advanceAppliedIndex(uint64_t);
+
         // Providing a `snapshot_index` indicates we can scanning a snapshot of index `snapshot_index`.
         // `snapshot_index` can be set to null if TiFlash is not in a raftstore v2 cluster.
         std::optional<uint64_t> snapshot_index;
+        // When applied raft log to `deadline_index`, `remained_keys` shall be cleared.
+        // Otherwise, raise a hard error.
+        std::optional<uint64_t> deadline_index;
         bool pre_handling = true;
+        uint64_t region_id = 0;
 
     private:
         // Stores orphan write cf keys while handling a raftstore v2 snapshot.

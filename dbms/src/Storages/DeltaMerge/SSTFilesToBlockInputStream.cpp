@@ -248,7 +248,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
 
 Block SSTFilesToBlockInputStream::readCommitedBlock()
 {
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "readCommitedBlock 1");
     if (is_decode_cancelled)
         return {};
 

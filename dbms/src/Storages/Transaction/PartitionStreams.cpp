@@ -484,16 +484,13 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
               { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 0");
     std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
 
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 1");
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
         return res_block;
 
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 2");
     {
         Stopwatch watch;
         {
@@ -507,13 +504,10 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
     }
 
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 3");
     res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap->column_defines));
 
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 4");
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
-    LOG_DEBUG(&Poco::Logger::get("!!!! fff"), "GenRegionBlockDataWithSchema 5");
 
     return res_block;
 }

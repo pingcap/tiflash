@@ -223,13 +223,13 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<std::string> && keys,
         std::vector<std::string> && vals,
         std::vector<WriteCmdType> && cmd_types,
-        std::vector<ColumnFamilyType> && cmd_cf);
+        std::vector<ColumnFamilyType> && cmd_cf,
+        std::optional<uint64_t> forced_index = std::nullopt);
 
-    /// Create a compactLog admin command, returns (index, term) of the admin command itself.
-    std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
 
-    std::tuple<uint64_t, uint64_t> adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest &&, raft_cmdpb::AdminResponse &&);
+    std::tuple<uint64_t, uint64_t> adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest &&, raft_cmdpb::AdminResponse &&, std::optional<uint64_t> forced_index = std::nullopt);
 
+    static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeCompactLog(MockProxyRegionPtr region, UInt64 compact_index);
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2 = true);
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composePrepareMerge(metapb::Region && target, UInt64 min_index);
     static std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> composeCommitMerge(metapb::Region && source, UInt64 commit);
@@ -273,7 +273,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         UInt64 region_id,
         std::vector<Cf> && cfs,
         uint64_t index,
-        uint64_t term);
+        uint64_t term,
+        std::optional<uint64_t> deadline_index);
 
     void doApply(
         KVStore & kvs,
@@ -293,6 +294,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         auto _ = genLockGuard();
         regions.clear();
     }
+
+    std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t);
 
     MockRaftStoreProxy()
     {
