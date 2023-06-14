@@ -67,7 +67,7 @@ public:
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr)
         {
-            LOG_ERROR(log, "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
             return;
         }
         schema_syncer->reset();
@@ -79,7 +79,7 @@ public:
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr)
         {
-            LOG_ERROR(log, "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
             return nullptr;
         }
         return schema_syncer->getDBInfoByName(database_name);
@@ -91,7 +91,7 @@ public:
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr)
         {
-            LOG_ERROR(log, "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
             return nullptr;
         }
         return schema_syncer->getDBInfoByMappedName(mapped_database_name);
@@ -103,7 +103,7 @@ public:
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr)
         {
-            LOG_ERROR(log, "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
             return false;
         }
         schema_syncers.erase(keyspace_id);
@@ -116,7 +116,7 @@ public:
         auto schema_syncer = getSchemaSyncer(keyspace_id);
         if (schema_syncer == nullptr)
         {
-            LOG_ERROR(log, "SchemaSyncer not found for keyspace_id: {}", keyspace_id);
+            LOG_ERROR(log, "SchemaSyncer not found, keyspace={}", keyspace_id);
         }
         schema_syncer->removeTableID(table_id);
     }

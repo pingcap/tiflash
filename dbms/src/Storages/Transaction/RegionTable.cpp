@@ -465,7 +465,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         RUNTIME_CHECK_MSG(
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
-            ", region_id={} keyspace_id={} table_id={}, old_keyspace_id={} old_table_id={}",
+            ", region_id={} keyspace={} table_id={}, old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
             region_id,
             keyspace_id,

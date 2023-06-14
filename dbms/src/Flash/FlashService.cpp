@@ -752,7 +752,7 @@ grpc::Status FlashService::FetchDisaggPages(
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
+    LOG_DEBUG(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.

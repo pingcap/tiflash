@@ -638,7 +638,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
         {
             LOG_INFO(
                 log,
-                "Syncer wants to drop database [id={}], but database is not found, may has been dropped.",
+                "Try to drop database but not found, may has been dropped, database_id={}",
                 schema_id);
             return;
         }
