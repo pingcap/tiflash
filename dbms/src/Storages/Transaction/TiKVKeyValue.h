@@ -19,8 +19,6 @@
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
-#include <string_view>
-
 namespace DB
 {
 template <bool is_key>

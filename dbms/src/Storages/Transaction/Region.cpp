@@ -517,15 +517,22 @@ RaftstoreVer Region::getClusterRaftstoreVer()
 
 void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
 {
-    data.orphan_keys_info.snapshot_index = appliedIndex();
-    data.orphan_keys_info.pre_handling = true;
-    data.orphan_keys_info.deadline_index = deadline_index;
-    data.orphan_keys_info.region_id = region_id;
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.snapshot_index = appliedIndex();
+        data.orphan_keys_info.pre_handling = true;
+        data.orphan_keys_info.deadline_index = deadline_index;
+        data.orphan_keys_info.region_id = region_id;
+    }
 }
 
 void Region::afterPrehandleSnapshot()
 {
-    data.orphan_keys_info.pre_handling = false;
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.pre_handling = false;
+        LOG_INFO(log, "After prehandle, remains {} orphan keys [region_id={}]", data.orphan_keys_info.remainedKeyCount(), id());
+    }
 }
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)

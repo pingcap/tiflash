@@ -295,7 +295,10 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
     }
 
     auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
-    region->orphanKeysInfo().advanceAppliedIndex(index);
+    if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        region->orphanKeysInfo().advanceAppliedIndex(index);
+    }
     return res;
 }
 
@@ -464,7 +467,10 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
               term,
               index);
 
-    curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+    if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+    }
 
     if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
@@ -534,8 +540,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         }
 
         auto & curr_region = *curr_region_ptr;
+
         // Admin cmd contains no normal data, we can advance orphan keys info just before handling.
-        curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+        if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+        {
+            curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+        }
+
         curr_region.makeRaftCommandDelegate(task_lock).handleAdminRaftCmd(
             request,
             response,
