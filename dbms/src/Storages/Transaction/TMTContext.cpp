@@ -58,17 +58,17 @@ std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd_addr, 
     {
         // product env
         // Get DBInfo/TableInfo from TiKV, and create table with names `t_${table_id}`
-        return std::make_shared<TiDBSchemaSyncerManager>(cluster, false, false);
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ false, /*mock_mapper*/ false);
     }
     else if (!for_unit_test)
     {
         // mock test
         // Get DBInfo/TableInfo from MockTiDB, and create table with its display names
-        return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, true);
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ true);
     }
     // unit test.
     // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
-    return std::make_shared<TiDBSchemaSyncerManager>(cluster, true, false);
+    return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ false);
 }
 
 // Print log for MPPTask which hasn't been removed for over 25 minutes.

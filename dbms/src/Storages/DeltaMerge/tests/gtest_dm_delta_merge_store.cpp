@@ -1829,7 +1829,6 @@ try
     // DDL add column f64 with default value
     // actual ddl is like: ADD COLUMN `f64` Double not null DEFAULT 1.123456
     {
-        // check default 值是不是对的
         TiDB::TableInfo new_table_info;
         static const String json_table_info = R"(
     {"cols":[{"comment":"","default":"1.123456","default_bit":null,"id":2,"name":{"L":"f64","O":"f64"},"offset":0,"origin_default":"1.123456","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":22,"Tp":5}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
@@ -1864,58 +1863,6 @@ try
     }
 }
 CATCH
-
-// TODO:target decimal  表示有问题，fixme
-// TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloatDecimal64)
-// try
-// {
-//     const String col_name_to_add = "f64";
-//     //const ColId col_id_to_add = 2;
-//     //const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
-
-//     // write some rows before DDL
-//     size_t num_rows_write = 1;
-//     {
-//         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-//         store->write(*db_context, db_context->getSettingsRef(), block);
-//     }
-
-//     // DDL add column f64 with default value
-//     // actual ddl is like: ADD COLUMN `f64` Decimal DEFAULT 1.123456
-//     {
-//         TiDB::TableInfo new_table_info;
-//         static const String json_table_info = R"(
-//     {"cols":[{"comment":"","default":"1.123456","default_bit":null,"id":2,"name":{"L":"f64","O":"f64"},"offset":0,"origin_default":"1.123456","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":6,"Elems":null,"Flag":1,"Flen":10,"Tp":246}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
-//             )";
-//         new_table_info.deserialize(json_table_info);
-
-//         store->applySchemaChanges(new_table_info);
-//     }
-
-//     // try read
-//     {
-//         auto in = store->read(*db_context,
-//                               db_context->getSettingsRef(),
-//                               store->getTableColumns(),
-//                               {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-//                               /* num_streams= */ 1,
-//                               /* max_version= */ std::numeric_limits<UInt64>::max(),
-//                               EMPTY_FILTER,
-//                               TRACING_NAME,
-//                               /* keep_order= */ false,
-//                               /* is_fast_scan= */ false,
-//                               /* expected_block_size= */ 1024)[0];
-
-//         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
-//             in,
-//             Strings({DMTestEnv::pk_name, col_name_to_add}),
-//             createColumns({
-//                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
-//                 createColumn<Decimal64>(std::vector<DecimalField<Decimal64>>(num_rows_write, DecimalField(Decimal64(1123456), 6))),
-//             }));
-//     }
-// }
-// CATCH
 
 TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat32)
 try

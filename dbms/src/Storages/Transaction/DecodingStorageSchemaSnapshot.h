@@ -105,7 +105,6 @@ struct DecodingStorageSchemaSnapshot
             for (const auto & primary_index_col : primary_index_cols)
             {
                 auto pk_column_id = table_info_.columns[primary_index_col.offset].id;
-                //auto pk_column_id = column_name_id_map[col.name];
                 pk_column_ids.emplace_back(pk_column_id);
                 pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             }
