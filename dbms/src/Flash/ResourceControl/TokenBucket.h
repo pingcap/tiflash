@@ -35,7 +35,8 @@ public:
         , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
-        , low_token_threshold(0.8 * init_tokens_) {}
+        , low_token_threshold(0.8 * init_tokens_)
+    {}
 
     ~TokenBucket() = default;
 

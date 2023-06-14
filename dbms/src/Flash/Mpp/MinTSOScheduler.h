@@ -56,6 +56,7 @@ public:
     {
         return active_set.size();
     }
+
 private:
     bool scheduleImp(const MPPQueryId & query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
     bool updateMinQueryId(const MPPQueryId & query_id, const bool retired, const String & msg);

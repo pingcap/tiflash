@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <common/logger_useful.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <common/logger_useful.h>
 #include <pingcap/kv/Cluster.h>
 
 namespace DB
@@ -74,7 +74,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
             need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getConsumptionDelta()));
         }
     }
-    
+
     resource_manager::TokenBucketsRequest gac_req;
     gac_req.set_client_unique_id(unique_client_id);
     gac_req.set_target_request_period_ms(TARGET_REQUEST_PERIOD_MS);
@@ -154,7 +154,7 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
 
                 int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
                 RUNTIME_CHECK(capacity >= 0);
-                
+
                 RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
 
                 auto resource_group = findResourceGroup(one_resp.resource_group_name());

@@ -63,7 +63,7 @@ double TokenBucket::getAvgSpeedPerSec()
     return avg_speed_per_sec;
 }
 
-double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) const 
+double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) const
 {
     RUNTIME_CHECK(timepoint >= last_compact_timepoint);
     auto elspased = timepoint - last_compact_timepoint;

@@ -15,8 +15,8 @@
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Mpp/MPPTaskManager.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/TokenBucket.h>
 #include <kvproto/resource_manager.pb.h>
 #include <pingcap/kv/Cluster.h>
@@ -46,11 +46,13 @@ public:
 
     ~ResourceGroup() = default;
 
-    enum TokenBucketMode {
+    enum TokenBucketMode
+    {
         normal_mode,
         degrade_mode,
         trickle_mode,
     };
+
 private:
     friend class LocalAdmissionController;
     std::string getName() const { return name; }
@@ -62,7 +64,7 @@ private:
     }
 
     bool consumeResource(double ru, uint64_t cpu_time_)
-    { 
+    {
         cpu_time += cpu_time_;
         std::lock_guard lock(mu);
         return bucket->consume(ru);
@@ -70,7 +72,7 @@ private:
 
     // Get remaining RU of this resource group.
     double getRU() const
-    { 
+    {
         std::lock_guard lock(mu);
         return bucket->peek();
     }
@@ -150,7 +152,7 @@ private:
         }
     }
 
-    KeyspaceID getKeyspaceID() const 
+    KeyspaceID getKeyspaceID() const
     {
         return keyspace_id;
     }
@@ -168,7 +170,7 @@ private:
     // 2. MediumPriorityValue is 8.
     // 3. HighPriorityValue is 16.
     uint32_t user_priority;
-    
+
     // Definition of the RG, e.g. RG settings, priority etc.
     resource_manager::ResourceGroup group_pb;
 
@@ -266,7 +268,7 @@ private:
             if (group.first == new_group_pb.name())
                 return std::make_pair(group.second, false);
         }
-        
+
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb, keyspace_id);
         resource_groups.insert({new_group_pb.name(), new_group});
         return std::make_pair(new_group, true);

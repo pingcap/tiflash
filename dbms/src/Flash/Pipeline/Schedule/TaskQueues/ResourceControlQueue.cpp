@@ -20,7 +20,7 @@
 
 namespace DB
 {
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::doFinish()
 {
     for (auto & ele : pipeline_tasks)
@@ -29,7 +29,7 @@ void ResourceControlQueue<NestedQueueType>::doFinish()
     }
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
 {
     if unlikely (is_finished)
@@ -57,7 +57,7 @@ void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
     }
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
     for (auto & task : tasks)
@@ -73,7 +73,7 @@ void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 {
     std::string name = task->getResourceGroupName();
@@ -107,7 +107,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
     return task_queue->take(task);
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, size_t inc_value)
 {
     assert(task);
@@ -136,7 +136,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     }
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
     LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
@@ -146,7 +146,7 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const st
     }
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfos()
 {
     ResourceGroupInfoQueue new_resource_group_infos;
@@ -159,7 +159,7 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfos()
     resource_group_infos = new_resource_group_infos;
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 bool ResourceControlQueue<NestedQueueType>::empty() const
 {
     std::lock_guard lock(mu);
@@ -176,7 +176,7 @@ bool ResourceControlQueue<NestedQueueType>::empty() const
     return empty;
 }
 
-template<typename NestedQueueType>
+template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::finish()
 {
     {

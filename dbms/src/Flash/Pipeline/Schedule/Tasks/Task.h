@@ -84,6 +84,7 @@ public:
     {
         return keyspace_id;
     }
+
 public:
     LoggerPtr log;
 
