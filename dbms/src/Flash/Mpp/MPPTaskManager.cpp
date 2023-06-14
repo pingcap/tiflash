@@ -19,6 +19,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <fmt/core.h>
 
@@ -35,6 +36,15 @@ namespace FailPoints
 extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
+
+MPPQueryTaskSet::~MPPQueryTaskSet()
+{
+    if likely (process_list_entry != nullptr)
+    {
+        auto peak_memory = process_list_entry->get().getMemoryTrackerPtr()->getPeak();
+        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_query).Observe(peak_memory);
+    }
+}
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))

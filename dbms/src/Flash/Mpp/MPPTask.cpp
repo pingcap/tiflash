@@ -521,8 +521,9 @@ void MPPTask::runImpl()
             // todo when error happens, should try to update the metrics if it is available
             if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-            auto process_info = context->getProcessListElement()->getInfo();
-            auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+            /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
+            /// todo log executor level peak memory usage instead
+            auto peak_memory = process_list_entry->get().getMemoryTrackerPtr()->getPeak();
             GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }

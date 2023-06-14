@@ -53,6 +53,7 @@ struct MPPQueryTaskSet
     {
         return state == Normal || state == Aborted;
     }
+    ~MPPQueryTaskSet();
 };
 
 /// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
