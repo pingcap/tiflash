@@ -154,7 +154,9 @@ class MPPTaskManager : private boost::noncopyable
 
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
 
-    std::unordered_map<MPPQueryId, MPPTaskSchedulerPtr, MPPQueryIdHash> resource_group_query_ids;
+    std::unordered_map<MPPQueryId, String, MPPQueryIdHash> resource_group_query_ids;
+
+    std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
 
     std::mutex mu;
 
@@ -199,17 +201,22 @@ public:
 
     String toString();
 
-    bool removeResourceGroupMinTSOScheduler(const String & name);
+    // This will be updated in LocalAdmissionController, will delete related MinTSO when resource group is deleted.
+    void removeResourceGroupMinTSOScheduler(const String & name);
+
+    // This is to clean resource group related scheduler periodicilly.
+    void cleanDeletedResourceGroupScheduler();
 
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);
     void removeMPPQueryTaskSet(const MPPQueryId & query_id, bool on_abort);
     MPPTaskSchedulerPtr getScheduler(const MPPQueryId & query_id)
     {
-        auto iter = resource_group_query_ids.find(query_id);
-        if (iter == resource_group_query_ids.end())
+        auto query_id_iter = resource_group_query_ids.find(query_id);
+        if (query_id_iter == resource_group_query_ids.end())
             return scheduler;
-        return iter->second;
+        auto scheduler_iter = resource_group_schedulers.find(query_id_iter->second);
+        return scheduler_iter->second;
     }
     MPPTaskSchedulerPtr getScheduler(const String & resource_group_name)
     {

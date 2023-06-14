@@ -356,7 +356,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
             MPPTaskSchedulerPtr resource_group_scheduler = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
             scheduled = iter->second->tryToSchedule(schedule_entry, *this);
             resource_group_schedulers.insert({resource_group_name, resource_group_scheduler});
-            resource_group_query_ids.insert({schedule_entry.getMPPTaskId().query_id, resource_group_scheduler});
+            resource_group_query_ids.insert({schedule_entry.getMPPTaskId().query_id, resource_group_name});
         }
         else
         {
@@ -371,10 +371,38 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduled;
 }
 
-bool MPPTaskManager::removeResourceGroupMinTSOScheduler(const String & name)
+void MPPTaskManager::removeResourceGroupMinTSOScheduler(const String & name)
 {
     std::lock_guard lock(mu);
-    return resource_group_schedulers.erase(name) == 1;
+    auto scheduler_iter = resource_group_schedulers.find(name);
+    if (scheduler_iter == resource_group_schedulers.end())
+        return;
+
+    bool query_id_deleted = false;
+    for (auto query_id_iter = resource_group_query_ids.begin(); query_id_iter != resource_group_query_ids.end();)
+    {
+        if (query_id_iter->second == name)
+        {
+            query_id_iter = resource_group_query_ids.erase(query_id_iter);
+            resource_group_schedulers_ready_to_delete.insert(scheduler_iter->second);
+            query_id_deleted = true;
+            break;
+        }
+    }
+    assert(query_id_deleted);
+    resource_group_schedulers.erase(scheduler_iter);
+}
+
+void MPPTaskManager::cleanDeletedResourceGroupScheduler()
+{
+    std::lock_guard lock(mu);
+    for (auto iter = resource_group_schedulers_ready_to_delete.begin(); iter != resource_group_schedulers_ready_to_delete.end();)
+    {
+        if ((*iter)->getActiveSetSize() + (*iter)->getWaitingSetSize() == 0)
+            iter = resource_group_schedulers_ready_to_delete.erase(iter);
+        else
+            ++iter;
+    }
 }
 
 void MPPTaskManager::releaseThreadsFromScheduler(const String & resource_group_name, int needed_threads)

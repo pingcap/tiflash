@@ -215,6 +215,8 @@ void LocalAdmissionController::cleanupResourceGroups()
     for (const auto & remove_name : remove_names)
         mpp_task_manager->removeResourceGroupMinTSOScheduler(remove_name);
 
+    mpp_task_manager->cleanDeletedResourceGroupScheduler();
+
     last_cleanup_resource_group_timepoint = std::chrono::steady_clock::now();
 }
 
