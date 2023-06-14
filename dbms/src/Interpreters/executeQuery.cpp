@@ -402,7 +402,7 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
     const IAST * ast,
-    bool use_current_memory_tracker)
+    bool is_dag_task)
 {
     assert(ast);
     auto total_memory = context.getServerInfo().has_value() ? context.getServerInfo()->memory_info.capacity : 0;
@@ -412,7 +412,7 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
         context.getClientInfo(),
         context.getSettingsRef(),
         total_memory,
-        use_current_memory_tracker);
+        is_dag_task);
     context.setProcessListElement(&process_list_entry->get());
     return process_list_entry;
 }

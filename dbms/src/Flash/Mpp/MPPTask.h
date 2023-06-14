@@ -124,7 +124,7 @@ private:
 
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
-    void initMemoryTracker(MPPTaskManagerPtr & task_manager);
+    void initProcessListEntry(MPPTaskManagerPtr & task_manager);
 
     void initExchangeReceivers();
 

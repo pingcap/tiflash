@@ -70,7 +70,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
         auto process_list_entry = setProcessListElement(
             context,
             dag_context.dummy_query_string,
-            dag_context.dummy_ast.get());
+            dag_context.dummy_ast.get(),
+            true);
         dag_context.setProcessListEntry(process_list_entry);
         return process_list_entry;
     }
