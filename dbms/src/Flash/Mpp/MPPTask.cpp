@@ -524,7 +524,6 @@ void MPPTask::runImpl()
             /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
             /// todo log executor level peak memory usage instead
             auto peak_memory = process_list_entry->get().getMemoryTrackerPtr()->getPeak();
-            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }
     }
