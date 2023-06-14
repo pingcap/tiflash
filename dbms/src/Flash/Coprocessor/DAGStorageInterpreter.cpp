@@ -57,9 +57,6 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
-#include "Common/Logger.h"
-
-
 namespace DB
 {
 namespace FailPoints
@@ -476,7 +473,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 // we think we can directly do read, and don't need sync schema.
 // compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
-bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const LoggerPtr & log)
+bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const DAGContext & dag_context, const LoggerPtr & log)
 {
     const auto & columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
@@ -487,6 +484,7 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
 
     for (const auto & column : columns)
     {
+        LOG_INFO(Logger::get("hyy"), "compare columns with id is {}", column.id);
         // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
         if (column.id < 0)
         {
@@ -495,13 +493,13 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            LOG_WARNING(log, "the column with id {} in query is not found in current columns", column.id);
+            LOG_WARNING(log, "the column(id={}) of table {} under keyspace {} in the query is not found in current columns", column.id, table_scan.getLogicalTableID(), dag_context.getKeyspaceID());
             return false;
         }
 
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            LOG_WARNING(log, "the data type {} of column {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), iter->second.type->getName());
+            LOG_WARNING(log, "the data type {} of column(id={}) of table {} under keyspace {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), table_scan.getLogicalTableID(), dag_context.getKeyspaceID(), iter->second.type->getName());
             return false;
         }
     }
@@ -1215,7 +1213,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
-        bool res = compareColumns(table_scan, table_store->getStoreColumnDefines(), log);
+        bool res = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
 
         if (res)
         {

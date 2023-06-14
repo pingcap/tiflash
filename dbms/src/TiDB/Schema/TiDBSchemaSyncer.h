@@ -144,7 +144,7 @@ public:
         builder.dropAllSchema();
     }
 
-    // clear all states. 
+    // clear all states.
     // just for testing restart
     void reset() override
     {
