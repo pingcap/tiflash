@@ -88,6 +88,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     static Timepoint last_print_log_time = Clock::now();
     // TODO(iosmanthus): TiDB should support tiflash replica.
     RegionTable & region_table = tmt.getRegionTable();
+    // Note that the IStorage instance could be not exist if there is only one empty region for the table.
     region_table.handleInternalRegionsByTable(keyspace_id, table_id, [&](const RegionTable::InternalRegions & regions) {
         region_list.reserve(regions.size());
         bool can_log = Clock::now() > last_print_log_time + PRINT_LOG_INTERVAL;
