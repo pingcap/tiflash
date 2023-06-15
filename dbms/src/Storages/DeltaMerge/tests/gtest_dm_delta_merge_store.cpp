@@ -717,7 +717,7 @@ try
                 col_i8_define.id));
         }
         ASSERT_TRUE(store->segments.empty());
-        store->write(*db_context, db_context->getSettingsRef(), block); // Create first segment.
+        store->write(*db_context, db_context->getSettingsRef(), block); // Create first segment, will write PS.
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
         store->write(*db_context, db_context->getSettingsRef(), block); // Will not write PS.
