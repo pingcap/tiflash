@@ -511,8 +511,15 @@ ImutRegionRangePtr Region::getRange() const
 
 RaftstoreVer Region::getClusterRaftstoreVer()
 {
-    RUNTIME_CHECK_MSG(proxy_helper, "proxy_helper must not be null");
-    return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
+    // In non-debug/test mode, we should assert the proxy_ptr be always not null.
+    if (proxy_helper->proxy_ptr)
+    {
+        return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
+    }
+    else
+    {
+        return RaftstoreVer::Uncertain;
+    }
 }
 
 void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
