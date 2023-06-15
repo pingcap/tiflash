@@ -518,7 +518,7 @@ std::tuple<bool, String> compareColumns(const TiDBTableScan & table_scan, const 
 
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            String error_message = fmt::format("the data type {} of column(id={}) of table {} under keyspace {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), table_scan.getLogicalTableID(), dag_context.getKeyspaceID(), iter->second.type->getName());
+            String error_message = fmt::format("the column data type in the query is not the same as the current column, keyspace={} table_id={} column_id={} column_type={} query_column_type={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id, iter->second.type->getName(), getDataTypeByColumnInfo(column)->getName());
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
