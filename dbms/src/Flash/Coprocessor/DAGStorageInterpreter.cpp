@@ -58,6 +58,8 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <tuple>
+
 namespace DB
 {
 namespace FailPoints
@@ -492,7 +494,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 // we think we can directly do read, and don't need sync schema.
 // compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
-bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const DAGContext & dag_context, const LoggerPtr & log)
+std::tuple<bool, String> compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const DAGContext & dag_context, const LoggerPtr & log)
 {
     const auto & columns = table_scan.getColumns();
     std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
@@ -511,17 +513,19 @@ bool compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & 
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            LOG_WARNING(log, "the column(id={}) of table {} under keyspace {} in the query is not found in current columns", column.id, table_scan.getLogicalTableID(), dag_context.getKeyspaceID());
-            return false;
+            String error_message = fmt::format("the column(id={}) of table {} under keyspace {} in the query is not found in current columns;\n", column.id, table_scan.getLogicalTableID(), dag_context.getKeyspaceID());
+            LOG_WARNING(log, error_message);
+            return std::make_tuple(false, error_message);
         }
 
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            LOG_WARNING(log, "the data type {} of column(id={}) of table {} under keyspace {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), table_scan.getLogicalTableID(), dag_context.getKeyspaceID(), iter->second.type->getName());
-            return false;
+            String error_message = fmt::format("the data type {} of column(id={}) of table {} under keyspace {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), table_scan.getLogicalTableID(), dag_context.getKeyspaceID(), iter->second.type->getName());
+            LOG_WARNING(log, error_message);
+            return std::make_tuple(false, error_message);
         }
     }
-    return true;
+    return std::make_tuple(true, "");
 }
 
 // Apply learner read to ensure we can get strong consistent with TiKV Region
@@ -1233,7 +1237,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
-        bool are_columns_matched = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
+        auto [are_columns_matched, error_message] = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
 
         if (are_columns_matched)
         {
@@ -1243,7 +1247,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         // columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
         if (schema_synced)
         {
-            throw TiFlashException(fmt::format("Table {} schema is newer than query schema version", table_id), Errors::Table::SchemaVersionError);
+            throw TiFlashException(fmt::format("Table {} in keyspace {} schema is newer than query schema version, columns info in query is not matches the column info in tiflash: {}", table_id, dagContext().getKeyspaceID(), error_message), Errors::Table::SchemaVersionError);
         }
 
         // let caller sync schema
