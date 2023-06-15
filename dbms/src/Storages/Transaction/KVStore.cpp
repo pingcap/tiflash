@@ -904,6 +904,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         auto task_lock = genTaskLock();
         auto maybe_region_map = [&]() {
             auto manage_lock = genRegionReadLock();
+            // Check if the region overlaps.
             return manage_lock.index.findByRangeChecked(range);
         }();
 
@@ -929,7 +930,6 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
                 table_id,
                 storage->isCommonHandle(),
                 storage->getRowKeyColumnSize());
-            auto region_task_lock = region_manager.genRegionTaskLock(overlapped_region.first);
             region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
         }
     }
