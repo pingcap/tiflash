@@ -101,7 +101,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         auto inc_time_spent = task->profile_info.elapsedFromPrev();
         task_queue->updateStatistics(task, inc_time_spent);
         total_time_spent += inc_time_spent;
-        if (status != Impl::TargetStatus || pipelineTaskTimeExceedThreshold(total_time_spent))
+        if (status != Impl::TargetStatus || pipelineTaskTimeExceedYieldThreshold(total_time_spent))
             break;
     }
     metrics.addExecuteTime(task, total_time_spent);

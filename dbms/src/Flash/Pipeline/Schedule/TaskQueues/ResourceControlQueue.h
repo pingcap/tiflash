@@ -27,7 +27,7 @@ class ResourceControlQueue : public TaskQueue
 {
 public:
     ResourceControlQueue() = default;
-    ~ResourceControlQueue() override {}
+    ~ResourceControlQueue() override = default;
 
     void submit(TaskPtr && task) override;
 
@@ -50,26 +50,31 @@ private:
     using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo>;
     using ResourceGroupNameSet = std::unordered_set<std::string>;
 
-    // Update used cpu time of resource group.
-    void updateResourceGroupResource(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
+    static constexpr auto InfoIndexPriority = 0;
+    static constexpr auto InfoIndexPipelineTaskQueue = 1;
+    static constexpr auto InfoIndexResourceName = 2;
+    static constexpr auto InfoIndexResourceKeyspaceId = 3;
+
+    // 1. Update cpu time of resource group.
+    // 2. Reorder resource_group_infos.
+    void updateResourceGroupStatics(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
-    // NOTE: not thread safe!
-    void updateResourceGroupInfos();
-    // NOTE: not thread safe!
-    void doFinish();
+    void updateResourceGroupInfosWithoutLock();
+
+    void submitWithoutLock(TaskPtr && task);
 
     mutable std::mutex mu;
-
-    std::atomic<bool> is_finished = false;
-
     std::condition_variable cv;
+
+    bool is_finished = false;
 
     ResourceGroupInfoQueue resource_group_infos;
     PipelineTasks pipeline_tasks;
 
     // <resource_group_name, acculumated_cpu_time>
-    // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group then set it to 0.
+    // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
+    // This is to prevent the resource group from being updated too frequently.
     std::unordered_map<std::string, UInt64> resource_group_statics;
 };
 } // namespace DB

@@ -21,55 +21,43 @@
 namespace DB
 {
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::doFinish()
-{
-    for (auto & ele : pipeline_tasks)
-    {
-        ele.second->finish();
-    }
-}
-
-template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::submit(TaskPtr && task)
 {
-    if unlikely (is_finished)
-    {
-        doFinish();
-    }
-    else
-    {
-        const std::string & name = task->getResourceGroupName();
-        KeyspaceID keyspace_id = task->getKeyspaceID();
-        std::lock_guard lock(mu);
-
-        auto iter = pipeline_tasks.find(name);
-        if (iter == pipeline_tasks.end())
-        {
-            auto task_queue = std::make_shared<NestedQueueType>();
-            task_queue->submit(std::move(task));
-            resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name, keyspace_id), task_queue, name, keyspace_id});
-            pipeline_tasks.insert({name, task_queue});
-        }
-        else
-        {
-            iter->second->submit(std::move(task));
-        }
-    }
+    std::lock_guard lock(mu);
+    submitWithoutLock(std::move(task));
 }
 
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::submit(std::vector<TaskPtr> & tasks)
 {
+    std::lock_guard lock(mu);
     for (auto & task : tasks)
     {
-        if unlikely (is_finished)
-        {
-            doFinish();
-            break;
-        }
-        // Each task may belong to different resource group,
-        // so there is no better way to submit batch tasks at once.
-        submit(std::move(task));
+        submitWithoutLock(std::move(task));
+    }
+}
+
+template <typename NestedQueueType>
+void ResourceControlQueue<NestedQueueType>::submitWithoutLock(TaskPtr && task)
+{
+    if unlikely (is_finished)
+        return;
+
+    // name can be empty, it means resource control is disabled.
+    const std::string & name = task->getResourceGroupName();
+    KeyspaceID keyspace_id = task->getKeyspaceID();
+
+    auto iter = pipeline_tasks.find(name);
+    if (iter == pipeline_tasks.end())
+    {
+        auto task_queue = std::make_shared<NestedQueueType>();
+        task_queue->submit(std::move(task));
+        resource_group_infos.push({LocalAdmissionController::global_instance->getPriority(name, keyspace_id), task_queue, name, keyspace_id});
+        pipeline_tasks.insert({name, task_queue});
+    }
+    else
+    {
+        iter->second->submit(std::move(task));
     }
 }
 
@@ -93,15 +81,12 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
                 return false;
 
             ResourceGroupInfo group_info = resource_group_infos.top();
-            task_queue = std::get<1>(group_info);
+            task_queue = std::get<InfoIndexPipelineTaskQueue>(group_info);
             return LocalAdmissionController::global_instance->getPriority(name, keyspace_id) >= 0.0 && !task_queue->empty();
         });
-    }
 
-    if unlikely (is_finished)
-    {
-        doFinish();
-        return false;
+        if unlikely (is_finished)
+            return false;
     }
 
     return task_queue->take(task);
@@ -118,9 +103,9 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     if (iter == resource_group_statics.end())
     {
         UInt64 accumulated_cpu_time = inc_value;
-        if unlikely (pipelineTaskTimeExceedThreshold(accumulated_cpu_time))
+        if (pipelineTaskTimeExceedYieldThreshold(accumulated_cpu_time))
         {
-            updateResourceGroupResource(name, keyspace_id, accumulated_cpu_time);
+            updateResourceGroupStatics(name, keyspace_id, accumulated_cpu_time);
             accumulated_cpu_time = 0;
         }
         resource_group_statics.insert({name, accumulated_cpu_time});
@@ -128,33 +113,35 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
     else
     {
         iter->second += inc_value;
-        if (pipelineTaskTimeExceedThreshold(iter->second))
+        if (pipelineTaskTimeExceedYieldThreshold(iter->second))
         {
-            updateResourceGroupResource(name, keyspace_id, iter->second);
+            updateResourceGroupStatics(name, keyspace_id, iter->second);
             iter->second = 0;
         }
     }
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupResource(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatics(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
     LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
     {
         std::lock_guard lock(mu);
-        updateResourceGroupInfos();
+        updateResourceGroupInfosWithoutLock();
     }
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfos()
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock()
 {
     ResourceGroupInfoQueue new_resource_group_infos;
     while (!resource_group_infos.empty())
     {
         const auto & group_info = resource_group_infos.top();
-        auto new_priority = LocalAdmissionController::global_instance->getPriority(std::get<2>(group_info), std::get<3>(group_info));
-        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<1>(group_info), std::get<2>(group_info), std::get<3>(group_info)));
+        const auto & name = std::get<InfoIndexResourceName>(group_info);
+        const auto & keyspace_id = std::get<InfoIndexResourceKeyspaceId>(group_info);
+        auto new_priority = LocalAdmissionController::global_instance->getPriority(name, keyspace_id);
+        new_resource_group_infos.push(std::make_tuple(new_priority, std::get<InfoIndexPipelineTaskQueue>(group_info), name, keyspace_id));
     }
     resource_group_infos = new_resource_group_infos;
 }
@@ -182,6 +169,8 @@ void ResourceControlQueue<NestedQueueType>::finish()
     {
         std::lock_guard lock(mu);
         is_finished = true;
+        for (auto & ele : pipeline_tasks)
+            ele.second->finish();
     }
     cv.notify_all();
 }
