@@ -113,7 +113,8 @@ ExecTaskStatus Task::executeIO()
 
 ExecTaskStatus Task::await()
 {
-    assert(mem_tracker_ptr == current_memory_tracker);
+    // await will not call the MemoryTracker, so current_memory_tracker must be nullptr.
+    assert(current_memory_tracker == nullptr);
     assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
     return task_status;

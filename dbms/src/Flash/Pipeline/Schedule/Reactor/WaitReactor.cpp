@@ -35,25 +35,22 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
     assert(task.first);
     auto * task_ptr = task.second;
-    task_ptr->startTraceMemory();
     auto status = task_ptr->await();
     switch (status)
     {
     case ExecTaskStatus::WAITING:
-        task_ptr->endTraceMemory();
         return false;
     case ExecTaskStatus::RUNNING:
         task_ptr->profile_info.elapsedAwaitTime();
-        task_ptr->endTraceMemory();
         cpu_tasks.push_back(std::move(task.first));
         return true;
     case ExecTaskStatus::IO:
         task_ptr->profile_info.elapsedAwaitTime();
-        task_ptr->endTraceMemory();
         io_tasks.push_back(std::move(task.first));
         return true;
     case FINISH_STATUS:
         task_ptr->profile_info.elapsedAwaitTime();
+        task_ptr->startTraceMemory();
         task_ptr->finalize();
         task_ptr->endTraceMemory();
         task.first.reset();
