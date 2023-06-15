@@ -28,6 +28,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>

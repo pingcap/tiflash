@@ -29,6 +29,7 @@
 #include <TiDB/OwnerInfo.h>
 #include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <pingcap/pd/MockPDClient.h>

@@ -334,7 +334,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     auto thread_manager = newThreadManager();
     auto n = static_cast<size_t>(table.segments().size());
 
-    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace_id={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
+    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
     for (size_t idx = 0; idx < n; ++idx)
     {
         const auto & remote_seg = table.segments(idx);

@@ -24,7 +24,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);
-    Int64 version = getter.getVersion();
+    const Int64 version = getter.getVersion();
 
     // TODO: we need support metrics contains keyspace info.
     Stopwatch watch;
@@ -107,7 +107,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(Context & cont
 
         if (diff->regenerate_schema_map)
         {
-            // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
+            // If `schema_diff.regenerate_schema_map` == true, return `-1` directly, let TiFlash reload schema info from TiKV.
             LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
             return -1;
         }
@@ -159,7 +159,7 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID physical_table_id)
 {
-    LOG_INFO(log, "Start sync table schema, table_id: {}", physical_table_id);
+    LOG_INFO(log, "Start sync table schema, table_id={}", physical_table_id);
     auto getter = createSchemaGetter(keyspace_id);
 
     // get logical_table_id and database_id based on physical_table_id,
@@ -167,12 +167,12 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     auto [find, database_id, logical_table_id] = findDatabaseIDAndTableID(physical_table_id);
     if (!find)
     {
-        LOG_WARNING(log, "Can't find physical_table_id {} in table_id_map, try to syncSchemas", physical_table_id);
+        LOG_WARNING(log, "Can't find related database_id and logical_table_id from table_id_map, try to syncSchemas. physical_table_id={}", physical_table_id);
         syncSchemas(context);
         std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
         {
-            LOG_ERROR(log, "Still can't find physical_table_id {} in table_id_map", physical_table_id);
+            LOG_ERROR(log, "Still can't find related database_id and logical_table_id from table_id_map, physical_table_id={}", physical_table_id);
             return false;
         }
     }

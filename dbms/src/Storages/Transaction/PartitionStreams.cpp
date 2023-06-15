@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 
 namespace DB

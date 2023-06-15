@@ -43,6 +43,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
 namespace DB

@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <random>
 

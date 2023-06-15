@@ -214,7 +214,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get(fmt::format("keyspace_id={} table_id={}", keyspace_id_, physical_table_id_)))
+    , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID

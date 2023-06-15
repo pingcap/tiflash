@@ -54,12 +54,12 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
         try
         {
             init_cnt += storage->initStoreIfDataDirExist(restore_segments_thread_pool) ? 1 : 0;
-            LOG_INFO(log, "Storage inited done, keyspace_id={} table_id={}", ks_id, table_id);
+            LOG_INFO(log, "Storage inited done, keyspace={} table_id={}", ks_id, table_id);
         }
         catch (...)
         {
             err_cnt++;
-            tryLogCurrentException(log, fmt::format("Storage inited fail, keyspace_id={} table_id={}", ks_id, table_id));
+            tryLogCurrentException(log, fmt::format("Storage inited fail, keyspace={} table_id={}", ks_id, table_id));
         }
     };
 
