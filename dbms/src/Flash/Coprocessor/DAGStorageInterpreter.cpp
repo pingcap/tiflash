@@ -58,8 +58,6 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
-#include <tuple>
-
 namespace DB
 {
 namespace FailPoints
