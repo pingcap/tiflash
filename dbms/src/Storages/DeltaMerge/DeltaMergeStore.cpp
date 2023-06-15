@@ -1811,7 +1811,7 @@ std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(const RowKeyVa
             auto page_storage_run_mode = storage_pool->getPageStorageRunMode();
             createFirstSegment(*dm_context, page_storage_run_mode);
         }
-    } while (is_empty);
+    } while (create_if_empty && is_empty);
 
     if (throw_if_notfound)
     {
