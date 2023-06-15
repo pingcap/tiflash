@@ -1245,7 +1245,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         // columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
         if (schema_synced)
         {
-            throw TiFlashException(fmt::format("Table {} in keyspace {} schema is newer than query schema version, columns info in query is not matches the column info in tiflash: {}", table_id, dagContext().getKeyspaceID(), error_message), Errors::Table::SchemaVersionError);
+            throw TiFlashException(fmt::format("The schema does not match the query, details: {}", error_message), Errors::Table::SchemaVersionError);
         }
 
         // let caller sync schema
