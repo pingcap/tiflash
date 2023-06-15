@@ -276,8 +276,22 @@ TEST(ThreadedWorker, ErrorInWorkerWithNonEmptyQueue)
     result = w.result_queue->pop(r);
     ASSERT_EQ(result, MPMCQueueResult::OK);
 
-    result = w.result_queue->pop(r);
-    ASSERT_EQ(result, MPMCQueueResult::CANCELLED);
+    // Because the concurrency is 2, there could be a chance that some new result
+    // is pushed into the result_queue before exception cancel all the wokers.
+    // As long as the queue is cancelled before all elements are handled, consider
+    // this test passed.
+    bool error_happened = false;
+    for (size_t i = 0; i < 3; ++i)
+    {
+        result = w.result_queue->pop(r);
+        if (result == MPMCQueueResult::CANCELLED)
+        {
+            error_happened = true;
+            break;
+        }
+        ASSERT_NE(r, 13);
+    }
+    ASSERT_TRUE(error_happened);
 
     result = w.source_queue->push(10);
     ASSERT_EQ(result, MPMCQueueResult::CANCELLED);
