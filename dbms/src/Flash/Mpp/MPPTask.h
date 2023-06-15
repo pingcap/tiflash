@@ -131,6 +131,8 @@ private:
     String getErrString() const;
     void setErrString(const String & message);
 
+    MemoryTracker * getMemoryTracker() const;
+
 private:
     struct ProcessListEntryHolder
     {

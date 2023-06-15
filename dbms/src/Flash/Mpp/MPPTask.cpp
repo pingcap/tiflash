@@ -121,8 +121,9 @@ MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    if (process_list_entry_holder.process_list_entry != nullptr && current_memory_tracker != process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get())
-        current_memory_tracker = process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get();
+    auto * query_memory_tracker = getMemoryTracker();
+    if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
+        current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
     LOG_INFO(log, "finish MPPTask: {}", id.toString());
 }
@@ -296,6 +297,13 @@ void MPPTask::setErrString(const String & message)
     err_string = message;
 }
 
+MemoryTracker * MPPTask::getMemoryTracker() const
+{
+    if (process_list_entry_holder.process_list_entry != nullptr)
+        return process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get();
+    return nullptr;
+}
+
 void MPPTask::unregisterTask()
 {
     auto [result, reason] = manager->unregisterTask(id);
@@ -315,7 +323,7 @@ void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
     process_list_entry_holder.process_list_entry = query_process_list_entry;
     dag_context->setProcessListEntry(query_process_list_entry);
     context->setProcessListElement(&query_process_list_entry->get());
-    current_memory_tracker = query_process_list_entry->get().getMemoryTrackerPtr().get();
+    current_memory_tracker = getMemoryTracker();
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -421,7 +429,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    RUNTIME_ASSERT(current_memory_tracker == process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
+    RUNTIME_ASSERT(current_memory_tracker == getMemoryTracker(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -526,7 +534,7 @@ void MPPTask::runImpl()
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
             /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
             /// todo log executor level peak memory usage instead
-            auto peak_memory = process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr()->getPeak();
+            auto peak_memory = getMemoryTracker()->getPeak();
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }
     }
