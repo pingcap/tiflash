@@ -96,7 +96,8 @@ MakeRegionQueryInfos(
     const std::unordered_set<RegionID> & region_force_retry,
     TMTContext & tmt,
     MvccQueryInfo & mvcc_info,
-    bool batch_cop [[maybe_unused]])
+    bool batch_cop [[maybe_unused]],
+    const LoggerPtr & log)
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
@@ -108,7 +109,7 @@ MakeRegionQueryInfos(
             if (r.key_ranges.empty())
             {
                 throw TiFlashException(
-                    fmt::format("Income key ranges is empty for region: {}", r.region_id),
+                    fmt::format("Income key ranges is empty for region: {}, version {}, conf_version {}", r.region_id, r.region_version, r.region_conf_version),
                     Errors::Coprocessor::BadRequest);
             }
             if (region_force_retry.count(id))
@@ -143,16 +144,24 @@ MakeRegionQueryInfos(
                     {
                         throw TiFlashException(
                             fmt::format(
-                                "Income key ranges is illegal for region: {}, table id in key range is {}, table id in region is {}",
+                                "Income key ranges is illegal for region: {}, version {}, conf_version {}, table id in key range is {}, table id in region is {}",
                                 r.region_id,
+                                r.region_version,
+                                r.region_conf_version,
                                 table_id_in_range,
                                 physical_table_id),
                             Errors::Coprocessor::BadRequest);
                     }
                     if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
+                    {
+                        LOG_WARNING(log, fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}, request range: [{}, {}), region range: [{}, {})", r.region_id, r.region_version, r.region_conf_version, p.first->toDebugString(), p.second->toDebugString(), info.range_in_table.first->toDebugString(), info.range_in_table.second->toDebugString()));
                         throw TiFlashException(
-                            fmt::format("Income key ranges is illegal for region: {}", r.region_id),
+                            fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}",
+                                        r.region_id,
+                                        r.region_version,
+                                        r.region_conf_version),
                             Errors::Coprocessor::BadRequest);
+                    }
                 }
                 info.required_handle_ranges = r.key_ranges;
                 info.bypass_lock_ts = r.bypass_lock_ts;
@@ -336,6 +345,9 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
+    /// record profiles of local and remote io source
+    dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+
     if (group_builder.empty())
     {
         group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
@@ -360,15 +372,21 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     /// If there is no local source, there is no need to execute cast and push down filter, return directly.
     /// But we should make sure that the analyzer is initialized before return.
     if (remote_read_start_index == 0)
+    {
+        dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
+        if (filter_conditions.hasValue())
+            dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
         return;
+    }
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
+    dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
-        /// TODO: record profile
+        dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
 
@@ -678,7 +696,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
         {},
         tmt,
         *mvcc_query_info,
-        false);
+        false,
+        log);
 
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
@@ -708,7 +727,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
                 force_retry,
                 tmt,
                 *mvcc_query_info,
-                true);
+                true,
+                log);
             UNUSED(status);
 
             if (retry)

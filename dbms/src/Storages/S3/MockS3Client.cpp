@@ -102,6 +102,8 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
 
 Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & request) const
 {
+    if (put_object_status == S3Status::FAILED)
+        return Aws::S3::S3ErrorMapper::GetErrorForName("");
     std::lock_guard lock(mtx);
     auto itr = storage.find(request.GetBucket());
     if (itr == storage.end())

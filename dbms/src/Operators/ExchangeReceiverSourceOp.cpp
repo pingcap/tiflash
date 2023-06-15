@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void ExchangeReceiverSourceOp::operateSuffix()
+void ExchangeReceiverSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish read {} rows from exchange", total_rows);
 }
@@ -69,7 +69,15 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
                 return OperatorStatus::HAS_OUTPUT;
             }
 
+            /// only the last response contains execution summaries
+            if (result.resp != nullptr)
+                io_profile_info->remote_execution_summary.add(*result.resp);
+
             const auto & decode_detail = result.decode_detail;
+            auto & connection_profile_info = io_profile_info->connection_profile_infos[result.call_index];
+            connection_profile_info.packets += decode_detail.packets;
+            connection_profile_info.bytes += decode_detail.packet_bytes;
+
             total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,

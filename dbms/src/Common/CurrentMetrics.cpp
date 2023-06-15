@@ -28,6 +28,7 @@
     M(PSMVCCSnapshotsList)                      \
     M(PSMVCCNumDelta)                           \
     M(PSMVCCNumBase)                            \
+    M(PSPendingWriterNum)                       \
     M(RWLockWaitingReaders)                     \
     M(RWLockWaitingWriters)                     \
     M(RWLockActiveReaders)                      \

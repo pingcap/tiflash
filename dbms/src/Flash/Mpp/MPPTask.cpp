@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -50,6 +51,8 @@ extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
+extern const char exception_during_mpp_non_root_task_run[];
+extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
 namespace
@@ -174,6 +177,8 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
+    size_t tunnel_queue_memory_bound = getAverageThreshold(context->getSettingsRef().max_buffered_bytes_in_executor, exchange_sender.encoded_task_meta_size());
+    CapacityLimits queue_limit(std::max(5, context->getSettingsRef().max_threads * 5), tunnel_queue_memory_bound); // MPMCQueue can benefit from a slightly larger queue size
 
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
@@ -184,7 +189,14 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(
+            task_meta,
+            task_request.meta(),
+            timeout,
+            queue_limit,
+            is_local,
+            is_async,
+            log->identifier());
 
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
 
@@ -225,9 +237,7 @@ void MPPTask::initExchangeReceivers()
                 log->identifier(),
                 executor_id,
                 executor.fine_grained_shuffle_stream_count(),
-                context->getSettings().local_tunnel_version,
-                context->getSettings().async_recv_version,
-                context->getSettings().recv_queue_size);
+                context->getSettingsRef());
 
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
@@ -434,6 +444,17 @@ void MPPTask::runImpl()
         }
         mpp_task_statistics.start();
 
+#ifndef NDEBUG
+        if (isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+        }
+        else
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+        }
+#endif
+
         auto result = query_executor_holder->execute();
         LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
         if (likely(result.is_success))
@@ -455,6 +476,7 @@ void MPPTask::runImpl()
         auto read_ru = dag_context->getReadRU();
         LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
+        mpp_task_statistics.setRU(cpu_ru, read_ru);
 
         mpp_task_statistics.collectRuntimeStatistics();
 

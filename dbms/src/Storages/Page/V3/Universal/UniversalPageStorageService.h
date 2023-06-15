@@ -71,8 +71,16 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     explicit UniversalPageStorageService(Context & global_context_);
+    // If the TiFlash process restart unexpectedly, some local checkpoint files can be left,
+    // remove these files when the process restarting.
+    void removeAllLocalCheckpointFiles();
+    Poco::Path getCheckpointLocalDir(UInt64 seq) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -97,5 +105,7 @@ public:
     // other background tasks unexpectly.
     std::unique_ptr<BackgroundProcessingPool> checkpoint_pool;
     BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
+
+    inline static const String checkpoint_dirname_prefix = "checkpoint_upload_";
 };
 } // namespace DB

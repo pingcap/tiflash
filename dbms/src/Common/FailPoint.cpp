@@ -49,6 +49,7 @@ namespace DB
     M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_before_mpp_non_root_task_run)                     \
     M(exception_during_mpp_non_root_task_run)                     \
+    M(exception_during_query_run)                                 \
     M(exception_before_mpp_register_root_mpp_task)                \
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \

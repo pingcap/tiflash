@@ -29,6 +29,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const Aggregator::Params & params_,
     bool final_,
     size_t max_threads_,
+    Int64 max_buffered_bytes_,
     size_t temporary_data_merge_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
@@ -36,6 +37,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , aggregator(params, req_id)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
+    , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
@@ -97,7 +99,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                     BlockInputStreams merging_streams;
                     for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
                         merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
+                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, max_buffered_bytes, log->identifier());
                 }
                 else
                 {

@@ -37,6 +37,7 @@ void PipelineTask::doFinalizeImpl()
 {
     assert(pipeline_exec);
     pipeline_exec->executeSuffix();
+    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
     pipeline_exec = nullptr;
     pipeline_exec_holder.reset();
 }
