@@ -511,8 +511,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(
     }
 
     StringPieceType expr_sp(subject, subject_size);
-    StringPieceType matches[MAX_CAPTURES];
-    bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num);
+    StringPieceType matches[capture_num+1];
+    bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num+1);
     if (!success)
     {
         res_data.resize(res_data.size() + 1);
@@ -645,7 +645,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[MAX_CAPTURES + 1];
+    StringPieceType matches[capture_num + 1];
 
     while (occur > 0)
     {
