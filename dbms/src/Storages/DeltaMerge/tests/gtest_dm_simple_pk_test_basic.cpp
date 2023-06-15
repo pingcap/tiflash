@@ -100,6 +100,10 @@ std::vector<Int64> SimplePKTestBasic::getSegmentBreakpoints() const
 {
     std::vector<Int64> breakpoints;
     std::unique_lock lock(store->read_write_mutex);
+    if (store->segments.empty())
+    {
+        return breakpoints;
+    }
     for (auto it = std::next(store->segments.cbegin()); it != store->segments.cend(); it++)
     {
         auto [start, end] = parseRange(it->second->getRowKeyRange());
@@ -427,7 +431,7 @@ try
         reload();
 
         {
-            ASSERT_EQ(store->segments.size(), 1);
+            ASSERT_EQ(store->segments.size(), 0);
             auto bps = getSegmentBreakpoints();
             ASSERT_EQ(bps.size(), 0);
         }
