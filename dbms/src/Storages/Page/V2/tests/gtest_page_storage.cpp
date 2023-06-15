@@ -868,7 +868,7 @@ try
         try
         {
             FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
-            SCOPE_EXIT({FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);});
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
             storage->write(std::move(batch));
         }
         catch (DB::Exception & e)
