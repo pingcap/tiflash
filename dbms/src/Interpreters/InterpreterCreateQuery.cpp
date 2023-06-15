@@ -58,6 +58,7 @@ extern const int TABLE_METADATA_ALREADY_EXISTS;
 extern const int UNKNOWN_DATABASE_ENGINE;
 extern const int DUPLICATE_COLUMN;
 extern const int READONLY;
+extern const int DDL_GUARD_IS_ACTIVE;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -523,17 +524,52 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
               * Otherwise, concurrent queries for creating a table, if the table does not exist,
               *  can throw an exception, even if IF NOT EXISTS is specified.
               */
-            guard = context.getDDLGuardIfTableDoesntExist(
-                database_name,
-                table_name,
-                "Table " + database_name + "." + table_name + " is creating or attaching right now");
-
-            if (!guard)
+            try
             {
-                if (create.if_not_exists)
-                    return {};
+                guard = context.getDDLGuardIfTableDoesntExist(
+                    database_name,
+                    table_name,
+                    "Table " + database_name + "." + table_name + " is creating or attaching right now");
+
+                if (!guard)
+                {
+                    if (create.if_not_exists)
+                        return {};
+                    else
+                        throw Exception("Table " + database_name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+                }
+            }
+            catch (Exception & e)
+            {
+                // Due to even if it throws this two error code, it can't ensure the table is completely created
+                // So we have to wait for the table created completely, then return to use the table.
+                // Thus, we choose to do a retry here to wait the table created completed.
+                if (e.code() == ErrorCodes::TABLE_ALREADY_EXISTS || e.code() == ErrorCodes::DDL_GUARD_IS_ACTIVE)
+                {
+                    LOG_WARNING(Logger::get("InterpreterCreateQuery"), "createTable failed with error code is {}, error info is {}, stack_info is {}", e.code(), e.displayText(), e.getStackTrace().toString());
+                    for (int i = 0; i < 20; i++) // retry for 400ms
+                    {
+                        if (context.isTableExist(database_name, table_name))
+                        {
+                            return {};
+                        }
+                        else
+                        {
+                            const int wait_useconds = 20000;
+                            LOG_ERROR(
+                                Logger::get("InterpreterCreateQuery"),
+                                "createTable failed but table not exist now, \nWe will sleep for {} ms and try again.",
+                                wait_useconds / 1000);
+                            usleep(wait_useconds); // sleep 20ms
+                        }
+                    }
+                    LOG_ERROR(Logger::get("InterpreterCreateQuery"), "still failed to createTable in InterpreterCreateQuery for retry 20 times");
+                    e.rethrow();
+                }
                 else
-                    throw Exception("Table " + database_name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+                {
+                    e.rethrow();
+                }
             }
         }
         else if (context.tryGetExternalTable(table_name) && create.if_not_exists)

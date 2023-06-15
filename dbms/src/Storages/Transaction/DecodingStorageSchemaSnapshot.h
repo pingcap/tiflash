@@ -78,12 +78,10 @@ struct DecodingStorageSchemaSnapshot
         , decoding_schema_version{decoding_schema_version_}
     {
         std::unordered_map<ColumnID, size_t> column_lut;
-        std::unordered_map<String, ColumnID> column_name_id_map;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
         {
             const auto & ci = table_info_.columns[i];
             column_lut.emplace(ci.id, i);
-            column_name_id_map.emplace(ci.name, ci.id);
         }
         for (size_t i = 0; i < column_defines->size(); i++)
         {
@@ -103,14 +101,10 @@ struct DecodingStorageSchemaSnapshot
         // create pk related metadata if needed
         if (is_common_handle)
         {
-            /// we will not update the IndexInfo except Rename DDL.
-            /// When the add column / drop column action happenes, the offset of each column may change
-            /// Thus, we should not use offset to get the column we want,
-            /// but use to compare the column name to get the column id.
             const auto & primary_index_cols = table_info_.getPrimaryIndexInfo().idx_cols;
-            for (const auto & col : primary_index_cols)
+            for (const auto & primary_index_col : primary_index_cols)
             {
-                auto pk_column_id = column_name_id_map[col.name];
+                auto pk_column_id = table_info_.columns[primary_index_col.offset].id;
                 pk_column_ids.emplace_back(pk_column_id);
                 pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             }

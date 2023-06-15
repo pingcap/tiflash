@@ -14,6 +14,7 @@
 
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -304,7 +305,8 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     if (args.size() < 2)
         throw Exception("Args not matched, should be: db_name, table_name, [table_name], ..., [table_name]", ErrorCodes::BAD_ARGUMENTS);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    auto db = context.getDatabase(database_name);
+    auto mapped_database_name = mappedDatabase(context, database_name);
+    auto db = context.getDatabase(mapped_database_name);
 
     std::vector<std::tuple<String, ColumnsDescription, String>> tables;
 

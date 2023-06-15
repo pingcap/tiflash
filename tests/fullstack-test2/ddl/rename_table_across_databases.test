@@ -19,10 +19,10 @@ mysql> drop database if exists test_new;
 mysql> create table test.t(a int, b int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-func> wait_table test t
-
 mysql> insert into test.t values (1, 1);
 mysql> insert into test.t values (1, 2);
+
+func> wait_table test t
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+------+
@@ -41,6 +41,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 # rename table across databases
 mysql> create database if not exists test_new;
 mysql> rename table test.t to test_new.t2;
+=> DBGInvoke __refresh_schemas() 
+
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 ERROR 1146 (42S02) at line 1: Table 'test.t' doesn't exist
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.t2;

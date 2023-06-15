@@ -53,6 +53,8 @@ public:
 
     std::string Get(const std::string & key);
     std::string Get(pingcap::kv::Backoffer & bo, const std::string & key);
+
+    kvrpcpb::MvccInfo mvccGet(const std::string & key);
     KeyspaceScanner Scan(const std::string & begin, const std::string & end);
 
 private:
