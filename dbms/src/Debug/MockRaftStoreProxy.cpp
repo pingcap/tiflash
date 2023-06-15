@@ -852,7 +852,7 @@ TableID MockRaftStoreProxy::bootstrapTable(
     return table_id;
 }
 
-std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t)
+std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t) const
 {
     WriteBufferFromOwnString buff;
     writeChar(RecordKVFormat::CFModifyFlag::PutFlag, buff);

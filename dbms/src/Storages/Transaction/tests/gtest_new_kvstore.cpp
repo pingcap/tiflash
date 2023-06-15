@@ -741,7 +741,7 @@ try
         auto r1 = proxy_instance->getRegion(region_id);
 
         // See `decodeWriteCfValue`.
-        auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
 
         {
             auto k1 = RecordKVFormat::genKey(table_id, 1, 111);
