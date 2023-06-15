@@ -756,20 +756,28 @@ Instructions OptimizedRegularExpressionImpl<thread_safe>::getInstructions(const 
 
     for (size_t i = 0; i < repl.size; ++i)
     {
-        if (repl.data[i] == '$' && i + 1 < repl.size)
+        if (repl.data[i] == '\\')
         {
-            if (isNumericASCII(repl.data[i + 1])) /// Substitution
+            if (i + 1 < repl.size)
             {
-                if (!literals.empty())
+                if (isNumericASCII(repl.data[i + 1])) /// Substitution
                 {
-                    instructions.emplace_back(literals);
-                    literals = "";
+                    if (!literals.empty())
+                    {
+                        instructions.emplace_back(literals);
+                        literals = "";
+                    }
+                    instructions.emplace_back(repl.data[i + 1] - '0');
                 }
-                instructions.emplace_back(repl.data[i + 1] - '0');
+                else
+                    literals += repl.data[i + 1]; /// Escaping
+                ++i;
             }
             else
-                literals += repl.data[i + 1]; /// Escaping
-            ++i;
+            {
+                // This slash is in the end. Ignore it and break the loop.
+                break;
+            }
         }
         else
             literals += repl.data[i]; /// Plain character

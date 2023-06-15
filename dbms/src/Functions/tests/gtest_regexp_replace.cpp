@@ -25,10 +25,10 @@ protected:
     const char * url1 = "https://go.mail/folder-1/online/ru-en/#lingvo/#1О 50000&price_ashka/rav4/page=/check.xml";
     const char * url2 = "http://saint-peters-total=меньше 1000-rublyayusche/catalogue/kolasuryat-v-2-kadyirovka-personal/serial_id=0&input_state/apartments/mokrotochki.net/upravda.ru/yandex.ru/GameMain.aspx?mult]/on/orders/50195&text=мыс и орелка в Балаш смотреть онлайн бесплатно в хорошем камбалакс&lr=20030393833539353862643188&op_promo=C-Teaser_id=06d162.html";
 
-    const char * url1_repl = "a$12$13";
+    const char * url1_repl = "a\\12\\13";
     const char * url1_res = "ago.mail2go.mail3";
 
-    const char * url2_repl = "aaa$1233";
+    const char * url2_repl = "aaa\\1233";
     const char * url2_res = "aaasaint-peters-total=меньше 1000-rublyayusche233";
 
     const char * url_pat = "^https?://(?:www\\.)?([^/]+)/.*$";
@@ -289,7 +289,7 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", "121212", "1.", "aa", 1, 3, ""},
                       {"121212", "121212", "1.", "aa", 1, 4, ""},
-                      {"sea1dad8 1lal8", "seafood fool", "foo(.?)", "1$1a$18", 1, 0, ""},
+                      {"sea1dad8 1lal8", "seafood fool", "foo(.?)", "1\\1a\\18", 1, 0, ""},
                       {"啊ah好a哈哈", "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
@@ -316,7 +316,7 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 3, ""},
                       {"121212", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 4, ""},
-                      {"seafood 1lal8", {0, 0, 0, 0, 0, 0}, "seafood fool", "foo(.?)", "1$1a$18", 1, 2, ""},
+                      {"seafood 1lal8", {0, 0, 0, 0, 0, 0}, "seafood fool", "foo(.?)", "1\\1a\\18", 1, 2, ""},
                       {"啊ah好a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", {0, 0, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
