@@ -30,8 +30,8 @@ struct MockSchemaNameMapper : public SchemaNameMapper
         return table_info.name + "_" + std::to_string(table_info.id);
     }
 
-    String debugDatabaseName(const TiDB::DBInfo & db_info) const override { return "db_" + std::to_string(db_info.id); }
-    String debugTableName(const TiDB::TableInfo & table_info) const override { return "t_" + std::to_string(table_info.id); }
+    String debugDatabaseName(const TiDB::DBInfo & db_info) const override { return fmt::format("db_{}", db_info.id); }
+    String debugTableName(const TiDB::TableInfo & table_info) const override { return fmt::format("t_{}", table_info.id); }
 };
 
 } // namespace DB
