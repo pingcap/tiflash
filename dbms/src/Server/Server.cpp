@@ -900,6 +900,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
+    initMemoryTracker();
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
     initThreadPool(config());

@@ -23,6 +23,12 @@
 
 #include <iomanip>
 
+namespace CurrentMetrics
+{
+extern const Metric MemoryTrackingQueryStorageTask;
+extern const Metric MemoryTrackingRNWorkerFetchPages;
+} // namespace CurrentMetrics
+
 std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
 std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
@@ -65,6 +71,13 @@ static Poco::Logger * getLogger()
     return logger;
 }
 
+static String memoryUsageDetail()
+{
+    return fmt::format("QueryStorageTaskTotal={}, RNFetchPages={}",
+                       formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get()),
+                       formatReadableSizeWithBinarySuffix(rn_fetch_pages_mem_tracker->get()));
+}
+
 void MemoryTracker::logPeakMemoryUsage() const
 {
     const char * tmp_decr = description.load();
@@ -78,6 +91,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       * So, we allow over-allocations.
       */
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
+    reportAmount();
 
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::add(metric, size);
@@ -111,6 +125,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         if (unlikely(fault_probability && drand48() < fault_probability))
         {
             amount.fetch_sub(size, std::memory_order_relaxed);
+            reportAmount();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
@@ -133,6 +148,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         {
             DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
             amount.fetch_sub(size, std::memory_order_relaxed);
+            reportAmount();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
@@ -155,6 +171,8 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   formatReadableSizeWithBinarySuffix(current_limit));
             }
 
+            fmt_buf.fmtAppend(", details: {}", memoryUsageDetail());
+
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
     }
@@ -171,6 +189,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         catch (...)
         {
             amount.fetch_sub(size, std::memory_order_relaxed);
+            reportAmount();
             std::rethrow_exception(std::current_exception());
         }
     }
@@ -180,6 +199,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 void MemoryTracker::free(Int64 size)
 {
     Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
+    reportAmount();
 
     /** Sometimes, query could free some data, that was allocated outside of query context.
       * Example: cache eviction.
@@ -190,6 +210,7 @@ void MemoryTracker::free(Int64 size)
     if (new_amount < 0 && !next.load(std::memory_order_relaxed)) // handle it only for root memory_tracker
     {
         amount.fetch_sub(new_amount);
+        reportAmount();
         size += new_amount;
     }
 
@@ -208,6 +229,7 @@ void MemoryTracker::reset()
     amount.store(0, std::memory_order_relaxed);
     peak.store(0, std::memory_order_relaxed);
     limit.store(0, std::memory_order_relaxed);
+    reportAmount();
 }
 
 
@@ -219,6 +241,12 @@ void MemoryTracker::setOrRaiseLimit(Int64 value)
         ;
 }
 
+void MemoryTracker::reportAmount()
+{
+    if (amount_metric.has_value())
+        CurrentMetrics::set(*amount_metric, amount.load(std::memory_order_relaxed));
+}
+
 #if __APPLE__ && __clang__
 __thread MemoryTracker * current_memory_tracker = nullptr;
 #else
@@ -227,6 +255,22 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
 std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
+
+std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
+std::shared_ptr<MemoryTracker> rn_fetch_pages_mem_tracker;
+
+void initMemoryTracker()
+{
+    RUNTIME_CHECK(sub_root_of_query_storage_task_mem_trackers == nullptr);
+    sub_root_of_query_storage_task_mem_trackers = MemoryTracker::create();
+    sub_root_of_query_storage_task_mem_trackers->setNext(root_of_query_mem_trackers.get());
+    sub_root_of_query_storage_task_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingQueryStorageTask);
+
+    RUNTIME_CHECK(rn_fetch_pages_mem_tracker == nullptr);
+    rn_fetch_pages_mem_tracker = MemoryTracker::create();
+    rn_fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
+    rn_fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingRNWorkerFetchPages);
+}
 
 namespace CurrentMemoryTracker
 {
