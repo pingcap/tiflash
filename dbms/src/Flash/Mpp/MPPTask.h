@@ -132,6 +132,17 @@ private:
     void setErrString(const String & message);
 
 private:
+    struct ProcessListEntryHolder
+    {
+        std::shared_ptr<ProcessListEntry> process_list_entry;
+        ~ProcessListEntryHolder()
+        {
+            /// Because MemoryTracker is now saved in `MPPQueryTaskSet` and shared by all the mpp tasks belongs to the same mpp query,
+            /// it may not be destructed when MPPTask is destructed, so need to manually reset current_memory_tracker to nullptr at the
+            /// end of the destructor of MPPTask, otherwise, current_memory_tracker may point to a invalid memory tracker
+            current_memory_tracker = nullptr;
+        }
+    };
     // We must ensure this member variable is put at this place to be destructed at proper time
     MPPTaskMonitorHelper mpp_task_monitor_helper;
 
@@ -147,11 +158,10 @@ private:
 
     MPPTaskScheduleEntry schedule_entry;
 
+    ProcessListEntryHolder process_list_entry_holder;
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
-
-    std::shared_ptr<ProcessListEntry> process_list_entry;
 
     QueryExecutorHolder query_executor_holder;
 

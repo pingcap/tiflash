@@ -100,11 +100,6 @@ MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 {
     if (initialized)
     {
-        /// Because MemoryTracker is now saved in `MPPQueryTaskSet`, it will not be destructed when
-        /// MPPTask is destructed, so need to manually reset current_memory_tracker to nullptr at the
-        /// end of the destructor of MPPTask, otherwise, current_memory_tracker may point to a invalid
-        /// memory tracker
-        current_memory_tracker = nullptr;
         manager->removeMonitoredTask(task_unique_id);
     }
 }
@@ -126,8 +121,8 @@ MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
-        current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
+    if (process_list_entry_holder.process_list_entry != nullptr && current_memory_tracker != process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get())
+        current_memory_tracker = process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
     LOG_INFO(log, "finish MPPTask: {}", id.toString());
 }
@@ -194,7 +189,8 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
 
-        bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
+        /// when the receiver task is root task, it should never be local tunnel
+        bool is_local = context->getSettingsRef().enable_local_tunnel && task_meta.task_id() != -1 && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(
             task_meta,
@@ -316,10 +312,10 @@ void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
     if (!aborted_reason.empty())
         throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
     assert(query_process_list_entry != nullptr);
-    process_list_entry = query_process_list_entry;
-    dag_context->setProcessListEntry(process_list_entry);
-    context->setProcessListElement(&process_list_entry->get());
-    current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
+    process_list_entry_holder.process_list_entry = query_process_list_entry;
+    dag_context->setProcessListEntry(query_process_list_entry);
+    context->setProcessListElement(&query_process_list_entry->get());
+    current_memory_tracker = query_process_list_entry->get().getMemoryTrackerPtr().get();
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -425,7 +421,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
+    RUNTIME_ASSERT(current_memory_tracker == process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -530,7 +526,7 @@ void MPPTask::runImpl()
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
             /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
             /// todo log executor level peak memory usage instead
-            auto peak_memory = process_list_entry->get().getMemoryTrackerPtr()->getPeak();
+            auto peak_memory = process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr()->getPeak();
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }
     }
