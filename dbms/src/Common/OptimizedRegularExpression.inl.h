@@ -25,7 +25,7 @@
 #include <optional>
 
 #define MIN_LENGTH_FOR_STRSTR 3
-constexpr static int MAX_CAPTURES = 10;
+constexpr static int MAX_CAPTURES = 9;
 
 namespace DB
 {
@@ -307,7 +307,6 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
         throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
 
     is_case_insensitive = options & RE_CASELESS;
-    bool is_no_capture = options & RE_NO_CAPTURE;
     bool is_dot_nl = options & RE_DOT_NL;
 
     capture_num = 0;
@@ -326,12 +325,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
         if (!re2->ok())
             throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
-        if (!is_no_capture)
-        {
-            capture_num = re2->NumberOfCapturingGroups();
-            if (capture_num > MAX_CAPTURES)
-                throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many capture_groups in regexp: {}", regexp_));
-        }
+        capture_num = re2->NumberOfCapturingGroups();
     }
 }
 
@@ -614,7 +608,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[MAX_CAPTURES];
+    StringPieceType matches[capture_num + 1];
 
     // Copy characters that before position
     res_data.resize(res_data.size() + byte_offset);
@@ -651,7 +645,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[MAX_CAPTURES];
+    StringPieceType matches[MAX_CAPTURES + 1];
 
     while (occur > 0)
     {

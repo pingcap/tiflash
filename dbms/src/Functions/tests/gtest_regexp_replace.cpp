@@ -94,7 +94,7 @@ struct RegexpReplaceCase
         std::vector<std::vector<UInt8>> & null_map,
         std::vector<String> & exprs,
         std::vector<String> & pats,
-        std::vector<String> repls,
+        std::vector<String> & repls,
         std::vector<Int64> & positions,
         std::vector<Int64> & occurs,
         std::vector<String> & match_types)
@@ -294,7 +294,9 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
                       {"aa", "\n", ".", "aa", 1, 0, "s"},
-                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"}};
+                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"},
+                      {R"(\+overflow+stack+overflow+stack)", "stackoverflow", "(.{5})(.*)", R"(\\+\2+\1+\2+\1\)", 1, 0, ""},
+                      {R"(\i\h-g\f-e\d-c\b-a\ \I\H-G\F-E\D-C\B-A\)", "fooabcdefghij fooABCDEFGHIJ", "foo(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)", R"(\\\9\\\8-\7\\\6-\5\\\4-\3\\\2-\1\\)", 1, 0, ""}};
         RegexpReplaceCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, repls, positions, occurs, match_types);
         results = getResultVec<String>(test_cases);
         ASSERT_COLUMN_EQ(createColumn<String>(results),
