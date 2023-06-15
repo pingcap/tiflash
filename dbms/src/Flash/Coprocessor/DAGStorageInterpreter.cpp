@@ -511,7 +511,7 @@ std::tuple<bool, String> compareColumns(const TiDBTableScan & table_scan, const 
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            String error_message = fmt::format("the column(id={}) of table {} under keyspace {} in the query is not found in current columns;\n", column.id, table_scan.getLogicalTableID(), dag_context.getKeyspaceID());
+            String error_message = fmt::format("the column in the query is not found in current columns, keyspace={} table_id={} column_id={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id);
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
