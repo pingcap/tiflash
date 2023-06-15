@@ -153,9 +153,9 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
     return std::make_tuple(false, 0, 0);
 }
 
-/// Help: do we need a lock for syncTableSchema for each table?
-/// I roughly think we don't need a lock here, because we will catch the lock for storage later.
-/// but I'm not quite sure.
+
+/// we don't need a lock at the beginning of syncTableSchema,
+/// we will catch the AlterLock for storage later.
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID physical_table_id)
 {

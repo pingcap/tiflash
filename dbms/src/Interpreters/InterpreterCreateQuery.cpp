@@ -541,7 +541,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             }
             catch (Exception & e)
             {
-                // Help: please check the logical could be ok
                 // Due to even if it throws this two error code, it can't ensure the table is completely created
                 // So we have to wait for the table created completely, then return to use the table.
                 // Thus, we choose to do a retry here to wait the table created completed.

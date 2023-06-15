@@ -1406,7 +1406,6 @@ ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::Table
         new_columns.ordinary.emplace_back(std::move(column));
     }
 
-    // Question: Could the previous columns with empty materialized
     new_columns.materialized = getColumns().materialized;
 
     return new_columns;
