@@ -85,6 +85,8 @@ private:
 
     QueryPriorities::Handle priority_handle;
 
+    /// if for_dag_task is true, it means the request comes from TiDB, processList is only used to
+    /// maintain the memory tracker, all the query streams related field is useless
     bool for_dag_task;
 
     std::atomic<bool> is_killed{false};
