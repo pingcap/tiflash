@@ -33,6 +33,8 @@ namespace ErrorCodes
 {
 extern const int FAIL_POINT_ERROR;
 };
+
+/// The schema syncer for given keyspace
 template <bool mock_getter, bool mock_mapper>
 class TiDBSchemaSyncer : public SchemaSyncer
 {
@@ -43,7 +45,7 @@ class TiDBSchemaSyncer : public SchemaSyncer
 private:
     KVClusterPtr cluster;
 
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
 
     Int64 cur_version;
 
@@ -83,16 +85,27 @@ public:
         , table_id_map(log)
     {}
 
+    /*
+     * Sync all tables' schemas based on schema diff. This method mainly update the TableID mapping of this keyspace.
+     */
     bool syncSchemas(Context & context) override;
 
+    /*
+     * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
+     * This function will be called concurrently when the schema not matches during reading or writing
+     */
     bool syncTableSchema(Context & context, TableID physical_table_id) override;
 
-private:
+    /*
+     * When the table is physically dropped from the TiFlash node, use this method to unregister
+     * the TableID mapping.
+     */
     void removeTableID(TableID table_id) override
     {
         table_id_map.erase(table_id);
     }
 
+private:
     Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 

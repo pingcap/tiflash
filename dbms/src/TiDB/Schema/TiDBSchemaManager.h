@@ -17,6 +17,8 @@
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 namespace DB
 {
+
+/// Manage all schema syncer for different keyspace
 class TiDBSchemaSyncerManager
 {
 public:

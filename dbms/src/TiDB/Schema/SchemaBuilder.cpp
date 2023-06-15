@@ -937,7 +937,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     auto storage_map = context.getTMTContext().getStorages().getAllStorage();
     for (auto it = storage_map.begin(); it != storage_map.end(); it++)
     {
-        auto table_info = it->second->getTableInfo();
+        const auto & table_info = it->second->getTableInfo();
         if (table_info.keyspace_id != keyspace_id)
             continue;
 

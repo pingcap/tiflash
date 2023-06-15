@@ -24,7 +24,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
     auto getter = createSchemaGetter(keyspace_id);
-    Int64 version = getter.getVersion();
+    const Int64 version = getter.getVersion();
 
     // TODO: we need support metrics contains keyspace info.
     Stopwatch watch;
