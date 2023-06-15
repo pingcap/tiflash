@@ -295,7 +295,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         regions.clear();
     }
 
-    std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t);
+    std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
     MockRaftStoreProxy()
     {
