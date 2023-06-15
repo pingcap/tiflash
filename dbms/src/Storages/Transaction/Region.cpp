@@ -512,7 +512,7 @@ ImutRegionRangePtr Region::getRange() const
 RaftstoreVer Region::getClusterRaftstoreVer()
 {
     // In non-debug/test mode, we should assert the proxy_ptr be always not null.
-    if (proxy_helper->proxy_ptr)
+    if (proxy_helper != nullptr)
     {
         return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
     }
