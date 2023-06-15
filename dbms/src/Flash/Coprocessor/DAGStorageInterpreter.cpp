@@ -511,14 +511,14 @@ std::tuple<bool, String> compareColumns(const TiDBTableScan & table_scan, const 
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
-            String error_message = fmt::format("the column(id={}) of table {} under keyspace {} in the query is not found in current columns;\n", column.id, table_scan.getLogicalTableID(), dag_context.getKeyspaceID());
+            String error_message = fmt::format("the column in the query is not found in current columns, keyspace={} table_id={} column_id={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id);
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
 
         if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
         {
-            String error_message = fmt::format("the data type {} of column(id={}) of table {} under keyspace {} in the query is not the same as the current column {} ", column.id, getDataTypeByColumnInfo(column)->getName(), table_scan.getLogicalTableID(), dag_context.getKeyspaceID(), iter->second.type->getName());
+            String error_message = fmt::format("the column data type in the query is not the same as the current column, keyspace={} table_id={} column_id={} column_type={} query_column_type={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id, iter->second.type->getName(), getDataTypeByColumnInfo(column)->getName());
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
@@ -1245,7 +1245,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         // columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
         if (schema_synced)
         {
-            throw TiFlashException(fmt::format("Table {} in keyspace {} schema is newer than query schema version, columns info in query is not matches the column info in tiflash: {}", table_id, dagContext().getKeyspaceID(), error_message), Errors::Table::SchemaVersionError);
+            throw TiFlashException(fmt::format("The schema does not match the query, details: {}", error_message), Errors::Table::SchemaVersionError);
         }
 
         // let caller sync schema
