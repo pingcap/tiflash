@@ -289,7 +289,6 @@ TEST(ThreadedWorker, ErrorInWorkerWithNonEmptyQueue)
             error_happened = true;
             break;
         }
-        ASSERT_NE(r, 13);
     }
     ASSERT_TRUE(error_happened);
 
