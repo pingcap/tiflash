@@ -47,13 +47,20 @@ private:
 
     // <priority, iterator_of_MLFQ_of_pipeline_tasks, resource_group_name, keyspace_id>
     using ResourceGroupInfo = std::tuple<double, std::shared_ptr<NestedQueueType>, std::string, KeyspaceID>;
-    using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo>;
-    using ResourceGroupNameSet = std::unordered_set<std::string>;
+    using CompatorType = bool (*)(const ResourceGroupInfo &, const ResourceGroupInfo &);
+    using ResourceGroupInfoQueue = std::priority_queue<ResourceGroupInfo, std::vector<ResourceGroupInfo>, CompatorType>;
 
+    // Index of ResourceGroupInfo.
     static constexpr auto InfoIndexPriority = 0;
     static constexpr auto InfoIndexPipelineTaskQueue = 1;
     static constexpr auto InfoIndexResourceName = 2;
     static constexpr auto InfoIndexResourceKeyspaceId = 3;
+
+    // ResourceGroupInfoQueue compator.
+    static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
+    {
+        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
+    }
 
     // 1. Update cpu time of resource group.
     // 2. Reorder resource_group_infos.
@@ -62,6 +69,7 @@ private:
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();
 
+    // Submit task into task queue of specific resource group.
     void submitWithoutLock(TaskPtr && task);
 
     mutable std::mutex mu;
@@ -69,6 +77,7 @@ private:
 
     bool is_finished = false;
 
+    CompatorType compator = compareResourceInfo;
     ResourceGroupInfoQueue resource_group_infos;
     PipelineTasks pipeline_tasks;
 
