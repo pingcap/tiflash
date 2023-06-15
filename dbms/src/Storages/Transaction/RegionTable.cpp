@@ -465,7 +465,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         RUNTIME_CHECK_MSG(
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
-            ", region_id={} keyspace_id={} table_id={}, old_keyspace_id={} old_table_id={}",
+            ", region_id={} keyspace={} table_id={}, old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
             region_id,
             keyspace_id,
@@ -521,7 +521,7 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
         *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
         *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
     }
-    LOG_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
+    LOG_TRACE(log, "region_id={}, table_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
     return (*leader_safe_ts > *self_safe_ts) && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 
