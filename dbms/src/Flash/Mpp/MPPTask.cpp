@@ -100,6 +100,10 @@ MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 {
     if (initialized)
     {
+        /// Because MemoryTracker is now saved in `MPPQueryTaskSet`, it will not be destructed when
+        /// MPPTask is destructed, so need to manually reset current_memory_tracker to nullptr at the
+        /// end of the destructor of MPPTask, otherwise, current_memory_tracker may point to a invalid
+        /// memory tracker
         current_memory_tracker = nullptr;
         manager->removeMonitoredTask(task_unique_id);
     }
@@ -307,7 +311,7 @@ void MPPTask::unregisterTask()
 
 void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
 {
-    /// all the mpp tasks of the same mpp query shares the same memory tracker
+    /// all the mpp tasks of the same mpp query shares the same process list entry
     auto [query_process_list_entry, aborted_reason] = task_manager->getOrCreateQueryProcessListEntry(id.query_id, context);
     if (!aborted_reason.empty())
         throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
