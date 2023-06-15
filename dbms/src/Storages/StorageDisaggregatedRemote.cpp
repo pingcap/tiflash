@@ -582,6 +582,8 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
             .extra_table_id_index = extra_table_id_index,
         }));
     }
+    db_context.getDAGContext()->addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+    db_context.getDAGContext()->addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 }
 
 } // namespace DB

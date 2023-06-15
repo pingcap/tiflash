@@ -22,7 +22,7 @@
 namespace DB::DM::Remote
 {
 
-void RNSegmentSourceOp::operateSuffix()
+void RNSegmentSourceOp::operateSuffixImpl()
 {
     LOG_INFO(
         log,
@@ -38,7 +38,7 @@ void RNSegmentSourceOp::operateSuffix()
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_stream_read).Observe(duration_read_sec);
 }
 
-void RNSegmentSourceOp::operatePrefix()
+void RNSegmentSourceOp::operatePrefixImpl()
 {
     workers->startInBackground();
 }

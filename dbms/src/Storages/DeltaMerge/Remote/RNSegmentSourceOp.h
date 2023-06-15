@@ -52,9 +52,11 @@ public:
 
     String getName() const override { return NAME; }
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
-    void operatePrefix() override;
+    void operatePrefixImpl() override;
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
     OperatorStatus readImpl(Block & block) override;
