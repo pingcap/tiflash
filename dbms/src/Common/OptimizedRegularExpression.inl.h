@@ -328,6 +328,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
             throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
         capture_num = re2->NumberOfCapturingGroups();
+        capture_num = capture_num <= MAX_CAPTURES ? capture_num : MAX_CAPTURES;
     }
 }
 
@@ -586,7 +587,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
     size_t start_pos = 0;
     size_t copy_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[capture_num + 1];
+    StringPieceType matches[MAX_CAPTURES + 1];
 
     // Copy characters that before position
     res_data.resize(res_data.size() + byte_offset);
@@ -626,7 +627,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[capture_num + 1];
+    StringPieceType matches[MAX_CAPTURES + 1];
 
     while (occur > 0)
     {
