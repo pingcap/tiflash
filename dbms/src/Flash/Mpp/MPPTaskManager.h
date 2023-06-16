@@ -40,6 +40,7 @@ struct MPPQueryTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
+    std::shared_ptr<ProcessListEntry> process_list_entry;
     MPPTaskMap task_map;
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
@@ -52,6 +53,7 @@ struct MPPQueryTaskSet
     {
         return state == Normal || state == Aborted;
     }
+    ~MPPQueryTaskSet();
 };
 
 /// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
@@ -192,6 +194,8 @@ public:
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
+
+    std::pair<std::shared_ptr<ProcessListEntry>, String> getOrCreateQueryProcessListEntry(const MPPQueryId & query_id, const ContextPtr & context);
 
     String toString();
 

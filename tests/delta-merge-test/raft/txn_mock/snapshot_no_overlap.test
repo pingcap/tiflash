@@ -14,7 +14,8 @@
 
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
+
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 # Create a Region 4 with range [0, 10) and insert some rows
 => DBGInvoke __region_snapshot(4, 0, 10, default, test)
@@ -38,12 +39,13 @@
 │ [region 4] ranges: [100, 200), state: Normal │
 │ total size: 1                                │
 └──────────────────────────────────────────────┘
-=> select _tidb_rowid, col_1 from default.test order by _tidb_rowid
+=> DBGInvoke query_mapped('select _tidb_rowid, col_1 from \$d.\$t order by _tidb_rowid', default, test)
 ┌─_tidb_rowid─┬─col_1─┐
 │         100 │    17 │
 │         111 │    18 │
 └─────────────┴───────┘
-=> selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from default.test order by _tidb_rowid
+
+=> DBGInvoke query_mapped('selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid', default, test)
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -54,8 +56,8 @@
 │    18 │         111 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
 
-=> manage table default.test merge delta
-=> select _tidb_rowid, col_1 from default.test order by _tidb_rowid
+>> DBGInvoke query_mapped('manage table \$d.\$t merge delta', default, test)
+=> DBGInvoke query_mapped('select _tidb_rowid, col_1 from \$d.\$t order by _tidb_rowid', default, test)
 ┌─_tidb_rowid─┬─col_1─┐
 │         100 │    17 │
 │         111 │    18 │
@@ -70,10 +72,11 @@
 │ [region 4] ranges: [100, 110), state: Normal │
 │ total size: 2                                │
 └──────────────────────────────────────────────┘
-=> select _tidb_rowid, col_1 from default.test order by _tidb_rowid
+
+=> DBGInvoke query_mapped('select _tidb_rowid, col_1 from \$d.\$t order by _tidb_rowid', default, test)
 ┌─_tidb_rowid─┬─col_1─┐
 │         100 │    17 │
 │         111 │    18 │
 └─────────────┴───────┘
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
