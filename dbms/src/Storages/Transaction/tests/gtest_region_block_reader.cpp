@@ -102,8 +102,8 @@ protected:
             const auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
-                auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
-                EncodeDatum(key_encode_fields[i], table_info.columns[idx].getCodecFlag(), pk_buf);
+                size_t pk_offset = primary_index_info.idx_cols[i].offset;
+                EncodeDatum(key_encode_fields[i], table_info.columns[pk_offset].getCodecFlag(), pk_buf);
             }
         }
         else

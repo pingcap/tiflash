@@ -214,7 +214,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get(fmt::format("keyspace_id={} table_id={}", keyspace_id_, physical_table_id_)))
+    , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
@@ -1638,44 +1638,93 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applyAlters(
-    const AlterCommands & commands,
-    const OptionTableInfoConstRef table_info,
-    ColumnID & max_column_id_used,
-    const Context & /* context */)
+void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
-    for (const auto & command : commands)
+    std::unordered_map<ColumnID, int> original_columns_index_map;
+    for (size_t index = 0; index < new_original_table_columns.size(); ++index)
     {
-        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
+        original_columns_index_map[new_original_table_columns[index].id] = index;
     }
 
-    if (table_info)
+    std::set<ColumnID> new_column_ids;
+    for (const auto & column : table_info.columns)
     {
-        // Update primary keys from TiDB::TableInfo when pk_is_handle = true
-        // todo update the column name in rowkey_columns
-        std::vector<String> pk_names;
-        for (const auto & col : table_info->get().columns)
+        auto column_id = column.id;
+        new_column_ids.insert(column_id);
+        auto iter = original_columns_index_map.find(column_id);
+        if (iter == original_columns_index_map.end())
         {
-            if (col.hasPriKeyFlag())
+            // create a new column
+            ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
+            define.default_value = column.defaultValueToField();
+            new_original_table_columns.emplace_back(std::move(define));
+        }
+        else
+        {
+            // check whether we need update the column's name or type or default value
+            auto & original_column = new_original_table_columns[iter->second];
+            auto new_data_type = getDataTypeByColumnInfo(column);
+
+            if (original_column.default_value != column.defaultValueToField())
             {
-                pk_names.emplace_back(col.name);
+                original_column.default_value = column.defaultValueToField();
+            }
+
+            if (original_column.name != column.name)
+            {
+                original_column.name = column.name;
+            }
+
+            if (original_column.type->getName() != new_data_type->getName())
+            {
+                original_column.type = new_data_type;
             }
         }
-        if (table_info->get().pk_is_handle && pk_names.size() == 1)
+    }
+
+    // remove extra columns
+    auto iter = new_original_table_columns.begin();
+    while (iter != new_original_table_columns.end())
+    {
+        // remove the extra columns
+        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
         {
-            // Only update primary key name if pk is handle and there is only one column with
-            // primary key flag
-            original_table_handle_define.name = pk_names[0];
+            iter++;
+            continue;
         }
-        if (table_info.value().get().replica_info.count == 0)
+        if (new_column_ids.count(iter->id) == 0)
         {
-            replica_exist.store(false);
+            iter = new_original_table_columns.erase(iter);
         }
+        else
+        {
+            iter++;
+        }
+    }
+
+    // Update primary keys from TiDB::TableInfo when pk_is_handle = true
+    std::vector<String> pk_names;
+    for (const auto & col : table_info.columns)
+    {
+        if (col.hasPriKeyFlag())
+        {
+            pk_names.emplace_back(col.name);
+        }
+    }
+    if (table_info.pk_is_handle && pk_names.size() == 1)
+    {
+        // Only update primary key name if pk is handle and there is only one column with
+        // primary key flag
+        original_table_handle_define.name = pk_names[0];
+    }
+    if (table_info.replica_info.count == 0)
+    {
+        replica_exist.store(false);
     }
 
     auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);

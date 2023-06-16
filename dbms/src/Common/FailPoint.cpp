@@ -33,11 +33,6 @@ namespace DB
     M(exception_between_rename_table_data_and_metadata)           \
     M(exception_between_create_database_meta_and_directory)       \
     M(exception_before_rename_table_old_meta_removed)             \
-    M(exception_after_step_1_in_exchange_partition)               \
-    M(exception_before_step_2_rename_in_exchange_partition)       \
-    M(exception_after_step_2_in_exchange_partition)               \
-    M(exception_before_step_3_rename_in_exchange_partition)       \
-    M(exception_after_step_3_in_exchange_partition)               \
     M(region_exception_after_read_from_storage_some_error)        \
     M(region_exception_after_read_from_storage_all_error)         \
     M(exception_before_dmfile_remove_encryption)                  \
@@ -67,7 +62,6 @@ namespace DB
     M(exception_mpp_hash_probe)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
-    M(exception_between_schema_change_in_the_same_diff)           \
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
@@ -124,7 +118,6 @@ namespace DB
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)
-
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
