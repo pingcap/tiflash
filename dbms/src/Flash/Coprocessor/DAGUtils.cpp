@@ -39,6 +39,8 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::RowNumber, "row_number"},
     {tipb::ExprType::Lead, "lead"},
     {tipb::ExprType::Lag, "lag"},
+    {tipb::ExprType::FirstValue, "first_value"},
+    {tipb::ExprType::LastValue, "last_value"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -680,6 +682,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
+
+    {tipb::ScalarFuncSig::GroupingSig, "grouping"},
 });
 
 template <typename GetColumnsFunc, typename GetDataTypeFunc>
@@ -1028,11 +1032,11 @@ bool isWindowFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::DenseRank:
     case tipb::ExprType::Lead:
     case tipb::ExprType::Lag:
+    case tipb::ExprType::FirstValue:
+    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::CumeDist:
         //    case tipb::ExprType::PercentRank:
         //    case tipb::ExprType::Ntile:
-        //    case tipb::ExprType::FirstValue:
-        //    case tipb::ExprType::LastValue:
         //    case tipb::ExprType::NthValue:
         return true;
     default:

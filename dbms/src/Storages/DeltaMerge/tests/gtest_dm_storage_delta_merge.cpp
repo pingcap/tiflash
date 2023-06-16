@@ -22,6 +22,7 @@
 #include <DataStreams/copyData.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -123,6 +124,14 @@ try
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx->getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    query_info.dag_query = std::make_unique<DAGQueryInfo>(
+        google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        pushed_down_filters, // Not care now
+        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        std::vector<int>{},
+        0,
+        ctx->getTimezoneInfo());
     BlockInputStreams ins = storage->read(column_names, query_info, *ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
@@ -661,6 +670,14 @@ try
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx->getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    query_info.dag_query = std::make_unique<DAGQueryInfo>(
+        google::protobuf::RepeatedPtrField<tipb::Expr>(),
+        pushed_down_filters, // Not care now
+        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        std::vector<int>{},
+        0,
+        ctx->getTimezoneInfo());
     Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
     BlockInputStreams ins = storage->read(read_columns, query_info, *ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
@@ -767,6 +784,14 @@ try
         SelectQueryInfo query_info;
         query_info.query = std::make_shared<ASTSelectQuery>();
         query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx->getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            pushed_down_filters, // Not care now
+            std::vector<TiDB::ColumnInfo>{}, // Not care now
+            std::vector<int>{},
+            0,
+            ctx->getTimezoneInfo());
         Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
         BlockInputStreams ins = storage->read(read_columns, query_info, *ctx, stage2, 8192, 1);
         return getInputStreamNRows(ins[0]);

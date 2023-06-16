@@ -26,17 +26,20 @@ PipelineTask::PipelineTask(
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
     : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
-    , pipeline_exec(std::move(pipeline_exec_))
+    , pipeline_exec_holder(std::move(pipeline_exec_))
+    , pipeline_exec(pipeline_exec_holder.get())
 {
-    assert(pipeline_exec);
+    RUNTIME_CHECK(pipeline_exec);
     pipeline_exec->executePrefix();
 }
 
-void PipelineTask::finalizeImpl()
+void PipelineTask::doFinalizeImpl()
 {
     assert(pipeline_exec);
     pipeline_exec->executeSuffix();
-    pipeline_exec.reset();
+    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+    pipeline_exec = nullptr;
+    pipeline_exec_holder.reset();
 }
 
 #define HANDLE_NOT_RUNNING_STATUS         \
@@ -102,8 +105,11 @@ ExecTaskStatus PipelineTask::doAwaitImpl()
     switch (op_status)
     {
         HANDLE_NOT_RUNNING_STATUS
-    // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // After `pipeline_exec->await`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
     case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:

@@ -183,6 +183,17 @@ std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
     return {minmaxes->getInt(pack_index * 2), minmaxes->getInt(pack_index * 2 + 1)};
 }
 
+std::pair<std::string, std::string> MinMaxIndex::getIntMinMaxOrNull(size_t pack_index)
+{
+    std::string min, max;
+    Field min_field, max_field;
+    minmaxes->get(pack_index * 2, min_field);
+    minmaxes->get(pack_index * 2 + 1, max_field);
+    min = min_field.isNull() ? "null" : min_field.toString();
+    max = max_field.isNull() ? "null" : max_field.toString();
+    return {min, max};
+}
+
 std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index)
 {
     return {minmaxes->getDataAt(pack_index * 2), minmaxes->getDataAt(pack_index * 2 + 1)};

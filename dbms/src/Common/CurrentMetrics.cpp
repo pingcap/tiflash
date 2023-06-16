@@ -28,6 +28,7 @@
     M(PSMVCCSnapshotsList)                      \
     M(PSMVCCNumDelta)                           \
     M(PSMVCCNumBase)                            \
+    M(PSPendingWriterNum)                       \
     M(RWLockWaitingReaders)                     \
     M(RWLockWaitingWriters)                     \
     M(RWLockActiveReaders)                      \
@@ -76,7 +77,8 @@
     M(DTFileCacheCapacity)                      \
     M(DTFileCacheUsed)                          \
     M(PageCacheCapacity)                        \
-    M(PageCacheUsed)
+    M(PageCacheUsed)                            \
+    M(ConnectionPoolSize)
 
 namespace CurrentMetrics
 {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -23,7 +24,7 @@ class PipelineExecutorStatusTestRunner : public ::testing::Test
 {
 };
 
-TEST_F(PipelineExecutorStatusTestRunner, timeout)
+TEST_F(PipelineExecutorStatusTestRunner, waitTimeout)
 try
 {
     PipelineExecutorStatus status;
@@ -32,6 +33,29 @@ try
         status.onEventSchedule();
         std::chrono::milliseconds timeout(10);
         status.waitFor(timeout);
+        GTEST_FAIL();
+    }
+    catch (DB::Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), PipelineExecutorStatus::timeout_err_msg);
+        auto err_msg = status.getExceptionMsg();
+        ASSERT_EQ(err_msg, PipelineExecutorStatus::timeout_err_msg);
+    }
+}
+CATCH
+
+TEST_F(PipelineExecutorStatusTestRunner, popTimeout)
+try
+{
+    PipelineExecutorStatus status;
+    status.toConsumeMode(1);
+    try
+    {
+        status.onEventSchedule();
+        std::chrono::milliseconds timeout(10);
+        ResultHandler result_handler{[](const Block &) {
+        }};
+        status.consumeFor(result_handler, timeout);
         GTEST_FAIL();
     }
     catch (DB::Exception & e)
@@ -58,7 +82,7 @@ try
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, to_err)
+TEST_F(PipelineExecutorStatusTestRunner, toErr)
 try
 {
     auto test = [](std::string && err_msg) {
@@ -79,6 +103,22 @@ try
     };
     test("throw exception");
     test("");
+}
+CATCH
+
+TEST_F(PipelineExecutorStatusTestRunner, consumeThrowError)
+try
+{
+    PipelineExecutorStatus status;
+    auto ret_queue = status.toConsumeMode(1);
+    ret_queue->push(Block{});
+    ResultHandler handler{[](const Block &) {
+        throw Exception("for test");
+    }};
+    status.consume(handler);
+    ASSERT_TRUE(status.getExceptionPtr());
+    auto actual_err_msg = status.getExceptionMsg();
+    ASSERT_EQ(actual_err_msg, "for test");
 }
 CATCH
 

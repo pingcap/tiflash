@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -50,6 +51,8 @@ extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
+extern const char exception_during_mpp_non_root_task_run[];
+extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
 namespace
@@ -85,6 +88,22 @@ void injectFailPointDuringRegisterTunnel(bool is_root_task)
 }
 } // namespace
 
+void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_)
+{
+    manager = manager_;
+    task_unique_id = task_unique_id_;
+    manager->addMonitoredTask(task_unique_id);
+    initialized = true;
+}
+
+MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
+{
+    if (initialized)
+    {
+        manager->removeMonitoredTask(task_unique_id);
+    }
+}
+
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : meta(meta_)
     , id(meta)
@@ -95,14 +114,16 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
 {
     current_memory_tracker = nullptr;
+    mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
-        current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
+    auto * query_memory_tracker = getMemoryTracker();
+    if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
+        current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
     LOG_INFO(log, "finish MPPTask: {}", id.toString());
 }
@@ -115,7 +136,7 @@ bool MPPTask::isRootMPPTask() const
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 {
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (unlikely(tunnel_set == nullptr))
             return;
     }
@@ -125,7 +146,7 @@ void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 void MPPTask::abortReceivers()
 {
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if unlikely (receiver_set == nullptr)
             return;
     }
@@ -159,6 +180,8 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
+    size_t tunnel_queue_memory_bound = getAverageThreshold(context->getSettingsRef().max_buffered_bytes_in_executor, exchange_sender.encoded_task_meta_size());
+    CapacityLimits queue_limit(std::max(5, context->getSettingsRef().max_threads * 5), tunnel_queue_memory_bound); // MPMCQueue can benefit from a slightly larger queue size
 
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
@@ -167,9 +190,17 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
 
-        bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
+        /// when the receiver task is root task, it should never be local tunnel
+        bool is_local = context->getSettingsRef().enable_local_tunnel && task_meta.task_id() != -1 && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(
+            task_meta,
+            task_request.meta(),
+            timeout,
+            queue_limit,
+            is_local,
+            is_async,
+            log->identifier());
 
         LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
 
@@ -180,7 +211,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnels can not be registered, because the task is not in initializing state"));
         tunnel_set = std::move(tunnel_set_local);
@@ -210,7 +241,7 @@ void MPPTask::initExchangeReceivers()
                 log->identifier(),
                 executor_id,
                 executor.fine_grained_shuffle_stream_count(),
-                context->getSettings().local_tunnel_version);
+                context->getSettingsRef());
 
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
@@ -220,7 +251,7 @@ void MPPTask::initExchangeReceivers()
         return true;
     });
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
         receiver_set = std::move(receiver_set_local);
@@ -236,7 +267,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
             "can't find tunnel ({} + {}) because the task is aborted, error message = {}",
             request->sender_meta().task_id(),
             request->receiver_meta().task_id(),
-            err_string);
+            getErrString());
         return {nullptr, err_msg};
     }
 
@@ -254,6 +285,25 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
     return {tunnel_ptr, ""};
 }
 
+String MPPTask::getErrString() const
+{
+    std::lock_guard lock(mtx);
+    return err_string;
+}
+
+void MPPTask::setErrString(const String & message)
+{
+    std::lock_guard lock(mtx);
+    err_string = message;
+}
+
+MemoryTracker * MPPTask::getMemoryTracker() const
+{
+    if (process_list_entry_holder.process_list_entry != nullptr)
+        return process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get();
+    return nullptr;
+}
+
 void MPPTask::unregisterTask()
 {
     auto [result, reason] = manager->unregisterTask(id);
@@ -261,6 +311,19 @@ void MPPTask::unregisterTask()
         LOG_DEBUG(log, "task unregistered");
     else
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+}
+
+void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
+{
+    /// all the mpp tasks of the same mpp query shares the same process list entry
+    auto [query_process_list_entry, aborted_reason] = task_manager->getOrCreateQueryProcessListEntry(id.query_id, context);
+    if (!aborted_reason.empty())
+        throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
+    assert(query_process_list_entry != nullptr);
+    process_list_entry_holder.process_list_entry = query_process_list_entry;
+    dag_context->setProcessListEntry(query_process_list_entry);
+    context->setProcessListElement(&query_process_list_entry->get());
+    current_memory_tracker = getMemoryTracker();
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -319,13 +382,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
-    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
-    dag_context->setProcessListEntry(process_list_entry);
+
+    auto task_manager = tmt_context.getMPPTaskManager();
+    initProcessListEntry(task_manager);
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
-    auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
@@ -347,7 +410,7 @@ void MPPTask::preprocess()
     query_executor_holder.set(queryExecute(*context));
     LOG_DEBUG(log, "init query executor done");
     {
-        std::unique_lock lock(tunnel_and_receiver_mu);
+        std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
@@ -366,7 +429,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
+    RUNTIME_ASSERT(current_memory_tracker == getMemoryTracker(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -395,7 +458,7 @@ void MPPTask::runImpl()
         scheduleOrWait();
 
         auto time_cost_in_schedule_ms = stopwatch.elapsedMilliseconds() - time_cost_in_preprocess_ms;
-        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
+        LOG_INFO(log, "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms", time_cost_in_schedule_ms, time_cost_in_preprocess_ms);
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
@@ -404,6 +467,17 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
+
+#ifndef NDEBUG
+        if (isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+        }
+        else
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+        }
+#endif
 
         auto result = query_executor_holder->execute();
         LOG_INFO(log, "mpp task finish execute, success: {}", result.is_success);
@@ -422,9 +496,11 @@ void MPPTask::runImpl()
             // finish receiver
             receiver_set->close();
         }
-        auto ru = query_executor_holder->collectRequestUnit();
-        LOG_INFO(log, "mpp finish with request unit: {}", ru);
-        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
+        auto cpu_ru = query_executor_holder->collectRequestUnit();
+        auto read_ru = dag_context->getReadRU();
+        LOG_INFO(log, "mpp finish with request unit: cpu={} read={}", cpu_ru, read_ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(cpu_ru + read_ru);
+        mpp_task_statistics.setRU(cpu_ru, read_ru);
 
         mpp_task_statistics.collectRuntimeStatistics();
 
@@ -456,9 +532,9 @@ void MPPTask::runImpl()
             // todo when error happens, should try to update the metrics if it is available
             if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-            auto process_info = context->getProcessListElement()->getInfo();
-            auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+            /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
+            /// todo log executor level peak memory usage instead
+            auto peak_memory = getMemoryTracker()->getPeak();
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }
     }
@@ -479,7 +555,7 @@ void MPPTask::runImpl()
             }
         }
     }
-    mpp_task_statistics.end(status.load(), err_string);
+    mpp_task_statistics.end(status.load(), getErrString());
     mpp_task_statistics.logTracingJson();
 
     LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
@@ -519,7 +595,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
-            err_string = message;
+            setErrString(message);
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
             abortTunnels("", false);
@@ -531,7 +607,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// abort the components from top to bottom because if bottom components are aborted
             /// first, the top components may see an error caused by the abort, which is not
             /// the original error
-            err_string = message;
+            setErrString(message);
             abortTunnels(message, false);
             abortQueryExecutor();
             abortReceivers();

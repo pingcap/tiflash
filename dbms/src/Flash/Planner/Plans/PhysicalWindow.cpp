@@ -35,7 +35,7 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
     /// The plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- ... <-- PhysicalSort`.
     /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
@@ -81,30 +81,33 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     else
     {
         /// If there are several streams, we merge them into one.
-        executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
-        assert(pipeline.streams.size() == 1);
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "merge into one for window input");
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
-void PhysicalWindow::buildPipelineExecGroup(
+void PhysicalWindow::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
-    size_t /*concurrency*/)
+    Context & context,
+    size_t concurrency)
 {
-    // TODO support non fine grained shuffle.
-    assert(fine_grained_shuffle.enable());
-
     executeExpression(exec_status, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
+
+    if (!fine_grained_shuffle.enable())
+        executeUnion(exec_status, group_builder, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
+
+    if (!fine_grained_shuffle.enable() && is_restore_concurrency)
+        restoreConcurrency(exec_status, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     executeExpression(exec_status, group_builder, window_description.after_window, log);
 }

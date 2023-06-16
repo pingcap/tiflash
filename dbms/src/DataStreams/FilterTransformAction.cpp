@@ -19,7 +19,6 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterTransformAction.h>
 
-#include <algorithm>
 
 namespace DB
 {
@@ -51,7 +50,7 @@ FilterTransformAction::FilterTransformAction(
     {
         /// Replace the filter column to a constant with value 1.
         FilterDescription filter_description_check(*column_elem.column);
-        column_elem.column = column_elem.type->createColumnConst(header.rows(), UInt64(1));
+        column_elem.column = column_elem.type->createColumnConst(header.rows(), static_cast<UInt64>(1));
     }
 }
 
@@ -131,7 +130,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     {
         /// Replace the column with the filter by a constant.
         block.safeGetByPosition(filter_column).column
-            = block.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
+            = block.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, static_cast<UInt64>(1));
         /// No need to touch the rest of the columns.
         return true;
     }
@@ -148,7 +147,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
             /// Example:
             ///  SELECT materialize(100) AS x WHERE x
             /// will work incorrectly.
-            current_column.column = current_column.type->createColumnConst(filtered_rows, UInt64(1));
+            current_column.column = current_column.type->createColumnConst(filtered_rows, static_cast<UInt64>(1));
             continue;
         }
 

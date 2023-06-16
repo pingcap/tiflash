@@ -23,6 +23,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <unordered_map>
@@ -38,29 +39,54 @@ namespace JoinInterpreterHelper
 {
 namespace
 {
+struct JoinKindAndInnerIndexPairHash
+{
+    std::size_t operator()(const std::pair<tipb::JoinType, size_t> & pair) const
+    {
+        return (static_cast<size_t>(pair.first) << 1) | pair.second;
+    }
+};
+
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
 {
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::LeftOuter},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::RightOuter},
-        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftOuterAnti}};
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_LeftOuter},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_RightOuter},
-        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftOuterAnti}};
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> null_aware_join_type_map{
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::NullAware_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftOuterAnti}};
+    /// in DAG request, inner part is the build side, however for TiFlash implementation,
+    /// the build side must be the right side, so need to swap the join side if needed
+    /// 1. for (cross) inner join, semi/anti-semi join, there is no problem in this swap.
+    /// 2. for cross semi/anti-semi join, the build side is always right, needn't swap.
+    /// 3. for non-cross left/right outer join, there is no problem in this swap.
+    /// 4. for cross left outer join, the build side is always right, needn't and can't swap.
+    /// 5. for cross right outer join, the build side is always left, so it will always swap and change to cross left outer join.
+    /// note that whatever the build side is, we can't support cross-right-outer join now.
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> equal_join_type_map{
+        {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Inner, 0}},
+        {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
+        {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::RightOuter, 0}},
+        {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::LeftOuter, 1}},
+        {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::LeftOuter, 0}},
+        {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::RightOuter, 1}},
+        {{tipb::JoinType::TypeSemiJoin, 0}, {ASTTableJoin::Kind::RightSemi, 0}},
+        {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Inner, 1}},
+        {{tipb::JoinType::TypeAntiSemiJoin, 0}, {ASTTableJoin::Kind::RightAnti, 0}},
+        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Anti, 1}},
+        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterSemi, 1}},
+        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::LeftOuterAnti, 1}}};
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> cartesian_join_type_map{
+        {{tipb::JoinType::TypeInnerJoin, 0}, {ASTTableJoin::Kind::Cross, 0}},
+        {{tipb::JoinType::TypeInnerJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
+        {{tipb::JoinType::TypeLeftOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
+        {{tipb::JoinType::TypeLeftOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 1}},
+        {{tipb::JoinType::TypeRightOuterJoin, 0}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
+        {{tipb::JoinType::TypeRightOuterJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuter, 0}},
+        {{tipb::JoinType::TypeSemiJoin, 1}, {ASTTableJoin::Kind::Cross, 1}},
+        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::Cross_Anti, 1}},
+        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterSemi, 1}},
+        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::Cross_LeftOuterAnti, 1}}};
+    static const std::unordered_map<std::pair<tipb::JoinType, size_t>, std::pair<ASTTableJoin::Kind, size_t>, JoinKindAndInnerIndexPairHash> null_aware_join_type_map{
+        {{tipb::JoinType::TypeAntiSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_Anti, 1}},
+        {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterSemi, 1}},
+        {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
 
+    RUNTIME_ASSERT(inner_index == 0 || inner_index == 1);
     const auto & join_type_map = [is_null_aware, join_keys_size]() {
         if (is_null_aware)
         {
@@ -74,62 +100,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(tipb::JoinTyp
             return cartesian_join_type_map;
     }();
 
-    auto join_type_it = join_type_map.find(tipb_join_type);
+    auto join_type_it = join_type_map.find(std::make_pair(tipb_join_type, inner_index));
     if (unlikely(join_type_it == join_type_map.end()))
-        throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
-
-    ASTTableJoin::Kind kind = join_type_it->second;
-
-    /// in DAG request, inner part is the build side, however for TiFlash implementation,
-    /// the build side must be the right side, so need to swap the join side if needed
-    /// 1. for (cross) inner join, semi/anti-semi join, there is no problem in this swap.
-    /// 2. for cross semi/anti-semi join, the build side is always right, needn't swap.
-    /// 3. for non-cross left/right join, there is no problem in this swap.
-    /// 4. for cross left join, the build side is always right, needn't and can't swap.
-    /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
-    /// note that whatever the build side is, we can't support cross-right join now.
-
-    size_t build_side_index = 0;
-    switch (kind)
-    {
-    case ASTTableJoin::Kind::Cross_RightOuter:
-        build_side_index = 0;
-        break;
-    case ASTTableJoin::Kind::Cross_LeftOuter:
-        build_side_index = 1;
-        break;
-    default:
-        build_side_index = inner_index;
-    }
-    assert(build_side_index == 0 || build_side_index == 1);
-
-    // should swap join side.
-    if (build_side_index != 1)
-    {
-        switch (kind)
-        {
-        case ASTTableJoin::Kind::Inner:
-            if (tipb_join_type == tipb::JoinType::TypeSemiJoin)
-                kind = ASTTableJoin::Kind::RightSemi;
-            break;
-        case ASTTableJoin::Kind::Anti:
-            if (tipb_join_type == tipb::JoinType::TypeAntiSemiJoin)
-                kind = ASTTableJoin::Kind::RightAnti;
-            break;
-        case ASTTableJoin::Kind::LeftOuter:
-            kind = ASTTableJoin::Kind::RightOuter;
-            break;
-        case ASTTableJoin::Kind::RightOuter:
-            kind = ASTTableJoin::Kind::LeftOuter;
-            break;
-        case ASTTableJoin::Kind::Cross_RightOuter:
-            kind = ASTTableJoin::Kind::Cross_LeftOuter;
-            break;
-        default:; // just `default`, for other kinds, don't need to change kind.
-        }
-    }
-
-    return {kind, build_side_index};
+        throw TiFlashException(fmt::format("Unknown join type in dag request {} {}", tipb_join_type, inner_index), Errors::Coprocessor::BadRequest);
+    return join_type_it->second;
 }
 
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
@@ -232,7 +206,7 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
 
 String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const
 {
-    if (!isRightSemiFamily(kind) || !has_other_condition)
+    if (!useRowFlaggedHashMap(kind, has_other_condition))
     {
         return "";
     }
@@ -400,6 +374,42 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     String filter_column_name;
     dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, original_key_names, left, is_right_out_join, filters, filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
+}
+
+std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(const Context & context,
+                                                                const Block & input_header,
+                                                                const LoggerPtr & log)
+{
+    std::vector<RuntimeFilterPtr> result;
+    if (join.runtime_filter_list().empty())
+    {
+        return result;
+    }
+    result.reserve(join.runtime_filter_list().size());
+    NamesAndTypes source_columns;
+    source_columns.reserve(input_header.columns());
+    for (auto const & p : input_header)
+        source_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
+    LOG_DEBUG(log, "before gen runtime filter, pb rf size:{}", join.runtime_filter_list().size());
+    for (auto rf_pb : join.runtime_filter_list())
+    {
+        RuntimeFilterPtr runtime_filter = std::make_shared<RuntimeFilter>(rf_pb);
+        // check if rs operator support runtime filter target expr type
+        try
+        {
+            runtime_filter->build();
+            dag_analyzer.appendRuntimeFilterProperties(runtime_filter);
+        }
+        catch (TiFlashException & e)
+        {
+            LOG_WARNING(log, "The runtime filter will not be register, reason:{}", e.message());
+            continue;
+        }
+        LOG_DEBUG(log, "push back runtime filter, id:{}", runtime_filter->id);
+        result.push_back(runtime_filter);
+    }
+    return result;
 }
 } // namespace JoinInterpreterHelper
 } // namespace DB

@@ -49,7 +49,7 @@ public:
         return setChunk();
     }
 
-    ~ReadBufferFromMemoryWriteBuffer()
+    ~ReadBufferFromMemoryWriteBuffer() override
     {
         for (const auto & range : chunk_list)
             free(range.begin(), range.size());
@@ -138,7 +138,7 @@ void MemoryWriteBuffer::addChunk()
         }
     }
 
-    Position begin = reinterpret_cast<Position>(alloc(next_chunk_size));
+    auto * begin = reinterpret_cast<Position>(alloc(next_chunk_size));
     chunk_tail = chunk_list.emplace_after(chunk_tail, begin, begin + next_chunk_size);
     total_chunks_size += next_chunk_size;
 

@@ -158,7 +158,7 @@ public:
     // Return false if the file size is not updated because the file_id is not in StableDiskDelegator.
     bool updateDTFileSize(UInt64 file_id, size_t file_size);
 
-    void removeDTFile(UInt64 file_id);
+    void removeDTFile(UInt64 file_id, bool throw_on_not_exist = true);
 
     // Used to add reference to remote DTFile at restart or after the local_page_id is applied to PageDirectory.
     void addRemoteDTFileIfNotExists(UInt64 local_external_id, size_t file_size);
@@ -172,7 +172,7 @@ public:
     // local_page_id may be an external id or a ref id, and ref id will just be ignored.
     void enableGCForRemoteDTFile(UInt64 local_page_id);
 
-    void removeRemoteDTFile(UInt64 local_external_id);
+    void removeRemoteDTFile(UInt64 local_external_id, bool throw_on_not_exist = true);
 
     // Return all remote DTFiles that can be GCed.
     std::set<UInt64> getAllRemoteDTFilesForGC();

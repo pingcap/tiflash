@@ -113,7 +113,7 @@ private:
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        bool manual_flush);
+        bool temp_file);
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 

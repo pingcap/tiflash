@@ -59,12 +59,10 @@ public:
     static constexpr auto task_num = 10;
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
-        return tasks;
+            addTask(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
     }
 
     void finishImpl() override
@@ -108,15 +106,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
-            return {};
+            return;
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -151,19 +147,17 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_tasks)
         {
             while (!exec_status.isCancelled())
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            return {};
+            return;
         }
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -180,10 +174,9 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         exec_status.onErrorOccurred(err_msg);
-        return {};
     }
 };
 
@@ -195,10 +188,9 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         assert(mem_tracker.get() == current_memory_tracker);
-        return {};
     }
 
     void finishImpl() override
@@ -234,15 +226,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (!with_task)
             throw Exception("throw exception in scheduleImpl");
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
-            tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
     }
 
     void finishImpl() override
@@ -266,15 +256,13 @@ public:
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
         if (0 == task_num)
-            return {};
+            return;
 
-        std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+            addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
 private:
@@ -286,7 +274,7 @@ class DoInsertEvent : public Event
 public:
     DoInsertEvent(
         PipelineExecutorStatus & exec_status_,
-        std::atomic_int16_t & counter_)
+        int16_t & counter_)
         : Event(exec_status_, nullptr)
         , counter(counter_)
     {
@@ -294,11 +282,9 @@ public:
     }
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override
+    void scheduleImpl() override
     {
-        std::vector<TaskPtr> tasks;
-        tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        return tasks;
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
     }
 
     void finishImpl() override
@@ -309,19 +295,106 @@ protected:
     }
 
 private:
-    std::atomic_int16_t & counter;
+    int16_t & counter;
+};
+
+class CreateTaskFailEvent : public Event
+{
+public:
+    explicit CreateTaskFailEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_, nullptr)
+    {
+    }
+
+protected:
+    void scheduleImpl() override
+    {
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        addTask(std::make_unique<RunTask>(exec_status, shared_from_this()));
+        throw Exception("create task fail");
+    }
+};
+
+class TestPorfileTask : public EventTask
+{
+public:
+    static constexpr size_t min_time = 500'000'000L; // 500ms
+
+    static constexpr size_t per_execute_time = 10'000'000L; // 10ms
+
+    TestPorfileTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_)
+        : EventTask(exec_status_, event_)
+    {}
+
+protected:
+    // doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
+    ExecTaskStatus doExecuteImpl() override
+    {
+        if (cpu_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            cpu_execute_time += per_execute_time;
+            return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::IO;
+    }
+
+    ExecTaskStatus doExecuteIOImpl() override
+    {
+        if (io_execute_time < min_time)
+        {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
+            io_execute_time += per_execute_time;
+            return ExecTaskStatus::IO;
+        }
+        return ExecTaskStatus::WAITING;
+    }
+
+    ExecTaskStatus doAwaitImpl() override
+    {
+        if unlikely (!wait_stopwatch)
+            wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+        return wait_stopwatch->elapsed() < min_time
+            ? ExecTaskStatus::WAITING
+            : ExecTaskStatus::FINISHED;
+    }
+
+private:
+    size_t cpu_execute_time = 0;
+    size_t io_execute_time = 0;
+    std::optional<Stopwatch> wait_stopwatch;
+};
+
+class TestPorfileEvent : public Event
+{
+public:
+    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_, size_t task_num_)
+        : Event(exec_status_, nullptr)
+        , task_num(task_num_)
+    {}
+
+    const size_t task_num;
+
+protected:
+    void scheduleImpl() override
+    {
+        for (size_t i = 0; i < task_num; ++i)
+            addTask(std::make_unique<TestPorfileTask>(exec_status, shared_from_this()));
+    }
 };
 } // namespace
 
 class EventTestRunner : public ::testing::Test
 {
 public:
-    void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
+    static void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
         Events sources;
         for (const auto & event : events)
         {
-            if (event->prepareForSource())
+            if (event->prepare())
                 sources.push_back(event);
         }
         for (const auto & event : sources)
@@ -333,13 +406,13 @@ public:
         }
     }
 
-    void wait(PipelineExecutorStatus & exec_status)
+    static void wait(PipelineExecutorStatus & exec_status)
     {
         std::chrono::seconds timeout(15);
         exec_status.waitFor(timeout);
     }
 
-    void assertNoErr(PipelineExecutorStatus & exec_status)
+    static void assertNoErr(PipelineExecutorStatus & exec_status)
     {
         auto exception_ptr = exec_status.getExceptionPtr();
         auto exception_msg = exec_status.getExceptionMsg();
@@ -467,7 +540,7 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            if (on_err_event->prepareForSource())
+            if (on_err_event->prepare())
                 on_err_event->schedule();
         }
         wait(exec_status);
@@ -483,20 +556,20 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, memory_trace)
+TEST_F(EventTestRunner, memoryTrace)
 try
 {
     PipelineExecutorStatus exec_status;
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
-    if (event->prepareForSource())
+    if (event->prepare())
         event->schedule();
     wait(exec_status);
     assertNoErr(exec_status);
 }
 CATCH
 
-TEST_F(EventTestRunner, throw_exception)
+TEST_F(EventTestRunner, throwException)
 try
 {
     std::vector<bool> with_tasks{false, true};
@@ -524,14 +597,14 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, many_tasks)
+TEST_F(EventTestRunner, manyTasks)
 try
 {
     for (size_t i = 0; i < 200; i += 7)
     {
         PipelineExecutorStatus exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
-        if (event->prepareForSource())
+        if (event->prepare())
             event->schedule();
         wait(exec_status);
         assertNoErr(exec_status);
@@ -539,18 +612,18 @@ try
 }
 CATCH
 
-TEST_F(EventTestRunner, insert_events)
+TEST_F(EventTestRunner, insertEvents)
 try
 {
     PipelineExecutorStatus exec_status;
-    std::atomic_int16_t counter1{5};
-    std::atomic_int16_t counter2{5};
-    std::atomic_int16_t counter3{5};
+    std::vector<int16_t> counters;
+    for (size_t i = 0; i < 10; ++i)
+        counters.push_back(99);
     {
         std::vector<EventPtr> events;
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter1));
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter2));
-        events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter3));
+        events.reserve(counters.size());
+        for (auto & counter : counters)
+            events.push_back(std::make_shared<DoInsertEvent>(exec_status, counter));
         auto err_event = std::make_shared<ThrowExceptionEvent>(exec_status, false);
         for (const auto & event : events)
             err_event->addInput(event);
@@ -560,9 +633,57 @@ try
     wait(exec_status);
     auto exception_ptr = exec_status.getExceptionPtr();
     ASSERT_TRUE(exception_ptr);
-    ASSERT_EQ(0, counter1);
-    ASSERT_EQ(0, counter2);
-    ASSERT_EQ(0, counter3);
+    for (auto & counter : counters)
+        ASSERT_EQ(0, counter);
+}
+CATCH
+
+TEST_F(EventTestRunner, createTaskFail)
+try
+{
+    PipelineExecutorStatus exec_status;
+    auto event = std::make_shared<CreateTaskFailEvent>(exec_status);
+    if (event->prepare())
+        event->schedule();
+    wait(exec_status);
+    auto exception_ptr = exec_status.getExceptionPtr();
+    ASSERT_TRUE(exception_ptr);
+}
+CATCH
+
+TEST_F(EventTestRunner, profile)
+try
+{
+    for (size_t task_num = 0; task_num < 2 * thread_num; task_num += 2)
+    {
+        PipelineExecutorStatus exec_status;
+        auto event = std::make_shared<TestPorfileEvent>(exec_status, task_num);
+        if (event->prepare())
+            event->schedule();
+        wait(exec_status);
+        assertNoErr(exec_status);
+
+        /// for executing
+        size_t exec_lower_limit = task_num * TestPorfileTask::min_time;
+        // Use `exec_lower_limit * 5` to avoid failure caused by unstable test environment.
+        size_t exec_upper_limit = exec_lower_limit * 5;
+        auto do_assert_for_exec = [&](UInt64 value) {
+            ASSERT_GE(value, exec_lower_limit);
+            ASSERT_LE(value, exec_upper_limit);
+        };
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getCPUExecuteTimeNs());
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getIOExecuteTimeNs());
+        do_assert_for_exec(exec_status.getQueryProfileInfo().getAwaitTimeNs());
+
+        /// for pending
+        if (task_num > thread_num)
+        {
+            // If the number of tasks is greater than the number of threads, there must be tasks in a pending state.
+            // To avoid unstable unit tests, we do not check the upper limit.
+            ASSERT_GT(exec_status.getQueryProfileInfo().getCPUPendingTimeNs(), 0);
+            ASSERT_GT(exec_status.getQueryProfileInfo().getIOPendingTimeNs(), 0);
+        }
+    }
 }
 CATCH
 

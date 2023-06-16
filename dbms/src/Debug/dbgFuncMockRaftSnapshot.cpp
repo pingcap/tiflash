@@ -43,6 +43,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -75,12 +76,6 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     size_t handle_column_size = is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     RegionPtr region;
 
-    std::unordered_map<String, size_t> column_name_columns_index_map;
-    for (size_t i = 0; i < table_info.columns.size(); i++)
-    {
-        column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-    }
-
     if (!is_common_handle)
     {
         auto start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value));
@@ -94,8 +89,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
         std::vector<Field> end_keys;
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            auto & column_info = table_info.columns[idx];
+            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
             auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
@@ -136,9 +130,9 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
                 std::vector<Field> keys; // handle key
                 for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
                 {
-                    auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-                    auto & column_info = table_info.columns[idx];
-                    auto start_field = RegionBench::convertField(column_info, fields[idx]);
+                    auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
+                    auto & column_info = table_info.columns[idx_col.offset];
+                    auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
                     TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
                     keys.emplace_back(start_datum.field());
                 }
@@ -213,15 +207,9 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
-        {
-            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-        }
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            const auto & column_info = table_info.columns[idx];
+            const auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
             auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
@@ -261,6 +249,21 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 }
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
+
+class RegionMockTest final
+{
+public:
+    RegionMockTest(KVStore * kvstore_, RegionPtr region_);
+    ~RegionMockTest();
+
+    DISALLOW_COPY_AND_MOVE(RegionMockTest);
+
+private:
+    TiFlashRaftProxyHelper mock_proxy_helper{};
+    const TiFlashRaftProxyHelper * ori_proxy_helper{};
+    KVStore * kvstore;
+    RegionPtr region;
+};
 
 RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
@@ -595,7 +598,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     if (!atomic_decode(false))
     {
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        tmt.getSchemaSyncerManager()->syncSchemas(context, keyspace_id);
 
         if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",

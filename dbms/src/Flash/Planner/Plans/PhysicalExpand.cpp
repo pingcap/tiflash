@@ -35,7 +35,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     const tipb::Expand & expand,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     if (unlikely(expand.grouping_sets().empty()))
     {
@@ -76,7 +76,7 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
     executeExpression(child_pipeline, expand_actions, log, expand_extra_info);
 }
 
-void PhysicalExpand::buildPipelineExecGroup(
+void PhysicalExpand::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

@@ -29,6 +29,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const Aggregator::Params & params_,
     bool final_,
     size_t max_threads_,
+    Int64 max_buffered_bytes_,
     size_t temporary_data_merge_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
@@ -36,6 +37,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , aggregator(params, req_id)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
+    , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
@@ -97,7 +99,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                     BlockInputStreams merging_streams;
                     for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
                         merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
+                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, max_buffered_bytes, log->identifier());
                 }
                 else
                 {
@@ -134,11 +136,14 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
+    auto & data = *parent.many_data[thread_num];
     parent.aggregator.executeOnBlock(
         block,
-        *parent.many_data[thread_num],
+        data,
         parent.threads_data[thread_num].key_columns,
         parent.threads_data[thread_num].aggregate_columns);
+    if (data.need_spill)
+        parent.aggregator.spill(data);
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -150,11 +155,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
     {
         /// Flush data in the RAM to disk. So it's easier to unite them later.
         auto & data = *parent.many_data[thread_num];
-
-        if (data.isConvertibleToTwoLevel())
-            data.convertToTwoLevel();
-
-        if (!data.empty())
+        if (data.tryMarkNeedSpill())
             parent.aggregator.spill(data);
     }
 }
@@ -167,10 +168,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
         ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
         for (auto & data : parent.many_data)
         {
-            if (data->isConvertibleToTwoLevel())
-                data->convertToTwoLevel();
-
-            if (!data->empty())
+            if (data->tryMarkNeedSpill())
                 parent.aggregator.spill(*data);
         }
     }
@@ -245,11 +243,16 @@ void ParallelAggregatingBlockInputStream::execute()
     /// If there was no data, and we aggregate without keys, we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (total_src_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
+    {
+        auto & data = *many_data[0];
         aggregator.executeOnBlock(
             children.at(0)->getHeader(),
-            *many_data[0],
+            data,
             threads_data[0].key_columns,
             threads_data[0].aggregate_columns);
+        if (data.need_spill)
+            aggregator.spill(data);
+    }
 }
 
 void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const

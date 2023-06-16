@@ -92,21 +92,20 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
 
-    std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
+    for (const auto & column : table_info.columns)
     {
-        for (const auto & column : table_info.columns)
-        {
-            columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
-        }
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters; // don't care pushed down filters
-        dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
-            pushed_down_filters,
-            table_info.columns,
-            timezone_info);
+        columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
+    std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
+        conditions,
+        pushed_down_filters,
+        table_info.columns,
+        std::vector<int>(), // don't care runtime filter
+        0,
+        timezone_info);
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
             columns_to_read.begin(),

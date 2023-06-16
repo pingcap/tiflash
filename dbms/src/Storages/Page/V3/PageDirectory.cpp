@@ -50,6 +50,7 @@
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
+extern const Metric PSPendingWriterNum;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -305,9 +306,9 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
     if (type == EditRecordType::VAR_ENTRY)
     {
         auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
-        RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
+        RUNTIME_CHECK_MSG(last_iter != entries.end() && last_iter->second.isEntry(), "{}", toDebugString());
         auto & ori_entry = last_iter->second.entry;
-        RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
+        RUNTIME_CHECK_MSG(ori_entry.checkpoint_info.has_value(), "{}", toDebugString());
         if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
@@ -536,12 +537,8 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 
     auto page_lock = acquireLock();
 
-    if (type != EditRecordType::VAR_ENTRY)
-    {
-        // For example, Put X -> Delete X -> dumpSnapshotToEdit -> Full GC -> Delete X -> copyCheckpointInfoFromEdit.
-        // In this case, we have X=VAR_ENTRY in the `edit`, but will get X=VAR_DELETE in the page directory.
-        return;
-    }
+    // This entry must be valid because it must be visible for the snap which is used to dump checkpoint, so it cannot be gced
+    RUNTIME_CHECK(type == EditRecordType::VAR_ENTRY);
 
     // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
     // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
@@ -563,7 +560,14 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     {
         // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
         RUNTIME_CHECK(iter->second.isEntry());
+
+        bool is_local_data_reclaimed = false;
+        if (iter->second.entry.checkpoint_info.has_value())
+            is_local_data_reclaimed = iter->second.entry.checkpoint_info.is_local_data_reclaimed;
+        // else it does not have checkpoint_info, local data must be not reclaimed
+
         iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
+        iter->second.entry.checkpoint_info.is_local_data_reclaimed = is_local_data_reclaimed; // keep this field value
 
         if (iter == entries.begin())
             break;
@@ -923,22 +927,14 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             }
             auto last_version = last_iter->first;
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
-            while (true)
+            if (prev_iter->second.isEntry())
             {
-                // if there is any entry prev to this delete entry,
-                //   1) the entry may be ref by another id.
-                //   2) the entry may be upsert into a newer wal file by the gc process.
-                // So we need to keep the entry item and its delete entry in the snapshot.
-                if (prev_iter->second.isEntry())
-                {
-                    const auto & entry = prev_iter->second;
-                    edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
-                    edit.varDel(page_id, last_version);
-                    break;
-                }
-                if (prev_iter == entries.begin())
-                    break;
-                prev_iter--;
+                if (prev_iter->second.being_ref_count == 1)
+                    return;
+                // It is being ref by another id, should persist the item and delete
+                const auto & entry = prev_iter->second;
+                edit.varEntry(page_id, prev_iter->first, entry.entry, entry.being_ref_count);
+                edit.varDel(page_id, last_version);
             }
         }
         return;
@@ -969,6 +965,7 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
 template <typename Trait>
 PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
@@ -1023,6 +1020,7 @@ SnapshotsStatistics PageDirectory<Trait>::getSnapshotsStat() const
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(const PageId & page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     PageEntryV3 entry_got;
 
     // After two write batches applied: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}, the `mvcc_table_directory` is:
@@ -1058,10 +1056,10 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
     bool ok = true;
     while (ok)
     {
-        typename MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -1078,8 +1076,9 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
                     return PageIdAndEntry{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -1116,6 +1115,7 @@ template <typename Trait>
 std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirectory<Trait>::PageIds>
 PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
 
@@ -1125,10 +1125,10 @@ PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds 
         bool ok = true;
         while (ok)
         {
-            typename MVCCMapType::const_iterator iter;
+            VersionedPageEntriesPtr iter_v;
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter = mvcc_table_directory.find(id_to_resolve);
+                auto iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
                     if (throw_on_not_exist)
@@ -1140,8 +1140,9 @@ PageDirectory<Trait>::getByIDsImpl(const typename PageDirectory<Trait>::PageIds 
                         return false;
                     }
                 }
+                iter_v = iter->second;
             }
-            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
+            auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
             switch (resolve_state)
             {
             case ResolveResult::TO_NORMAL:
@@ -1196,10 +1197,10 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
     bool keep_resolve = true;
     while (keep_resolve)
     {
-        typename MVCCMapType::const_iterator iter;
+        VersionedPageEntriesPtr iter_v;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
+            auto iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
                 if (throw_on_not_exist)
@@ -1211,8 +1212,9 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
                     return Trait::PageIdTrait::getInvalidID();
                 }
             }
+            iter_v = iter->second;
         }
-        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
+        auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter_v->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
         switch (resolve_state)
         {
         case ResolveResult::TO_NORMAL:
@@ -1259,6 +1261,7 @@ UInt64 PageDirectory<Trait>::getMaxIdAfterRestart() const
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIds()
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_scan).Increment();
     std::set<PageId> page_ids;
 
     std::shared_lock read_lock(table_rw_mutex);
@@ -1275,6 +1278,7 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIds()
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_scan).Increment();
     if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
         PageIdSet page_ids;
@@ -1301,6 +1305,7 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWith
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsInRange(const PageId & start, const PageId & end, const DB::PageStorageSnapshotPtr & snap_)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_scan).Increment();
     if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
         PageIdSet page_ids;
@@ -1475,7 +1480,8 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
-
+    GET_METRIC(tiflash_storage_page_command_count, type_write).Increment();
+    CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
     Writer w;
     w.edit = &edit;
 
@@ -1486,6 +1492,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
 
     writers.push_back(&w);
+    SYNC_FOR("after_PageDirectory::enter_write_group");
     w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
@@ -1506,9 +1513,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         // group owner, others just return an empty set.
         return {};
     }
-
     auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock();
+    SYNC_FOR("before_PageDirectory::leader_apply");
 
     // `true` means the write process has completed without exception
     bool success = false;
@@ -1731,20 +1738,20 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
     std::map<PageId, std::tuple<PageId, PageVersion>> ref_ids_maybe_rewrite;
 
     {
-        typename MVCCMapType::const_iterator iter;
+        PageId page_id;
+        VersionedPageEntriesPtr version_entries;
+
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.cbegin();
+            auto iter = mvcc_table_directory.cbegin();
             if (iter == mvcc_table_directory.end())
                 return {blob_versioned_entries, total_page_size};
+            page_id = iter->first;
+            version_entries = iter->second;
         }
 
         while (true)
         {
-            // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
-            // do scan on the version list without lock on `mvcc_table_directory`.
-            auto page_id = iter->first;
-            const auto & version_entries = iter->second;
             fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
                 if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
                 {
@@ -1761,9 +1768,11 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 
             {
                 std::shared_lock read_lock(table_rw_mutex);
-                iter++;
+                auto iter = mvcc_table_directory.upper_bound(page_id);
                 if (iter == mvcc_table_directory.end())
                     break;
+                page_id = iter->first;
+                version_entries = iter->second;
             }
         }
     }
@@ -1775,13 +1784,14 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
     {
         const auto ori_id = std::get<0>(ori_id_ver);
         const auto ver = std::get<1>(ori_id_ver);
-        typename MVCCMapType::const_iterator page_iter;
+
+        VersionedPageEntriesPtr version_entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            page_iter = mvcc_table_directory.find(ori_id);
+            auto page_iter = mvcc_table_directory.find(ori_id);
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
+            version_entries = page_iter->second;
         }
-        const auto & version_entries = page_iter->second;
         // After storing all data in one PageStorage instance, we will run full gc
         // with external pages. Skip rewriting if it is an external pages.
         if (version_entries->isExternalPage())
@@ -1866,42 +1876,45 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
+size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & edit)
 {
+    size_t num_copied = 0;
     const auto & records = edit.getRecords();
     if (records.empty())
-        return;
+        return num_copied;
 
     // Pre-check: All ENTRY edit record must contain checkpoint info.
     // We do the pre-check before copying any remote info to avoid partial completion.
     for (const auto & rec : records)
     {
         if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK(rec.entry.checkpoint_info.has_value());
+            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
     }
 
     for (const auto & rec : records)
     {
-        // Only VAR_ENTRY will contain checkpoint info.
+        // Only VAR_ENTRY need update checkpoint info.
         if (rec.type != EditRecordType::VAR_ENTRY)
             continue;
 
         // TODO: Improve from O(nlogn) to O(n).
 
-        typename MVCCMapType::iterator iter;
+        VersionedPageEntriesPtr entries;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(rec.page_id);
+            auto iter = mvcc_table_directory.find(rec.page_id);
             if (iter == mvcc_table_directory.end())
                 // There may be obsolete entries deleted.
                 // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
                 // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
                 continue;
+            entries = iter->second;
         }
 
-        auto & entries = iter->second;
         entries->copyCheckpointInfoFromEdit(rec);
+        num_copied += 1;
     }
+    return num_copied;
 }
 
 template <typename Trait>
@@ -2050,22 +2063,28 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
     }
 
     PageEntriesEdit edit;
-    typename MVCCMapType::iterator iter;
+
+    PageId iter_k;
+    VersionedPageEntriesPtr iter_v;
     {
         std::shared_lock read_lock(table_rw_mutex);
-        iter = mvcc_table_directory.begin();
+        auto iter = mvcc_table_directory.begin();
         if (iter == mvcc_table_directory.end())
             return edit;
+        iter_k = iter->first;
+        iter_v = iter->second;
     }
     while (true)
     {
-        iter->second->collapseTo(snap->sequence, iter->first, edit);
+        iter_v->collapseTo(snap->sequence, iter_k, edit);
 
         {
             std::shared_lock read_lock(table_rw_mutex);
-            ++iter;
+            auto iter = mvcc_table_directory.upper_bound(iter_k);
             if (iter == mvcc_table_directory.end())
                 break;
+            iter_k = iter->first;
+            iter_v = iter->second;
         }
     }
 

@@ -74,5 +74,14 @@ Field convertField(const TiDB::ColumnInfo & column_info, const Field & field);
 TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id);
 
 const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name);
-
 } // namespace DB::RegionBench
+
+namespace DB
+{
+using QualifiedName = std::pair<String, String>;
+String mappedDatabase(Context & context, const String & database_name);
+std::optional<String> mappedDatabaseWithOptional(Context & context, const String & database_name);
+std::optional<QualifiedName> mappedTableWithOptional(Context & context, const String & database_name, const String & table_name);
+QualifiedName mappedTable(Context & context, const String & database_name, const String & table_name, bool include_tombstone = false);
+
+} // namespace DB

@@ -87,6 +87,11 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildGroupingFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     static String buildDefaultFunction(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,

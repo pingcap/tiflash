@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
+class PipelineExecutorStatus;
+
 // The base class of event related task.
 class EventTask : public Task
 {
@@ -34,29 +34,24 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
 
-    ~EventTask();
-
 protected:
-    ExecTaskStatus executeImpl() noexcept override;
+    ExecTaskStatus executeImpl() override;
     virtual ExecTaskStatus doExecuteImpl() = 0;
 
-    ExecTaskStatus executeIOImpl() noexcept override;
+    ExecTaskStatus executeIOImpl() override;
     virtual ExecTaskStatus doExecuteIOImpl() { return ExecTaskStatus::RUNNING; };
 
-    ExecTaskStatus awaitImpl() noexcept override;
+    ExecTaskStatus awaitImpl() override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
-    // Used to release held resources, just like `Event::finishImpl`.
-    void finalize() noexcept;
-    virtual void finalizeImpl(){};
+    void finalizeImpl() override;
+    virtual void doFinalizeImpl(){};
 
-private:
-    ExecTaskStatus doTaskAction(std::function<ExecTaskStatus()> && action);
+    UInt64 getScheduleDuration() const;
 
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
-    bool finalized = false;
 };
 
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -60,6 +61,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     // for disagg tiflash write node
     if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        service->removeAllLocalCheckpointFiles();
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
@@ -102,6 +104,13 @@ bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & ch
     return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
 }
 
+void UniversalPageStorageService::setSyncAllData()
+{
+    sync_all_at_next_upload = true;
+    gc_handle->wake();
+    LOG_INFO(log, "sync_all flag is set, next checkpoint will upload all existing data");
+}
+
 bool UniversalPageStorageService::uploadCheckpoint()
 {
     // If another thread is running, just skip
@@ -141,7 +150,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
         return false;
     }
     auto s3lock_client = tmt.getS3LockClient();
-    return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+    const bool force_sync = sync_all_at_next_upload.load();
+    bool upload_done = uploadCheckpointImpl(store_info, s3lock_client, remote_store, force_sync);
+    if (force_sync && upload_done)
+        sync_all_at_next_upload = false;
+    // always return false to run at fixed rate
+    return false;
 }
 
 struct FileIdsToCompactGetter
@@ -165,7 +179,8 @@ struct FileIdsToCompactGetter
 bool UniversalPageStorageService::uploadCheckpointImpl(
     const metapb::Store & store_info,
     const S3::S3LockClientPtr & s3lock_client,
-    const DM::Remote::IDataStorePtr & remote_store)
+    const DM::Remote::IDataStorePtr & remote_store,
+    bool force_sync_data)
 {
     // `initLocksLocalManager` enable writes to remote store.
     // if it is the first time after restart, it will load the last_upload_sequence
@@ -176,7 +191,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // actually skip
     // TODO: we can do it in a better way by splitting `dumpIncrementalCheckpoint`
     //       into smaller parts to avoid this.
-    if (uni_page_storage->canSkipCheckpoint())
+    if (!force_sync_data && uni_page_storage->canSkipCheckpoint())
     {
         return false;
     }
@@ -197,9 +212,14 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // TODO: directly write into remote store. But take care of the order
     //       of CheckpointData files, lock files, and CheckpointManifest.
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
-    auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
+    auto local_dir = getCheckpointLocalDir(upload_info.upload_sequence);
     Poco::File(local_dir).createDirectories();
     auto local_dir_str = local_dir.toString() + "/";
+    SCOPE_EXIT({
+        // No matter the local checkpoint files are uploaded successfully or fails, delete them directly.
+        // Since the directory has been created before, it should exists.
+        Poco::File(local_dir).remove(true);
+    });
 
     /*
      * If using `snapshot->sequence` as a part of manifest name, we can NOT
@@ -227,6 +247,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
 
+    if (force_sync_data)
+    {
+        LOG_INFO(log, "Upload checkpoint with all existing data");
+    }
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -242,6 +266,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
+        .full_compact = force_sync_data,
         .compact_getter = FileIdsToCompactGetter{
             .uni_page_storage = uni_page_storage,
             .gc_threshold = gc_threshold,
@@ -256,16 +281,13 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
 
     LOG_INFO(
         log,
-        "Upload checkpoint success, upload_sequence={} incremental_bytes={} compact_bytes={}",
+        "Upload checkpoint success,{} upload_sequence={} incremental_bytes={} compact_bytes={}",
+        force_sync_data ? " sync_all=true" : "",
         upload_info.upload_sequence,
         write_stats.incremental_data_bytes,
         write_stats.compact_data_bytes);
 
-    // the checkpoint is uploaded to remote data store, remove local temp files
-    Poco::File(local_dir).remove(true);
-
-    // always return false to run at fixed rate
-    return false;
+    return true;
 }
 
 bool UniversalPageStorageService::gc()
@@ -300,4 +322,28 @@ void UniversalPageStorageService::shutdown()
         gc_handle = nullptr;
     }
 }
+
+void UniversalPageStorageService::removeAllLocalCheckpointFiles()
+{
+    Poco::File temp_dir(global_context.getTemporaryPath());
+    if (temp_dir.exists() && temp_dir.isDirectory())
+    {
+        std::vector<String> short_names;
+        temp_dir.list(short_names);
+        for (const auto & name : short_names)
+        {
+            if (startsWith(name, checkpoint_dirname_prefix))
+            {
+                auto checkpoint_dirname = global_context.getTemporaryPath() + "/" + name;
+                Poco::File(checkpoint_dirname).remove(true);
+            }
+        }
+    }
+}
+
+Poco::Path UniversalPageStorageService::getCheckpointLocalDir(UInt64 seq) const
+{
+    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq)).absolute();
+}
+
 } // namespace DB

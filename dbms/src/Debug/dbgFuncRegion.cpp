@@ -61,15 +61,10 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     {
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
-        std::unordered_map<String, size_t> column_name_columns_index_map;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
-        {
-            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-        }
+
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            const auto & column_info = table_info.columns[idx];
+            const auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
             auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());
@@ -116,7 +111,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryFlushRegion(region_id);
+    tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region_id);
 
     output(fmt::format("region_table try flush region {}", region_id));
 }

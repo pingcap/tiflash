@@ -235,7 +235,7 @@ void NativeBlockInputStream::updateAvgValueSizeHints(const Block & block)
     if (rows < 10)
         return;
 
-    avg_value_size_hints.resize_fill(block.columns(), 0);
+    avg_value_size_hints.resize_fill(block.columns());
 
     for (auto idx : ext::range(0, block.columns()))
     {

@@ -113,24 +113,22 @@ public:
         }
     }
 
-    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enable_memory_tracker = false);
+    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context);
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1,
-        bool enable_memory_tracker = false);
+        size_t concurrency = 1);
 
     Blocks getExecuteStreamsReturnBlocks(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1,
-        bool enable_memory_tracker = false);
+        size_t concurrency = 1);
 
     /// test execution summary
     // <rows, concurrency>
-    using ProfileInfo = std::pair<int, size_t>;
+    using ProfileInfo = std::pair<int, int>;
     using Expect = std::unordered_map<String, ProfileInfo>;
     static constexpr int not_check_rows = -1;
-    static constexpr UInt64 not_check_concurrency = -1;
+    static constexpr int not_check_concurrency = -1;
 
 
     void testForExecutionSummary(

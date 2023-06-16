@@ -14,6 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Pipeline/Pipeline.h>
@@ -23,6 +24,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <gtest/gtest.h>
 
 #include <functional>
 
@@ -168,7 +170,7 @@ void ExecutorTest::executeExecutor(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
-    if (enable_pipeline && !Pipeline::isSupported(*request))
+    if (enable_pipeline && !Pipeline::isSupported(*request, context.context->getSettingsRef()))
         continue;
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
@@ -190,7 +192,7 @@ void ExecutorTest::checkBlockSorted(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
-    if (enable_pipeline && !Pipeline::isSupported(*request))
+    if (enable_pipeline && !Pipeline::isSupported(*request, context.context->getSettingsRef()))
         continue;
     std::vector<size_t> concurrencies{2, 5, 10};
     for (auto concurrency : concurrencies)
@@ -279,40 +281,42 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 void ExecutorTest::enablePlanner(bool is_enable) const
 {
     context.context->setSetting("enable_planner", is_enable ? "true" : "false");
+    enablePipeline(false);
 }
 
 void ExecutorTest::enablePipeline(bool is_enable) const
 {
     context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
+    context.context->setSetting("enforce_enable_pipeline", is_enable ? "true" : "false");
 }
 
+// ywq todo rename
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
     const std::shared_ptr<tipb::DAGRequest> & request,
-    size_t concurrency,
-    bool enable_memory_tracker)
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    return executeStreams(&dag_context, enable_memory_tracker);
+    return executeStreams(&dag_context);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool enable_memory_tracker)
+ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context)
 {
     TiFlashTestEnv::setUpTestContext(*context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(*context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(*context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
-Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request,
-                                                   size_t concurrency,
-                                                   bool enable_memory_tracker)
+Blocks ExecutorTest::getExecuteStreamsReturnBlocks(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(*context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(*context.context, /*internal=*/true)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return blocks;
 }
 
@@ -323,30 +327,35 @@ void ExecutorTest::testForExecutionSummary(
 {
     request->set_collect_execution_summaries(true);
     DAGContext dag_context(*request, "test_execution_summary", concurrency);
+    Stopwatch stop_watch;
     executeStreams(&dag_context);
+    auto time_ns_used = stop_watch.elapsed();
     ASSERT_TRUE(dag_context.collect_execution_summaries);
     ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
     statistics_collector.initialize(&dag_context);
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+    bool enable_planner = context.context->getSettingsRef().enable_planner;
+    bool enable_pipeline = context.context->getSettingsRef().enable_pipeline || context.context->getSettingsRef().enforce_enable_pipeline;
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
     for (const auto & summary : summaries)
     {
         ASSERT_TRUE(summary.has_executor_id()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         auto it = expect.find(summary.executor_id());
         ASSERT_TRUE(it != expect.end())
             << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
-            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+            << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.first != not_check_rows)
             ASSERT_EQ(summary.num_produced_rows(), it->second.first)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.second != not_check_concurrency)
             ASSERT_EQ(summary.concurrency(), it->second.second)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
-        // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+        ASSERT_LE(summary.time_processed_ns(), time_ns_used);
+        // num_iterations and tiflash_scan_context are not checked here.
     }
 }
 

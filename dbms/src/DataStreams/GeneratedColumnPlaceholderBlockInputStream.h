@@ -18,6 +18,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <DataStreams/GeneratedColumnPlaceHolderTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -32,18 +33,17 @@ public:
         const BlockInputStreamPtr & input,
         const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos_,
         const String & req_id_)
-        : generated_column_infos(generated_column_infos_)
+        : action(input->getHeader(), generated_column_infos_)
         , log(Logger::get(req_id_))
     {
         children.push_back(input);
     }
 
     String getName() const override { return NAME; }
+
     Block getHeader() const override
     {
-        Block block = children.back()->getHeader();
-        insertColumns(block, /*insert_data=*/false);
-        return block;
+        return action.getHeader();
     }
 
     static String getColumnName(UInt64 col_index)
@@ -54,43 +54,19 @@ public:
 protected:
     void readPrefix() override
     {
-        RUNTIME_CHECK(!generated_column_infos.empty());
-        // Validation check.
-        for (size_t i = 1; i < generated_column_infos.size(); ++i)
-        {
-            RUNTIME_CHECK(std::get<0>(generated_column_infos[i]) > std::get<0>(generated_column_infos[i - 1]));
-        }
+        action.checkColumn();
     }
 
     Block readImpl() override
     {
         Block block = children.back()->read();
-        insertColumns(block, /*insert_data=*/true);
+        action.transform(block);
         return block;
     }
 
 private:
-    void insertColumns(Block & block, bool insert_data) const
-    {
-        if (!block)
-            return;
-
-        for (const auto & ele : generated_column_infos)
-        {
-            const auto & col_index = std::get<0>(ele);
-            const auto & col_name = std::get<1>(ele);
-            const auto & data_type = std::get<2>(ele);
-            ColumnPtr column = nullptr;
-            if (insert_data)
-                column = data_type->createColumnConstWithDefaultValue(block.rows());
-            else
-                column = data_type->createColumn();
-            block.insert(col_index, ColumnWithTypeAndName{column, data_type, col_name});
-        }
-    }
-
     static constexpr auto NAME = "GeneratedColumnPlaceholder";
-    const std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+    GeneratedColumnPlaceHolderTransformAction action;
     const LoggerPtr log;
 };
 

@@ -14,6 +14,7 @@
 
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB
 {
@@ -22,6 +23,17 @@ void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
     rows += profile_info.rows;
     blocks += profile_info.blocks;
     bytes += profile_info.bytes;
+    allocated_bytes += profile_info.allocated_bytes;
+    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+    ++concurrency;
+}
+
+void BaseRuntimeStatistics::append(const OperatorProfileInfo & profile_info)
+{
+    rows += profile_info.rows;
+    blocks += profile_info.blocks;
+    bytes += profile_info.bytes;
+    allocated_bytes += profile_info.allocated_bytes;
     execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
     ++concurrency;
 }

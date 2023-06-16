@@ -85,6 +85,23 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageIdU64 
     }
 }
 
+void DeltaMergeStore::removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist)
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return;
+
+    auto delegator = path_pool->getStableDiskDelegator();
+    if (auto remote_data_store = global_context.getSharedContextDisagg()->remote_data_store;
+        !remote_data_store)
+    {
+        delegator.removeDTFile(file_id, throw_on_not_exist);
+    }
+    else
+    {
+        delegator.removeRemoteDTFile(file_id, throw_on_not_exist);
+    }
+}
+
 Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
@@ -514,7 +531,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
     }
 }
 
-void DeltaMergeStore::ingestFiles(
+UInt64 DeltaMergeStore::ingestFiles(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
     const std::vector<DM::ExternalDTFileInfo> & external_files,
@@ -744,6 +761,8 @@ void DeltaMergeStore::ingestFiles(
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+
+    return bytes;
 }
 
 std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(

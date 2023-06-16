@@ -53,13 +53,10 @@ public:
         , expr_after_agg(expr_after_agg_)
     {}
 
-    void buildPipeline(PipelineBuilder & builder) override;
-
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
-        PipelineExecGroupBuilder & group_builder,
+    void buildPipeline(
+        PipelineBuilder & builder,
         Context & context,
-        size_t /*concurrency*/) override;
+        PipelineExecutorStatus & exec_status) override;
 
     void finalize(const Names & parent_require) override;
 
@@ -67,6 +64,12 @@ public:
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t /*concurrency*/) override;
 
 private:
     ExpressionActionsPtr before_agg_actions;

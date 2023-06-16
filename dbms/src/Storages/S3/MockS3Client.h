@@ -44,7 +44,22 @@ public:
     Model::CopyObjectOutcome CopyObject(const Model::CopyObjectRequest & request) const override;
     Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
+    Model::GetBucketLifecycleConfigurationOutcome GetBucketLifecycleConfiguration(const Model::GetBucketLifecycleConfigurationRequest & request) const override;
+    Model::PutBucketLifecycleConfigurationOutcome PutBucketLifecycleConfiguration(const Model::PutBucketLifecycleConfigurationRequest & request) const override;
+
+    enum class S3Status
+    {
+        NORMAL,
+        FAILED,
+    };
+    static void setPutObjectStatus(S3Status status)
+    {
+        put_object_status = status;
+    }
+
 private:
+    inline static S3Status put_object_status = S3Status::NORMAL;
+
     static String normalizedKey(String ori_key);
 
     // Object key -> Object data

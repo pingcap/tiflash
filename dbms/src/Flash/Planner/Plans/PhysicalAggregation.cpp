@@ -40,7 +40,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     if (unlikely(aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0))
     {
@@ -137,17 +137,18 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             params,
             true,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
 
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
     else
     {
-        assert(pipeline.streams.size() == 1);
+        RUNTIME_CHECK(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             pipeline.firstStream(),
             params,
@@ -158,11 +159,11 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     // we can record for agg after restore concurrency.
     // Because the streams of expr_after_agg will provide the correct ProfileInfo.
     // See #3804.
-    assert(expr_after_agg && !expr_after_agg->getActions().empty());
+    RUNTIME_CHECK(expr_after_agg && !expr_after_agg->getActions().empty());
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
-void PhysicalAggregation::buildPipelineExecGroup(
+void PhysicalAggregation::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
@@ -170,12 +171,12 @@ void PhysicalAggregation::buildPipelineExecGroup(
 {
     // For non fine grained shuffle, PhysicalAggregation will be broken into AggregateBuild and AggregateConvergent.
     // So only fine grained shuffle is considered here.
-    assert(fine_grained_shuffle.enable());
+    RUNTIME_CHECK(fine_grained_shuffle.enable());
 
     executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
-    size_t concurrency = group_builder.concurrency;
+    size_t concurrency = group_builder.concurrency();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),
@@ -201,13 +202,16 @@ void PhysicalAggregation::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, expr_after_agg, log);
 }
 
-void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
+void PhysicalAggregation::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorStatus & exec_status)
 {
     auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
     if (fine_grained_shuffle.enable())
     {
         // For fine grained shuffle, Aggregate wouldn't be broken.
-        child->buildPipeline(builder);
+        child->buildPipeline(builder, context, exec_status);
         builder.addPlanNode(shared_from_this());
     }
     else
@@ -227,7 +231,7 @@ void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
         // Break the pipeline for agg_build.
         auto agg_build_builder = builder.breakPipeline(agg_build);
         // agg_build pipeline.
-        child->buildPipeline(agg_build_builder);
+        child->buildPipeline(agg_build_builder, context, exec_status);
         agg_build_builder.build();
         // agg_convergent pipeline.
         auto agg_convergent = std::make_shared<PhysicalAggregationConvergent>(

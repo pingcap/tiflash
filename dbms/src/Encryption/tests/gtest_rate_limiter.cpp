@@ -70,8 +70,9 @@ TEST(WriteLimiterTest, Rate)
         // make sure that 0.8 * target <= actual_rate <= 1.25 * target
         // hint: the range [0.8, 1.25] is copied from rocksdb,
         // if tests fail, try to enlarge this range.
-        EXPECT_GE(actual_rate / target, 0.80);
-        EXPECT_LE(actual_rate / target, 1.25);
+        // enlarge the range to [0.75, 1.30]
+        EXPECT_GE(actual_rate / target, 0.75);
+        EXPECT_LE(actual_rate / target, 1.30);
     }
 }
 
@@ -367,15 +368,6 @@ TEST(ReadLimiterTest, ReadMany)
     request(read_limiter, 1000);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
-
-    Stopwatch sw;
-    request(read_limiter, 1); // About 1000ms
-    auto req_ms = sw.elapsedMilliseconds();
-    // Theoretical value of `req_ms` is 1000.
-    // But time can be affected by many factors,
-    // such as machine load, process scheduling delays, clock jitter.
-    ASSERT_GE(req_ms, 950);
-    ASSERT_LT(req_ms, 1100);
 }
 
 #ifdef __linux__

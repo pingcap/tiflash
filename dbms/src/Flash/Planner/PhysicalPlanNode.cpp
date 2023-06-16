@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
@@ -86,24 +87,38 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 
 void PhysicalPlanNode::buildPipelineExecGroup(
-    PipelineExecutorStatus & /*exec_status*/,
-    PipelineExecGroupBuilder & /*group_builder*/,
-    Context & /*context*/,
-    size_t /*concurrency*/)
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    throw Exception("Unsupport");
+    buildPipelineExecGroupImpl(exec_status, group_builder, context, concurrency);
+    if (is_tidb_operator)
+        context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)
 {
-    assert(childrenSize() <= 1);
+    RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder);
+        children(0)->buildPipeline(builder, context, exec_status);
     builder.addPlanNode(shared_from_this());
+}
+
+EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorStatus & exec_status)
+{
+    if (getFineGrainedShuffle().enable())
+        return nullptr;
+    return doSinkComplete(exec_status);
+}
+
+EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorStatus & /*exec_status*/)
+{
+    return nullptr;
 }
 } // namespace DB

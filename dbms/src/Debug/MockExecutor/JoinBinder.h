@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockRuntimeFilter.h>
 
 namespace DB::mock
 {
@@ -35,9 +36,9 @@ public:
         , is_null_aware_semi_join(is_null_aware_semi_join)
         , inner_index(inner_index_)
     {
-        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
-            throw Exception("No join condition found.");
     }
+
+    void addRuntimeFilter(MockRuntimeFilter & rf);
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
@@ -63,6 +64,7 @@ protected:
     uint64_t fine_grained_shuffle_stream_count;
     bool is_null_aware_semi_join;
     int64_t inner_index;
+    std::vector<std::shared_ptr<MockRuntimeFilter>> rf_list;
 };
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
 ExecutorBinderPtr compileJoin(

@@ -20,11 +20,15 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
+#include <Operators/DMSegmentThreadSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -210,7 +214,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get(fmt::format("keyspace_id={} table_id={}", keyspace_id_, physical_table_id_)))
+    , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
@@ -959,6 +963,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         EMPTY_FILTER,
@@ -981,7 +986,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
                 req_info);
         }
         else
@@ -995,9 +999,11 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 /* read_mode */ ReadMode::Raw,
-                extra_table_id_index,
-                physical_table_id,
                 req_info);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
         }
         res.push_back(stream);
     }
@@ -1020,7 +1026,10 @@ static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, b
 ReadMode DeltaMergeStore::getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+                      "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
+                      filter == nullptr || filter->before_where == nullptr,
+                      magic_enum::enum_name(read_mode));
     return read_mode;
 }
 
@@ -1031,6 +1040,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t num_streams,
                                         UInt64 max_version,
                                         const PushDownFilterPtr & filter,
+                                        const RuntimeFilteList & runtime_filter_list,
+                                        const int rf_max_wait_time_ms,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
@@ -1050,11 +1061,13 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_DEBUG(tracing_logger,
-              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
-              keep_order,
-              db_context.getSettingsRef().dt_enable_read_thread,
-              enable_read_thread);
+    LOG_INFO(tracing_logger,
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} is_fast_scan={} is_push_down_filter_empty={}",
+             keep_order,
+             db_context.getSettingsRef().dt_enable_read_thread,
+             enable_read_thread,
+             is_fast_scan,
+             filter == nullptr || filter->before_where == nullptr);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1066,6 +1079,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         filter,
@@ -1086,10 +1100,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
-                columns_to_read,
+                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
-                log_tracing_id);
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms);
         }
         else
         {
@@ -1102,9 +1117,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 max_version,
                 expected_block_size,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
                 log_tracing_id);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
         }
         res.push_back(stream);
     }
@@ -1113,8 +1130,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     return res;
 }
 
-SourceOps DeltaMergeStore::readSourceOps(
-    PipelineExecutorStatus & exec_status_,
+void DeltaMergeStore::read(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
@@ -1153,37 +1171,65 @@ SourceOps DeltaMergeStore::readSourceOps(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream = std::max(1, num_streams);
+    size_t final_num_stream = enable_read_thread
+        ? std::max(1, num_streams)
+        : std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         filter,
         max_version,
         expected_block_size,
-        getReadMode(db_context, is_fast_scan, keep_order, filter),
+        read_mode,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
         final_num_stream);
 
-    SourceOps res;
-    RUNTIME_CHECK(enable_read_thread); // TODO: support keep order
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        res.push_back(
-            std::make_unique<UnorderedSourceOp>(
-                exec_status_,
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<UnorderedSourceOp>(
+                    exec_status,
+                    read_task_pool,
+                    columns_to_read,
+                    extra_table_id_index,
+                    log_tracing_id));
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_status,
+                dm_context,
                 read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                log_tracing_id));
+        }
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_status,
+                log_tracing_id,
                 columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
-                log_tracing_id));
+                physical_table_id));
+        });
     }
-    LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 
-    return res;
+    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
@@ -1592,44 +1638,93 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applyAlters(
-    const AlterCommands & commands,
-    const OptionTableInfoConstRef table_info,
-    ColumnID & max_column_id_used,
-    const Context & /* context */)
+void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
-    for (const auto & command : commands)
+    std::unordered_map<ColumnID, int> original_columns_index_map;
+    for (size_t index = 0; index < new_original_table_columns.size(); ++index)
     {
-        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
+        original_columns_index_map[new_original_table_columns[index].id] = index;
     }
 
-    if (table_info)
+    std::set<ColumnID> new_column_ids;
+    for (const auto & column : table_info.columns)
     {
-        // Update primary keys from TiDB::TableInfo when pk_is_handle = true
-        // todo update the column name in rowkey_columns
-        std::vector<String> pk_names;
-        for (const auto & col : table_info->get().columns)
+        auto column_id = column.id;
+        new_column_ids.insert(column_id);
+        auto iter = original_columns_index_map.find(column_id);
+        if (iter == original_columns_index_map.end())
         {
-            if (col.hasPriKeyFlag())
+            // create a new column
+            ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
+            define.default_value = column.defaultValueToField();
+            new_original_table_columns.emplace_back(std::move(define));
+        }
+        else
+        {
+            // check whether we need update the column's name or type or default value
+            auto & original_column = new_original_table_columns[iter->second];
+            auto new_data_type = getDataTypeByColumnInfo(column);
+
+            if (original_column.default_value != column.defaultValueToField())
             {
-                pk_names.emplace_back(col.name);
+                original_column.default_value = column.defaultValueToField();
+            }
+
+            if (original_column.name != column.name)
+            {
+                original_column.name = column.name;
+            }
+
+            if (original_column.type->getName() != new_data_type->getName())
+            {
+                original_column.type = new_data_type;
             }
         }
-        if (table_info->get().pk_is_handle && pk_names.size() == 1)
+    }
+
+    // remove extra columns
+    auto iter = new_original_table_columns.begin();
+    while (iter != new_original_table_columns.end())
+    {
+        // remove the extra columns
+        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
         {
-            // Only update primary key name if pk is handle and there is only one column with
-            // primary key flag
-            original_table_handle_define.name = pk_names[0];
+            iter++;
+            continue;
         }
-        if (table_info.value().get().replica_info.count == 0)
+        if (new_column_ids.count(iter->id) == 0)
         {
-            replica_exist.store(false);
+            iter = new_original_table_columns.erase(iter);
         }
+        else
+        {
+            iter++;
+        }
+    }
+
+    // Update primary keys from TiDB::TableInfo when pk_is_handle = true
+    std::vector<String> pk_names;
+    for (const auto & col : table_info.columns)
+    {
+        if (col.hasPriKeyFlag())
+        {
+            pk_names.emplace_back(col.name);
+        }
+    }
+    if (table_info.pk_is_handle && pk_names.size() == 1)
+    {
+        // Only update primary key name if pk is handle and there is only one column with
+        // primary key flag
+        original_table_handle_define.name = pk_names[0];
+    }
+    if (table_info.replica_info.count == 0)
+    {
+        replica_exist.store(false);
     }
 
     auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
@@ -1650,32 +1745,58 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromLocal()
+void DeltaMergeStore::listLocalStableFiles(const std::function<void(UInt64, const String &)> & handle) const
 {
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
-    options.clean_up = true;
+    options.clean_up = true; // Clean not readable DMFiles.
     auto file_provider = global_context.getFileProvider();
     auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            //To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
-            //we just add the file to path_delegate with file_size = 0
-            //when we do DMFile::restore later, we then update the actually size of file.
-            path_delegate.addDTFile(file_id, 0, root_path);
+            handle(file_id, root_path);
         }
     }
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFilesFromLocal() const
+{
+    auto path_delegate = path_pool->getStableDiskDelegator();
+    listLocalStableFiles([&path_delegate](UInt64 file_id, const String & root_path) {
+        // To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
+        // we just add the file to path_delegate with file_size = 0
+        // when we do DMFile::restore later, we then update the actually size of file.
+        path_delegate.addDTFile(file_id, 0, root_path);
+    });
+}
+
+// If TiFlash is running in disagg-mode, we can remove all local DMFiles directly.
+// Because they all not be written into PageStorage and no one reference them.
+void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
+{
+    listLocalStableFiles([](UInt64 file_id, const String & root_path) {
+        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        Poco::File file(path);
+        if (file.exists())
+        {
+            file.remove(true);
+        }
+    });
+}
+
+void DeltaMergeStore::restoreStableFiles() const
 {
     LOG_DEBUG(log, "Loading dt files");
 
     if (!global_context.getSharedContextDisagg()->remote_data_store)
     {
         restoreStableFilesFromLocal();
+    }
+    else
+    {
+        removeLocalStableFilesIfDisagg();
     }
 }
 

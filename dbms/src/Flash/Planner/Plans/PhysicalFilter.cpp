@@ -32,7 +32,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     const tipb::Selection & selection,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -58,7 +58,7 @@ void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::buildPipelineExecGroup(
+void PhysicalFilter::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
