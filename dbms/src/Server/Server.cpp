@@ -976,6 +976,128 @@ private:
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
+<<<<<<< HEAD
+=======
+// By default init global thread pool by hardware_concurrency
+// Later we will adjust it by `adjustThreadPoolSize`
+void initThreadPool(Poco::Util::LayeredConfiguration & config)
+{
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+
+    // Note: Global Thread Pool must be larger than sub thread pools.
+    GlobalThreadPool::initialize(
+        /*max_threads*/ default_num_threads * 20,
+        /*max_free_threads*/ default_num_threads,
+        /*queue_size*/ default_num_threads * 8);
+
+    auto disaggregated_mode = getDisaggregatedMode(config);
+    if (disaggregated_mode == DisaggregatedMode::Compute)
+    {
+        RNPagePreparerPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        RNRemoteReadTaskPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
+
+    if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
+    {
+        DataStoreS3Pool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        S3FileCachePool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
+}
+
+void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
+{
+    // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
+    size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    // Note: Global Thread Pool must be larger than sub thread pools.
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 200);
+    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 400);
+
+    if (RNPagePreparerPool::instance)
+    {
+        RNPagePreparerPool::instance->setMaxThreads(max_io_thread_count);
+        RNPagePreparerPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNPagePreparerPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (RNRemoteReadTaskPool::instance)
+    {
+        RNRemoteReadTaskPool::instance->setMaxThreads(max_io_thread_count);
+        RNRemoteReadTaskPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNRemoteReadTaskPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (DataStoreS3Pool::instance)
+    {
+        DataStoreS3Pool::instance->setMaxThreads(max_io_thread_count);
+        DataStoreS3Pool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        DataStoreS3Pool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (S3FileCachePool::instance)
+    {
+        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
+        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+}
+
+void syncSchemaWithTiDB(
+    const TiFlashStorageConfig & storage_config,
+    BgStorageInitHolder & bg_init_stores,
+    const std::unique_ptr<Context> & global_context,
+    const LoggerPtr & log)
+{
+    /// Then, sync schemas with TiDB, and initialize schema sync service.
+    /// If in API V2 mode, each keyspace's schema is fetch lazily.
+    if (storage_config.api_version == 1)
+    {
+        Stopwatch watch;
+        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        {
+            try
+            {
+                global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                break;
+            }
+            catch (Poco::Exception & e)
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+        }
+        LOG_DEBUG(log, "Sync schemas done.");
+    }
+
+    // Init the DeltaMergeStore instances if data exist.
+    // Make the disk usage correct and prepare for serving
+    // queries.
+    bg_init_stores.start(
+        *global_context,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
+
+    // init schema sync service with tidb
+    global_context->initializeSchemaSyncService();
+}
+
+>>>>>>> cf98d94329 (Cut down the wait time for sync schema in restart  (#7672))
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
