@@ -964,12 +964,8 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     auto task_lock = genTaskLock();
     for (const auto & region : region_compact_indexes)
     {
-        auto region_ptr = getRegion(region.first);
-        if (!region_ptr)
-        {
-            LOG_INFO(log, "region {} has been removed, ignore", region.first);
-            continue;
-        }
+        // Can truncated to flushed index, which is applied_index in this case.
+        // Region can be removed since we don't lock kvstore here.
         notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
     }
     auto elapsed_notify_proxy = watch.elapsedMilliseconds();
