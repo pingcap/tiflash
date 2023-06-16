@@ -313,15 +313,17 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
     if (!is_trivial)
     {
         /// Compile the re2 regular expression.
-        typename RegexType::Options options;
+        typename RegexType::Options reg_options;
 
         if (is_case_insensitive)
-            options.set_case_sensitive(false);
+            reg_options.set_case_sensitive(false);
 
         if (is_dot_nl)
-            options.set_dot_nl(true);
+            reg_options.set_dot_nl(true);
 
-        re2 = std::make_unique<RegexType>(regexp_, options);
+        reg_options.set_log_errors(false);
+
+        re2 = std::make_unique<RegexType>(regexp_, reg_options);
         if (!re2->ok())
             throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
@@ -500,36 +502,11 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSub
     return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
 
-template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions)
-{
-    if (occur > 1 || byte_pos != 1)
-    {
-        res_data.resize(res_data.size() + 1);
-        res_data[res_offset++] = '\0';
-        return;
-    }
-
-    StringPieceType expr_sp(subject, subject_size);
-    StringPieceType matches[capture_num+1];
-    bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num+1);
-    if (!success)
-    {
-        res_data.resize(res_data.size() + 1);
-    }
-    else
-    {
-        replaceMatchedStringWithInstructions(res_data, res_offset, matches, instructions);
-    }
-
-    res_data[res_offset++] = '\0';
-}
-
 namespace FunctionsRegexp
 {
 inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)), "Index out of bounds in regular function.");
 }
 
 inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
@@ -607,6 +584,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
+    size_t copy_pos = 0;
     size_t expr_len = expr_sp.size();
     StringPieceType matches[capture_num + 1];
 
@@ -621,19 +599,22 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
         if (!success)
             break;
 
-        auto skipped_byte_size = static_cast<Int64>(matches[0].data() - (expr_sp.data() + start_pos));
+        auto skipped_byte_size = static_cast<Int64>(matches[0].data() - (expr_sp.data() + copy_pos));
         res_data.resize(res_data.size() + skipped_byte_size);
-        memcpy(&res_data[res_offset], expr_sp.data() + start_pos, skipped_byte_size); // copy the skipped bytes
+        memcpy(&res_data[res_offset], expr_sp.data() + copy_pos, skipped_byte_size); // copy the skipped bytes
         res_offset += skipped_byte_size;
+        copy_pos += skipped_byte_size + matches[0].length();
+        start_pos = copy_pos;
 
         replaceMatchedStringWithInstructions(res_data, res_offset, matches, instructions);
 
-        start_pos = matches[0].data() + matches[0].size() - expr_sp.data();
+        if (matches[0].empty())
+            start_pos += DB::UTF8::seqLength(expr_sp[start_pos]); // Avoid infinity loop
     }
 
-    size_t suffix_byte_size = expr_len - start_pos;
+    size_t suffix_byte_size = expr_len - copy_pos;
     res_data.resize(res_data.size() + suffix_byte_size + 1);
-    memcpy(&res_data[res_offset], expr_sp.data() + start_pos, suffix_byte_size); // Copy suffix string
+    memcpy(&res_data[res_offset], expr_sp.data() + copy_pos, suffix_byte_size); // Copy suffix string
     res_offset += suffix_byte_size;
     res_data[res_offset++] = 0;
 }
@@ -661,6 +642,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
 
         start_pos = matches[0].data() + matches[0].size() - expr_sp.data();
         --occur;
+        if (matches[0].empty())
+            start_pos += DB::UTF8::seqLength(expr_sp[start_pos]); // Avoid infinity loop
     }
 
     auto prefix_byte_size = static_cast<Int64>(matches[0].data() - subject);
@@ -731,12 +714,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::replace(
 
     FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
     FunctionsRegexp::makeReplaceOccurValid(occur);
-
-    if (unlikely(subject_size == 0))
-    {
-        processReplaceEmptyStringExpr(subject, subject_size, res_data, res_offset, pos, occur, instructions);
-        return;
-    }
 
     size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
     replaceImpl(subject, subject_size, res_data, res_offset, byte_pos, occur, instructions);

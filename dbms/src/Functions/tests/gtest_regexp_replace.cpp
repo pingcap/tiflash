@@ -296,7 +296,17 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"aa", "\n", ".", "aa", 1, 0, "s"},
                       {"12aa34", "12\n34", ".", "aa", 3, 1, "s"},
                       {R"(\+overflow+stack+overflow+stack)", "stackoverflow", "(.{5})(.*)", R"(\\+\2+\1+\2+\1\)", 1, 0, ""},
-                      {R"(\i\h-g\f-e\d-c\b-a\ \I\H-G\F-E\D-C\B-A\)", "fooabcdefghij fooABCDEFGHIJ", "foo(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)", R"(\\\9\\\8-\7\\\6-\5\\\4-\3\\\2-\1\\)", 1, 0, ""}};
+                      {R"(\i\h-g\f-e\d-c\b-a\ \I\H-G\F-E\D-C\B-A\)", "fooabcdefghij fooABCDEFGHIJ", "foo(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)", R"(\\\9\\\8-\7\\\6-\5\\\4-\3\\\2-\1\\)", 1, 0, ""},
+                      {"apbc", "abc", "\\d*", "p", 1, 2, ""},
+                      {"abcp", "abc", "\\d*", "p", 1, 4, ""},
+                      {"papbpcp", "abc", "\\d*", "p", 1, 0, ""},
+                      {"abcp", "abc", "\\d*$", "p", 1, 1, ""},
+                      {"我p们", "我们", "\\d*", "p", 1, 2, ""},
+                      {"p我p们p", "我们", "\\d*", "p", 1, 0},
+                      {"我们p", "我们", "\\d*", "p", 1, 3},
+                      {"p", "123", "(123)||(^$)", "p", 1, 1, ""},
+                      {"123p", "123", "(123)||(^$)", "p", 1, 2, ""},
+                      {"pp", "123", "(123)||(^$)", "p", 1, 0, ""}};
         RegexpReplaceCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, repls, positions, occurs, match_types);
         results = getResultVec<String>(test_cases);
         ASSERT_COLUMN_EQ(createColumn<String>(results),
