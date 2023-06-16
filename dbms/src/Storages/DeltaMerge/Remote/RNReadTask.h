@@ -89,7 +89,7 @@ public:
     String info() const
     {
         return fmt::format(
-            "ReadSegmentTask<store_id={} keyspace_id={} table_id={} segment_id={}>",
+            "ReadSegmentTask<store_id={} keyspace={} table_id={} segment_id={}>",
             meta.store_id,
             meta.keyspace_id,
             meta.physical_table_id,

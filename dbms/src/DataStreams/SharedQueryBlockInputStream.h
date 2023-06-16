@@ -38,8 +38,8 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
-        : queue(clients)
+    SharedQueryBlockInputStream(size_t clients, Int64 max_buffered_bytes, const BlockInputStreamPtr & in_, const String & req_id)
+        : queue(CapacityLimits(clients, max_buffered_bytes), [](const Block & block) { return block.allocatedBytes(); })
         , log(Logger::get(req_id))
         , in(in_)
     {

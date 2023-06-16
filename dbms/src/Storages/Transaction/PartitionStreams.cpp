@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -68,12 +69,9 @@ static void writeRegionDataToStorage(
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
-        if (storage == nullptr || storage->isTombstone())
+        if (storage == nullptr)
         {
-            if (!force_decode) // Need to update.
-                return false;
-            if (storage == nullptr) // Table must have just been GC-ed.
-                return true;
+            return force_decode;
         }
 
         /// Get a structure read lock throughout decode, during which schema must not change.
@@ -187,8 +185,10 @@ static void writeRegionDataToStorage(
     /// If first try failed, sync schema and force read then write.
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
-
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(log, "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
@@ -429,7 +429,10 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(Logger::get("AtomicGetStorageSchema"), "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",

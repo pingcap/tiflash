@@ -40,6 +40,8 @@ public:
 
     OperatorStatus await();
 
+    void finalizeProfileInfo(UInt64 extra_time);
+
 private:
     inline OperatorStatus executeImpl();
 

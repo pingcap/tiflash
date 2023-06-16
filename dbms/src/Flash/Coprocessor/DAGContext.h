@@ -33,6 +33,8 @@
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/IOProfileInfo.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -57,6 +59,7 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams join_build_streams;
+    OperatorProfileInfos join_build_profile_infos;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -123,6 +126,13 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+enum class ExecutionMode
+{
+    None,
+    Stream,
+    Pipeline,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -144,10 +154,20 @@ public:
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
+    std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
+
+    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
+
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
+
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
+
+    std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
+
+    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos);
+
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -276,6 +296,19 @@ public:
 
     RU getReadRU() const;
 
+    void switchToStreamMode()
+    {
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Stream;
+    }
+    void switchToPipelineMode()
+    {
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Pipeline;
+    }
+    ExecutionMode getExecutionMode() const { return execution_mode; }
+
+public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -330,16 +363,26 @@ private:
     /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
+
+    /// operator profile related
+    /// operator_profile_infos will be added to map concurrently at runtime, so a lock is needed to prevent data race.
+    std::mutex operator_profile_infos_map_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.
+    std::unordered_map<String, OperatorProfileInfos> operator_profile_infos_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
-    /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
+    /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
+    /// inbound_io_profile_infos_map is a map that maps from executor_id (table_scan / exchange_receiver) to IOProfileInfos.
+    /// IOProfileInfos are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
+    std::unordered_map<String, IOProfileInfos> inbound_io_profile_infos_map;
+
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
@@ -363,6 +406,12 @@ private:
 
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
+
+    // Used to determine the execution mode
+    // - None: request has not been executed yet
+    // - Stream: execute with block input stream
+    // - Pipeline: execute with pipeline model
+    ExecutionMode execution_mode = ExecutionMode::None;
 };
 
 } // namespace DB

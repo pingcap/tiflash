@@ -23,6 +23,7 @@ namespace FailPoints
 {
 extern const char random_pipeline_model_task_run_failpoint[];
 extern const char random_pipeline_model_cancel_failpoint[];
+extern const char exception_during_query_run[];
 } // namespace FailPoints
 
 #define EXECUTE(function)                                                                   \
@@ -33,6 +34,7 @@ extern const char random_pipeline_model_cancel_failpoint[];
     {                                                                                       \
         auto status = (function());                                                         \
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
         return status;                                                                      \
     }                                                                                       \
     catch (...)                                                                             \
@@ -90,6 +92,11 @@ ExecTaskStatus EventTask::executeIOImpl()
 ExecTaskStatus EventTask::awaitImpl()
 {
     EXECUTE(doAwaitImpl);
+}
+
+UInt64 EventTask::getScheduleDuration() const
+{
+    return event->getScheduleDuration();
 }
 
 #undef EXECUTE

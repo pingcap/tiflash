@@ -83,7 +83,8 @@ ProcessList::EntryPtr ProcessList::insert(
     const IAST * ast,
     const ClientInfo & client_info,
     const Settings & settings,
-    const UInt64 total_memory)
+    const UInt64 total_memory,
+    bool is_dag_task)
 {
     EntryPtr res;
 
@@ -141,7 +142,7 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
-        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority), is_dag_task));
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());
@@ -217,11 +218,11 @@ ProcessListEntry::~ProcessListEntry()
     auto range = user_process_list.queries.equal_range(query_id);
     if (range.first != range.second)
     {
-        for (auto it = range.first; it != range.second; ++it)
+        for (auto current_it = range.first; current_it != range.second; ++current_it)
         {
-            if (it->second == process_list_element_ptr)
+            if (current_it->second == process_list_element_ptr)
             {
-                user_process_list.queries.erase(it);
+                user_process_list.queries.erase(current_it);
                 found = true;
                 break;
             }
@@ -254,6 +255,8 @@ ProcessListEntry::~ProcessListEntry()
 
 void ProcessListElement::setQueryStreams(const BlockIO & io)
 {
+    if likely (for_dag_task)
+        return;
     std::lock_guard lock(query_streams_mutex);
 
     query_stream_in = io.in;
@@ -263,6 +266,8 @@ void ProcessListElement::setQueryStreams(const BlockIO & io)
 
 void ProcessListElement::releaseQueryStreams()
 {
+    if likely (for_dag_task)
+        return;
     BlockInputStreamPtr in;
     BlockOutputStreamPtr out;
 
@@ -279,6 +284,7 @@ void ProcessListElement::releaseQueryStreams()
 
 bool ProcessListElement::streamsAreReleased()
 {
+    RUNTIME_CHECK_MSG(!for_dag_task, "Should not reach here for dag task");
     std::lock_guard lock(query_streams_mutex);
 
     return query_streams_status == QueryStreamsStatus::Released;
@@ -286,6 +292,7 @@ bool ProcessListElement::streamsAreReleased()
 
 bool ProcessListElement::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const
 {
+    RUNTIME_CHECK_MSG(!for_dag_task, "Should not reach here for dag task");
     std::lock_guard lock(query_streams_mutex);
 
     if (query_streams_status != QueryStreamsStatus::Initialized)

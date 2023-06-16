@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __set_flush_threshold(100000, 0)
 
@@ -29,7 +29,7 @@
 
 => DBGInvoke __try_flush_region(4)
 
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test1 │     1 │          50 │
 │ test2 │     2 │          51 │
@@ -37,7 +37,7 @@
 │ test3 │     4 │          53 │
 └───────┴───────┴─────────────┘
 
-=> select count(*) from default.test
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test)
 ┌─count()─┐
 │       4 │
 └─────────┘
@@ -45,27 +45,24 @@
 => DBGInvoke __sleep(1000)
 => DBGInvoke __raft_delete_row(default, test, 4, 51)
 
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test1 │     1 │          50 │
 │ test3 │     3 │          52 │
 │ test3 │     4 │          53 │
 └───────┴───────┴─────────────┘
 
-=> select count(*) from default.test
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test)
 ┌─count()─┐
 │       3 │
 └─────────┘
 
-=> selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from default.test
+=> DBGInvoke query_mapped('selraw col_1, col_2, _tidb_rowid, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid, _INTERNAL_DELMARK', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-│ test3 │     4 │          53 │                 0 │
+│ test1 │     1 │          50 │                 0 │
 └───────┴───────┴─────────────┴───────────────────┘
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
 │ test2 │     2 │          51 │                 0 │
-└───────┴───────┴─────────────┴───────────────────┘
-┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
-│ test1 │     1 │          50 │                 0 │
 └───────┴───────┴─────────────┴───────────────────┘
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
 │       │     0 │          51 │                 1 │
@@ -73,6 +70,9 @@
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
 │ test3 │     3 │          52 │                 0 │
 └───────┴───────┴─────────────┴───────────────────┘
+┌─col_1─┬─col_2─┬─_tidb_rowid─┬─_INTERNAL_DELMARK─┐
+│ test3 │     4 │          53 │                 0 │
+└───────┴───────┴─────────────┴───────────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
