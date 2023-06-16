@@ -75,7 +75,7 @@ public:
 
     struct OrphanKeysInfo
     {
-        // Proteced by region task lock.
+        // Protected by region task lock.
         void observeExtraKey(TiKVKey && key);
 
         bool observeKeyFromNormalWrite(const TiKVKey & key);
