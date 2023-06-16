@@ -890,7 +890,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
-                    "tryFlushRegionCacheInStorage can not get table for table id {}, ignored",
+                    "compactLogByRowKeyRange can not get table for table id {}, ignored",
                     table_id);
         return;
     }
@@ -951,6 +951,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         auto region_ptr = std::get<3>(region.second);
         LOG_DEBUG(log, "flush extra segment of region {}, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
         auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+        // Both flushCache and persistRegion should be protected by region task lock.
         storage->flushCache(tmt.getContext(), std::get<2>(region.second));
         persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
     }
