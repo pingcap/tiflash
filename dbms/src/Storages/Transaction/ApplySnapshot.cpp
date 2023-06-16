@@ -304,7 +304,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
         e.addMessage(fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }
-    new_region->afterPrehandleSnapshot();
     return external_files;
 }
 
