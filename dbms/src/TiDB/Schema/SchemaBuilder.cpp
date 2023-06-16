@@ -85,6 +85,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(DatabaseID database_id,
 
         for (const auto & part_def : table_info->partition.definitions)
         {
+            LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table_id);
             table_id_map.emplacePartitionTableID(part_def.id, table_id);
         }
     }
@@ -922,10 +923,14 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             }
 
             table_id_map.emplaceTableID(table->id, db->id);
+            LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
+
+            applyCreatePhysicalTable(db, table);
             if (table->isLogicalPartitionTable())
             {
                 for (const auto & part_def : table->partition.definitions)
                 {
+                    LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table->id);
                     table_id_map.emplacePartitionTableID(part_def.id, table->id);
                 }
             }
