@@ -124,7 +124,8 @@ public:
 
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
-    // All orphan write keys are asserted to be replayed before reach `deadline_index`.
+    // For Raftstore V2, there could be some orphan keys in the write column family being left to `new_region` after pre-handled.
+    // All orphan write keys are asserted to be replayed before reaching `deadline_index`.
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
         SSTViewVec,
