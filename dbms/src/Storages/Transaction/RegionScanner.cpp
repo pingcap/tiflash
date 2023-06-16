@@ -61,7 +61,7 @@ bool Region::CommittedScanner::hasNext()
 bool Region::CommittedScanner::tryNext()
 {
     RUNTIME_CHECK_MSG(!peeked.has_value(), "Can't call CommittedScanner::tryNext() twice");
-    RUNTIME_CHECK(write_map_it != write_map_it_end);
+    assert(write_map_it != write_map_it_end);
     auto ans = region->readDataByWriteIt(write_map_it++, need_val, hard_error);
     if (ans)
     {
