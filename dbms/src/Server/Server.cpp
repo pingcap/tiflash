@@ -828,7 +828,7 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < 3 * 60) // retry for 3 mins
+        while (watch.elapsedSeconds() < global_context->getSettingsRef().wait_seconds_for_sync_schema_in_restart) // retry for 3 mins
         {
             try
             {
