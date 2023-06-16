@@ -582,11 +582,14 @@ void MPPTask::reportStatus(const String & err_msg)
         mpp::TaskMeta * req_meta = req->mutable_meta();
         req_meta->CopyFrom(meta);
 
-        tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
-        if unlikely (!execution_info.SerializeToString(req->mutable_data()))
+        if (dag_context->collect_execution_summaries)
         {
-            LOG_ERROR(log, "Failed to serialize TiFlash execution info");
-            return;
+            tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
+            if unlikely (!execution_info.SerializeToString(req->mutable_data()))
+            {
+                LOG_ERROR(log, "Failed to serialize TiFlash execution info");
+                return;
+            }
         }
 
         if (!err_msg.empty())
@@ -602,7 +605,7 @@ void MPPTask::reportStatus(const String & err_msg)
         const auto & resp = rpc_call.getResp();
         if (resp->has_error())
         {
-            LOG_ERROR(log, "ReportMPPTaskStatus resp error: {}", resp->error().msg());
+            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp->error().msg());
         }
     }
     catch (...)
