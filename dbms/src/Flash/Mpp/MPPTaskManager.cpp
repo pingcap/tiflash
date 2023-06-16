@@ -247,13 +247,12 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
     }
-    if (query_set != nullptr && query_set->task_map.find(task->id) != query_set->task_map.end())
+    /// query_set must not be nullptr if the current query is not aborted since MPPTask::initProcessListEntry
+    /// will always create the query_set
+    RUNTIME_CHECK_MSG(query_set != nullptr, "query set must not be null when register task");
+    if (query_set->task_map.find(task->id) != query_set->task_map.end())
     {
         return {false, "task has been registered"};
-    }
-    if (query_set == nullptr) /// the first one
-    {
-        query_set = addMPPQueryTaskSet(task->id.query_id);
     }
     query_set->task_map.emplace(task->id, task);
     /// cancel all the alarm waiting on this task
