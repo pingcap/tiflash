@@ -45,7 +45,7 @@ bool Region::CommittedScanner::hasNext()
     }
     else
     {
-        if (!write_map_size)
+        if (write_map_size == 0)
             return false;
         while (write_map_it != write_map_it_end)
         {
