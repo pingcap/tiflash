@@ -120,10 +120,12 @@ public:
         assert(container != nullptr);
         if (snap_seq == 0)
         {
-            for (auto & [_, ref_count] : container->ref_map)
-            {
-                ref_count = ref_count - deref_count;
-            }
+            RUNTIME_CHECK(!container->ref_map.empty());
+            auto iter = container->ref_map.end();
+            iter--;
+            RUNTIME_CHECK(iter->second > deref_count);
+            iter->second = iter->second - deref_count;
+            container->ref_map.erase(container->ref_map.begin(), iter);
         }
         else
         {

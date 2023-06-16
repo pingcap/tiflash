@@ -1274,8 +1274,9 @@ CATCH
 TEST(MultiVersionRefCount, RefAndCollapse)
 try
 {
-    auto * multi_version_ref_count = MultiVersionRefCount::appendRefCount(nullptr, PageVersion(2), 2);
+    MultiVersionRefCount * multi_version_ref_count = nullptr;
     {
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(2), 2);
         auto * new_multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(3), 3);
         ASSERT_EQ(multi_version_ref_count, new_multi_version_ref_count);
     }
@@ -1299,6 +1300,29 @@ try
 
     MultiVersionRefCount::destroy(multi_version_ref_count);
 }
+CATCH
+
+TEST(MultiVersionRefCount, DecrRefWithSeq0)
+try
+{
+    MultiVersionRefCount * multi_version_ref_count = nullptr;
+    {
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(2), 2);
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(3), 3);
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(4), 4);
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(8), 5);
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(9), 6);
+        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 5);
+    }
+
+    {
+        MultiVersionRefCount::decrLatestRefCountInSnap(multi_version_ref_count, 0, 1);
+        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 1);
+        ASSERT_EQ(MultiVersionRefCount::getLatestRefCount(multi_version_ref_count), 5);
+    }
+
+    MultiVersionRefCount::destroy(multi_version_ref_count);
+} // namespace PS::V3::tests
 CATCH
 
 TEST_F(PageDirectoryGCTest, GCPushForward)
