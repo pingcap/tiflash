@@ -1833,17 +1833,17 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
     Stopwatch watch;
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto snap = createSnapshot(identifier);
-    auto edit_from_disk = dumpSnapshotToEdit(snap);
-    files_snap.num_records = edit_from_disk.size();
+    auto edit = dumpSnapshotToEdit(snap);
+    files_snap.num_records = edit.size();
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();
     if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit), write_limiter);
         return done_any_io;
     }
     else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
-        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit), write_limiter);
         return done_any_io;
     }
 }

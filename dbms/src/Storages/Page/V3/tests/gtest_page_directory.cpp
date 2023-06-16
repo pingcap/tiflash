@@ -1210,6 +1210,67 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, IncrRefDuringDump)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        dir->gcInMemEntries({});
+        ASSERT_EQ(dir->numPages(), 2);
+    }
+
+    // create a snap for dump
+    auto snap = dir->createSnapshot("");
+
+    // add a ref during dump snapshot
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 5), buildV3Id(TEST_NAMESPACE_ID, 3));
+        dir->apply(std::move(edit));
+    }
+
+    // check the being_ref_count in dumped snapshot is correct
+    {
+        auto edit = dir->dumpSnapshotToEdit(snap);
+        ASSERT_EQ(edit.size(), 3);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records[0].type, EditRecordType::VAR_ENTRY);
+        ASSERT_EQ(records[0].being_ref_count, 2);
+        ASSERT_EQ(records[1].type, EditRecordType::VAR_DELETE);
+        ASSERT_EQ(records[2].type, EditRecordType::VAR_REF);
+    }
+
+    {
+        auto edit = dir->dumpSnapshotToEdit();
+        ASSERT_EQ(edit.size(), 4);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records[0].type, EditRecordType::VAR_ENTRY);
+        ASSERT_EQ(records[0].being_ref_count, 3);
+        ASSERT_EQ(records[1].type, EditRecordType::VAR_DELETE);
+        ASSERT_EQ(records[2].type, EditRecordType::VAR_REF);
+        ASSERT_EQ(records[3].type, EditRecordType::VAR_REF);
+    }
+}
+CATCH
+
 TEST(MultiVersionRefCount, RefAndCollapse)
 try
 {
