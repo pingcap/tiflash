@@ -104,7 +104,7 @@ try
             snap = page_storage->getSnapshot("");
 
         // let's compact the WAL logs
-        auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+        auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
         ASSERT_TRUE(done_snapshot);
 
         // let's try full gc, this will not trigger full gc
@@ -215,7 +215,7 @@ try
     th_gc.get();
 
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
@@ -291,7 +291,7 @@ try
     th_gc.get();
 
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
@@ -429,7 +429,7 @@ try
     th_foreground_write.get();
 
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();

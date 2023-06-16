@@ -1163,6 +1163,83 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
     }
 }
 
+TEST_F(PageDirectoryTest, RestoreWithRefToDeletedPage)
+try
+{
+    {
+        PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntriesEdit edit; // ingest
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 352), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 353), buildV3Id(TEST_NAMESPACE_ID, 352));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // ingest done
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 352));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 353, snap);
+        EXPECT_EQ(normal_id, 352);
+    }
+
+    auto s0 = dir->createSnapshot();
+    auto edit = dir->dumpSnapshotToEdit(s0);
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory<u128::FactoryTrait> factory;
+        auto d = factory.createFromEditForTest(getCurrentTestName(), provider, delegator, deseri_edit);
+        return d;
+    };
+
+    {
+        auto restored_dir = restore_from_edit(edit);
+        auto snap = restored_dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(restored_dir, 353, snap);
+        EXPECT_EQ(normal_id, 352);
+    }
+}
+CATCH
+
+TEST(MultiVersionRefCount, RefAndCollapse)
+try
+{
+    auto * multi_version_ref_count = MultiVersionRefCount::appendRefCount(nullptr, PageVersion(2), 2);
+    {
+        auto * new_multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(3), 3);
+        ASSERT_EQ(multi_version_ref_count, new_multi_version_ref_count);
+    }
+    // check multi version snap correct
+    {
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(4), 4);
+        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(8), 5);
+        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 1), 1);
+        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 2), 2);
+        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 8), 5);
+        ASSERT_EQ(MultiVersionRefCount::getLatestRefCount(multi_version_ref_count), 5);
+    }
+    // decr ref and collapse
+    {
+        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 4);
+        MultiVersionRefCount::decrLatestRefCountInSnap(multi_version_ref_count, 4, 2);
+        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 2);
+        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 4), 2);
+        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 8), 3);
+    }
+
+    MultiVersionRefCount::destroy(multi_version_ref_count);
+}
+CATCH
+
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
 {
@@ -2311,6 +2388,64 @@ try
         auto page_ids = restored_dir->getAllPageIds();
         ASSERT_EQ(page_ids.size(), 0);
     }
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, IncrRefDuringGC)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        dir->apply(std::move(edit));
+    }
+
+    {
+        // begin gc and stop after get lowest seq
+        auto sp_gc = SyncPointCtl::enableInScope("after_PageDirectory::doGC_getLowestSeq");
+        auto th_gc = std::async([&]() {
+            dir->gcInMemEntries({});
+        });
+        sp_gc.waitAndPause();
+
+        // add a ref during gc
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 5), buildV3Id(TEST_NAMESPACE_ID, 3));
+        dir->apply(std::move(edit));
+
+        // continue gc and finish
+        sp_gc.next();
+        th_gc.get();
+
+        ASSERT_EQ(dir->numPages(), 3);
+    }
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_SAME_ENTRY(entry_1_v1, getEntry(dir, 5, snap));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 3));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 5));
+        dir->apply(std::move(edit));
+    }
+
+    dir->gcInMemEntries({});
+    ASSERT_EQ(dir->numPages(), 0);
 }
 CATCH
 

@@ -82,48 +82,168 @@ private:
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
+// This is not a thread safe class
+// It must be used with outer synchronization
+class MultiVersionRefCount
+{
+public:
+    static MultiVersionRefCount * createFrom(const PageVersion & ver, Int64 ref_count)
+    {
+        if (ref_count == 1)
+        {
+            return nullptr;
+        }
+        return appendRefCount(nullptr, ver, ref_count);
+    }
+
+    static MultiVersionRefCount * copy(MultiVersionRefCount * container)
+    {
+        if (container == nullptr)
+        {
+            return nullptr;
+        }
+        auto * new_container = new MultiVersionRefCount();
+        for (const auto & [ver, ref_count] : container->ref_map)
+        {
+            new_container->ref_map.emplace(ver, ref_count);
+        }
+        return new_container;
+    }
+
+    static void destroy(MultiVersionRefCount * container)
+    {
+        delete container;
+    }
+
+    static void decrLatestRefCountInSnap(MultiVersionRefCount * container, UInt64 snap_seq, Int64 deref_count)
+    {
+        assert(container != nullptr);
+        if (snap_seq == 0)
+        {
+            for (auto & [_, ref_count] : container->ref_map)
+            {
+                ref_count = ref_count - deref_count;
+            }
+        }
+        else
+        {
+            auto iter = MapUtils::findMutLess(container->ref_map, PageVersion(snap_seq + 1));
+            RUNTIME_CHECK(iter != container->ref_map.end());
+            RUNTIME_CHECK(iter->second > deref_count);
+            auto old_iter = iter;
+            for (; iter != container->ref_map.end(); ++iter)
+            {
+                iter->second = iter->second - deref_count;
+            }
+            // older version is just need for gc.
+            // So when we decr ref with a snap, we can be sure that older versions won't be need anymore
+            container->ref_map.erase(container->ref_map.begin(), old_iter);
+        }
+    }
+
+    [[nodiscard]] static MultiVersionRefCount * appendRefCount(MultiVersionRefCount * container, const PageVersion & ver, Int64 ref_count)
+    {
+        RUNTIME_CHECK(ref_count > 1);
+        if (container == nullptr)
+        {
+            container = new MultiVersionRefCount();
+        }
+        RUNTIME_CHECK(container->ref_map.empty() || container->ref_map.rbegin()->first < ver);
+        container->ref_map.emplace(ver, ref_count);
+        return container;
+    }
+
+    static Int64 getRefCountInSnap(MultiVersionRefCount * container, UInt64 snap_seq)
+    {
+        if (container == nullptr)
+        {
+            return 1;
+        }
+        RUNTIME_CHECK(!container->ref_map.empty());
+        auto iter = MapUtils::findLess(container->ref_map, PageVersion(snap_seq + 1));
+        if (iter == container->ref_map.end())
+        {
+            return 1;
+        }
+        else
+        {
+            return iter->second;
+        }
+    }
+
+    static Int64 getLatestRefCount(MultiVersionRefCount * container)
+    {
+        if (container == nullptr)
+        {
+            return 1;
+        }
+        RUNTIME_CHECK(!container->ref_map.empty());
+        return container->ref_map.rbegin()->second;
+    }
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    std::map<PageVersion, Int64> ref_map;
+};
+
 struct EntryOrDelete
 {
     bool is_delete = true;
-    Int64 being_ref_count = 1;
+    MultiVersionRefCount * being_ref_count = nullptr;
     PageEntryV3 entry;
+
+    EntryOrDelete(bool is_delete_, MultiVersionRefCount * being_ref_count_, PageEntryV3 entry_)
+        : is_delete(is_delete_)
+        , being_ref_count(being_ref_count_)
+        , entry(entry_)
+    {}
+
+    EntryOrDelete(EntryOrDelete && src)
+        : is_delete(src.is_delete)
+        , being_ref_count(src.being_ref_count)
+        , entry(std::move(src.entry))
+    {
+        src.being_ref_count = nullptr;
+    }
+
+    EntryOrDelete(const EntryOrDelete & src)
+        : is_delete(src.is_delete)
+        , being_ref_count(MultiVersionRefCount::copy(src.being_ref_count))
+        , entry(src.entry)
+    {}
 
     static EntryOrDelete newDelete()
     {
-        return EntryOrDelete{
-            .is_delete = true,
-            .being_ref_count = 1, // meaningless
-            .entry = {}, // meaningless
-        };
-    }
+        return EntryOrDelete(true, nullptr /* meaningless */, {} /* meaningless */);
+    };
     static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
     {
-        return EntryOrDelete{
-            .is_delete = false,
-            .being_ref_count = 1,
-            .entry = entry,
-        };
+        return EntryOrDelete(false, nullptr, entry);
     }
     static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
-        return EntryOrDelete{
-            .is_delete = false,
-            .being_ref_count = ori_entry.being_ref_count,
-            .entry = entry,
-        };
+        return EntryOrDelete(false, MultiVersionRefCount::copy(ori_entry.being_ref_count), entry);
     }
 
-    static EntryOrDelete newFromRestored(PageEntryV3 entry, Int64 being_ref_count)
+    static EntryOrDelete newFromRestored(PageEntryV3 entry, const PageVersion & ver, Int64 being_ref_count)
     {
-        return EntryOrDelete{
-            .is_delete = false,
-            .being_ref_count = being_ref_count,
-            .entry = entry,
-        };
+        return EntryOrDelete(false, MultiVersionRefCount::createFrom(ver, being_ref_count), entry);
     }
 
-    bool isDelete() const { return is_delete; }
-    bool isEntry() const { return !is_delete; }
+    ~EntryOrDelete()
+    {
+        MultiVersionRefCount::destroy(being_ref_count);
+    }
+
+    bool isDelete() const
+    {
+        return is_delete;
+    }
+    bool isEntry() const
+    {
+        return !is_delete;
+    }
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -152,8 +272,16 @@ public:
         , create_ver(0)
         , delete_ver(0)
         , ori_page_id{}
-        , being_ref_count(1)
+        , being_ref_count(nullptr)
     {}
+
+    // avoid copy and move because there is a raw pointr member inside this class which needs special attention when copy and move it
+    DISALLOW_COPY_AND_MOVE(VersionedPageEntries);
+
+    ~VersionedPageEntries()
+    {
+        MultiVersionRefCount::destroy(being_ref_count);
+    }
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
 
@@ -185,7 +313,7 @@ public:
     std::tuple<ResolveResult, PageId, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
-    Int64 incrRefCount(const PageVersion & ver);
+    Int64 incrRefCount(const PageVersion & target_ver, const PageVersion & ref_ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
@@ -257,7 +385,7 @@ public:
             is_deleted,
             delete_ver,
             ori_page_id,
-            being_ref_count,
+            MultiVersionRefCount::getLatestRefCount(being_ref_count),
             entries.size());
     }
     template <typename T>
@@ -284,7 +412,7 @@ private:
     // Original page id, valid when type == VAR_REF
     PageId ori_page_id;
     // Being ref counter, valid when type == VAR_EXTERNAL
-    Int64 being_ref_count;
+    MultiVersionRefCount * being_ref_count;
     // A shared ptr to a holder, valid when type == VAR_EXTERNAL
     std::shared_ptr<PageId> external_holder;
 };
@@ -363,10 +491,7 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    /// When create PageDirectory for dump snapshot, we should keep the last valid var_entry when it is deleted.
-    /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
-    /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
-    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
+    bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
     size_t copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
 
@@ -551,6 +676,6 @@ struct fmt::formatter<DB::PS::V3::EntryOrDelete>
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             entry.is_delete,
             entry.entry,
-            entry.being_ref_count);
+            DB::PS::V3::MultiVersionRefCount::getLatestRefCount(entry.being_ref_count));
     }
 };

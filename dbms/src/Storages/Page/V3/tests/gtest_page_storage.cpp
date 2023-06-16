@@ -1710,7 +1710,7 @@ try
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
 
-    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
     ASSERT_TRUE(done_snapshot);
 
     {
@@ -1784,7 +1784,7 @@ try
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
 
-    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
     ASSERT_TRUE(done_snapshot);
 
     {
