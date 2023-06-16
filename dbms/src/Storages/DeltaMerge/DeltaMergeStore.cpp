@@ -828,7 +828,11 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
         // Keep trying until succeeded.
         while (true)
         {
-            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ false, /*throw_if_notfound*/ true);
+            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ false, /*throw_if_notfound*/ false);
+            if (segment == nullptr)
+            {
+                return;
+            }
             segment_range = segment->getRowKeyRange();
 
             // compact could fail.
