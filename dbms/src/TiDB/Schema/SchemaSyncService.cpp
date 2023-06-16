@@ -51,7 +51,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             return false;
         },
         false,
-        context.getSettingsRef().bg_ddl_sync_schema_interval * 1000);
+        context.getSettingsRef().ddl_sync_interval_seconds * 1000);
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
@@ -103,7 +103,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     return false;
                 },
                 false,
-                context.getSettingsRef().bg_ddl_sync_schema_interval * 1000);
+                context.getSettingsRef().ddl_sync_interval_seconds * 1000);
 
             keyspace_handle_map.emplace(keyspace, task_handle);
         }
