@@ -36,7 +36,7 @@ bool MonoSSTReader::remained() const
         {
             if (!tail_checked)
             {
-                LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), getDebugCfType());
+                LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), magic_enum::enum_name(type));
                 tail_checked = true;
             }
             return false;
