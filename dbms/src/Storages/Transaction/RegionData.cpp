@@ -331,7 +331,7 @@ void RegionData::OrphanKeysInfo::advanceAppliedIndex(uint64_t applied_index)
         if (applied_index >= deadline_index.value() && count)
         {
             auto one = remained_keys.begin()->toDebugString();
-            throw Exception(fmt::format("Orphan keys from snapshot at {} still exists at deadline {}. One of total {} is {}. [region_id={}]", snapshot_index.value(), deadline_index.value(), count, one, region_id));
+            throw Exception(fmt::format("Orphan keys from snapshot still exists. One of total {} is {}. region_id={} snapshot_index={} deadline_index={} applied_index={}", count, one, region_id, snapshot_index.value(), deadline_index.value(), applied_index));
         }
     }
 }
