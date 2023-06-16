@@ -335,7 +335,6 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
         ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 default 1 ]");
         ASSERT_EQ(kvs.getRegion(7)->dataInfo(), "[lock 1 ]");
     }
-    return;
     // Rollback 1 to before split
     // 7 is persisted
     {
