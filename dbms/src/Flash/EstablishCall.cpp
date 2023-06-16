@@ -123,8 +123,10 @@ void EstablishCallData::notifyReady()
 
 void EstablishCallData::cancel()
 {
+    std::unique_lock lock(proceed_mutex);
     if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
     {
+        lock.unlock();
         delete this;
         return;
     }
@@ -144,6 +146,7 @@ void EstablishCallData::finishTunnelAndResponder()
 
 void EstablishCallData::proceed()
 {
+    std::unique_lock lock(proceed_mutex);
     if (state == NEW_REQUEST)
     {
         state = PROCESSING;
@@ -174,6 +177,7 @@ void EstablishCallData::proceed()
         assert(state == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That't the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
+        lock.unlock();
         delete this;
         return;
     }
