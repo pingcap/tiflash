@@ -269,28 +269,31 @@ try
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_ps_wal_compact);
-    auto sp_gc = getSyncPoint();
-    auto th_gc = std::async([&]() {
-        auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
-        ASSERT_EQ(expectFullGCExecute(), done_full_gc);
-    });
-    // let's compact the WAL logs
-    sp_gc.waitAndPause();
-
     {
-        // the delete timing is decide by `sp_gc`
-        WriteBatch batch;
-        batch.delPage(ref_page_id2);
-        batch.delPage(ref_page_id3);
-        batch.delPage(ref_page_id4);
-        page_storage->write(std::move(batch));
+        auto sp_gc = getSyncPoint();
+        auto th_gc = std::async([&]() {
+            auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
+            ASSERT_EQ(expectFullGCExecute(), done_full_gc);
+        });
+        // let's compact the WAL logs
+        sp_gc.waitAndPause();
+
+        {
+            // the delete timing is decide by `sp_gc`
+            WriteBatch batch;
+            batch.delPage(ref_page_id2);
+            batch.delPage(ref_page_id3);
+            batch.delPage(ref_page_id4);
+            page_storage->write(std::move(batch));
+        }
+
+        // let's try full gc
+        sp_gc.next();
+        th_gc.get();
     }
 
-    // let's try full gc
-    sp_gc.next();
-    th_gc.get();
-
     // wal compact again
+    page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
     page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");

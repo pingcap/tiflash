@@ -154,9 +154,8 @@ void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const P
 {
     for (const auto & r : edit.getRecords())
     {
-        if (r.version < max_applied_ver)
-            continue;
-        max_applied_ver = r.version;
+        if (max_applied_ver < r.version)
+            max_applied_ver = r.version;
 
         if (dump_entries)
             LOG_INFO(Logger::get(), "{}", r);
