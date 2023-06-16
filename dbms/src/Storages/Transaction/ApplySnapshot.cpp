@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <ext/scope_guard.h>
 
@@ -311,6 +312,11 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
+    // if it's only a empty snapshot, we don't create the Storage object, but return directly.
+    if (snaps.len == 0)
+    {
+        return {};
+    }
     auto context = tmt.getContext();
     auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
@@ -405,7 +411,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+                tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;
 

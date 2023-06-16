@@ -48,11 +48,18 @@ public:
     ~MonoSSTReader() override;
 
 private:
+    auto getDebugCfType() const
+    {
+        return static_cast<std::underlying_type<decltype(type)>::type>(type);
+    }
+
+private:
     const TiFlashRaftProxyHelper * proxy_helper;
     SSTReaderPtr inner;
     ColumnFamilyType type;
     RegionRangeFilter range;
     SSTFormatKind kind;
+    mutable bool tail_checked;
     Poco::Logger * log;
 };
 

@@ -14,7 +14,8 @@
 
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
+
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __region_snapshot(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 2, 1, 0, 10)
@@ -59,4 +60,4 @@
 │ total size: 2                              │
 └────────────────────────────────────────────┘
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()

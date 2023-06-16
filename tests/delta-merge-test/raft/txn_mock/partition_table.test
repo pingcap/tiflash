@@ -16,41 +16,41 @@
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
-=> drop table if exists default.test_9997
-=> drop table if exists default.test_9998
-=> drop table if exists default.test_9999
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __mock_tidb_partition(default, test, 9999)
 => DBGInvoke __mock_tidb_partition(default, test, 9998)
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 
 => DBGInvoke __put_region(4, 0, 100, default, test, 9999)
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 'test1', 1)
 => DBGInvoke __raft_insert_row(default, test, 4, 51, 'test2', 2)
 => DBGInvoke __try_flush_region(4)
 
 => DBGInvoke __put_region(5, 100, 200, default, test, 9998)
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __raft_insert_row(default, test, 5, 152, 'test3', 3)
 => DBGInvoke __raft_insert_row(default, test, 5, 153, 'test4', 4)
 => DBGInvoke __try_flush_region(5)
 
-=> select avg(col_2) from default.test_9999
+=> DBGInvoke query_mapped('select avg(col_2) from \$d.\$t', default, test_9999)
 ┌─avg(col_2)─┐
 │        1.5 │
 └────────────┘
 
-=> select count(*) from default.test_9999
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test_9999)
 ┌─count()─┐
 │       2 │
 └─────────┘
 
-=> select avg(col_2) from default.test_9998
+=> DBGInvoke query_mapped('select avg(col_2) from \$d.\$t', default, test_9998)
 ┌─avg(col_2)─┐
 │        3.5 │
 └────────────┘
 
-=> select count(*) from default.test_9998
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test_9998)
 ┌─count()─┐
 │       2 │
 └─────────┘
@@ -62,12 +62,12 @@
 => DBGInvoke __try_flush_region(6)
 => DBGInvoke __refresh_schemas()
 
-=> select avg(col_2) from default.test_9997
+=> DBGInvoke query_mapped('select avg(col_2) from \$d.\$t', default, test_9997)
 ┌─avg(col_2)─┐
 │        3.5 │
 └────────────┘
 
-=> select count(*) from default.test_9997
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test_9997)
 ┌─count()─┐
 │       2 │ 
 └─────────┘
@@ -80,13 +80,12 @@
 └──────────────────────────────────┘
 
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 Nullable(Int8)')
-=> DBGInvoke __refresh_schemas()
-=> select col_3 from default.test_9999
+=> DBGInvoke query_mapped('select col_3 from \$d.\$t', default, test_9997)
 ┌─col_3─┐
 │    \N │
 │    \N │
 └───────┘
-=> select count(col_3) from default.test_9997
+=> DBGInvoke query_mapped('select count(col_3) from \$d.\$t', default, test_9997)
 ┌─count(col_3)─┐
 │            0 │
 └──────────────┘
@@ -97,11 +96,6 @@
 ┌─is_tombstone(default, test_9999)─┐
 │ true                             │
 └──────────────────────────────────┘
-
-=> drop table if exists default.test
-=> drop table if exists default.test_9997
-=> drop table if exists default.test_9998
-=> drop table if exists default.test_9999
 
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __clean_up_region()

@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __set_flush_threshold(100000, 0)
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
@@ -28,7 +28,7 @@
 
 => DBGInvoke __try_flush_region(0)
 
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test1 │     1 │          50 │
 │ test2 │     2 │          51 │
@@ -36,21 +36,21 @@
 │ test3 │     4 │          53 │
 └───────┴───────┴─────────────┘
 
-=> select count(*) from default.test
+=> DBGInvoke query_mapped('select count(*) from \$d.\$t', default, test)
 ┌─count()─┐
 │       4 │
 └─────────┘
 
-=> select avg(col_2) from default.test
+=> DBGInvoke query_mapped('select avg(col_2) from \$d.\$t', default, test)
 ┌─avg(col_2)─┐
 │        2.5 │
 └────────────┘
 
-=> select avg(col_2), col_1 from default.test where col_1 > 'test1' group by col_1
+=> DBGInvoke query_mapped('select avg(col_2), col_1 from \$d.\$t where col_1 > ''test1'' group by col_1', default, test)
 ┌─avg(col_2)─┬─col_1─┐
 │        3.5 │ test3 │
 │          2 │ test2 │
 └────────────┴───────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
