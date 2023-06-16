@@ -295,6 +295,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     try
     {
+        SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
         external_files = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
     }
     catch (DB::Exception & e)
