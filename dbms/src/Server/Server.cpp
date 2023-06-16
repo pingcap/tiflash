@@ -1194,7 +1194,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     Stopwatch watch;
-    while (watch.elapsedSeconds() < 3 * 60) // retry for 3 mins
+    while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
     {
         try
         {
