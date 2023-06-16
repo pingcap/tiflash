@@ -100,9 +100,7 @@ public:
     Timestamp getTombstone() const { return tombstone; }
     void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
-    /// Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    /// Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
-    virtual void alterFromTiDB(
+    virtual void updateTombstone(
         const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
@@ -111,6 +109,15 @@ public:
         const Context & context)
         = 0;
 
+    virtual void alterSchemaChange(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const String & database_name,
+        const String & table_name,
+        const Context & context)
+        = 0;
+
+    virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.

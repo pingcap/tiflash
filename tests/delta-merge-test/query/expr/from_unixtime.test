@@ -22,7 +22,7 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'a int, b decimal(12,2), c decimal(65,30), d decimal(10,0)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 1, 295385399.12,295385399.123456789098765432123456789000, 295385399)
 => DBGInvoke __raft_insert_row(default, test, 4, 51, 2, 295385400.12,295385400.123456189098765432123456789000, 295385400)

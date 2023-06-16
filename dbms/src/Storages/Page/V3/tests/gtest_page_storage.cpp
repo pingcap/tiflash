@@ -837,6 +837,7 @@ try
         try
         {
             FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
             page_storage->write(std::move(batch));
         }
         catch (DB::Exception & e)
@@ -847,7 +848,6 @@ try
         }
     }
 
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
     {
         size_t num_pages = 0;
         page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });

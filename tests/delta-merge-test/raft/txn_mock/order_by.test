@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __set_flush_threshold(100000, 0)
 
@@ -29,7 +29,7 @@
 
 => DBGInvoke __try_flush_region(4)
 
-=> select * from default.test order by col_1, col_2
+=> DBGInvoke query_mapped('select * from \$d.\$t order by col_1, col_2', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test1 │    -1 │          50 │
 │ test2 │    -2 │          51 │
@@ -37,7 +37,7 @@
 │ test3 │    -3 │          52 │
 └───────┴───────┴─────────────┘
 
-=> select * from default.test order by col_2
+=> DBGInvoke query_mapped('select * from \$d.\$t order by col_2', default, test)
 ┌─col_1─┬─col_2─┬─_tidb_rowid─┐
 │ test3 │    -4 │          53 │
 │ test3 │    -3 │          52 │
@@ -46,4 +46,4 @@
 └───────┴───────┴─────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
