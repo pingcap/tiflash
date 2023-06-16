@@ -14,5 +14,16 @@
 
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
-unsigned getNumberOfPhysicalCPUCores();
+#include <common/types.h>
+
+#include <thread>
+
+UInt16 getNumberOfLogicalCPUCores();
+UInt16 getNumberOfPhysicalCPUCores();
+
+// We should call this function before Context has been created,
+// which will call `getNumberOfLogicalCPUCores`, or we can not
+// set cpu cores any more.
+void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_);
+
+void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores, UInt16 number_of_hardware_physical_cores);

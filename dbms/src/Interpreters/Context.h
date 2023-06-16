@@ -382,6 +382,7 @@ public:
 
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & getBlockableBackgroundPool();
+    BackgroundProcessingPool & getPSBackgroundPool();
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 

@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/schema.pb.h>
 
 #include <optional>
 
@@ -116,7 +117,8 @@ enum TP
     M(NoDefaultValue, (1 << 12)) \
     M(OnUpdateNow, (1 << 13))    \
     M(PartKey, (1 << 14))        \
-    M(Num, (1 << 15))
+    M(Num, (1 << 15))            \
+    M(GeneratedColumn, (1 << 23))
 
 enum ColumnFlag
 {
@@ -412,5 +414,6 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
 
 } // namespace TiDB

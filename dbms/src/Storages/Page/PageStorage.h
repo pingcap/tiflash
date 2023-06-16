@@ -219,6 +219,7 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider,
+        Context & global_ctx,
         bool use_v3 = false);
 
     PageStorage(
@@ -325,6 +326,8 @@ public:
     {
         return gcImpl(not_skip, write_limiter, read_limiter);
     }
+
+    virtual void shutdown() {}
 
     // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;

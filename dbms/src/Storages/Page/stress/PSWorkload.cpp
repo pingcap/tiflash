@@ -85,7 +85,8 @@ void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String pa
 
     if (options.running_ps_version == 2)
     {
-        ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider);
+        bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+        ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider, *bkg_pool);
     }
     else if (options.running_ps_version == 3)
     {

@@ -128,6 +128,7 @@
     M(PSMVCCCompactOnDelta)                     \
     M(PSMVCCCompactOnDeltaRebaseRejected)       \
     M(PSMVCCCompactOnBase)                      \
+    M(PSMVCCCompactOnBaseCommit)                \
                                                 \
     M(DMWriteBytes)                             \
     M(DMWriteBlock)                             \
