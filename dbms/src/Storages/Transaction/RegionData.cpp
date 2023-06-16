@@ -135,11 +135,12 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
         {
             if (!hard_error)
             {
-                // We are parsing a raftstore v2 snapshot.
                 if (orphan_keys_info.pre_handling)
                 {
                     RUNTIME_CHECK_MSG(orphan_keys_info.snapshot_index.has_value(),
                                       "Snapshot index shall be set when Applying snapshot");
+                    // While pre-handling snapshot from raftstore v2, we accept and store the orphan keys in memory
+                    // These keys should be resolved in later raft logs
                     orphan_keys_info.observeExtraKey(TiKVKey::copyFrom(*key));
                     return std::nullopt;
                 }
