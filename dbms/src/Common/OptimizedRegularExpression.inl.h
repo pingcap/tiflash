@@ -507,7 +507,7 @@ namespace FunctionsRegexp
 {
 inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)), "Index out of bounds in regular function.");
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0)), "Index out of bounds in regular function.");
 }
 
 inline void checkArgsInstr(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
@@ -523,7 +523,7 @@ inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos
 
 inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    checkArgPos(utf8_total_len, subject_size, pos);
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)), "Index out of bounds in regular function.");
 }
 
 inline void makeOccurValid(Int64 & occur)
