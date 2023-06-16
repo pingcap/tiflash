@@ -292,7 +292,22 @@ struct Settings
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
     M(SettingUInt64, pipeline_cpu_task_thread_pool_size, 0, "The size of cpu task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                             \
     M(SettingUInt64, pipeline_io_task_thread_pool_size, 0, "The size of io task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                               \
+<<<<<<< HEAD
     M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")
+=======
+    M(SettingTaskQueueType, pipeline_cpu_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of cpu task thread pool")                                                                                                 \
+    M(SettingTaskQueueType, pipeline_io_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of io task thread pool")                                                                                                   \
+    M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")                                                                                                                                                             \
+    M(SettingBool, force_push_down_all_filters_to_scan, false, "Push down all filters to scan, only used for test")                                                                                                                     \
+    M(SettingUInt64, async_recv_version, 1, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
+    M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")                                                                                                    \
+    M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
+    M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
+    M(SettingUInt64, bg_ddl_sync_schema_interval, 60, "The interval of background DDL sync schema in seconds")                                                                                                                          \
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+
+
+>>>>>>> cf98d94329 (Cut down the wait time for sync schema in restart  (#7672))
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
