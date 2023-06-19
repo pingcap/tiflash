@@ -1274,54 +1274,46 @@ CATCH
 TEST(MultiVersionRefCount, RefAndCollapse)
 try
 {
-    MultiVersionRefCount * multi_version_ref_count = nullptr;
+    MultiVersionRefCount ref_counts;
     {
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(2), 2);
-        auto * new_multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(3), 3);
-        ASSERT_EQ(multi_version_ref_count, new_multi_version_ref_count);
-    }
-    // check multi version snap correct
-    {
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(4), 4);
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(8), 5);
-        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 1), 1);
-        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 2), 2);
-        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 8), 5);
-        ASSERT_EQ(MultiVersionRefCount::getLatestRefCount(multi_version_ref_count), 5);
-    }
-    // decr ref and collapse
-    {
-        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 4);
-        MultiVersionRefCount::decrLatestRefCountInSnap(multi_version_ref_count, 4, 2);
-        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 2);
-        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 4), 2);
-        ASSERT_EQ(MultiVersionRefCount::getRefCountInSnap(multi_version_ref_count, 8), 3);
+        ref_counts.appendRefCount(PageVersion(2), 2);
+        ref_counts.appendRefCount(PageVersion(4), 4);
+        ref_counts.appendRefCount(PageVersion(8), 5);
+        ASSERT_EQ(ref_counts.getRefCountInSnap(1), 1);
+        ASSERT_EQ(ref_counts.getRefCountInSnap(2), 2);
+        ASSERT_EQ(ref_counts.getRefCountInSnap(8), 5);
+        ASSERT_EQ(ref_counts.getLatestRefCount(), 5);
     }
 
-    MultiVersionRefCount::destroy(multi_version_ref_count);
+    // decr ref and collapse
+    {
+        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 3);
+        ref_counts.decrLatestRefCountInSnap(4, 2);
+        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 2);
+        ASSERT_EQ(ref_counts.getRefCountInSnap(4), 2);
+        ASSERT_EQ(ref_counts.getRefCountInSnap(8), 3);
+    }
 }
 CATCH
 
 TEST(MultiVersionRefCount, DecrRefWithSeq0)
 try
 {
-    MultiVersionRefCount * multi_version_ref_count = nullptr;
+    MultiVersionRefCount ref_counts;
     {
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(2), 2);
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(3), 3);
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(4), 4);
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(8), 5);
-        multi_version_ref_count = MultiVersionRefCount::appendRefCount(multi_version_ref_count, PageVersion(9), 6);
-        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 5);
+        ref_counts.appendRefCount(PageVersion(2), 2);
+        ref_counts.appendRefCount(PageVersion(3), 3);
+        ref_counts.appendRefCount(PageVersion(4), 4);
+        ref_counts.appendRefCount(PageVersion(8), 5);
+        ref_counts.appendRefCount(PageVersion(9), 6);
+        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 5);
     }
 
     {
-        MultiVersionRefCount::decrLatestRefCountInSnap(multi_version_ref_count, 0, 1);
-        ASSERT_EQ(multi_version_ref_count->ref_map.size(), 1);
-        ASSERT_EQ(MultiVersionRefCount::getLatestRefCount(multi_version_ref_count), 5);
+        ref_counts.decrLatestRefCountInSnap(0, 1);
+        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 1);
+        ASSERT_EQ(ref_counts.getLatestRefCount(), 5);
     }
-
-    MultiVersionRefCount::destroy(multi_version_ref_count);
 } // namespace PS::V3::tests
 CATCH
 

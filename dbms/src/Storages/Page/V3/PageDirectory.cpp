@@ -103,7 +103,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
             assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
-            if (unlikely(MultiVersionRefCount::getLatestRefCount(last_iter->second.being_ref_count) != 1 && last_iter->first.sequence < ver.sequence))
+            if (unlikely(last_iter->second.being_ref_count.getLatestRefCount() != 1 && last_iter->first.sequence < ver.sequence))
             {
                 throw Exception(
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
@@ -151,7 +151,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             assert(last_iter->second.isEntry());
             // It is ok to replace the entry with same sequence and newer epoch, but not valid
             // to replace the entry with newer sequence.
-            if (unlikely(MultiVersionRefCount::getLatestRefCount(last_iter->second.being_ref_count) != 1 && last_iter->first.sequence < ver.sequence))
+            if (unlikely(last_iter->second.being_ref_count.getLatestRefCount() != 1 && last_iter->first.sequence < ver.sequence))
             {
                 throw Exception(
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
@@ -218,7 +218,6 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         is_deleted = false;
         create_ver = ver;
         delete_ver = PageVersion(0);
-        being_ref_count = nullptr;
         RUNTIME_CHECK(entries.empty());
         entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
         // return the new created holder to caller to set the page_id
@@ -236,7 +235,6 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
                 is_deleted = false;
                 create_ver = ver;
                 delete_ver = PageVersion(0);
-                being_ref_count = nullptr;
                 entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
@@ -402,7 +400,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
         create_ver = rec.version;
-        being_ref_count = MultiVersionRefCount::createFrom(rec.version, rec.being_ref_count);
+        being_ref_count.appendRefCount(rec.version, rec.being_ref_count);
         entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.version, 1 /* meaningless */));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
@@ -631,12 +629,12 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
             // Then `iter` point to an entry or the `entries.begin()`, return if entry found
             if (iter->second.isEntry())
             {
-                auto ref_count_value = MultiVersionRefCount::getLatestRefCount(iter->second.being_ref_count);
+                auto ref_count_value = iter->second.being_ref_count.getLatestRefCount();
                 if (unlikely(met_delete && ref_count_value == 1))
                 {
                     throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, target_ver), ErrorCodes::LOGICAL_ERROR);
                 }
-                iter->second.being_ref_count = MultiVersionRefCount::appendRefCount(iter->second.being_ref_count, ref_ver, ref_count_value + 1);
+                iter->second.being_ref_count.appendRefCount(ref_ver, ref_count_value + 1);
                 return ref_count_value + 1;
             }
         } // fallthrough to FAIL
@@ -646,8 +644,8 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
         if (create_ver <= target_ver)
         {
             // We may add reference to an external id even if it is logically deleted.
-            auto ref_count_value = MultiVersionRefCount::getLatestRefCount(being_ref_count);
-            being_ref_count = MultiVersionRefCount::appendRefCount(being_ref_count, ref_ver, ref_count_value + 1);
+            auto ref_count_value = being_ref_count.getLatestRefCount();
+            being_ref_count.appendRefCount(ref_ver, ref_count_value + 1);
             return ref_count_value + 1;
         }
     }
@@ -712,7 +710,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
 {
     if (type == EditRecordType::VAR_EXTERNAL)
     {
-        return (MultiVersionRefCount::getLatestRefCount(being_ref_count) == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
+        return (being_ref_count.getLatestRefCount() == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
     }
     else if (type == EditRecordType::VAR_REF)
     {
@@ -790,7 +788,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
         {
             if (last_entry_is_delete)
             {
-                if (MultiVersionRefCount::getLatestRefCount(iter->second.being_ref_count) == 1)
+                if (iter->second.being_ref_count.getLatestRefCount() == 1)
                 {
                     if (entries_removed)
                     {
@@ -832,8 +830,8 @@ bool VersionedPageEntries<Trait>::derefAndClean(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
     {
-        MultiVersionRefCount::decrLatestRefCountInSnap(being_ref_count, lowest_seq, deref_count);
-        return (is_deleted && delete_ver.sequence <= lowest_seq && MultiVersionRefCount::getLatestRefCount(being_ref_count) == 1);
+        being_ref_count.decrLatestRefCountInSnap(lowest_seq, deref_count);
+        return (is_deleted && delete_ver.sequence <= lowest_seq && being_ref_count.getLatestRefCount() == 1);
     }
     else if (type == EditRecordType::VAR_ENTRY)
     {
@@ -856,7 +854,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             throw Exception(fmt::format("Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
         assert(iter->second.isEntry());
-        MultiVersionRefCount::decrLatestRefCountInSnap(iter->second.being_ref_count, lowest_seq, deref_count);
+        iter->second.being_ref_count.decrLatestRefCountInSnap(lowest_seq, deref_count);
 
         if (lowest_seq == 0)
             return false;
@@ -893,7 +891,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             return;
         auto iter = entries.find(create_ver);
         RUNTIME_CHECK(iter != entries.end());
-        edit.varExternal(page_id, create_ver, iter->second.entry, MultiVersionRefCount::getRefCountInSnap(being_ref_count, seq));
+        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count.getRefCountInSnap(seq));
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -911,7 +909,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
         if (last_iter->second.isEntry())
         {
             const auto & entry = last_iter->second;
-            edit.varEntry(page_id, /*ver*/ last_iter->first, entry.entry, MultiVersionRefCount::getRefCountInSnap(entry.being_ref_count, seq));
+            edit.varEntry(page_id, /*ver*/ last_iter->first, entry.entry, entry.being_ref_count.getRefCountInSnap(seq));
             return;
         }
         else if (last_iter->second.isDelete())
@@ -925,7 +923,7 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
             auto prev_iter = --last_iter; // Note that `last_iter` should not be used anymore
             if (prev_iter->second.isEntry())
             {
-                auto ref_count_value = MultiVersionRefCount::getRefCountInSnap(prev_iter->second.being_ref_count, seq);
+                auto ref_count_value = prev_iter->second.being_ref_count.getRefCountInSnap(seq);
                 if (ref_count_value == 1)
                     return;
                 // It is being ref by another id, should persist the item and delete
