@@ -1276,9 +1276,9 @@ try
 {
     MultiVersionRefCount ref_counts;
     {
-        ref_counts.appendRefCount(PageVersion(2), 2);
-        ref_counts.appendRefCount(PageVersion(4), 4);
-        ref_counts.appendRefCount(PageVersion(8), 5);
+        ref_counts.incrRefCount(PageVersion(2), 1);
+        ref_counts.incrRefCount(PageVersion(4), 2);
+        ref_counts.incrRefCount(PageVersion(8), 1);
         ASSERT_EQ(ref_counts.getRefCountInSnap(1), 1);
         ASSERT_EQ(ref_counts.getRefCountInSnap(2), 2);
         ASSERT_EQ(ref_counts.getRefCountInSnap(8), 5);
@@ -1288,10 +1288,13 @@ try
     // decr ref and collapse
     {
         ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 3);
-        ref_counts.decrLatestRefCountInSnap(4, 2);
+        ref_counts.decrRefCountInSnap(4, 2);
         ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 2);
         ASSERT_EQ(ref_counts.getRefCountInSnap(4), 2);
         ASSERT_EQ(ref_counts.getRefCountInSnap(8), 3);
+        ref_counts.decrRefCountInSnap(10, 2);
+        ASSERT_EQ(ref_counts.getLatestRefCount(), 1);
+        ASSERT_EQ(ref_counts.versioned_ref_counts, nullptr);
     }
 }
 CATCH
@@ -1301,18 +1304,18 @@ try
 {
     MultiVersionRefCount ref_counts;
     {
-        ref_counts.appendRefCount(PageVersion(2), 2);
-        ref_counts.appendRefCount(PageVersion(3), 3);
-        ref_counts.appendRefCount(PageVersion(4), 4);
-        ref_counts.appendRefCount(PageVersion(8), 5);
-        ref_counts.appendRefCount(PageVersion(9), 6);
+        ref_counts.incrRefCount(PageVersion(2), 1);
+        ref_counts.incrRefCount(PageVersion(3), 1);
+        ref_counts.incrRefCount(PageVersion(4), 1);
+        ref_counts.incrRefCount(PageVersion(8), 1);
+        ref_counts.incrRefCount(PageVersion(9), 1);
         ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 5);
     }
 
     {
-        ref_counts.decrLatestRefCountInSnap(0, 1);
-        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 1);
-        ASSERT_EQ(ref_counts.getLatestRefCount(), 5);
+        ref_counts.decrRefCountInSnap(0, 2);
+        ASSERT_EQ(ref_counts.versioned_ref_counts->size(), 6);
+        ASSERT_EQ(ref_counts.getLatestRefCount(), 4);
     }
 } // namespace PS::V3::tests
 CATCH

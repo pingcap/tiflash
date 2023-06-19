@@ -101,7 +101,7 @@ public:
         }
     }
 
-    void appendRefCount(const PageVersion & ver, Int64 ref_count)
+    void restoreFrom(const PageVersion & ver, Int64 ref_count)
     {
         // versioned_ref_counts being nullptr always means ref count 1
         RUNTIME_CHECK(ref_count > 0);
@@ -109,49 +109,54 @@ public:
         {
             return;
         }
+        RUNTIME_CHECK(versioned_ref_counts == nullptr);
+        versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+        // empty `versioned_ref_counts` means ref count 1, so the ref count delta here is ref_count - 1
+        versioned_ref_counts->emplace_back(ver, ref_count - 1);
+    }
+
+    void incrRefCount(const PageVersion & ver, Int64 ref_count_delta)
+    {
         if (versioned_ref_counts == nullptr)
         {
             versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
         }
-        RUNTIME_CHECK(versioned_ref_counts->empty() || versioned_ref_counts->rbegin()->first < ver);
-        versioned_ref_counts->emplace_back(ver, ref_count);
+        versioned_ref_counts->emplace_back(ver, ref_count_delta);
     }
 
-    void decrLatestRefCountInSnap(UInt64 snap_seq, Int64 deref_count) const
+    void decrRefCountInSnap(UInt64 snap_seq, Int64 deref_count_delta)
     {
-        RUNTIME_CHECK(versioned_ref_counts != nullptr && !versioned_ref_counts->empty());
         if (snap_seq == 0)
         {
-            auto iter = versioned_ref_counts->end();
-            iter--;
-            RUNTIME_CHECK(iter->second > deref_count);
-            iter->second = iter->second - deref_count;
-            versioned_ref_counts->erase(versioned_ref_counts->begin(), iter);
+            // TODO: actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
+            // But collpase it when `snap_seq` is not zero should be enough. So we just do an append here.
+            versioned_ref_counts->emplace_back(PageVersion(0, 0), -deref_count_delta);
         }
         else
         {
-            auto iter = std::lower_bound(
-                versioned_ref_counts->begin(),
-                versioned_ref_counts->end(),
-                PageVersion(snap_seq + 1),
-                [](const auto & lhs, const auto & rhs) {
-                    return lhs.first < rhs;
-                });
-
-            RUNTIME_CHECK(iter != versioned_ref_counts->begin());
-            iter--;
-            RUNTIME_CHECK(iter->second > deref_count);
-            auto old_iter = iter;
-            for (; iter != versioned_ref_counts->end(); ++iter)
+            auto new_versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+            Int64 ref_count_delta_in_snap = -deref_count_delta;
+            for (const auto & [ver, ref_count_delta] : *versioned_ref_counts)
             {
-                iter->second = iter->second - deref_count;
+                if (ver.sequence <= snap_seq)
+                {
+                    ref_count_delta_in_snap += ref_count_delta;
+                }
+                else
+                {
+                    new_versioned_ref_counts->emplace_back(ver, ref_count_delta);
+                }
             }
-            // older version is just need for gc.
-            // So when we decr ref with a snap, we can be sure that older versions won't be need anymore
-            versioned_ref_counts->erase(versioned_ref_counts->begin(), old_iter);
+            if (ref_count_delta_in_snap == 0 && new_versioned_ref_counts->empty())
+            {
+                versioned_ref_counts = nullptr;
+                return;
+            }
+            RUNTIME_CHECK(ref_count_delta_in_snap > 0);
+            new_versioned_ref_counts->emplace_back(PageVersion(snap_seq, 0), ref_count_delta_in_snap);
+            versioned_ref_counts.swap(new_versioned_ref_counts);
         }
     }
-
 
     Int64 getRefCountInSnap(UInt64 snap_seq) const
     {
@@ -159,20 +164,13 @@ public:
         {
             return 1;
         }
-        RUNTIME_CHECK(!versioned_ref_counts->empty());
-        auto iter = std::lower_bound(
-            versioned_ref_counts->cbegin(),
-            versioned_ref_counts->cend(),
-            PageVersion(snap_seq + 1),
-            [](const auto & lhs, const auto & rhs) {
-                return lhs.first < rhs;
+        return std::accumulate(
+            versioned_ref_counts->begin(),
+            versioned_ref_counts->end(),
+            1,
+            [&](Int64 acc, const auto & ver_ref_count) {
+                return acc + (ver_ref_count.first.sequence <= snap_seq ? ver_ref_count.second : 0);
             });
-        if (iter == versioned_ref_counts->cbegin())
-        {
-            return 1;
-        }
-        iter--;
-        return iter->second;
     }
 
     Int64 getLatestRefCount() const
@@ -181,13 +179,17 @@ public:
         {
             return 1;
         }
-        RUNTIME_CHECK(!versioned_ref_counts->empty());
-        return versioned_ref_counts->rbegin()->second;
+        return std::accumulate(
+            versioned_ref_counts->begin(),
+            versioned_ref_counts->end(),
+            1,
+            [](Int64 acc, const auto & ver_ref_count) { return acc + ver_ref_count.second; });
     }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    // store the ref count delta for each version, empty means ref count 1
     std::unique_ptr<std::vector<std::pair<PageVersion, Int64>>> versioned_ref_counts;
 };
 
@@ -226,7 +228,7 @@ struct EntryOrDelete
             .is_delete = false,
             .entry = entry,
         };
-        result.being_ref_count.appendRefCount(ver, being_ref_count);
+        result.being_ref_count.restoreFrom(ver, being_ref_count);
         return result;
     }
 

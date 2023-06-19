@@ -400,7 +400,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
         create_ver = rec.version;
-        being_ref_count.appendRefCount(rec.version, rec.being_ref_count);
+        being_ref_count.restoreFrom(rec.version, rec.being_ref_count);
         entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.version, 1 /* meaningless */));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
@@ -634,7 +634,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
                 {
                     throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, target_ver), ErrorCodes::LOGICAL_ERROR);
                 }
-                iter->second.being_ref_count.appendRefCount(ref_ver, ref_count_value + 1);
+                iter->second.being_ref_count.incrRefCount(ref_ver, 1);
                 return ref_count_value + 1;
             }
         } // fallthrough to FAIL
@@ -645,7 +645,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
         {
             // We may add reference to an external id even if it is logically deleted.
             auto ref_count_value = being_ref_count.getLatestRefCount();
-            being_ref_count.appendRefCount(ref_ver, ref_count_value + 1);
+            being_ref_count.incrRefCount(ref_ver, 1);
             return ref_count_value + 1;
         }
     }
@@ -830,7 +830,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
     {
-        being_ref_count.decrLatestRefCountInSnap(lowest_seq, deref_count);
+        being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
         return (is_deleted && delete_ver.sequence <= lowest_seq && being_ref_count.getLatestRefCount() == 1);
     }
     else if (type == EditRecordType::VAR_ENTRY)
@@ -854,7 +854,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             throw Exception(fmt::format("Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
         assert(iter->second.isEntry());
-        iter->second.being_ref_count.decrLatestRefCountInSnap(lowest_seq, deref_count);
+        iter->second.being_ref_count.decrRefCountInSnap(lowest_seq, deref_count);
 
         if (lowest_seq == 0)
             return false;
