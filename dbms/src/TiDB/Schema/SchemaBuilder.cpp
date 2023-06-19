@@ -476,7 +476,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     }
 
     const auto old_mapped_tbl_name = storage->getTableName();
-    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_modify_column, keyspace_id).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_rename_table, keyspace_id).Increment();
     LOG_INFO(
         log,
         "Renaming table {}.{} (display name: {}) to {}.",
