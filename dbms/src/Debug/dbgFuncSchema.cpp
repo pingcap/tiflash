@@ -16,6 +16,7 @@
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
@@ -27,6 +28,7 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
@@ -63,7 +65,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
     try
     {
         schema_syncer->syncSchemas(context, NullspaceID);
@@ -82,6 +84,93 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     }
 
     output("schemas refreshed");
+}
+
+void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto mapped_db = mappedDatabase(context, database_name);
+
+    TMTContext & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
+    if (storage == nullptr)
+    {
+        return;
+    }
+
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    try
+    {
+        schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, storage->getTableInfo().id);
+        if (storage->getTableInfo().partition.num > 0)
+        {
+            for (const auto & def : storage->getTableInfo().partition.definitions)
+            {
+                schema_syncer->syncTableSchema(context, storage->getTableInfo().keyspace_id, def.id);
+            }
+        }
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+        {
+            output(e.message());
+            return;
+        }
+        else
+        {
+            throw;
+        }
+    }
+
+    output("table schema refreshed");
+}
+
+void dbgFuncRefreshMappedTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    auto table_id = table->table_info.id;
+    auto keyspace_id = table->table_info.keyspace_id;
+
+    TMTContext & tmt = context.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    try
+    {
+        schema_syncer->syncTableSchema(context, keyspace_id, table_id);
+        if (table->table_info.partition.num > 0)
+        {
+            for (const auto & def : table->table_info.partition.definitions)
+            {
+                schema_syncer->syncTableSchema(context, keyspace_id, def.id);
+            }
+        }
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+        {
+            output(e.message());
+            return;
+        }
+        else
+        {
+            throw;
+        }
+    }
+
+    output("table schema refreshed");
 }
 
 // Trigger gc on all databases / tables.
@@ -103,8 +192,8 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    auto schema_syncer = tmt.getSchemaSyncer();
-    schema_syncer->reset();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
+    schema_syncer->reset(NullspaceID);
 
     output("reset schemas");
 }
@@ -118,7 +207,8 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     FmtBuffer fmt_buf;
     if (args.size() == 1)
     {
-        auto db = context.getDatabase(database_name);
+        auto mapped_database_name = mappedDatabase(context, database_name);
+        auto db = context.getDatabase(mapped_database_name);
         auto tiflash_db = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
         if (!tiflash_db)
             throw Exception(database_name + " is not DatabaseTiFlash", ErrorCodes::BAD_ARGUMENTS);
@@ -128,7 +218,9 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     else if (args.size() == 2)
     {
         const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-        auto storage = context.getTable(database_name, table_name);
+        auto mapped_table_name = mappedTable(context, database_name, table_name, true).second;
+        auto mapped_database_name = mappedDatabase(context, database_name);
+        auto storage = context.getTable(mapped_database_name, mapped_table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         if (!managed_storage)
             throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);

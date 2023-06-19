@@ -94,7 +94,7 @@ enum class SchemaActionType : Int8
     ActionAlterTTLRemove = 67,
 
 
-    // If we supporte new type from TiDB.
+    // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
     MaxRecognizedType = 68,
@@ -161,6 +161,8 @@ struct SchemaGetter
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id);
 
     TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id);
+
+    std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
 
     std::vector<TiDB::DBInfoPtr> listDBs();
 

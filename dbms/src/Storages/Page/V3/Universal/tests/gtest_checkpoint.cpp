@@ -17,6 +17,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
@@ -24,6 +25,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
@@ -35,6 +37,7 @@
 
 #include <future>
 #include <limits>
+using namespace DB::S3::tests;
 
 namespace DB::FailPoints
 {
@@ -468,7 +471,12 @@ try
         page_storage->write(std::move(batch));
     }
     // mock that local files are generated, but uploading to remote data source is failed
-    dumpCheckpoint(/*upload_success*/ false);
+    try
+    {
+        dumpCheckpoint(/*upload_success*/ false);
+        FAIL() << "Uploading checkpoint failed would throw exception, should not come here.";
+    }
+    catch (...)
     {
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
@@ -1213,6 +1221,98 @@ try
         EXPECT_EQ(*restored_entry.second.checkpoint_info.data_location.data_file_id, "lock/s99/dat_100_1.lock_s2_3"); // restored from local WAL
         EXPECT_EQ(restored_entry.second.checkpoint_info.is_local_data_reclaimed, true);
     }
+}
+CATCH
+
+
+TEST_F(UniversalPageStorageServiceCheckpointTest, DumpFail)
+try
+{
+    auto page_storage = uni_ps_service->getUniversalPageStorage();
+    auto store_info = metapb::Store{};
+    store_info.set_id(store_id);
+    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
+    auto remote_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
+    // Mock normal writes
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("5", tag, "The flower carriage rocked");
+        batch.putPage("3", tag, "Said she just dreamed a dream");
+        page_storage->write(std::move(batch));
+    }
+    {
+        UniversalWriteBatch batch;
+        batch.delPage("1");
+        batch.putRefPage("2", "5");
+        batch.putPage("10", tag, "Nahida opened her eyes");
+        batch.delPage("3");
+        page_storage->write(std::move(batch));
+    }
+    MockS3Client::setPutObjectStatus(MockS3Client::S3Status::FAILED);
+    SCOPE_EXIT({ MockS3Client::setPutObjectStatus(MockS3Client::S3Status::NORMAL); });
+    try
+    {
+        uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store, false);
+        FAIL() << "Exception should be thrown above, should not come here.";
+    }
+    catch (...)
+    {
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        const auto & tmp_path = global_context.getTemporaryPath();
+        std::vector<String> short_names;
+        Poco::File(tmp_path).list(short_names);
+        for (const auto & name : short_names)
+        {
+            ASSERT_FALSE(startsWith(name, UniversalPageStorageService::checkpoint_dirname_prefix)) << name;
+        }
+    }
+}
+CATCH
+
+TEST_F(UniversalPageStorageServiceCheckpointTest, removeAllLocalCheckpointFiles)
+try
+{
+    auto list_files = [](const String & dir) {
+        std::vector<String> filenames;
+        Poco::File(dir).list(filenames);
+        return std::set<String>(filenames.begin(), filenames.end());
+    };
+
+    auto remove_file = [](const String & fname) {
+        Poco::File f(fname);
+        if (f.exists())
+        {
+            f.remove(true);
+        }
+    };
+
+    auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+    const auto & tmp_path = global_context.getTemporaryPath();
+
+    // Clean old data if necessary.
+    auto cp_dir1 = uni_ps_service->getCheckpointLocalDir(1);
+    remove_file(cp_dir1.toString());
+    auto cp_dir2 = uni_ps_service->getCheckpointLocalDir(2);
+    remove_file(cp_dir2.toString());
+    remove_file(tmp_path + "/" + "not_checkpoint");
+
+    auto fnames0 = list_files(tmp_path);
+
+    auto create_dir = [](const String & name) {
+        Poco::File f(name);
+        f.createDirectories();
+        ASSERT_TRUE(f.exists()) << name;
+    };
+
+    create_dir(cp_dir1.getFileName());
+    create_dir(cp_dir2.getFileName());
+    create_dir(tmp_path + "/" + "not_checkpoint");
+
+    uni_ps_service->removeAllLocalCheckpointFiles();
+
+    ASSERT_FALSE(Poco::File(cp_dir1).exists()) << cp_dir1.getFileName();
+    ASSERT_FALSE(Poco::File(cp_dir2).exists()) << cp_dir2.getFileName();
+    ASSERT_TRUE(Poco::File(tmp_path + "/" + "not_checkpoint").exists()) << tmp_path;
 }
 CATCH
 

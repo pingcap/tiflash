@@ -203,7 +203,12 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
-{}
+{
+    if (tasks_wrapper.empty())
+    {
+        q.finish();
+    }
+}
 
 void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
 {

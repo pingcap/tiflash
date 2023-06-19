@@ -827,11 +827,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     {
         std::shared_lock lock(read_write_mutex);
         // avoid gc on empty tables
-        if (segments.size() == 1)
+        if (segments.empty() || (segments.size() == 1 && segments.begin()->second->getEstimatedRows() == 0))
         {
-            const auto & seg = segments.begin()->second;
-            if (seg->getEstimatedRows() == 0)
-                return 0;
+            return 0;
         }
     }
 
