@@ -86,6 +86,7 @@ private:
     void responderFinish(const grpc::Status & status);
 
     std::mutex mu;
+    std::mutex proceed_mutex;
     // server instance
     AsyncFlashService * service;
 
