@@ -149,6 +149,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     }
 
     GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition, keyspace_id).Increment();
+
 }
 
 template <typename Getter, typename NameMapper>
@@ -1022,7 +1023,11 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     else
     {
         LOG_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));
+<<<<<<< HEAD
         GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_modify_column, keyspace_id).Increment();
+=======
+
+>>>>>>> 7aafea8835af8f8c77f48fb197fec660eb9f850d
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
 
         storage->alterSchemaChange(

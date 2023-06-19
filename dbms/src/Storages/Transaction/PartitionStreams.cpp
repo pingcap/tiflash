@@ -184,7 +184,11 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
+<<<<<<< HEAD
         GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
+=======
+        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+>>>>>>> 7aafea8835af8f8c77f48fb197fec660eb9f850d
         Stopwatch watch;
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();

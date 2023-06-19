@@ -23,15 +23,12 @@ template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
-
-    GET_KEYSPACE_METRIC(tiflash_sync_schema_applying, keyspace_id).Set(1.0);
-    SCOPE_EXIT({ GET_KEYSPACE_METRIC(tiflash_sync_schema_applying, keyspace_id).Set(0.0); });
-
     auto getter = createSchemaGetter(keyspace_id);
     const Int64 version = getter.getVersion();
 
+    // TODO: we need support metrics contains keyspace info.
     Stopwatch watch;
-    SCOPE_EXIT({ GET_KEYSPACE_METRIC(tiflash_schema_apply_duration_seconds, type_sync_schema_apply_duration, keyspace_id).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
     if (version == SchemaGetter::SchemaVersionNotExist)
     {
@@ -42,7 +39,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
 
         LOG_INFO(log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
-
+        
         // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
         // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
         // as a tombstone and let the SchemaSyncService drop them physically.
