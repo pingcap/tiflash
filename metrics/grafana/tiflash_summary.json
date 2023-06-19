@@ -4883,7 +4883,7 @@
               "expr": "avg(tiflash_schema_version{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", keyspace!=\"\"}) by (instance, keyspace)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "{{instance-keyspace}}",
+              "legendFormat": "{{instance}}-{{keyspace}}",
               "refId": "A"
             }
           ],
@@ -5081,7 +5081,7 @@
               "expr": "avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", keyspace!=\"\"}[1m])) by (type, keyspace)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "{{type-keyspace}}",
+              "legendFormat": "{{type}}-{{keyspace}}",
               "refId": "A"
             },
             {
