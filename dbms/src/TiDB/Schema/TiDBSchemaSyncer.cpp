@@ -39,7 +39,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
 
         LOG_INFO(log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
-        
+
         // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
         // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
         // as a tombstone and let the SchemaSyncService drop them physically.
