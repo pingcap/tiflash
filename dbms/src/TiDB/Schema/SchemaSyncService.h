@@ -45,7 +45,6 @@ public:
 
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
-    void removeCurrentVersion(KeyspaceID keyspace_id);
 
     struct GCContext
     {
@@ -65,9 +64,9 @@ private:
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
 
-    mutable std::shared_mutex ks_map_mutex;
+    mutable std::shared_mutex keyspace_map_mutex;
     // Handles for each keyspace schema sync task.
-    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
+    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> keyspace_handle_map;
 
     LoggerPtr log;
 };

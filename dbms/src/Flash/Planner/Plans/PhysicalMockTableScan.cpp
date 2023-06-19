@@ -118,7 +118,7 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::buildPipelineExecGroup(
+void PhysicalMockTableScan::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

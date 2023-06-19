@@ -85,6 +85,23 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageIdU64 
     }
 }
 
+void DeltaMergeStore::removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist)
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return;
+
+    auto delegator = path_pool->getStableDiskDelegator();
+    if (auto remote_data_store = global_context.getSharedContextDisagg()->remote_data_store;
+        !remote_data_store)
+    {
+        delegator.removeDTFile(file_id, throw_on_not_exist);
+    }
+    else
+    {
+        delegator.removeRemoteDTFile(file_id, throw_on_not_exist);
+    }
+}
+
 Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
@@ -104,14 +121,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
         // Keep trying until succeeded.
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                RUNTIME_CHECK(segment_it != segments.end(), cur_range.toDebugString());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             FAIL_POINT_PAUSE(FailPoints::pause_when_ingesting_to_dt_store);
             waitForWrite(dm_context, segment);
@@ -212,14 +222,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
 
         while (!remaining_delete_range.none())
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(remaining_delete_range.getStart());
-                RUNTIME_CHECK(segment_it != segments.end(), remaining_delete_range.toDebugString());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(remaining_delete_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
             RUNTIME_CHECK(
@@ -312,16 +315,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
         auto file_ingest_range = external_files[file_idx].range.shrink(ingest_range);
         while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-                auto segment_it = segments.upper_bound(file_ingest_range.getStart());
-                RUNTIME_CHECK(segment_it != segments.end(),
-                              file_ingest_range.toDebugString(),
-                              file_idx,
-                              files[file_idx]->path());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(file_ingest_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             if (segment->hasAbandoned())
                 continue; // retry with current range and file
@@ -766,14 +760,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 
         while (!remaining_delete_range.none())
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(remaining_delete_range.getStart());
-                RUNTIME_CHECK(segment_it != segments.end(), remaining_delete_range.toDebugString());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(remaining_delete_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
             RUNTIME_CHECK(
@@ -864,13 +851,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         auto file_ingest_range = target_segments[segment_idx]->getRowKeyRange();
         while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-                auto segment_it = segments.upper_bound(file_ingest_range.getStart());
-                RUNTIME_CHECK(segment_it != segments.end());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(file_ingest_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             if (segment->hasAbandoned())
                 continue; // retry with current range and file

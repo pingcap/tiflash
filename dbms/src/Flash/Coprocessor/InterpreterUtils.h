@@ -32,11 +32,13 @@ class PipelineExecGroupBuilder;
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log);
 
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log,
     bool ignore_block = false,
     const String & extra_info = "");
@@ -45,11 +47,13 @@ void restoreConcurrency(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     size_t concurrency,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log);
 
 void executeUnion(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    Int64 max_buffered_bytes,
     const LoggerPtr & log);
 
 ExpressionActionsPtr generateProjectExpressionActions(

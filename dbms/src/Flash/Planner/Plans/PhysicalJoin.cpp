@@ -54,7 +54,6 @@ void recordJoinExecuteInfo(
     RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -221,7 +220,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();

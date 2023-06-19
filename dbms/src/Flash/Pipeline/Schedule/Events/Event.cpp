@@ -131,6 +131,7 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    schedule_duration = stopwatch.elapsed();
     scheduleTasks();
 }
 
@@ -175,6 +176,7 @@ void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
+    finish_duration = stopwatch.elapsed();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
     {
@@ -203,6 +205,18 @@ void Event::finish()
     exec_status.onEventFinish();
 }
 
+UInt64 Event::getScheduleDuration() const
+{
+    assertStatus(EventStatus::SCHEDULED);
+    return schedule_duration;
+}
+
+UInt64 Event::getFinishDuration() const
+{
+    assertStatus(EventStatus::FINISHED);
+    return finish_duration;
+}
+
 void Event::switchStatus(EventStatus from, EventStatus to)
 {
     RUNTIME_ASSERT(
@@ -216,7 +230,7 @@ void Event::switchStatus(EventStatus from, EventStatus to)
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 
-void Event::assertStatus(EventStatus expect)
+void Event::assertStatus(EventStatus expect) const
 {
     auto cur_status = status.load();
     RUNTIME_ASSERT(

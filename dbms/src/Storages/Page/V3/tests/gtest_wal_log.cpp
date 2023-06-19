@@ -810,7 +810,7 @@ INSTANTIATE_TEST_CASE_P(
         return fmt::format("{}_{}", recycle_log, allow_retry_read);
     });
 
-TEST(LogFileRWTest2, ManuallyFlush)
+TEST(LogFileRWTest2, ManuallySync)
 {
     auto provider = TiFlashTestEnv::getDefaultFileProvider();
     auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest2");
@@ -835,7 +835,7 @@ TEST(LogFileRWTest2, ManuallyFlush)
         ReadBufferFromString buff(payload);
         ASSERT_NO_THROW(writer->addRecord(buff, payload.size()));
     }
-    writer->flush();
+    writer->sync();
 
     auto read_buf = createReadBufferFromFileBaseByFileProvider(
         provider,

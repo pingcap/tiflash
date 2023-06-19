@@ -61,7 +61,7 @@
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
-
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Dynamic/Var.h>
@@ -181,15 +181,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 
         getDatabaseAndTableNames(database_name, table_name);
 
-        if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
-        {
-            storage = context.getTable(database_name, table_name);
-            table_lock = storage->lockForShare(context.getCurrentQueryId());
-        }
-        else
-        {
-            getAndLockStorageWithSchemaVersion(database_name, table_name, settings.schema_version);
-        }
+        getAndLockStorageWithSchemaVersion(database_name, table_name);
     }
 
     query_analyzer = std::make_unique<ExpressionAnalyzer>(
@@ -220,99 +212,34 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 }
 
 
-void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
+void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name)
 {
+    // always sync schema first and then read table
     const String qualified_name = database_name + "." + table_name;
 
-    /// Get current schema version in schema syncer for a chance to shortcut.
-    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion(NullspaceID);
 
-    /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
-        /// Get storage in case it's dropped then re-created.
-        // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_tmp = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
-        if (!storage_tmp)
-            return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
-
-        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
-        if (!managed_storage
-            || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DT))
-        {
-            throw Exception("Specifying schema_version for storage: " + storage_tmp->getName()
-                                + ", table: " + qualified_name + " is not allowed",
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-
-        /// Lock storage.
-        auto lock = storage_tmp->lockForShare(context.getCurrentQueryId());
-
-        /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
-        // We have three schema versions, two in TiFlash:
-        // 1. Storage: the version that this TiFlash table (storage) was last altered.
-        // 2. Global: the version that TiFlash global schema is at.
-        // And one from TiDB/TiSpark:
-        // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = managed_storage->getTableInfo().schema_version;
-        // Not allow storage > query in any case, one example is time travel queries.
-        if (storage_schema_version > query_schema_version)
-            throw TiFlashException("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version),
-                                   Errors::Table::SchemaVersionError);
-        // From now on we have storage <= query.
-        // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
-        if (schema_synced)
-            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
-        // From now on the schema was not synced.
-        // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
-        // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
-        // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
-        if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
-        // From now on we have global < query.
-        // Return false for outer to sync and retry.
-        return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
-    };
-
-    /// Try get storage and lock once.
-    StoragePtr storage_tmp;
-    TableLockHolder lock;
-    Int64 storage_schema_version;
-    auto log_schema_version = [&](const String & result) {
-        LOG_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
-    };
-    bool ok;
     {
-        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(false);
-        if (ok)
-        {
-            log_schema_version("OK, no syncing required.");
-            storage = storage_tmp;
-            table_lock = lock;
-            return;
-        }
-    }
-
-    /// If first try failed, sync schema and try again.
-    {
-        log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
         // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
         // and we do not support keyspace feature for ClickHouse interface,
         // we could use nullspace id here safely.
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context, NullspaceID);
-        auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
-
-        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(true);
-        if (ok)
+        context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
+        auto storage_tmp = context.getTable(database_name, table_name);
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
+        if (!managed_storage || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
         {
-            log_schema_version("OK after syncing.");
+            LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
-            table_lock = lock;
+            table_lock = storage->lockForShare(context.getCurrentQueryId());
             return;
         }
 
-        throw Exception("Shouldn't reach here", ErrorCodes::UNKNOWN_EXCEPTION);
+        context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(context, NullspaceID, managed_storage->getTableInfo().id);
+        auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
+
+        table_lock = storage_tmp->lockForShare(context.getCurrentQueryId());
+        storage = storage_tmp;
     }
 }
 
@@ -920,6 +847,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             params,
             final,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
@@ -1137,6 +1065,7 @@ void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
             pipeline.streams,
             BlockInputStreams{},
             max_streams,
+            0,
             /*req_id=*/"");
         ;
 

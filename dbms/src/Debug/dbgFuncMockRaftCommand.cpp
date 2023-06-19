@@ -60,16 +60,9 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         std::vector<Field> end_keys1;
         std::vector<Field> end_keys2;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
-        {
-            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-        }
-
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            auto & column_info = table_info.columns[idx];
+            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
 
             auto start_field1 = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum1 = TiDB::DatumBumpy(start_field1, column_info.tp);

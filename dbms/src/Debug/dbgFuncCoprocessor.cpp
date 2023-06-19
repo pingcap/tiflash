@@ -16,6 +16,7 @@
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Debug/dbgQueryExecutor.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
@@ -49,7 +50,9 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
         context,
         query,
         [&](const String & database_name, const String & table_name) {
-            auto storage = context.getTable(database_name, table_name);
+            auto mapped_database_name = mappedDatabase(context, database_name);
+            auto mapped_table_name = mappedTable(context, database_name, table_name);
+            auto storage = context.getTable(mapped_database_name, mapped_table_name.second);
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
             if (!managed_storage //
                 || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT
@@ -58,7 +61,6 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
             return managed_storage->getTableInfo();
         },
         properties);
-
     return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 

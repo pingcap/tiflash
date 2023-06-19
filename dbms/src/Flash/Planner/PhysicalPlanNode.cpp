@@ -87,17 +87,19 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 
 void PhysicalPlanNode::buildPipelineExecGroup(
-    PipelineExecutorStatus & /*exec_status*/,
-    PipelineExecGroupBuilder & /*group_builder*/,
-    Context & /*context*/,
-    size_t /*concurrency*/)
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    throw Exception("Unsupport");
+    buildPipelineExecGroupImpl(exec_status, group_builder, context, concurrency);
+    if (is_tidb_operator)
+        context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)

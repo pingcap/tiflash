@@ -27,6 +27,7 @@
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 namespace DB
 {
@@ -198,7 +199,7 @@ void NaturalDag::buildTables(Context & context)
     using ClientPtr = pingcap::pd::ClientPtr;
     TMTContext & tmt = context.getTMTContext();
     ClientPtr pd_client = tmt.getPDClient();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
 
     String db_name(getDatabaseName());
     buildDatabase(context, schema_syncer, db_name);
@@ -235,7 +236,7 @@ void NaturalDag::buildTables(Context & context)
     }
 }
 
-void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name)
+void NaturalDag::buildDatabase(Context & context, std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer, const String & db_name)
 {
     auto result = MockTiDB::instance().getDBIDByName(db_name);
     if (result.first)
