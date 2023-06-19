@@ -478,6 +478,7 @@ struct EqualWidthBuckets
     }
 };
 
+const String keyspace_name = "keyspace";
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -491,7 +492,7 @@ struct MetricFamilyTrait<prometheus::Counter>
     static auto & add(prometheus::Family<prometheus::Counter> & family, uint32_t keyspace_id, ArgType && arg)
     {
         std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
-        map["keyspace"] = std::to_string(keyspace_id);
+        map[keyspace_name] = std::to_string(keyspace_id);
         return family.Add(map);
     }
 };
@@ -504,7 +505,7 @@ struct MetricFamilyTrait<prometheus::Gauge>
     static auto & add(prometheus::Family<prometheus::Gauge> & family, uint32_t keyspace_id, ArgType && arg)
     {
         std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
-        map["keyspace"] = std::to_string(keyspace_id);
+        map[keyspace_name] = std::to_string(keyspace_id);
         return family.Add(map);
     }
 };
@@ -521,7 +522,7 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, uint32_t keyspace_id, ArgType && arg)
     {
         std::map<std::string, std::string> map = std::get<0>(arg);
-        map["keyspace"] = std::to_string(keyspace_id);
+        map[keyspace_name] = std::to_string(keyspace_id);
         return family.Add(map, std::move(std::get<1>(arg)));
     }
 };
