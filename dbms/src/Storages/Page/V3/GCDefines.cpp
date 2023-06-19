@@ -246,6 +246,7 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
 
+    // Compact WAL after in-memory GC in PageDirectory in order to reduce the overhead of dumping useless entries
     statistics.compact_wal_happen = page_directory.tryDumpSnapshot(write_limiter, force_wal_compact);
     if (statistics.compact_wal_happen)
     {
