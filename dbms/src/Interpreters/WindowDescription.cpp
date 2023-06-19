@@ -60,9 +60,11 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.begin_offset = frame_.start().offset();
     frame.begin_type = getBoundaryTypeFromTipb(frame_.start());
     frame.begin_preceding = (frame_.start().type() == tipb::WindowBoundType::Preceding);
+    frame.begin_cmp_data_type = frame_.start().cmp_data_type();
     frame.end_offset = frame_.end().offset();
     frame.end_type = getBoundaryTypeFromTipb(frame_.end());
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
+    frame.end_cmp_data_type = frame_.end().cmp_data_type();
     frame.is_default = false;
 }
 

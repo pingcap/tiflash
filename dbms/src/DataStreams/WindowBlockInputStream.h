@@ -197,6 +197,15 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
+    template <typename OrderByColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundary(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+
+    template <typename OrderByColType, typename AuxColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundary(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+
+    template <typename OrderByColType, typename AuxColType, int CmpDataType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundaryImpl(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+
 public:
     LoggerPtr log;
 
@@ -271,10 +280,6 @@ public:
 
     // Auxiliary variable for range frame type when calculating frame_end
     RowNumber prev_frame_end;
-
-    // Mark the order by column type to avoid type judge
-    // each time we update the start/end frame position.
-    Window::ColumnType col_type;
 
     //TODO: used as template parameters
     bool only_have_row_number = false;

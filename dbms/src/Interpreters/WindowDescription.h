@@ -86,11 +86,13 @@ struct WindowFrame
     UInt64 begin_offset = 0;
     bool begin_preceding = true;
     Int32 begin_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType begin_cmp_data_type;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
     bool end_preceding = false;
     Int32 end_range_auxiliary_column_index = -1;
+    tipb::RangeCmpDataType end_cmp_data_type;
 
     bool operator==(const WindowFrame & other) const
     {
@@ -136,6 +138,9 @@ struct WindowDescription
     // Mark the order by column type to avoid type judge
     // each time we update the start/end frame position.
     Window::ColumnType col_type;
+
+    Window::ColumnType begin_aux_col_type;
+    Window::ColumnType end_aux_col_type;
 
     // ascending or descending for order by column
     bool is_desc;

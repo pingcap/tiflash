@@ -64,12 +64,6 @@ extern const String sum_on_partial_result;
 
 namespace
 {
-inline const String BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME = "begin_range_frame_auxiliary_cal_numeric";
-inline const String END_FRAME_AUX_CALCU_CONST_COL_NAME = "end_range_frame_auxiliary_cal_numeric";
-
-inline const String BEGIN_FRAME_AUX_RES_COL_NAME = "begin_aux_res_col_name";
-inline const String END_FRAME_AUX_RES_COL_NAME = "end_aux_res_col_name";
-
 bool isUInt8Type(const DataTypePtr & type)
 {
     return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
@@ -238,90 +232,30 @@ Window::ColumnType getColumnType(const ColumnPtr & col_ptr)
     throw Exception("Unexpected column type!");
 }
 
-template <bool is_begin>
-ColumnWithTypeAndName createAuxiliaryColumnAndName(const ColumnWithTypeAndName & order_by_col_type_and_name, const Field & const_val)
+// We need auxiliary columns' info when finding the start or end boundary of the frame
+void setAuxiliaryColumnInfo(
+    ExpressionActionsPtr & actions,
+    WindowDescription & window_desc,
+    const String & begin_aux_col_name,
+    const String & end_aux_col_name,
+    const tipb::Window & window)
 {
-    ColumnPtr auxiliary_col = order_by_col_type_and_name.type->createColumnConst(1, const_val);
-    ColumnWithTypeAndName auxiliary_col_and_name;
-    auxiliary_col_and_name.column = auxiliary_col;
-    auxiliary_col_and_name.type = order_by_col_type_and_name.type;
+    // Execute this function only when the frame type is Range
+    if (window.frame().type() != tipb::WindowFrameType::Ranges)
+        return;
 
-    if constexpr (is_begin)
-        auxiliary_col_and_name.name = BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME;
-    else
-        auxiliary_col_and_name.name = END_FRAME_AUX_CALCU_CONST_COL_NAME;
-
-    return auxiliary_col_and_name;
-}
-
-template <bool is_begin, bool is_desc>
-FunctionBuilderPtr getFunctionBuilderPtr(const Context & context)
-{
-    String aux_func_name;
-    if ((is_desc && is_begin) || (!is_desc && !is_begin))
-        aux_func_name = NameMinus::name;
-    else if ((is_desc && !is_begin) || (!is_desc && is_begin))
-        aux_func_name = NamePlus::name;
-
-    String res_col_name;
-    if constexpr (is_begin)
-        res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
-    else
-        res_col_name = END_FRAME_AUX_RES_COL_NAME;
-
-    return FunctionFactory::instance().get(aux_func_name, context);
-}
-
-template <bool is_begin>
-void addRangeFrameAuxiliaryFunctionActionImpl(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
-{
-    // Prepare something
-    bool is_desc = (window_desc.order_by[0].direction == -1);
-    const Block & sample_block = actions->getSampleBlock();
-    const String & order_by_col_name = window_desc.order_by[0].column_name;
-    const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
-
-    // sql: .... XXX preceding and YYY following ...
-    // const_val is the numeric 'XXX' or 'YYY'
-    Field const_val;
-    if constexpr (is_begin)
-        const_val = decodeLiteral(window.frame().start().calcfuncs()[0]); // TODO this `calcfuncs` name will be changed
-    else
-        const_val = decodeLiteral(window.frame().end().calcfuncs()[0]); // TODO this `calcfuncs` name will be changed
-
-    String res_col_name;
-    if constexpr (is_begin)
-        res_col_name = BEGIN_FRAME_AUX_RES_COL_NAME;
-    else
-        res_col_name = END_FRAME_AUX_RES_COL_NAME;
-
-    // Add the auxiliary const column
-    //
-    // Before executing window function, we need to execute an arithmatic function that calculates
-    // the order_by_column with a const number.
-    // This const number should be contained in a const column and the following piece of codes
-    // are for creating this const column.
-    ColumnWithTypeAndName auxiliary_col_and_name = createAuxiliaryColumnAndName<is_begin>(order_by_col_type_and_name, const_val);
-    auto begin_add_col_action = ExpressionAction::addColumn(auxiliary_col_and_name);
-    actions->add(begin_add_col_action);
-
-    // Get the auxiliary function
-    FunctionBuilderPtr function_builder;
-    if (is_desc)
-        function_builder = getFunctionBuilderPtr<is_begin, true>(context);
-    else
-        function_builder = getFunctionBuilderPtr<is_begin, false>(context);
-    const ExpressionAction & aux_func = ExpressionAction::applyFunction(function_builder, {order_by_col_name, auxiliary_col_and_name.name}, res_col_name);
-    actions->add(aux_func);
-}
-
-std::pair<size_t, size_t> getAuxiliaryColumnIndexs(ExpressionActionsPtr & actions)
-{
     Block tmp_block = actions->getSampleBlock();
     actions->execute(tmp_block);
-    size_t begin_aux_col_idx = tmp_block.getPositionByName(BEGIN_FRAME_AUX_RES_COL_NAME);
-    size_t end_aux_col_idx = tmp_block.getPositionByName(END_FRAME_AUX_RES_COL_NAME);
-    return std::make_pair(begin_aux_col_idx, end_aux_col_idx);
+    size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
+    size_t end_aux_col_idx = tmp_block.getPositionByName(end_aux_col_name);
+
+    // Set auxiliary columns' indexes
+    window_desc.frame.begin_range_auxiliary_column_index = begin_aux_col_idx;
+    window_desc.frame.end_range_auxiliary_column_index = end_aux_col_idx;
+
+    // Set auxiliary columns' types
+    window_desc.begin_aux_col_type = getColumnType(tmp_block.getByName(begin_aux_col_name).column);
+    window_desc.end_aux_col_type = getColumnType(tmp_block.getByName(end_aux_col_name).column);
 }
 
 void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
@@ -339,38 +273,26 @@ void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const Exp
 }
 
 // Add a function generating a new auxiliary column that help the implementation of range frame type
-void addRangeFrameAuxiliaryFunctionAction(WindowDescription & window_desc, ExpressionActionsPtr & actions, const tipb::Window & window, const Context & context)
+std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
+    DAGExpressionAnalyzer * analyzer,
+    WindowDescription & window_desc,
+    ExpressionActionsPtr & actions,
+    const tipb::Window & window)
 {
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
-        return;
+        return std::make_pair("", "");
+    ;
 
     assert(window_desc.order_by.size() == 1);
     assert(window.frame().start().calcfuncs().size() == 1);
 
     // For begin frame
-    addRangeFrameAuxiliaryFunctionActionImpl<true>(window_desc, actions, window, context);
+    String begin_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions);
     // For end frame
-    addRangeFrameAuxiliaryFunctionActionImpl<false>(window_desc, actions, window, context);
+    String end_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions);
 
-    // Update index so that the window function could know the position of auxiliary columns
-    auto aux_col_idxs = getAuxiliaryColumnIndexs(actions);
-    window_desc.frame.begin_range_auxiliary_column_index = aux_col_idxs.first;
-    window_desc.frame.end_range_auxiliary_column_index = aux_col_idxs.second;
-}
-
-// For implementing the range frame type, we add many auxiliary columns
-// and we will remove these columns after the window function.
-void removeAuxiliaryColumns(ExpressionActionsPtr & actions, const tipb::Window & window)
-{
-    // Execute this function only when the frame type is Range
-    if (window.frame().type() != tipb::WindowFrameType::Ranges)
-        return;
-
-    actions->add(ExpressionAction::removeColumn(BEGIN_FRAME_AUX_CALCU_CONST_COL_NAME));
-    actions->add(ExpressionAction::removeColumn(END_FRAME_AUX_CALCU_CONST_COL_NAME));
-    actions->add(ExpressionAction::removeColumn(BEGIN_FRAME_AUX_RES_COL_NAME));
-    actions->add(ExpressionAction::removeColumn(END_FRAME_AUX_RES_COL_NAME));
+    return std::make_pair(begin_aux_col_name, end_aux_col_name);
 }
 
 WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer, const tipb::Window & window)
@@ -387,14 +309,14 @@ WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer
 }
 
 void initBeforeWindow(
-    DAGExpressionAnalyzer * const analyzer,
+    DAGExpressionAnalyzer * analyzer,
     WindowDescription & window_desc,
     ExpressionActionsChain & chain,
     const tipb::Window & window,
     ExpressionActionsChain::Step & step)
 {
     // Prepare auxiliary function for range frame type
-    addRangeFrameAuxiliaryFunctionAction(window_desc, step.actions, window, analyzer->context);
+    auto aux_col_names = addRangeFrameAuxiliaryFunctionAction(analyzer, window_desc, step.actions, window);
 
     analyzer->appendWindowColumns(window_desc, window, step.actions);
     // set required output for window funcs's arguments.
@@ -406,6 +328,7 @@ void initBeforeWindow(
 
     window_desc.before_window = chain.getLastActions();
     chain.finalize();
+    setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
     chain.clear();
 }
 
@@ -417,7 +340,6 @@ void initAfterWindow(
     size_t source_size)
 {
     auto & after_window_step = analyze->initAndGetLastStep(chain);
-    removeAuxiliaryColumns(after_window_step.actions, window);
     analyze->appendCastAfterWindow(after_window_step.actions, window, source_size);
     window_desc.after_window_columns = analyze->getCurrentInputColumns();
     analyze->appendSourceColumnsToRequireOutput(after_window_step);
