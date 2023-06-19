@@ -722,16 +722,19 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     };
 
     {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-
-        handle_write_cmd_func();
+        {
+            // RegionTable::writeBlockByRegion may lead to persistRegion when flush proactively.
+            // So we can't lock here.
+            std::unique_lock<std::shared_mutex> lock(mutex);
+            handle_write_cmd_func();
+        }
 
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, true);
         }
 
         meta.setApplied(index, term);
