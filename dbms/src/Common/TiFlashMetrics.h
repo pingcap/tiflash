@@ -32,6 +32,7 @@
 
 // to make GCC 11 happy
 #include <cassert>
+#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -415,7 +416,6 @@ namespace DB
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
         F(type_page_read_bytes, {"type", "page_read_bytes"}))
-
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
@@ -471,6 +471,11 @@ struct MetricFamilyTrait<prometheus::Counter>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
     static auto & add(prometheus::Family<prometheus::Counter> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Counter> & family, uint32_t keyspace_id, ArgType && arg) { 
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map["keyspace_id"] = std::to_string(keyspace_id);
+        return family.Add(map); 
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -478,6 +483,11 @@ struct MetricFamilyTrait<prometheus::Gauge>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
     static auto & add(prometheus::Family<prometheus::Gauge> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Gauge> & family, uint32_t keyspace_id, ArgType && arg) { 
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map["keyspace_id"] = std::to_string(keyspace_id);
+        return family.Add(map); 
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -487,6 +497,15 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
+    }
+
+    static auto & add(prometheus::Family<prometheus::Histogram> & family, uint32_t keyspace_id, ArgType && arg)
+    {   
+        std::map<std::string, std::string> map = std::get<0>(arg);
+        map["keyspace_id"] = std::to_string(keyspace_id);
+        // std::map<std::string, std::string> map = {{"keyspace_id", std::to_string(keyspace_id)}};
+        // map.emplace(std::get<0>(arg));
+        return family.Add(map, std::move(std::get<1>(arg)));
     }
 };
 
@@ -502,10 +521,15 @@ struct MetricFamily
         const std::string & help,
         std::initializer_list<MetricArgType> args)
     {
+        for (const auto &begin: args){
+            store_args.push_back(begin);
+        }
+
+        store_args = args;
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
         metrics.reserve(args.size() ? args.size() : 1);
         for (auto arg : args)
-        {
+        {   
             auto & metric = MetricTrait::add(family, std::forward<MetricArgType>(arg));
             metrics.emplace_back(&metric);
         }
@@ -514,12 +538,44 @@ struct MetricFamily
             auto & metric = MetricTrait::add(family, MetricArgType{});
             metrics.emplace_back(&metric);
         }
+        store_family = &family;
+    }
+
+    void addMetricsForKeyspace(uint32_t keyspace_id){
+        std::vector<T *> metrics_temp;
+
+        for (auto arg : store_args)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, std::forward<MetricArgType>(arg));
+            metrics_temp.emplace_back(&metric);
+        }
+
+        if (store_args.size() == 0)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, MetricArgType{});
+            metrics_temp.emplace_back(&metric);
+        }
+        metrics_map[keyspace_id] = metrics_temp;
     }
 
     T & get(size_t idx = 0) { return *(metrics[idx]); }
+    T & get(size_t idx, uint32_t keyspace_id) {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (metrics_map.find(keyspace_id) == metrics_map.end()){
+                addMetricsForKeyspace(keyspace_id);
+            }
+        }
+        return *(metrics_map[keyspace_id][idx]);
+    }
 
 private:
+    std::mutex mutex;
     std::vector<T *> metrics;
+    prometheus::Family<T> * store_family;
+    std::vector<MetricArgType> store_args;
+
+    std::unordered_map<uint32_t, std::vector<T *>> metrics_map; // keyspace_id --> metrics
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -591,19 +647,31 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #ifndef GTEST_TIFLASH_METRICS
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TiFlashMetrics::instance().family.get(0, keyspace_id)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TiFlashMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #else
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_METRIC_2(family, metric) TestMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #endif
 #define GET_METRIC(...)                                             \
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
+
+#define GET_KEYSPACE_METRIC(...)                                             \
+    __GET_KEYSPACE_METRIC_MACRO(__VA_ARGS__, __GET_KEYSPACE_METRIC_1, __GET_KEYSPACE_METRIC_0, __GET_METRIC_0) \
     (__VA_ARGS__)
 
 #define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \
