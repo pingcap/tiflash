@@ -231,9 +231,10 @@ private:
 private:
     RegionData data;
     RegionMeta meta;
+    // Modification to data or meta requires this mutex.
+    mutable std::shared_mutex mutex;
 
     LoggerPtr log;
-    mutable std::shared_mutex mutex;
 
     const TableID mapped_table_id;
     const KeyspaceID keyspace_id;

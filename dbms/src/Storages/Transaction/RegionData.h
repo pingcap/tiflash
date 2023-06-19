@@ -94,7 +94,9 @@ public:
         // When applied raft log to `deadline_index`, `remained_keys` shall be cleared.
         // Otherwise, raise a hard error.
         std::optional<uint64_t> deadline_index;
-        bool pre_handling = true;
+        // Marks if we are prehandling a snapshot. We only register orphan key when prehandling.
+        // See `RegionData::readDataByWriteIt`.
+        bool pre_handling = false;
         uint64_t region_id = 0;
 
     private:

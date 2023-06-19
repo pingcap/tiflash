@@ -27,11 +27,6 @@ struct StringObject : std::string
 public:
     using Base = std::string;
 
-    struct Hash
-    {
-        std::size_t operator()(const StringObject & x) const { return std::hash<Base>()(x); }
-    };
-
     StringObject() = default;
     StringObject(Base && str_)
         : Base(std::move(str_))
@@ -46,8 +41,9 @@ public:
         : Base(str)
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
-    template <bool B>
-    static StringObject<B> copyFrom(const StringObject<B> & other)
+
+    template <bool a, typename = std::enable_if_t<a == is_key>>
+    static StringObject<is_key> copyFromObj(const StringObject<a> & other)
     {
         return StringObject(other.data(), other.dataSize());
     }
