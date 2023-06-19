@@ -103,6 +103,7 @@ public:
             return nullptr;
         }
         auto * new_container = new MultiVersionRefCount();
+        RUNTIME_CHECK(new_container != nullptr);
         for (const auto & [ver, ref_count] : container->ref_map)
         {
             new_container->ref_map.emplace(ver, ref_count);
@@ -150,6 +151,7 @@ public:
         {
             container = new MultiVersionRefCount();
         }
+        RUNTIME_CHECK(container != nullptr);
         RUNTIME_CHECK(container->ref_map.empty() || container->ref_map.rbegin()->first < ver);
         container->ref_map.emplace(ver, ref_count);
         return container;
