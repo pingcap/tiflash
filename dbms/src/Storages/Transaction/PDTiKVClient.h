@@ -116,8 +116,7 @@ struct PDClientHelper
             try
             {
                 auto ks_gc_sp = pd_client->getGCSafePointV2(keyspace_id);
-                auto ks_gc_sp_last_update_time = std::chrono::steady_clock::now();
-                update_ks_gc_sp_map(keyspace_id, ks_gc_sp, ks_gc_sp_last_update_time);
+                update_ks_gc_sp_map(keyspace_id, ks_gc_sp);
                 return ks_gc_sp;
             }
             catch (pingcap::Exception & e)
@@ -127,12 +126,12 @@ struct PDClientHelper
         }
     }
 
-    static void update_ks_gc_sp_map(KeyspaceID keyspace_id, Timestamp ks_gc_sp, TimePoint ks_gc_sp_update_time)
+    static void update_ks_gc_sp_map(KeyspaceID keyspace_id, Timestamp ks_gc_sp)
     {
         std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
         KeyspaceGCInfo newKeyspaceGCInfo;
         newKeyspaceGCInfo.ks_gc_sp = ks_gc_sp;
-        newKeyspaceGCInfo.ks_gc_sp_update_time = ks_gc_sp_update_time;
+        newKeyspaceGCInfo.ks_gc_sp_update_time = std::chrono::steady_clock::now();
         ks_gc_sp_map[keyspace_id] = newKeyspaceGCInfo;
     }
 
