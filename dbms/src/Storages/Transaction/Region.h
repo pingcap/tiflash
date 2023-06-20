@@ -51,6 +51,7 @@ struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 class RegionMockTest;
 struct ReadIndexResult;
+enum class RaftstoreVer : uint8_t;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 class Region : public std::enable_shared_from_this<Region>
@@ -64,30 +65,26 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        explicit CommittedScanner(const RegionPtr & store_, bool use_lock = true)
-            : store(store_)
-        {
-            if (use_lock)
-                lock = std::shared_lock<std::shared_mutex>(store_->mutex);
+        explicit CommittedScanner(const RegionPtr & region_, bool use_lock, bool need_value);
 
-            const auto & data = store->data.writeCF().getData();
+        bool hasNext();
+        RegionDataReadInfo next();
 
-            write_map_size = data.size();
-            write_map_it = data.begin();
-            write_map_it_end = data.end();
-        }
-
-        bool hasNext() const { return write_map_size && write_map_it != write_map_it_end; }
-
-        auto next(bool need_value = true) { return store->readDataByWriteIt(write_map_it++, need_value); }
-
-        DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
+        DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) { return region->getLockInfo(query); }
 
         size_t writeMapSize() const { return write_map_size; }
 
     private:
-        RegionPtr store;
+        bool tryNext();
+
+    private:
+        RegionPtr region;
         std::shared_lock<std::shared_mutex> lock; // A shared_lock so that we can concurrently read committed data.
+        std::optional<RegionDataReadInfo> peeked;
+        bool need_val;
+        // In raftstore v2, snapshot sent to TiFlash may contains extra keys which are from newer raft log entries than the snapshot claimed `snapshot_index`.
+        // We treat this as a soft error. Some validations may be performed elsewhere instead of blocking the main process.
+        bool hard_error;
 
         size_t write_map_size = 0;
         RegionData::ConstWriteCFIter write_map_it;
@@ -97,22 +94,22 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        explicit CommittedRemover(const RegionPtr & store_, bool use_lock = true)
-            : store(store_)
+        explicit CommittedRemover(const RegionPtr & region_, bool use_lock = true)
+            : region(region_)
         {
             if (use_lock)
-                lock = std::unique_lock<std::shared_mutex>(store_->mutex);
+                lock = std::unique_lock<std::shared_mutex>(region_->mutex);
         }
 
         void remove(const RegionWriteCFData::Key & key)
         {
-            auto & write_cf_data = store->data.writeCF().getDataMut();
+            auto & write_cf_data = region->data.writeCF().getDataMut();
             if (auto it = write_cf_data.find(key); it != write_cf_data.end())
-                store->removeDataByWriteIt(it);
+                region->removeDataByWriteIt(it);
         }
 
     private:
-        RegionPtr store;
+        RegionPtr region;
         std::unique_lock<std::shared_mutex> lock; // A unique_lock so that we can safely remove committed data.
     };
 
@@ -127,7 +124,7 @@ public:
     // Directly drop all data in this Region object.
     void clearAllData();
 
-    CommittedScanner createCommittedScanner(bool use_lock = true);
+    CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
@@ -205,6 +202,12 @@ public:
 
     RegionMeta & mutMeta() { return meta; }
 
+    RaftstoreVer getClusterRaftstoreVer();
+    void beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index);
+    void afterPrehandleSnapshot();
+    RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
+    const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
+
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
@@ -217,7 +220,7 @@ private:
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
-    RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
+    std::optional<RegionDataReadInfo> readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error);
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
@@ -227,9 +230,9 @@ private:
 
 private:
     RegionData data;
-    mutable std::shared_mutex mutex;
-
     RegionMeta meta;
+    // Modification to data or meta requires this mutex.
+    mutable std::shared_mutex mutex;
 
     LoggerPtr log;
 
