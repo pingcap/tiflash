@@ -139,8 +139,8 @@ struct WindowDescription
     // each time we update the start/end frame position.
     Window::ColumnType col_type;
 
-    Window::ColumnType begin_aux_col_type;
-    Window::ColumnType end_aux_col_type;
+    Window::ColumnType begin_aux_col_type = Window::ColumnType::UnInitialized;
+    Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;
 
     // ascending or descending for order by column
     bool is_desc;

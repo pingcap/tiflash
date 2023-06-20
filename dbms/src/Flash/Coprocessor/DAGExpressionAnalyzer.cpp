@@ -240,57 +240,70 @@ void setAuxiliaryColumnInfo(
     const String & end_aux_col_name,
     const tipb::Window & window)
 {
+    return;
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
+        return;
+
+    if (begin_aux_col_name.empty() && end_aux_col_name.empty())
         return;
 
     Block tmp_block = actions->getSampleBlock();
     actions->execute(tmp_block);
-    size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
-    size_t end_aux_col_idx = tmp_block.getPositionByName(end_aux_col_name);
 
-    // Set auxiliary columns' indexes
-    window_desc.frame.begin_range_auxiliary_column_index = begin_aux_col_idx;
-    window_desc.frame.end_range_auxiliary_column_index = end_aux_col_idx;
+    if (!begin_aux_col_name.empty())
+    {
+        size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
+        window_desc.frame.begin_range_auxiliary_column_index = begin_aux_col_idx; // Set auxiliary columns' indexes
+        window_desc.begin_aux_col_type = getColumnType(tmp_block.getByName(begin_aux_col_name).column); // Set auxiliary columns' types
+    }
 
-    // Set auxiliary columns' types
-    window_desc.begin_aux_col_type = getColumnType(tmp_block.getByName(begin_aux_col_name).column);
-    window_desc.end_aux_col_type = getColumnType(tmp_block.getByName(end_aux_col_name).column);
+    if (!end_aux_col_name.empty())
+    {
+        size_t end_aux_col_idx = tmp_block.getPositionByName(end_aux_col_name);
+        window_desc.frame.end_range_auxiliary_column_index = end_aux_col_idx; // Set auxiliary columns' indexes
+        window_desc.end_aux_col_type = getColumnType(tmp_block.getByName(end_aux_col_name).column); // Set auxiliary columns' types
+    }
 }
 
 void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
 {
+    return;
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
 
-    const Block & sample_block = actions->getSampleBlock();
-    const String & order_by_col_name = window_desc.order_by[0].column_name;
-    const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
+    if (!window_desc.order_by.empty())
+    {
+        const Block & sample_block = actions->getSampleBlock();
+        const String & order_by_col_name = window_desc.order_by[0].column_name;
+        const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
 
-    window_desc.col_type = getColumnType(order_by_col_type_and_name.column);
-    window_desc.is_desc = (window_desc.order_by[0].direction == -1);
+        window_desc.col_type = getColumnType(order_by_col_type_and_name.column);
+        window_desc.is_desc = (window_desc.order_by[0].direction == -1);
+    }
 }
 
 // Add a function generating a new auxiliary column that help the implementation of range frame type
 std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     DAGExpressionAnalyzer * analyzer,
-    WindowDescription & window_desc,
     ExpressionActionsPtr & actions,
     const tipb::Window & window)
 {
+    return std::make_pair("", "");
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
-    ;
 
-    assert(window_desc.order_by.size() == 1);
-    assert(window.frame().start().calcfuncs().size() == 1);
+    String begin_aux_col_name;
+    String end_aux_col_name;
 
     // For begin frame
-    String begin_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions);
+    if (window.frame().start().has_frame_range())
+        begin_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().start().frame_range(), actions);
     // For end frame
-    String end_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions);
+    if (window.frame().end().has_frame_range())
+        end_aux_col_name = DAGExpressionAnalyzerHelper::buildFunction(analyzer, window.frame().end().frame_range(), actions);
 
     return std::make_pair(begin_aux_col_name, end_aux_col_name);
 }
@@ -316,7 +329,7 @@ void initBeforeWindow(
     ExpressionActionsChain::Step & step)
 {
     // Prepare auxiliary function for range frame type
-    auto aux_col_names = addRangeFrameAuxiliaryFunctionAction(analyzer, window_desc, step.actions, window);
+    auto aux_col_names = addRangeFrameAuxiliaryFunctionAction(analyzer, step.actions, window);
 
     analyzer->appendWindowColumns(window_desc, window, step.actions);
     // set required output for window funcs's arguments.
@@ -348,7 +361,7 @@ void initAfterWindow(
     chain.clear();
 }
 
-ExpressionActionsChain::Step createStepForBuildingWindowDescription(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
+ExpressionActionsChain::Step & createStepForBuildingWindowDescription(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
 {
     analyzer->initChain<true>(chain);
     ExpressionActionsChain::Step & step = chain.getLastStep();
@@ -789,47 +802,10 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
-    // ExpressionActionsChain chain;
-    // ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
-    // appendSourceColumnsToRequireOutput(step);
-    // size_t source_size = getCurrentInputColumns().size();
-
-    // WindowDescription window_description;
-    // window_description.partition_by = getWindowSortDescription(window.partition_by());
-    // window_description.order_by = getWindowSortDescription(window.order_by());
-    // if (window.has_frame())
-    // {
-    //     window_description.setWindowFrame(window.frame());
-    // }
-
-    // appendWindowColumns(window_description, window, step.actions);
-    // set required output for window funcs's arguments.
-    // for (const auto & window_function_description : window_description.window_functions_descriptions)
-    // {
-    //     for (const auto & argument_name : window_function_description.argument_names)
-    //         step.required_output.push_back(argument_name);
-    // }
-
-    // window_description.before_window = chain.getLastActions();
-    // chain.finalize();
-    // chain.clear();
-
-
-    // auto & after_window_step = initAndGetLastStep(chain);
-    // appendCastAfterWindow(after_window_step.actions, window, source_size);
-    // window_description.after_window_columns = getCurrentInputColumns();
-    // appendSourceColumnsToRequireOutput(after_window_step);
-    // window_description.after_window = chain.getLastActions();
-    // chain.finalize();
-    // chain.clear();
-
-    // return window_description;
-
-
     ExpressionActionsChain chain;
-    ExpressionActionsChain::Step step = createStepForBuildingWindowDescription(this, chain);
+    ExpressionActionsChain::Step & step = createStepForBuildingWindowDescription(this, chain);
     size_t source_size = getCurrentInputColumns().size();
-
+    
     WindowDescription window_description = createAndInitWindowDesc(this, window);
     setOrderByColumnTypeAndDirection(window_description, step.actions, window);
     initBeforeWindow(this, window_description, chain, window, step);
