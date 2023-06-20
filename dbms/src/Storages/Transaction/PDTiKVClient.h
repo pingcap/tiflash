@@ -38,6 +38,27 @@ struct KeyspaceGCInfo
 {
     DB::Timestamp ks_gc_sp;
     TimePoint ks_gc_sp_update_time;
+
+    KeyspaceGCInfo()
+    {
+        ks_gc_sp_update_time = std::chrono::steady_clock::now();
+    }
+
+    KeyspaceGCInfo(const KeyspaceGCInfo& other)
+    {
+        ks_gc_sp = other.ks_gc_sp;
+        ks_gc_sp_update_time = std::chrono::steady_clock::now();
+    }
+
+    KeyspaceGCInfo& operator=(const KeyspaceGCInfo& other)
+    {
+        if (this != &other)
+        {
+            ks_gc_sp = other.ks_gc_sp;
+            ks_gc_sp_update_time = std::chrono::steady_clock::now();
+        }
+        return *this;
+    }
 };
 
 namespace DB
