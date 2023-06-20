@@ -32,7 +32,7 @@
 
 #include <atomic>
 
-using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+using TimePoint = std::atomic<std::chrono::time_point<std::chrono::steady_clock>>;
 
 struct KeyspaceGCInfo
 {
@@ -152,7 +152,7 @@ struct PDClientHelper
 
 private:
     static std::atomic<Timestamp> cached_gc_safe_point;
-    static std::atomic<std::chrono::time_point<std::chrono::system_clock>> safe_point_last_update_time;
+    static std::atomic<std::chrono::time_point<std::chrono::steady_clock>> safe_point_last_update_time;
 
     // Keyspace gc safepoint cache and update time.
     static std::unordered_map<KeyspaceID, KeyspaceGCInfo> ks_gc_sp_map;
