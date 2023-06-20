@@ -805,7 +805,7 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     ExpressionActionsChain chain;
     ExpressionActionsChain::Step & step = createStepForBuildingWindowDescription(this, chain);
     size_t source_size = getCurrentInputColumns().size();
-    
+
     WindowDescription window_description = createAndInitWindowDesc(this, window);
     setOrderByColumnTypeAndDirection(window_description, step.actions, window);
     initBeforeWindow(this, window_description, chain, window, step);

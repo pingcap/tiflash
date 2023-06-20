@@ -121,17 +121,17 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
         if (frame.start.has_value())
         {
             auto * start = mut_frame->mutable_start();
-            start->set_offset(std::get<2>(frame.start.value()));
-            start->set_unbounded(std::get<1>(frame.start.value()));
-            start->set_type(std::get<0>(frame.start.value()));
+            start->set_offset(frame.start->getOffset());
+            start->set_unbounded(frame.start->isUnbounded());
+            start->set_type(frame.start->getBoundType());
         }
 
         if (frame.end.has_value())
         {
             auto * end = mut_frame->mutable_end();
-            end->set_offset(std::get<2>(frame.end.value()));
-            end->set_unbounded(std::get<1>(frame.end.value()));
-            end->set_type(std::get<0>(frame.end.value()));
+            end->set_offset(frame.end->getOffset());
+            end->set_unbounded(frame.end->isUnbounded());
+            end->set_type(frame.end->getBoundType());
         }
     }
 

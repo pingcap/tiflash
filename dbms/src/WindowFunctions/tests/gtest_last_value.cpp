@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -83,8 +84,8 @@ public:
     {
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
-            std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
-            std::make_tuple(tipb::WindowBoundType::Following, true, 0)};
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0),
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
             toVec<IntType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
@@ -108,8 +109,8 @@ public:
     {
         MockWindowFrame unbounded_type_frame{
             tipb::WindowFrameType::Rows,
-            std::make_tuple(tipb::WindowBoundType::Preceding, true, 0),
-            std::make_tuple(tipb::WindowBoundType::Following, true, 0)};
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0),
+            mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0)};
 
         executeFunctionAndAssert(
             toVec<FloatType>({1, 5, 5, 5, 5, 10, 10, 10, 10, 10, 13, 13, 13}),
@@ -153,7 +154,7 @@ try
         // frame type: offset
         MockWindowFrame frame;
         frame.type = tipb::WindowFrameType::Rows;
-        frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, 0);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
 
         std::vector<Int64> frame_start_offset{0, 1, 3, 10};
         std::vector<std::vector<String>> res_not_null{
@@ -171,7 +172,7 @@ try
 
         for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
-            frame.end = std::make_tuple(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
+            frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, frame_start_offset[i]);
             executeFunctionAndAssert(
                 toVec<String>(res_not_null[i]),
                 LastValue(value_col),

@@ -17,17 +17,53 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Parsers/ASTOrderByElement.h>
 
+#include "tipb/executor.pb.h"
+
 namespace DB::mock
 {
-// true: unbounded, false: not unbounded
-using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
+class MockWindowFrameBound
+{
+public:
+    // Constructor for non-range frame type
+    MockWindowFrameBound(const tipb::WindowBoundType & bound_type_, bool is_unbounded_, UInt64 offset_)
+        : bound_type(bound_type_)
+        , is_unbounded(is_unbounded_)
+        , offset(offset_)
+    {}
+
+    // Constructor for range frame type
+    MockWindowFrameBound(
+        const tipb::WindowBoundType & bound_type_,
+        const tipb::Expr & range_frame_,
+        const tipb::RangeCmpDataType & cmp_data_type_)
+        : bound_type(bound_type_)
+        , is_unbounded(false)
+        , offset(0)
+        , range_frame(range_frame_)
+        , cmp_data_type(cmp_data_type_)
+    {}
+
+    tipb::WindowBoundType getBoundType() const { return bound_type; }
+    bool isUnbounded() const { return is_unbounded; }
+    UInt64 getOffset() const { return offset; }
+    tipb::Expr getRangeFrame() const { return range_frame; }
+    tipb::RangeCmpDataType getCmpDataType() const { return cmp_data_type; }
+
+private:
+    tipb::WindowBoundType bound_type;
+    bool is_unbounded; // true: unbounded, false: not unbounded
+    UInt64 offset;
+    tipb::Expr range_frame; // only for range frame type
+    tipb::RangeCmpDataType cmp_data_type; // only for range frame type
+};
+
 struct MockWindowFrame
 {
     std::optional<tipb::WindowFrameType> type;
     std::optional<MockWindowFrameBound> start;
     std::optional<MockWindowFrameBound> end;
-    // TODO: support calcFuncs
 };
+
 using ASTPartitionByElement = ASTOrderByElement;
 
 class WindowBinder : public ExecutorBinder
