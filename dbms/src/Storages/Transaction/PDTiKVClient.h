@@ -123,7 +123,7 @@ struct PDClientHelper
             auto now = std::chrono::steady_clock::now();
 
             auto ks_gc_info = get_ks_gc_sp(keyspace_id);
-            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time);
+            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
             const auto min_interval = std::max(Int64(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
             {
