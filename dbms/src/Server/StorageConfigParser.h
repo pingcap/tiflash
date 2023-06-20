@@ -20,14 +20,10 @@
 #include <tuple>
 #include <vector>
 
-namespace Poco
-{
-class Logger;
-namespace Util
+namespace Poco::Util
 {
 class LayeredConfiguration;
-}
-} // namespace Poco
+} // namespace Poco::Util
 
 namespace DB
 {
