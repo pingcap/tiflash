@@ -291,16 +291,14 @@ struct TiFlashProxyConfig
         auto disaggregated_mode = getDisaggregatedMode(config);
 
         // tiflash_compute doesn't need proxy.
-        // todo: remove after AutoScaler is stable.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            LOG_INFO(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
-
         if (!config.has("raft.pd_addr"))
         {
             LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
