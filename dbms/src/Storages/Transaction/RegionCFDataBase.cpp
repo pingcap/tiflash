@@ -44,6 +44,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
+
     if (!kv_pair)
         return 0;
 
@@ -73,6 +74,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
     // We support duplicated kv pairs if they are the same in snapshot.
     // This is because kvs in raftstore v2's snapshot may be overlapped.
     // However, we still not permit duplicated kvs from raft cmd.
+
     if (!ok)
     {
         if (mode == DupCheck::Deny)
