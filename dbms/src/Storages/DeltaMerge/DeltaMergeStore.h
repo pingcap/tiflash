@@ -251,6 +251,7 @@ public:
                     const String & table_name_,
                     KeyspaceID keyspace_id_,
                     TableID physical_table_id_,
+                    KeyspaceID keyspace_id,
                     bool has_replica,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,

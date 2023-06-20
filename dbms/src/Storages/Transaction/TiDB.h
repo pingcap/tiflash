@@ -399,6 +399,7 @@ struct TableInfo
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
+    KeyspaceID getKeyspaceID() const;
 
     const ColumnInfo & getColumnInfo(ColumnID id) const;
 

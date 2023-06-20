@@ -351,6 +351,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                                                                        keyspace_id,
                                                                        /* ignore_cache= */ false,
                                                                        context.getSettingsRef().safe_point_update_interval_seconds);
             }

@@ -624,7 +624,7 @@ void setColumnsToRead(const DeltaMergeStorePtr & store, ColumnDefines & columns_
 }
 
 // Check whether tso is smaller than TiDB GcSafePoint
-void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id)
+void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id, KeyspaceID keyspace_id)
 {
     auto & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
@@ -633,6 +633,7 @@ void checkReadTso(UInt64 read_tso, const Context & context, const String & req_i
         return;
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
+        keyspace_id,
         /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds);
     if (read_tso < safe_point)
@@ -655,7 +656,8 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
 {
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
-    checkReadTso(mvcc_query_info.read_tso, context, req_id);
+    auto keyspace_id = getTableInfo().getKeyspaceID();
+    checkReadTso(mvcc_query_info.read_tso, context, req_id, keyspace_id);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -935,8 +937,9 @@ BlockInputStreams StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
@@ -1006,8 +1009,9 @@ void StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
@@ -1043,8 +1047,9 @@ StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
 
     snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     // Ensure read_tso is valid after snapshot is built
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
     return snap;
 }
 
@@ -1846,6 +1851,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
             table_column_info->table_name,
             tidb_table_info.keyspace_id,
             tidb_table_info.id,
+            tidb_table_info.keyspace_id,
             tidb_table_info.replica_info.count > 0,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
