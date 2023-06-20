@@ -25,7 +25,7 @@
 #include <optional>
 
 #define MIN_LENGTH_FOR_STRSTR 3
-constexpr static int MAX_CAPTURES = 10;
+constexpr static int MAX_CAPTURES = 9;
 
 namespace DB
 {
@@ -307,31 +307,28 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
         throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
 
     is_case_insensitive = options & RE_CASELESS;
-    bool is_no_capture = options & RE_NO_CAPTURE;
     bool is_dot_nl = options & RE_DOT_NL;
 
     capture_num = 0;
     if (!is_trivial)
     {
         /// Compile the re2 regular expression.
-        typename RegexType::Options options;
+        typename RegexType::Options reg_options;
 
         if (is_case_insensitive)
-            options.set_case_sensitive(false);
+            reg_options.set_case_sensitive(false);
 
         if (is_dot_nl)
-            options.set_dot_nl(true);
+            reg_options.set_dot_nl(true);
 
-        re2 = std::make_unique<RegexType>(regexp_, options);
+        reg_options.set_log_errors(false);
+
+        re2 = std::make_unique<RegexType>(regexp_, reg_options);
         if (!re2->ok())
             throw Poco::Exception(fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
-        if (!is_no_capture)
-        {
-            capture_num = re2->NumberOfCapturingGroups();
-            if (capture_num > MAX_CAPTURES)
-                throw Poco::Exception(fmt::format("OptimizedRegularExpression: too many capture_groups in regexp: {}", regexp_));
-        }
+        capture_num = re2->NumberOfCapturingGroups();
+        capture_num = capture_num <= MAX_CAPTURES ? capture_num : MAX_CAPTURES;
     }
 }
 
@@ -506,31 +503,6 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::processSub
     return std::optional<StringRef>(StringRef(matched_str.data(), matched_str.size()));
 }
 
-template <bool thread_safe>
-void OptimizedRegularExpressionImpl<thread_safe>::processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions)
-{
-    if (occur > 1 || byte_pos != 1)
-    {
-        res_data.resize(res_data.size() + 1);
-        res_data[res_offset++] = '\0';
-        return;
-    }
-
-    StringPieceType expr_sp(subject, subject_size);
-    StringPieceType matches[MAX_CAPTURES];
-    bool success = re2->Match(expr_sp, 0, expr_sp.size(), re2_st::RE2::Anchor::UNANCHORED, matches, capture_num);
-    if (!success)
-    {
-        res_data.resize(res_data.size() + 1);
-    }
-    else
-    {
-        replaceMatchedStringWithInstructions(res_data, res_offset, matches, instructions);
-    }
-
-    res_data[res_offset++] = '\0';
-}
-
 namespace FunctionsRegexp
 {
 inline void checkArgPos(Int64 utf8_total_len, size_t subject_size, Int64 pos)
@@ -551,7 +523,7 @@ inline void checkArgsSubstr(Int64 utf8_total_len, size_t subject_size, Int64 pos
 
 inline void checkArgsReplace(Int64 utf8_total_len, size_t subject_size, Int64 pos)
 {
-    checkArgPos(utf8_total_len, subject_size, pos);
+    RUNTIME_CHECK_MSG(!(pos <= 0 || (pos > utf8_total_len && subject_size != 0) || (pos != 1 && subject_size == 0)), "Index out of bounds in regular function.");
 }
 
 inline void makeOccurValid(Int64 & occur)
@@ -613,8 +585,9 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
+    size_t copy_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[MAX_CAPTURES];
+    StringPieceType matches[MAX_CAPTURES + 1];
 
     // Copy characters that before position
     res_data.resize(res_data.size() + byte_offset);
@@ -627,19 +600,22 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceAllImpl(const char * su
         if (!success)
             break;
 
-        auto skipped_byte_size = static_cast<Int64>(matches[0].data() - (expr_sp.data() + start_pos));
+        auto skipped_byte_size = static_cast<Int64>(matches[0].data() - (expr_sp.data() + copy_pos));
         res_data.resize(res_data.size() + skipped_byte_size);
-        memcpy(&res_data[res_offset], expr_sp.data() + start_pos, skipped_byte_size); // copy the skipped bytes
+        memcpy(&res_data[res_offset], expr_sp.data() + copy_pos, skipped_byte_size); // copy the skipped bytes
         res_offset += skipped_byte_size;
+        copy_pos += skipped_byte_size + matches[0].length();
+        start_pos = copy_pos;
 
         replaceMatchedStringWithInstructions(res_data, res_offset, matches, instructions);
 
-        start_pos = matches[0].data() + matches[0].size() - expr_sp.data();
+        if (matches[0].empty())
+            start_pos += DB::UTF8::seqLength(expr_sp[start_pos]); // Avoid infinity loop
     }
 
-    size_t suffix_byte_size = expr_len - start_pos;
+    size_t suffix_byte_size = expr_len - copy_pos;
     res_data.resize(res_data.size() + suffix_byte_size + 1);
-    memcpy(&res_data[res_offset], expr_sp.data() + start_pos, suffix_byte_size); // Copy suffix string
+    memcpy(&res_data[res_offset], expr_sp.data() + copy_pos, suffix_byte_size); // Copy suffix string
     res_offset += suffix_byte_size;
     res_data[res_offset++] = 0;
 }
@@ -651,7 +627,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
     StringPieceType expr_sp(subject + byte_offset, subject_size - byte_offset);
     size_t start_pos = 0;
     size_t expr_len = expr_sp.size();
-    StringPieceType matches[MAX_CAPTURES];
+    StringPieceType matches[MAX_CAPTURES + 1];
 
     while (occur > 0)
     {
@@ -667,6 +643,8 @@ void OptimizedRegularExpressionImpl<thread_safe>::replaceOneImpl(const char * su
 
         start_pos = matches[0].data() + matches[0].size() - expr_sp.data();
         --occur;
+        if (matches[0].empty())
+            start_pos += DB::UTF8::seqLength(expr_sp[start_pos]); // Avoid infinity loop
     }
 
     auto prefix_byte_size = static_cast<Int64>(matches[0].data() - subject);
@@ -738,12 +716,6 @@ void OptimizedRegularExpressionImpl<thread_safe>::replace(
     FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
     FunctionsRegexp::makeReplaceOccurValid(occur);
 
-    if (unlikely(subject_size == 0))
-    {
-        processReplaceEmptyStringExpr(subject, subject_size, res_data, res_offset, pos, occur, instructions);
-        return;
-    }
-
     size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
     replaceImpl(subject, subject_size, res_data, res_offset, byte_pos, occur, instructions);
 }
@@ -756,20 +728,28 @@ Instructions OptimizedRegularExpressionImpl<thread_safe>::getInstructions(const 
 
     for (size_t i = 0; i < repl.size; ++i)
     {
-        if (repl.data[i] == '$' && i + 1 < repl.size)
+        if (repl.data[i] == '\\')
         {
-            if (isNumericASCII(repl.data[i + 1])) /// Substitution
+            if (i + 1 < repl.size)
             {
-                if (!literals.empty())
+                if (isNumericASCII(repl.data[i + 1])) /// Substitution
                 {
-                    instructions.emplace_back(literals);
-                    literals = "";
+                    if (!literals.empty())
+                    {
+                        instructions.emplace_back(literals);
+                        literals = "";
+                    }
+                    instructions.emplace_back(repl.data[i + 1] - '0');
                 }
-                instructions.emplace_back(repl.data[i + 1] - '0');
+                else
+                    literals += repl.data[i + 1]; /// Escaping
+                ++i;
             }
             else
-                literals += repl.data[i + 1]; /// Escaping
-            ++i;
+            {
+                // This slash is in the end. Ignore it and break the loop.
+                break;
+            }
         }
         else
             literals += repl.data[i]; /// Plain character

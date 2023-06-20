@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64, col_3 Int64', 'col_1,col_2', 'dt')
 
@@ -28,14 +28,15 @@
 => DBGInvoke __raft_insert_row_full(default, test, 4, '', 4, 1, 'test4',4,0)
 => DBGInvoke __raft_insert_row_full(default, test, 4, '', 3, 0, 'test4',4,15)
 => DBGInvoke __raft_insert_row_full(default, test, 4, '', 1, 0, 'test5',5,16)
-=> select col_1,col_2,col_3 from default.test " --schema_version "10000000
+=> DBGInvoke query_mapped('select col_1, col_2, col_3 from \$d.\$t', default, test)
 ┌─col_1─┬─col_2─┬─col_3─┐
 │ test1 │     1 │    12 │
 │ test2 │     2 │    10 │
 │ test3 │     3 │    14 │
 │ test5 │     5 │    16 │
 └───────┴───────┴───────┘
-=> selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+
+=> DBGInvoke query_mapped('selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK', default, test)
 ┌─col_1─┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │ test1 │     1 │    12 │                 1 │                 0 │
 │ test2 │     2 │    10 │                 1 │                 0 │
@@ -56,7 +57,8 @@
 => DBGInvoke __raft_insert_row_full(default, test, 5, 10, 1, 0, 'test10', 10, 17)
 => DBGInvoke __raft_insert_row_full(default, test, 5, 11, 1, 0, 'test11', 11, 18)
 => DBGInvoke __raft_insert_row_full(default, test, 5, 10, 3, 0, 'test10', 10, 19)
-=> select col_1,col_2,col_3 from default.test
+
+=> DBGInvoke query_mapped('select col_1, col_2, col_3 from \$d.\$t', default, test)
 ┌─col_1──┬─col_2─┬─col_3─┐
 │ test1  │     1 │    12 │
 │ test2  │     2 │    10 │
@@ -65,7 +67,7 @@
 │ test10 │    10 │    19 │
 │ test11 │    11 │    18 │
 └────────┴───────┴───────┘
-=> selraw col_1,col_2,col_3, _INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> DBGInvoke query_mapped('selraw col_1,col_2,col_3,_INTERNAL_VERSION, _INTERNAL_DELMARK from \$d.\$t order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK', default, test)
 ┌─col_1──┬─col_2─┬─col_3─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │ test1  │     1 │    12 │                 1 │                 0 │
 │ test2  │     2 │    10 │                 1 │                 0 │
@@ -108,7 +110,8 @@
 │ [region 5] ranges: [020A7465737430038000000000000000, 020E74657374313030038000000000000064), state: Normal │
 │ total size: 1                                                                                              │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-=> select col_1, col_2, col_3 from default.test order by _tidb_rowid
+
+=> DBGInvoke query_mapped('select col_1, col_2, col_3 from \$d.\$t order by _tidb_rowid', default, test)
 ┌─col_1──┬─col_2─┬─col_3─┐
 │ test1  │     1 │    12 │
 │ test2  │     2 │    10 │
@@ -118,4 +121,4 @@
 │ test11 │    11 │    18 │
 └────────┴───────┴───────┘
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()

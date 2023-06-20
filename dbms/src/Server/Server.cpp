@@ -91,6 +91,7 @@
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
@@ -826,11 +827,12 @@ void syncSchemaWithTiDB(
     /// If in API V2 mode, each keyspace's schema is fetch lazily.
     if (storage_config.api_version == 1)
     {
-        for (int i = 0; i < 60; i++) // retry for 3 mins
+        Stopwatch watch;
+        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
         {
             try
             {
-                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context, NullspaceID);
+                global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
                 break;
             }
             catch (Poco::Exception & e)
