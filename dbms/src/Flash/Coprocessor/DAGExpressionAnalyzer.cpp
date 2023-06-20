@@ -789,6 +789,43 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
+    // ExpressionActionsChain chain;
+    // ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
+    // appendSourceColumnsToRequireOutput(step);
+    // size_t source_size = getCurrentInputColumns().size();
+
+    // WindowDescription window_description;
+    // window_description.partition_by = getWindowSortDescription(window.partition_by());
+    // window_description.order_by = getWindowSortDescription(window.order_by());
+    // if (window.has_frame())
+    // {
+    //     window_description.setWindowFrame(window.frame());
+    // }
+
+    // appendWindowColumns(window_description, window, step.actions);
+    // set required output for window funcs's arguments.
+    // for (const auto & window_function_description : window_description.window_functions_descriptions)
+    // {
+    //     for (const auto & argument_name : window_function_description.argument_names)
+    //         step.required_output.push_back(argument_name);
+    // }
+
+    // window_description.before_window = chain.getLastActions();
+    // chain.finalize();
+    // chain.clear();
+
+
+    // auto & after_window_step = initAndGetLastStep(chain);
+    // appendCastAfterWindow(after_window_step.actions, window, source_size);
+    // window_description.after_window_columns = getCurrentInputColumns();
+    // appendSourceColumnsToRequireOutput(after_window_step);
+    // window_description.after_window = chain.getLastActions();
+    // chain.finalize();
+    // chain.clear();
+
+    // return window_description;
+
+
     ExpressionActionsChain chain;
     ExpressionActionsChain::Step step = createStepForBuildingWindowDescription(this, chain);
     size_t source_size = getCurrentInputColumns().size();
@@ -1577,8 +1614,8 @@ void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain) const
                     columns_with_type_and_name.emplace_back(col.type, col.name);
                     column_name_set.emplace(col.name);
                 }
-                chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns_with_type_and_name));
             }
+            chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns_with_type_and_name));
         }
         else
         {
