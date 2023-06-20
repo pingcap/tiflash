@@ -14,7 +14,7 @@
 
 ## The listening host for supporting TCP service. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
 # listen_host = "0.0.0.0"
-## The TiFlash TCP service port. The TCP service is an internal testing interface with a default port of 9000. In versions of TiFlash prior to 7.1.0, this port is open by default, allowing unauthorized access to execute high-privileged SQL queries, view critical data, and modify operational data. In versions of TiFlash 7.1.0 and later, this port won't be open if this config is not specified. We recommend to not specify this config for any TiFlash production deployment.
+## The TiFlash TCP service port. The TCP service is an internal testing interface with a default port of 9000. In versions of TiFlash prior to 7.1.0, this port is open by default, allowing unauthorized access to execute high-privileged SQL queries, view critical data, and modify operational data. In versions of TiFlash 7.1.0 and later, this port won't be open if this config is not specified. We recommend not to specify this config for any TiFlash deployment.
 # tcp_port = 9000
 ## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
 # mark_cache_size = 1073741824
