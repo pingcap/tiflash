@@ -99,7 +99,7 @@ struct PDClientHelper
         if (!ignore_cache)
         {
             // In case we cost too much to update safe point from PD.
-            auto now = std::chrono::system_clock::now();
+            auto now = std::chrono::steady_clock::now();
 
             auto ks_gc_info = get_ks_gc_sp(keyspace_id);
             const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time);
@@ -116,7 +116,7 @@ struct PDClientHelper
             try
             {
                 auto ks_gc_sp = pd_client->getGCSafePointV2(keyspace_id);
-                auto ks_gc_sp_last_update_time = std::chrono::system_clock::now();
+                auto ks_gc_sp_last_update_time = std::chrono::steady_clock::now();
                 update_ks_gc_sp_map(keyspace_id, ks_gc_sp, ks_gc_sp_last_update_time);
                 return ks_gc_sp;
             }
