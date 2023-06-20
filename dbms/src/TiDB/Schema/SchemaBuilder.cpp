@@ -147,6 +147,8 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
             applyRenamePhysicalTable(new_db_info, *new_table_info, storage);
         }
     }
+
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_exchange_partition, keyspace_id).Increment();
 }
 
 template <typename Getter, typename NameMapper>
@@ -405,6 +407,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterSchemaChange(alter_lock, updated_table_info, name_mapper.mapDatabaseName(db_info->id, keyspace_id), name_mapper.mapTableName(updated_table_info), context);
 
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_apply_partition, keyspace_id).Increment();
     LOG_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 }
 
@@ -473,7 +476,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     }
 
     const auto old_mapped_tbl_name = storage->getTableName();
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_rename_column).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_rename_table, keyspace_id).Increment();
     LOG_INFO(
         log,
         "Renaming table {}.{} (display name: {}) to {}.",
@@ -610,7 +613,7 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
 {
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_create_db, keyspace_id).Increment();
     LOG_INFO(log, "Creating database {}", name_mapper.debugDatabaseName(*db_info));
 
     auto statement = createDatabaseStmt(context, *db_info, name_mapper);
@@ -666,7 +669,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 {
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_db).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_drop_db, keyspace_id).Increment();
     LOG_INFO(log, "Tombstoning database {}", db_name);
     auto db = context.tryGetDatabase(db_name);
     if (db == nullptr)
@@ -770,7 +773,7 @@ String createTableStmt(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info)
 {
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_create_table, keyspace_id).Increment();
     LOG_INFO(log, "Creating table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 
     /// Check if this is a RECOVER table.
@@ -837,7 +840,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         LOG_DEBUG(log, "table {} does not exist.", table_id);
         return;
     }
-    GET_METRIC(tiflash_schema_internal_ddl_count, type_drop_table).Increment();
+    GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_drop_table, keyspace_id).Increment();
     LOG_INFO(log, "Tombstoning table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 
     // TODO:try to optimize alterCommands
@@ -1019,7 +1022,7 @@ void SchemaBuilder<Getter, NameMapper>::applyTable(DatabaseID database_id, Table
     else
     {
         LOG_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id));
-
+        GET_KEYSPACE_METRIC(tiflash_schema_internal_ddl_count, type_modify_column, keyspace_id).Increment();
         auto alter_lock = storage->lockForAlter(getThreadNameAndID());
 
         storage->alterSchemaChange(
