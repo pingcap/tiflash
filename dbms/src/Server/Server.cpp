@@ -827,7 +827,8 @@ void syncSchemaWithTiDB(
     /// If in API V2 mode, each keyspace's schema is fetch lazily.
     if (storage_config.api_version == 1)
     {
-        for (int i = 0; i < 60; i++) // retry for 3 mins
+        Stopwatch watch;
+        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
         {
             try
             {
