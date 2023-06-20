@@ -725,6 +725,8 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         {
             // RegionTable::writeBlockByRegion may lead to persistRegion when flush proactively.
             // So we can't lock here.
+            // Safety: Mutations to a region come from raft applying and bg flushing of storage layer.
+            // Both way, they must firstly acquires the RegionTask lock.
             std::unique_lock<std::shared_mutex> lock(mutex);
             handle_write_cmd_func();
         }

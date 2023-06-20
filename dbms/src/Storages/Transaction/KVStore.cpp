@@ -951,8 +951,8 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         auto region_ptr = std::get<3>(region.second);
         LOG_DEBUG(log, "flush extra segment of region {}, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
         // Both flushCache and persistRegion should be protected by region task lock.
-        storage->flushCache(tmt.getContext(), std::get<2>(region.second));
         auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+        storage->flushCache(tmt.getContext(), std::get<2>(region.second));
         persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
     }
     // TODO Flush the segments that isn't related to any region. Is it really necessary?
@@ -961,7 +961,6 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     watch.restart();
 
     // forbid regions being removed.
-    // auto task_lock = genTaskLock();
     for (const auto & region : region_compact_indexes)
     {
         // Can truncated to flushed index, which is applied_index in this case.
