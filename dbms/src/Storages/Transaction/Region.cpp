@@ -15,6 +15,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -637,11 +638,11 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     }
 }
 
-EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
+std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
     {
-        return EngineStoreApplyRes::None;
+        return std::make_pair(EngineStoreApplyRes::None, std::nullopt);
     }
     auto & context = tmt.getContext();
     Stopwatch watch;
@@ -721,12 +722,15 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         approx_mem_cache_bytes += cache_written_size;
     };
 
+    DM::WriteResult write_result = std::nullopt;
     {
         {
             // RegionTable::writeBlockByRegion may lead to persistRegion when flush proactively.
             // So we can't lock here.
             // Safety: Mutations to a region come from raft applying and bg flushing of storage layer.
-            // Both way, they must firstly acquires the RegionTask lock.
+            // 1. A raft applying process should acquire the region task lock.
+            // 2. While bg/fg flushing, applying raft logs should also be prevented with region task lock.
+            // So between here and RegionTable::writeBlockByRegion, there will be no new data applied.
             std::unique_lock<std::shared_mutex> lock(mutex);
             handle_write_cmd_func();
         }
@@ -736,7 +740,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, true);
+            write_result = RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, true);
         }
 
         meta.setApplied(index, term);
@@ -744,7 +748,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
 
     meta.notifyAll();
 
-    return EngineStoreApplyRes::None;
+    return std::make_pair(EngineStoreApplyRes::None, std::move(write_result));
 }
 
 void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)

@@ -533,10 +533,10 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
                              handle_column);
         }
     }
-    return std::move(block);
+    return block;
 }
 
-void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
+DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
     LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
@@ -544,7 +544,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     const auto rows = block.rows();
     if (rows == 0)
-        return;
+        return std::nullopt;
 
     auto dm_context = newDMContext(db_context, db_settings, "write");
 
@@ -673,9 +673,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             throw Exception("Fail point random_exception_after_dt_write_done is triggered.", ErrorCodes::FAIL_POINT_ERROR);
     });
 
-    // TODO: Update the tracing_id before checkSegmentUpdate
-    for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+    // TODO: Update the tracing_id before checkSegmentsUpdateForKVStore
+    return checkSegmentsUpdateForKVStore(dm_context, updated_segments.begin(), updated_segments.end(), ThreadType::Write, InputType::RaftLog);
 }
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
@@ -734,7 +733,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        // We don't handle delete range from raft, the delete range is for dm's purpose only.
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }
 
 bool DeltaMergeStore::flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed)
@@ -957,7 +957,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     });
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
-        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read, InputType::NotRaft);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
     String req_info;
@@ -1073,7 +1073,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
-        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read, InputType::NotRaft);
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
@@ -1169,7 +1169,7 @@ void DeltaMergeStore::read(
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
-        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read, InputType::NotRaft);
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
@@ -1309,7 +1309,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     }
 
     // checkSegmentUpdate could do foreground merge delta, so call it before sleep.
-    checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+    checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 
     size_t sleep_step = 50;
     // Wait at most `sleep_ms` until the delta is merged.
@@ -1319,7 +1319,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
         size_t ms = std::min(sleep_ms, sleep_step);
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
         sleep_ms -= ms;
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
     }
 }
 
@@ -1328,12 +1328,13 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
     // TODO: maybe we should wait, if there are too many delete ranges?
 }
 
-void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type)
+bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type, InputType input_type)
 {
-    fiu_do_on(FailPoints::skip_check_segment_update, { return; });
+    bool should_trigger_kvstore_flush = false;
+    fiu_do_on(FailPoints::skip_check_segment_update, { return should_trigger_kvstore_flush; });
 
     if (segment->hasAbandoned())
-        return;
+        return should_trigger_kvstore_flush;
     const auto & delta = segment->getDelta();
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
@@ -1444,7 +1445,14 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             delta_last_try_flush_bytes = delta_bytes;
             LOG_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
             segment->flushCache(*dm_context);
-            triggerCompactLog(dm_context, segment, false);
+            if (input_type == InputType::RaftLog)
+            {
+                // Only the segment update is from a raft log write, will we notify KVStore to trigger a foreground flush.
+                // Raft Snapshot will always trigger to a KVStore fg flush.
+                // Raft IngestSST will trigger a KVStore fg flush at best effort,
+                // which means if the write cf has remained value, we still need to hold the sst file and wait for the next SST.
+                should_trigger_kvstore_flush = true;
+            }
         }
         else if (should_background_flush)
         {
@@ -1468,7 +1476,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
     // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
-        return;
+        return should_trigger_kvstore_flush;
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
         // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
@@ -1559,19 +1567,19 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     if (thread_type == ThreadType::Write)
     {
         if (try_fg_split(segment))
-            return;
+            return should_trigger_kvstore_flush;
 
         if (SegmentPtr new_segment = try_fg_merge_delta(); new_segment)
         {
             // After merge delta, we better check split immediately.
             if (try_bg_split(new_segment))
-                return;
+                return should_trigger_kvstore_flush;
         }
     }
     else if (thread_type == ThreadType::BG_MergeDelta)
     {
         if (try_bg_split(segment))
-            return;
+            return should_trigger_kvstore_flush;
     }
 
     if (dm_context->enable_logical_split)
@@ -1579,23 +1587,24 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         // Logical split point is calculated based on stable. Always try to merge delta into the stable
         // before logical split is good for calculating the split point.
         if (try_bg_merge_delta())
-            return;
+            return should_trigger_kvstore_flush;
         if (try_bg_split(segment))
-            return;
+            return should_trigger_kvstore_flush;
     }
     else
     {
         // During the physical split delta will be merged, so we prefer physical split over merge delta.
         if (try_bg_split(segment))
-            return;
+            return should_trigger_kvstore_flush;
         if (try_bg_merge_delta())
-            return;
+            return should_trigger_kvstore_flush;
     }
     if (try_bg_compact())
-        return;
+        return should_trigger_kvstore_flush;
     if (try_place_delta_index())
-        return;
+        return should_trigger_kvstore_flush;
 
+    return should_trigger_kvstore_flush;
     // The segment does not need any updates for now.
 }
 

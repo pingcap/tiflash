@@ -15,6 +15,7 @@
 #pragma once
 
 #include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -197,7 +198,7 @@ public:
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }

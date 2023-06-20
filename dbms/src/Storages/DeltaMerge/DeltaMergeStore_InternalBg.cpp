@@ -283,7 +283,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+            checkSegmentUpdate(dm_context, segment, ThreadType::Init, InputType::NotRaft);
         }
     }
 
@@ -399,7 +399,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             type = ThreadType::BG_Flush;
             break;
         case TaskType::NotifyCompactLog:
-            triggerCompactLog(task.dm_context, task.segment, true);
+            triggerCompactLog(task.dm_context, task.segment->getRowKeyRange(), true);
         case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
@@ -425,9 +425,9 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
     // continue to check whether we need to apply more tasks after this task is ended.
     if (left)
-        checkSegmentUpdate(task.dm_context, left, type);
+        checkSegmentUpdate(task.dm_context, left, type, InputType::NotRaft);
     if (right)
-        checkSegmentUpdate(task.dm_context, right, type);
+        checkSegmentUpdate(task.dm_context, right, type, InputType::NotRaft);
 
     return true;
 }
@@ -690,7 +690,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
+        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
     }
 
     return new_segment;
@@ -813,7 +813,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     }
 
     segment_snap = {};
-    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
+    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
 
     return new_segment;
 }
@@ -922,7 +922,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     return gc_segments_num;
 }
 
-void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background) const
+void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const RowKeyRange & range, bool is_background) const
 {
     auto & tmt = dm_context->db_context.getTMTContext();
     auto & kv_store = tmt.getKVStore();
@@ -947,7 +947,7 @@ void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const S
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(watch.elapsedSeconds());
         }
     });
-    kv_store->compactLogByRowKeyRange(tmt, segment->getRowKeyRange(), keyspace_id, physical_table_id, is_background);
+    kv_store->compactLogByRowKeyRange(tmt, range, keyspace_id, physical_table_id, is_background);
 }
 } // namespace DM
 } // namespace DB

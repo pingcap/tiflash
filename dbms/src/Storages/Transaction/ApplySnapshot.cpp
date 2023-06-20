@@ -521,6 +521,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         // try to flush remain data in memory.
         func_try_flush();
         auto tmp_region = handleIngestSSTByDTFile(region, snaps, index, term, tmt);
+        // Merge data from tmp_region.
         region->finishIngestSSTByDTFile(std::move(tmp_region), index, term);
         // after `finishIngestSSTByDTFile`, try to flush committed data into storage
         func_try_flush();
@@ -533,6 +534,8 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
     else
     {
+        // We always try to flush dm cache and region if possible for every IngestSST,
+        // in order to have the raft log truncated and sst deleted.
         persistRegion(*region, &region_task_lock, __FUNCTION__);
         return EngineStoreApplyRes::Persist;
     }

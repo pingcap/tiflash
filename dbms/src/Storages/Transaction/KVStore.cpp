@@ -247,7 +247,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt) const
+    TMTContext & tmt)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -288,17 +288,31 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
         tmt);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
-
-    const RegionPtr region = getRegion(region_id);
-    if (region == nullptr)
+    DM::WriteResult write_result = std::nullopt;
+    EngineStoreApplyRes res;
     {
-        return EngineStoreApplyRes::NotFound;
-    }
+        auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
-    auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
+        const RegionPtr region = getRegion(region_id);
+        if (region == nullptr)
+        {
+            return EngineStoreApplyRes::NotFound;
+        }
+
+        auto && [r, w] = region->handleWriteRaftCmd(cmds, index, term, tmt);
+        write_result = std::move(w);
+        res = r;
+    }
+    if (write_result)
+    {
+        auto & inner = write_result.value();
+        for (auto it = inner.pending_flush_ranges.begin(); it != inner.pending_flush_ranges.end(); it++)
+        {
+            compactLogByRowKeyRange(tmt, *it, inner.keyspace_id, inner.table_id, false);
+        }
+    }
     return res;
 }
 
@@ -933,15 +947,15 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
         }
     }
-    // flush all segments in the range of regions.
-    // TODO: combine continues range to do one flush.
+    // Flush all segments in the range of regions.
+    // TODO: combine adjacent range to do one flush.
     for (const auto & region : region_compact_indexes)
     {
         auto region_rowkey_range = std::get<2>(region.second);
 
         if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
         {
-            // region_rowkey_range belongs to rowkey_range.
+            // `region_rowkey_range` belongs to rowkey_range.
             // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
             // This segment has flushed, skip it.
             LOG_DEBUG(log, "flushed segment of region {}", region.first);
@@ -955,8 +969,6 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
         storage->flushCache(tmt.getContext(), std::get<2>(region.second));
         persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
     }
-    // TODO Flush the segments that isn't related to any region. Is it really necessary?
-    // storage->flushCache(tmt.getContext(), rowkey_range);
     auto elapsed_coupled_flush = watch.elapsedMilliseconds();
     watch.restart();
 

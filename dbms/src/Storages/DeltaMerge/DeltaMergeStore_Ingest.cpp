@@ -743,7 +743,7 @@ void DeltaMergeStore::ingestFiles(
 
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::RaftSSTAndSnap);
 }
 
 std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
@@ -1081,7 +1081,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     }
 
     for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write, InputType::NotRaft);
 }
 
 } // namespace DM
