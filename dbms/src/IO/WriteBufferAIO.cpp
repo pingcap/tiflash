@@ -15,12 +15,13 @@
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
 #include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/WriteBufferAIO.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #include <limits>
-
 
 namespace ProfileEvents
 {
@@ -104,6 +105,10 @@ void WriteBufferAIO::sync()
 
     /// Ask OS to flush data to disk.
     ProfileEvents::increment(ProfileEvents::FileFSync);
+    Stopwatch sw;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds());
+    });
     int res = ::fsync(fd);
     if (res == -1)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);

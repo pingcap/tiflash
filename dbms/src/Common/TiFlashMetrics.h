@@ -433,7 +433,9 @@ namespace DB
         F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
         F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
         F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
-        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))                                                                         \
+    M(tiflash_system_seconds, "system calls duration in seconds", Histogram,                                                                        \
+        F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))
 
 // clang-format on
 
