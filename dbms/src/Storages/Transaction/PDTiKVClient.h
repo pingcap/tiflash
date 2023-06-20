@@ -52,7 +52,7 @@ struct KeyspaceGCInfo
 
     KeyspaceGCInfo& operator=(const KeyspaceGCInfo& other)
     {
-        if (this != &other)
+        if (this != &other) 
         {
             ks_gc_sp = other.ks_gc_sp;
             ks_gc_sp_update_time = std::chrono::steady_clock::now();
