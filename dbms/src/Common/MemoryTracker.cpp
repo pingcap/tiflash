@@ -272,6 +272,12 @@ void initMemoryTracker()
     rn_fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingRNWorkerFetchPages);
 }
 
+void resetMemoryTracker()
+{
+    sub_root_of_query_storage_task_mem_trackers->reset();
+    rn_fetch_pages_mem_tracker->reset();
+}
+
 namespace CurrentMemoryTracker
 {
 static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB

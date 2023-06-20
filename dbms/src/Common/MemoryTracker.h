@@ -173,6 +173,7 @@ extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_tracker
 extern std::shared_ptr<MemoryTracker> rn_fetch_pages_mem_tracker;
 
 void initMemoryTracker();
+void resetMemoryTracker();
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
