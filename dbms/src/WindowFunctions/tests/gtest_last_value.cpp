@@ -15,6 +15,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 #include <optional>
@@ -23,7 +24,7 @@
 namespace DB::tests
 {
 // TODO Tests with frame should be added
-class LastValue : public DB::tests::ExecutorTest
+class LastValue : public DB::tests::WindowTest
 {
     static const size_t max_concurrency_level = 10;
 
@@ -52,7 +53,7 @@ public:
         const ColumnWithTypeAndName & result,
         const ASTPtr & function,
         const ColumnsWithTypeAndName & input,
-        MockWindowFrame frame = MockWindowFrame())
+        MockWindowFrame mock_frame = MockWindowFrame())
     {
         ColumnsWithTypeAndName actual_input = input;
         assert(actual_input.size() == 3);
@@ -71,7 +72,7 @@ public:
         auto request = context
                            .scan("test_db", "test_table_for_last_value")
                            .sort({{"partition", false}, {"order", false}}, true)
-                           .window(function, {"order", false}, {"partition", false}, frame)
+                           .window(function, {"order", false}, {"partition", false}, mock_frame)
                            .build(context);
 
         ColumnsWithTypeAndName expect = input;

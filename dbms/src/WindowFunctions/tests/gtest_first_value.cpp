@@ -15,20 +15,24 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
+#include <memory>
 #include <optional>
 
 namespace DB::tests
 {
-class FirstValue : public DB::tests::ExecutorTest
+class FirstValue : public DB::tests::WindowTest
 {
-    static const size_t max_concurrency_level = 10;
+    static const size_t MAX_CONCURRENCY_LEVEL = 10;
+    static constexpr auto PARTITION_COL_NAME = "partition";
+    static constexpr auto ORDER_COL_NAME = "order";
+    static constexpr auto VALUE_COL_NAME = "first_value";
 
 public:
-    static constexpr auto value_col_name = "first_value";
-    const ASTPtr value_col = col(value_col_name);
+    const ASTPtr value_col = col(VALUE_COL_NAME);
 
     void initializeContext() override
     {
@@ -43,7 +47,7 @@ public:
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, MAX_CONCURRENCY_LEVEL));
         }
     }
 
@@ -57,20 +61,20 @@ public:
         assert(actual_input.size() == 3);
         TiDB::TP value_tp = dataTypeToTP(actual_input[2].type);
 
-        actual_input[0].name = "partition";
-        actual_input[1].name = "order";
-        actual_input[2].name = value_col_name;
+        actual_input[0].name = PARTITION_COL_NAME;
+        actual_input[1].name = ORDER_COL_NAME;
+        actual_input[2].name = VALUE_COL_NAME;
         context.addMockTable(
             {"test_db", "test_table_for_first_value"},
-            {{"partition", TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
-             {"order", TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
-             {value_col_name, value_tp, actual_input[2].type->isNullable()}},
+            {{PARTITION_COL_NAME, TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
+             {ORDER_COL_NAME, TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
+             {VALUE_COL_NAME, value_tp, actual_input[2].type->isNullable()}},
             actual_input);
 
         auto request = context
                            .scan("test_db", "test_table_for_first_value")
-                           .sort({{"partition", false}, {"order", false}}, true)
-                           .window(function, {"order", false}, {"partition", false}, mock_frame)
+                           .sort({{PARTITION_COL_NAME, false}, {ORDER_COL_NAME, false}}, true)
+                           .window(function, {ORDER_COL_NAME, false}, {PARTITION_COL_NAME, false}, mock_frame)
                            .build(context);
 
         ColumnsWithTypeAndName expect = input;
@@ -117,10 +121,10 @@ public:
     template <typename Type>
     void testIntForRangeFrame()
     {
-        MockWindowFrame frame;
-        frame.type = tipb::WindowFrameType::Ranges;
-        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+        MockWindowFrame mock_frame;
+        mock_frame.type = tipb::WindowFrameType::Ranges;
+        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
+        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
 
         std::vector<Int64> frame_start_range{0, 1, 3, 10};
         std::vector<std::vector<Int64>> res{
@@ -131,14 +135,16 @@ public:
 
         for (size_t i = 0; i < frame_start_range.size(); ++i)
         {
-            frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_range[i]);
+            mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, frame_start_range[i]);
+            std::cout << "1111111111" << std::endl;
             executeFunctionAndAssert(
                 toVec<Type>(res[i]),
                 FirstValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
                  toVec<Type>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
                  toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
-                frame);
+                mock_frame);
+            std::cout << "222222222222" << std::endl;
         }
     }
 
@@ -218,12 +224,12 @@ try
 }
 CATCH
 
-// TEST_F(FirstValue, firstValueWithRangeFrameType)
-// try
-// {
-//     // TODO support unsigned int.
-//     testIntForRangeFrame<Int8>();
-// }
-// CATCH
+TEST_F(FirstValue, firstValueWithRangeFrameType)
+try
+{
+    // TODO support unsigned int.
+    testIntForRangeFrame<Int8>();
+}
+CATCH
 
 } // namespace DB::tests

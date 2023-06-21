@@ -124,6 +124,15 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             start->set_offset(frame.start->getOffset());
             start->set_unbounded(frame.start->isUnbounded());
             start->set_type(frame.start->getBoundType());
+            if (frame.start->isRangeFrame())
+            {
+                // It's ok to pass raw pointer here because the destruction of
+                // mock::MockWindowFrame happens after the execution of DAGRequest
+                // and we can ensure that the raw pointer is always valid in the
+                // process of executing.
+                start->set_allocated_frame_range(frame.start->getRangeFrame());
+                start->set_cmp_data_type(frame.start->getCmpDataType());
+            }
         }
 
         if (frame.end.has_value())
@@ -132,6 +141,15 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             end->set_offset(frame.end->getOffset());
             end->set_unbounded(frame.end->isUnbounded());
             end->set_type(frame.end->getBoundType());
+            if (frame.end->isRangeFrame())
+            {
+                // It's ok to pass raw pointer here because the destruction of
+                // mock::MockWindowFrame happens after the execution of DAGRequest
+                // and we can ensure that the raw pointer is always valid in the
+                // process of executing.
+                end->set_allocated_frame_range(frame.end->getRangeFrame());
+                end->set_cmp_data_type(frame.end->getCmpDataType());
+            }
         }
     }
 
@@ -139,7 +157,7 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
+ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> partition_columns;
     if (partition_by_expr_list != nullptr)
@@ -166,6 +184,16 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
             compileExpr(input->output_schema, elem->children[0]);
         }
     }
+
+    // Build range frame's auxiliary function
+    if (frame.start.has_value())
+        if (frame.start->isRangeFrame())
+            frame.start->buildRangeFrameAuxFunction(input->output_schema);
+
+    // Build range frame's auxiliary function
+    if (frame.end.has_value())
+        if (frame.end->isRangeFrame())
+            frame.end->buildRangeFrameAuxFunction(input->output_schema);
 
     DAGSchema output_schema;
     output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());

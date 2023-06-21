@@ -240,7 +240,6 @@ void setAuxiliaryColumnInfo(
     const String & end_aux_col_name,
     const tipb::Window & window)
 {
-    return;
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
@@ -248,9 +247,7 @@ void setAuxiliaryColumnInfo(
     if (begin_aux_col_name.empty() && end_aux_col_name.empty())
         return;
 
-    Block tmp_block = actions->getSampleBlock();
-    actions->execute(tmp_block);
-
+    const Block & tmp_block = actions->getSampleBlock();
     if (!begin_aux_col_name.empty())
     {
         size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
@@ -268,7 +265,6 @@ void setAuxiliaryColumnInfo(
 
 void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
 {
-    return;
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return;
@@ -290,7 +286,6 @@ std::pair<String, String> addRangeFrameAuxiliaryFunctionAction(
     ExpressionActionsPtr & actions,
     const tipb::Window & window)
 {
-    return std::make_pair("", "");
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
         return std::make_pair("", "");
@@ -340,8 +335,8 @@ void initBeforeWindow(
     }
 
     window_desc.before_window = chain.getLastActions();
-    chain.finalize();
     setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
+    chain.finalize();
     chain.clear();
 }
 
