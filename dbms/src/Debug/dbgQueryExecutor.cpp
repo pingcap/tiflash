@@ -39,7 +39,7 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr)
+BlockInputStreamPtr constructExchangeReceiverStream(Context & context, tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, DAGSchema & root_task_schema, const String & root_addr, bool enable_local_tunnel)
 {
     for (auto & field : root_task_schema)
     {
@@ -65,7 +65,7 @@ BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb:
                 root_tm,
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                false,
+                enable_local_tunnel,
                 context.getSettingsRef().enable_async_grpc_client),
             tipb_exchange_receiver.encoded_task_meta_size(),
             10,
@@ -77,7 +77,7 @@ BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb:
     return ret;
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema)
+BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
@@ -93,7 +93,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
         tm.AppendToString(tm_string);
     }
-    return constructRootExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST);
+    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, Debug::LOCAL_HOST, enable_local_tunnel);
 }
 
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
@@ -116,7 +116,7 @@ BlockInputStreamPtr prepareRootExchangeReceiverWithMultipleContext(Context & con
 
     prepareExchangeReceiverMetaWithMultipleContext(tipb_exchange_receiver, properties, task_id, addr);
 
-    return constructRootExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr);
+    return constructExchangeReceiverStream(context, tipb_exchange_receiver, properties, root_task_schema, root_addr, true);
 }
 
 void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
@@ -222,7 +222,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         if (call.getResp()->has_error())
             throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
     }
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema);
+    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
