@@ -99,9 +99,7 @@ void MPPTaskMonitorHelper::initAndAddself(MPPTaskManager * manager_, const Strin
 MPPTaskMonitorHelper::~MPPTaskMonitorHelper()
 {
     if (initialized)
-    {
         manager->removeMonitoredTask(task_unique_id);
-    }
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
@@ -121,9 +119,8 @@ MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    auto * query_memory_tracker = getMemoryTracker();
-    if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
-        current_memory_tracker = query_memory_tracker;
+    if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
+        current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
     LOG_INFO(log, "finish MPPTask: {}", id.toString());
 }
@@ -190,8 +187,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
 
-        /// when the receiver task is root task, it should never be local tunnel
-        bool is_local = context->getSettingsRef().enable_local_tunnel && task_meta.task_id() != -1 && meta.address() == task_meta.address();
+        bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(
             task_meta,
@@ -297,13 +293,6 @@ void MPPTask::setErrString(const String & message)
     err_string = message;
 }
 
-MemoryTracker * MPPTask::getMemoryTracker() const
-{
-    if (process_list_entry_holder.process_list_entry != nullptr)
-        return process_list_entry_holder.process_list_entry->get().getMemoryTrackerPtr().get();
-    return nullptr;
-}
-
 void MPPTask::unregisterTask()
 {
     auto [result, reason] = manager->unregisterTask(id);
@@ -311,19 +300,6 @@ void MPPTask::unregisterTask()
         LOG_DEBUG(log, "task unregistered");
     else
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
-}
-
-void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
-{
-    /// all the mpp tasks of the same mpp query shares the same process list entry
-    auto [query_process_list_entry, aborted_reason] = task_manager->getOrCreateQueryProcessListEntry(id.query_id, context);
-    if (!aborted_reason.empty())
-        throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
-    assert(query_process_list_entry != nullptr);
-    process_list_entry_holder.process_list_entry = query_process_list_entry;
-    dag_context->setProcessListEntry(query_process_list_entry);
-    context->setProcessListElement(&query_process_list_entry->get());
-    current_memory_tracker = getMemoryTracker();
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -382,13 +358,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
-
-    auto task_manager = tmt_context.getMPPTaskManager();
-    initProcessListEntry(task_manager);
+    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
+    dag_context->setProcessListEntry(process_list_entry);
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
+    auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
@@ -429,7 +405,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    RUNTIME_ASSERT(current_memory_tracker == getMemoryTracker(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
+    RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -532,9 +508,9 @@ void MPPTask::runImpl()
             // todo when error happens, should try to update the metrics if it is available
             if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-            /// note that memory_tracker is shared by all the mpp tasks, the peak memory usage is not accurate
-            /// todo log executor level peak memory usage instead
-            auto peak_memory = getMemoryTracker()->getPeak();
+            auto process_info = context->getProcessListElement()->getInfo();
+            auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
             mpp_task_statistics.setMemoryPeak(peak_memory);
         }
     }

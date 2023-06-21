@@ -110,7 +110,7 @@ struct MemTrackerWrapper
 
 struct TrackedMppDataPacket
 {
-    TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
+    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
         : mem_tracker_wrapper(estimateAllocatedSize(data), memory_tracker)
     {
         packet = data;

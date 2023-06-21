@@ -22,11 +22,13 @@ namespace DB
 struct LocalRequestHandler
 {
     LocalRequestHandler(
+        MemoryTracker * recv_mem_tracker_,
         std::function<void(bool, const String &)> && notify_write_done_,
         std::function<void()> && notify_close_,
         std::function<void()> && add_local_conn_num_,
         ReceiverChannelWriter && channel_writer_)
-        : notify_write_done(std::move(notify_write_done_))
+        : recv_mem_tracker(recv_mem_tracker_)
+        , notify_write_done(std::move(notify_write_done_))
         , notify_close(std::move(notify_close_))
         , add_local_conn_num(std::move(add_local_conn_num_))
         , channel_writer(std::move(channel_writer_))
@@ -73,6 +75,7 @@ struct LocalRequestHandler
         return waiting_task_time;
     }
 
+    MemoryTracker * recv_mem_tracker;
     std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_close;
     std::function<void()> add_local_conn_num;
