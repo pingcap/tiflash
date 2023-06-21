@@ -39,6 +39,11 @@ public:
         return "AddExtraTableIDColumnTransformOp";
     }
 
+    // `AddExtraTableIDColumnTransformOp` will be appended to `DMSegmentThreadSourceOp` and returned to the computing layer.
+    // [`AddExtraTableIDColumnTransformOp` --> `DMSegmentThreadSourceOp`]
+    // So override getIOProfileInfo is needed here.
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
 protected:
     OperatorStatus transformImpl(Block & block) override;
 

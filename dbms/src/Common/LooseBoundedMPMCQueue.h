@@ -34,33 +34,13 @@ public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
     using PushCallback = std::function<void(const T & element)>;
 
-    explicit LooseBoundedMPMCQueue(size_t capacity_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
-        , get_auxiliary_memory_usage([](const T &) { return 0; })
-    {}
-    LooseBoundedMPMCQueue(size_t capacity_, PushCallback && push_callback_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
-        , get_auxiliary_memory_usage([](const T &) { return 0; })
-        , push_callback(std::move(push_callback_))
-    {}
-
-    LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+    LooseBoundedMPMCQueue(
+        const CapacityLimits & capacity_limits_,
+        ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; },
+        PushCallback && push_callback_ = {})
+        : capacity_limits(capacity_limits_)
         , get_auxiliary_memory_usage(
-              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
-                  ? [](const T &) {
-                        return 0;
-                    }
-                  : std::move(get_auxiliary_memory_usage_))
-    {}
-    LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_, PushCallback && push_callback_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
-        , get_auxiliary_memory_usage(
-              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+              capacity_limits.max_bytes == std::numeric_limits<Int64>::max()
                   ? [](const T &) {
                         return 0;
                     }
@@ -221,7 +201,7 @@ private:
     bool isFullWithoutLock() const
     {
         assert(current_auxiliary_memory_usage >= 0);
-        return queue.size() >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage;
+        return static_cast<Int64>(queue.size()) >= capacity_limits.max_size || current_auxiliary_memory_usage >= capacity_limits.max_bytes;
     }
 
     template <typename FF>
@@ -269,7 +249,7 @@ private:
         /// 1. there is another reader
         /// 2. there is another writer
         /// if we notify the writer if the queue is not full here, w3 can write immediately
-        if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
+        if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
             writer_head.notifyNext();
     }
 
@@ -290,8 +270,7 @@ private:
     };
 
     std::deque<DataWithMemoryUsage> queue;
-    size_t capacity;
-    const Int64 max_auxiliary_memory_usage;
+    CapacityLimits capacity_limits;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
     const PushCallback push_callback;
     Int64 current_auxiliary_memory_usage = 0;

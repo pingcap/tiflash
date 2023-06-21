@@ -67,7 +67,7 @@ void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
     orderStreams(pipeline, max_streams, order_descr, limit, false, context, log);
 }
 
-void PhysicalTopN::buildPipelineExecGroup(
+void PhysicalTopN::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
@@ -85,7 +85,7 @@ void PhysicalTopN::buildPipelineExecGroup(
     {
         executeFinalSort(exec_status, group_builder, order_descr, limit, context, log);
         if (is_restore_concurrency)
-            restoreConcurrency(exec_status, group_builder, concurrency, log);
+            restoreConcurrency(exec_status, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 

@@ -25,6 +25,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Interpreters/Settings.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
@@ -323,15 +324,13 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
-    Int32 local_tunnel_version_,
-    Int32 async_recv_version_,
-    Int32 recv_queue_size,
+    const Settings & settings,
     const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
-    , max_buffer_size(getMaxBufferSize(source_num, recv_queue_size))
+    , max_buffer_size(getMaxBufferSize(source_num, settings.recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
     , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
@@ -340,8 +339,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
-    , local_tunnel_version(local_tunnel_version_)
-    , async_recv_version(async_recv_version_)
+    , local_tunnel_version(settings.local_tunnel_version)
+    , async_recv_version(settings.async_recv_version)
     , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
@@ -563,7 +562,6 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
             LoggerPtr local_log = Logger::get(fmt::format("{} {}", exc_log->identifier(), req_info));
 
             LocalRequestHandler local_request_handler(
-                getMemoryTracker(),
                 [this, log = local_log](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg, log);
                 },

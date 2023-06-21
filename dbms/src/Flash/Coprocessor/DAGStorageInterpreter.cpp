@@ -51,11 +51,12 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-
 
 namespace DB
 {
@@ -96,7 +97,8 @@ MakeRegionQueryInfos(
     const std::unordered_set<RegionID> & region_force_retry,
     TMTContext & tmt,
     MvccQueryInfo & mvcc_info,
-    bool batch_cop [[maybe_unused]])
+    bool batch_cop [[maybe_unused]],
+    const LoggerPtr & log)
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
@@ -108,7 +110,7 @@ MakeRegionQueryInfos(
             if (r.key_ranges.empty())
             {
                 throw TiFlashException(
-                    fmt::format("Income key ranges is empty for region: {}", r.region_id),
+                    fmt::format("Income key ranges is empty for region: {}, version {}, conf_version {}", r.region_id, r.region_version, r.region_conf_version),
                     Errors::Coprocessor::BadRequest);
             }
             if (region_force_retry.count(id))
@@ -143,16 +145,24 @@ MakeRegionQueryInfos(
                     {
                         throw TiFlashException(
                             fmt::format(
-                                "Income key ranges is illegal for region: {}, table id in key range is {}, table id in region is {}",
+                                "Income key ranges is illegal for region: {}, version {}, conf_version {}, table id in key range is {}, table id in region is {}",
                                 r.region_id,
+                                r.region_version,
+                                r.region_conf_version,
                                 table_id_in_range,
                                 physical_table_id),
                             Errors::Coprocessor::BadRequest);
                     }
                     if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
+                    {
+                        LOG_WARNING(log, fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}, request range: [{}, {}), region range: [{}, {})", r.region_id, r.region_version, r.region_conf_version, p.first->toDebugString(), p.second->toDebugString(), info.range_in_table.first->toDebugString(), info.range_in_table.second->toDebugString()));
                         throw TiFlashException(
-                            fmt::format("Income key ranges is illegal for region: {}", r.region_id),
+                            fmt::format("Income key ranges is illegal for region: {}, version {}, conf_version {}",
+                                        r.region_id,
+                                        r.region_version,
+                                        r.region_conf_version),
                             Errors::Coprocessor::BadRequest);
+                    }
                 }
                 info.required_handle_ranges = r.key_ranges;
                 info.bypass_lock_ts = r.bypass_lock_ts;
@@ -240,12 +250,12 @@ String genErrMsgForLocalRead(
 {
     return table_id == logical_table_id
         ? fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id)
         : fmt::format(
-            "(while creating read sources from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+            "(while creating read sources from storage `{}`.`{}`, table_id={}, logical_table_id={})",
             storage->getDatabaseName(),
             storage->getTableName(),
             table_id,
@@ -336,6 +346,9 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     if (!remote_requests.empty())
         buildRemoteExec(exec_status, group_builder, remote_requests);
 
+    /// record profiles of local and remote io source
+    dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+
     if (group_builder.empty())
     {
         group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
@@ -360,15 +373,21 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     /// If there is no local source, there is no need to execute cast and push down filter, return directly.
     /// But we should make sure that the analyzer is initialized before return.
     if (remote_read_start_index == 0)
+    {
+        dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
+        if (filter_conditions.hasValue())
+            dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
         return;
+    }
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
+    dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
-        /// TODO: record profile
+        dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
 
@@ -467,6 +486,44 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
         recordProfileStreams(pipeline, filter_conditions.executor_id);
     }
+}
+
+// here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
+// we think we can directly do read, and don't need sync schema.
+// compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
+// column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
+std::tuple<bool, String> compareColumns(const TiDBTableScan & table_scan, const DM::ColumnDefines & cur_columns, const DAGContext & dag_context, const LoggerPtr & log)
+{
+    const auto & columns = table_scan.getColumns();
+    std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
+    for (const auto & column : cur_columns)
+    {
+        column_id_map[column.id] = column;
+    }
+
+    for (const auto & column : columns)
+    {
+        // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
+        if (column.id < 0)
+        {
+            continue;
+        }
+        auto iter = column_id_map.find(column.id);
+        if (iter == column_id_map.end())
+        {
+            String error_message = fmt::format("the column in the query is not found in current columns, keyspace={} table_id={} column_id={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id);
+            LOG_WARNING(log, error_message);
+            return std::make_tuple(false, error_message);
+        }
+
+        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
+        {
+            String error_message = fmt::format("the column data type in the query is not the same as the current column, keyspace={} table_id={} column_id={} column_type={} query_column_type={}", dag_context.getKeyspaceID(), table_scan.getLogicalTableID(), column.id, iter->second.type->getName(), getDataTypeByColumnInfo(column)->getName());
+            LOG_WARNING(log, error_message);
+            return std::make_tuple(false, error_message);
+        }
+    }
+    return std::make_tuple(true, "");
 }
 
 // Apply learner read to ensure we can get strong consistent with TiKV Region
@@ -678,7 +735,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
         {},
         tmt,
         *mvcc_query_info,
-        false);
+        false,
+        log);
 
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
@@ -708,7 +766,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
                 force_retry,
                 tmt,
                 *mvcc_query_info,
-                true);
+                true,
+                log);
             UNUSED(status);
 
             if (retry)
@@ -748,7 +807,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("(while doing learner read for table, logical table_id: {})", logical_table_id));
+            e.addMessage(fmt::format("(while doing learner read for table, logical table_id={})", logical_table_id));
             throw;
         }
     }
@@ -1149,11 +1208,8 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         return storages_with_lock;
     }
 
-    auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion(keyspace_id);
-
-    /// Align schema version under the read lock.
-    /// Return: [storage, table_structure_lock, storage_schema_version, ok]
-    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
+    /// Return: [storage, table_structure_lock]
+    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto table_store = tmt.getStorages().get(keyspace_id, table_id);
@@ -1162,7 +1218,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             if (schema_synced)
                 throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
             else
-                return {{}, {}, {}, false};
+                return {{}, {}};
         }
 
         if (unlikely(table_store->engineType() != ::TiDB::StorageEngine::DT))
@@ -1178,101 +1234,90 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
-        /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
-        // We have three schema versions, two in TiFlash:
-        // 1. Storage: the version that this TiFlash table (storage) was last altered.
-        // 2. Global: the version that TiFlash global schema is at.
-        // And one from TiDB/TiSpark:
-        // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = table_store->getTableInfo().schema_version;
-        // Not allow storage > query in any case, one example is time travel queries.
-        if (storage_schema_version > query_schema_version)
-            throw TiFlashException(
-                fmt::format("Table {} schema version {} newer than query schema version {}", table_id, storage_schema_version, query_schema_version),
-                Errors::Table::SchemaVersionError);
-        // From now on we have storage <= query.
-        // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
+        // check the columns in table_scan and table_store, to check whether we need to sync table schema.
+        auto [are_columns_matched, error_message] = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
+
+        if (are_columns_matched)
+        {
+            return std::make_tuple(table_store, lock);
+        }
+
+        // columns not match but we have synced schema, it means the schema in tiflash is newer than that in query
         if (schema_synced)
-            return {table_store, lock, storage_schema_version, true};
-        // From now on the schema was not synced.
-        // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
-        // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
-        // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
-        if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return {table_store, lock, storage_schema_version, true};
-        // From now on we have global < query.
-        // Return false for outer to sync and retry.
-        return {nullptr, {}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
+        {
+            throw TiFlashException(fmt::format("The schema does not match the query, details: {}", error_message), Errors::Table::SchemaVersionError);
+        }
+
+        // let caller sync schema
+        return {nullptr, {}};
     };
 
-    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<Int64>, bool> {
+    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<TableID>> {
         std::vector<ManageableStoragePtr> table_storages;
         std::vector<TableStructureLockHolder> table_locks;
-        std::vector<Int64> table_schema_versions;
-        auto [logical_table_storage, logical_table_lock, logical_table_storage_schema_version, ok] = get_and_lock_storage(schema_synced, logical_table_id);
-        if (!ok)
-            return {{}, {}, {}, false};
-        table_storages.emplace_back(std::move(logical_table_storage));
-        table_locks.emplace_back(std::move(logical_table_lock));
-        table_schema_versions.push_back(logical_table_storage_schema_version);
+
+        std::vector<TableID> need_sync_table_ids;
+
+        auto [logical_table_storage, logical_table_lock] = get_and_lock_storage(schema_synced, logical_table_id);
+        if (logical_table_storage == nullptr)
+        {
+            need_sync_table_ids.push_back(logical_table_id);
+        }
+        else
+        {
+            table_storages.emplace_back(std::move(logical_table_storage));
+            table_locks.emplace_back(std::move(logical_table_lock));
+        }
+
         if (!table_scan.isPartitionTableScan())
         {
-            return {table_storages, table_locks, table_schema_versions, true};
+            return {table_storages, table_locks, need_sync_table_ids};
         }
         for (auto const physical_table_id : table_scan.getPhysicalTableIDs())
         {
-            auto [physical_table_storage, physical_table_lock, physical_table_storage_schema_version, ok] = get_and_lock_storage(schema_synced, physical_table_id);
-            if (!ok)
+            auto [physical_table_storage, physical_table_lock] = get_and_lock_storage(schema_synced, physical_table_id);
+            if (physical_table_storage == nullptr)
             {
-                return {{}, {}, {}, false};
+                need_sync_table_ids.push_back(physical_table_id);
             }
-            table_storages.emplace_back(std::move(physical_table_storage));
-            table_locks.emplace_back(std::move(physical_table_lock));
-            table_schema_versions.push_back(physical_table_storage_schema_version);
-        }
-        return {table_storages, table_locks, table_schema_versions, true};
-    };
-
-    auto log_schema_version = [&](const String & result, const std::vector<Int64> & storage_schema_versions) {
-        FmtBuffer buffer;
-        buffer.fmtAppend("Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
-        if (table_scan.isPartitionTableScan())
-        {
-            assert(storage_schema_versions.size() == 1 + table_scan.getPhysicalTableIDs().size());
-            for (size_t i = 0; i < table_scan.getPhysicalTableIDs().size(); ++i)
+            else
             {
-                const auto physical_table_id = table_scan.getPhysicalTableIDs()[i];
-                buffer.fmtAppend(", Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", physical_table_id, result, storage_schema_versions[1 + i], global_schema_version, query_schema_version);
+                table_storages.emplace_back(std::move(physical_table_storage));
+                table_locks.emplace_back(std::move(physical_table_lock));
             }
         }
-        return buffer.toString();
+        return {table_storages, table_locks, need_sync_table_ids};
     };
 
-    auto sync_schema = [&] {
+    auto sync_schema = [&](TableID table_id) {
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_cop_read, dagContext().getKeyspaceID()).Increment();
         auto start_time = Clock::now();
-        GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, dagContext().getKeyspaceID());
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, dagContext().getKeyspaceID(), table_id);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
+        LOG_INFO(log, "Table {} schema sync cost {} ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.
-    auto [storages, locks, storage_schema_versions, ok] = get_and_lock_storages(false);
-    if (ok)
+    auto [storages, locks, need_sync_table_ids] = get_and_lock_storages(false);
+    if (need_sync_table_ids.empty())
     {
-        LOG_DEBUG(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
+        LOG_INFO(log, "OK, no syncing required.");
     }
     else
     /// If first try failed, sync schema and try again.
     {
-        LOG_DEBUG(log, "not OK, syncing schemas.");
+        LOG_INFO(log, "not OK, syncing schemas.");
 
-        sync_schema();
-
-        std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
-        if (ok)
+        for (auto & table_id : need_sync_table_ids)
         {
-            LOG_DEBUG(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
+            sync_schema(table_id);
+        }
+
+
+        std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
+        if (need_sync_table_ids.empty())
+        {
+            LOG_INFO(log, "OK after syncing.");
         }
         else
             throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);

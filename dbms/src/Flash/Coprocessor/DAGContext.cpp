@@ -18,10 +18,13 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/transformProfiles.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
+
+#include <mutex>
 
 namespace DB
 {
@@ -179,6 +182,32 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
+std::unordered_map<String, OperatorProfileInfos> & DAGContext::getOperatorProfileInfosMap()
+{
+    return operator_profile_infos_map;
+}
+
+void DAGContext::addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos)
+{
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    /// The profiles of some operators has been recorded.
+    /// For example, `DAGStorageInterpreter` records the profiles of PhysicalTableScan.
+    if (operator_profile_infos_map.find(executor_id) == operator_profile_infos_map.end())
+        operator_profile_infos_map[executor_id] = std::move(profile_infos);
+}
+
+void DAGContext::addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos)
+{
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    if (inbound_io_profile_infos_map.find(executor_id) == inbound_io_profile_infos_map.end())
+        inbound_io_profile_infos_map[executor_id] = std::move(io_profile_infos);
+}
+
+std::unordered_map<String, IOProfileInfos> & DAGContext::getInboundIOProfileInfosMap()
+{
+    return inbound_io_profile_infos_map;
+}
+
 void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
 {
     final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
@@ -290,22 +319,23 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     // collect table scan metrics
     UInt64 time_processed_ns = 0;
     UInt64 num_produced_bytes = 0;
-    for (auto & p : getProfileStreamsMap())
+    switch (getExecutionMode())
     {
-        if (p.first == table_scan_executor_id)
-        {
-            for (auto & stream_ptr : p.second)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
-                {
-                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                    num_produced_bytes += p_stream->getProfileInfo().bytes;
-                }
-            }
-            break;
-        }
+    case ExecutionMode::None:
+        break;
+    case ExecutionMode::Stream:
+        transformProfileForStream(*this, table_scan_executor_id, [&](const IProfilingBlockInputStream & p_stream) {
+            time_processed_ns = std::max(time_processed_ns, p_stream.getProfileInfo().execution_time);
+            num_produced_bytes += p_stream.getProfileInfo().bytes;
+        });
+        break;
+    case ExecutionMode::Pipeline:
+        transformProfileForPipeline(*this, table_scan_executor_id, [&](const OperatorProfileInfo & profile_info) {
+            time_processed_ns = std::max(time_processed_ns, profile_info.execution_time);
+            num_produced_bytes += profile_info.bytes;
+        });
+        break;
     }
-
     // convert to bytes per second
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }

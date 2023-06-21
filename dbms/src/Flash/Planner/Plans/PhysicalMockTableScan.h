@@ -63,14 +63,14 @@ public:
 
     void updateStreams(Context & context);
 
-    void buildPipelineExecGroup(
+private:
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus &,
         PipelineExecGroupBuilder & group_builder,
-        Context &,
+        Context & context,
         size_t) override;
-
-private:
-    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/ context, size_t /*max_streams*/) override;
 
     void buildRuntimeFilterInLocalStream(Context & context);
 

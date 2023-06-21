@@ -225,7 +225,7 @@ try
         /// case 2: less auxiliary memory bound than the capacity bound
         size_t actual_max_size = 5;
         auxiliary_memory_bound = sizeof(Int64) * actual_max_size;
-        LooseBoundedMPMCQueue<Int64> queue(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
+        LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
         for (size_t i = 0; i < actual_max_size; i++)
             ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(actual_max_size) == MPMCQueueResult::FULL);
@@ -237,7 +237,7 @@ try
     {
         /// case 3: less capacity bound than the auxiliary memory bound
         auxiliary_memory_bound = sizeof(Int64) * (max_size * 10);
-        LooseBoundedMPMCQueue<Int64> queue(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
+        LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
         for (size_t i = 0; i < max_size; i++)
             ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
@@ -248,7 +248,7 @@ try
         std::vector<Int64> bounds{0, -1};
         for (const auto & bound : bounds)
         {
-            LooseBoundedMPMCQueue<Int64> queue(max_size, bound, [](const Int64 &) { return 1024 * 1024; });
+            LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, bound), [](const Int64 &) { return 1024 * 1024; });
             for (size_t i = 0; i < max_size; i++)
                 ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
             ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
@@ -257,7 +257,7 @@ try
 
     {
         /// case 5 even if the element's auxiliary memory is out of bound, at least one element can be pushed
-        LooseBoundedMPMCQueue<Int64> queue(max_size, 1, [](const Int64 &) { return 10; });
+        LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, 1), [](const Int64 &) { return 10; });
         ASSERT_TRUE(queue.tryPush(1) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(2) == MPMCQueueResult::FULL);
         ASSERT_TRUE(queue.tryPop(value) == MPMCQueueResult::OK);
@@ -267,7 +267,7 @@ try
 
     {
         /// case 6 after pop a huge element, more than one small push can be notified without further pop
-        LooseBoundedMPMCQueue<Int64> queue(max_size, 20, [](const Int64 & element) { return std::abs(element); });
+        LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, 20), [](const Int64 & element) { return std::abs(element); });
         ASSERT_TRUE(queue.tryPush(100) == MPMCQueueResult::OK);
         ASSERT_TRUE(queue.tryPush(5) == MPMCQueueResult::FULL);
         auto thread_manager = newThreadManager();
@@ -298,7 +298,7 @@ try
 
     {
         /// case 7, force push does not limited by memory bound
-        LooseBoundedMPMCQueue<Int64> queue(max_size, sizeof(Int64) * max_size / 2, [](const Int64 &) { return sizeof(Int64); });
+        LooseBoundedMPMCQueue<Int64> queue(CapacityLimits(max_size, sizeof(Int64) * max_size / 2), [](const Int64 &) { return sizeof(Int64); });
         for (size_t i = 0; i < max_size / 2; i++)
             ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
         for (size_t i = max_size / 2; i < max_size; i++)

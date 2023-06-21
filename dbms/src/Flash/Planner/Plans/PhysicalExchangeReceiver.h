@@ -47,15 +47,16 @@ public:
         return mpp_exchange_receiver->getSourceNum();
     }
 
-    void buildPipelineExecGroup(
+private:
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+    void buildPipelineExecGroupImpl(
         PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,
         size_t /*concurrency*/) override;
 
 private:
-    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-
     Block sample_block;
 
     std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;

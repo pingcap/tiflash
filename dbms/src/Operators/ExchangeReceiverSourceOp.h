@@ -32,6 +32,7 @@ public:
         : SourceOp(exec_status_, req_id)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
+        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, exchange_receiver->getSourceNum()))
     {
         exchange_receiver->verifyStreamId(stream_id);
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
@@ -43,9 +44,11 @@ public:
         return "ExchangeReceiverSourceOp";
     }
 
-    void operateSuffix() override;
+    IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:
+    void operateSuffixImpl() override;
+
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
@@ -63,5 +66,7 @@ private:
     std::optional<ReceiveResult> recv_res;
 
     size_t stream_id;
+
+    IOProfileInfoPtr io_profile_info;
 };
 } // namespace DB

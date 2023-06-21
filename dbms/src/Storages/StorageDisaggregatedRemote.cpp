@@ -58,6 +58,7 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <numeric>
 #include <unordered_set>
 
@@ -332,6 +333,8 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
 
     auto thread_manager = newThreadManager();
     auto n = static_cast<size_t>(table.segments().size());
+
+    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
     for (size_t idx = 0; idx < n; ++idx)
     {
         const auto & remote_seg = table.segments(idx);
@@ -341,7 +344,7 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
             "buildRNReadSegmentTask",
             [&] {
                 auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
-                    log,
+                    table_tracing_logger,
                     db_context,
                     scan_context,
                     remote_seg,
@@ -473,8 +476,9 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         *column_defines,
         db_context,
         log);
-    auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+    const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
+    LOG_DEBUG(log, "Building segment input streams, read_mode={} is_fast_scan={} keep_order={}", magic_enum::enum_name(read_mode), table_scan.isFastScan(), table_scan.keepOrder());
 
     auto workers = DM::Remote::RNWorkers::create({
         .log = log->getChild(executor_id),

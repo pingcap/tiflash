@@ -79,7 +79,7 @@ public:
         const FileProviderPtr & file_provider_,
         Format::LogNumberType log_number_,
         bool recycle_log_files_,
-        bool manual_flush_ = false);
+        bool manual_sync_ = false);
 
     DISALLOW_COPY(LogWriter);
 
@@ -87,7 +87,7 @@ public:
 
     void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
 
-    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
+    void sync();
 
     void close();
 
@@ -103,6 +103,8 @@ private:
 
     void resetBuffer();
 
+    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
+
 private:
     String path;
     FileProviderPtr file_provider;
@@ -112,9 +114,8 @@ private:
     size_t block_offset; // Current offset in block
     Format::LogNumberType log_number;
     const bool recycle_log_files;
-    // If true, it does not flush after each write. Instead it relies on the upper
-    // layer to manually does the flush by calling ::flush()
-    const bool manual_flush;
+    // If true, the upper layer need manually sync the log file after write by calling LogWriter::sync()
+    const bool manual_sync;
 
     size_t written_bytes = 0;
 

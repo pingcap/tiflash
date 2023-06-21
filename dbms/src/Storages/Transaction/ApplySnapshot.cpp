@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <ext/scope_guard.h>
 
@@ -260,6 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     manage_lock.index.remove(range, region_id);
                 }
             }
+            // Reuse the old region for non-region-related data.
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
             {
@@ -286,11 +288,14 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     std::vector<DM::ExternalDTFileInfo> external_files;
+    new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     try
     {
+        SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
         external_files = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
     }
     catch (DB::Exception & e)
@@ -311,6 +316,11 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     DM::FileConvertJobType job_type,
     TMTContext & tmt)
 {
+    // if it's only a empty snapshot, we don't create the Storage object, but return directly.
+    if (snaps.len == 0)
+    {
+        return {};
+    }
     auto context = tmt.getContext();
     auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
@@ -385,15 +395,16 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         }
         catch (DB::Exception & e)
         {
-            auto try_clean_up = [&stream]() -> void {
-                if (stream != nullptr)
-                    stream->cancel();
-            };
+            if (stream != nullptr)
+            {
+                // Remove all DMFiles.
+                stream->cancel();
+            }
+
             if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
             {
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
-                try_clean_up();
 
                 if (force_decode)
                 {
@@ -403,8 +414,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
-                GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+                GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
+                tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;
 
@@ -414,7 +425,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             {
                 // We can ignore if storage is dropped.
                 LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
-                try_clean_up();
                 break;
             }
             else
@@ -489,10 +499,11 @@ void KVStore::handleApplySnapshot(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
