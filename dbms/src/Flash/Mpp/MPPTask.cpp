@@ -392,7 +392,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
-    auto [result, reason] = task_manager->registerTask(shared_from_this());
+    auto [result, reason] = task_manager->makeTaskVisible(shared_from_this());
     if (!result)
     {
         throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
