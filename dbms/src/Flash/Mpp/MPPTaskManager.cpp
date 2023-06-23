@@ -246,7 +246,7 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
     LOG_WARNING(log, "Finish abort query: " + query_id.toString());
 }
 
-std::pair<bool, String> MPPTaskManager::makeTaskVisible(MPPTaskPtr task)
+std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
 {
     if (!task->isRootMPPTask())
     {
@@ -274,7 +274,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskVisible(MPPTaskPtr task)
             alarm.second.Cancel();
         query_set->alarms.erase(alarm_it);
     }
-    task->registered = true;
+    task->is_public = true;
     cv.notify_all();
     return {true, ""};
 }

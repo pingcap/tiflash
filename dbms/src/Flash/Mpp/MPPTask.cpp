@@ -392,7 +392,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
-    auto [result, reason] = task_manager->makeTaskVisible(shared_from_this());
+    auto [result, reason] = task_manager->makeTaskPublic(shared_from_this());
     if (!result)
     {
         throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
@@ -566,8 +566,8 @@ void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
     manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
-    if (!registered)
-        // if the task is not registered, need to cancel it explicitly
+    if (!is_public)
+        // if the task is not public, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
 }
 

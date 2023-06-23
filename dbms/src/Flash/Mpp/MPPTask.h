@@ -156,7 +156,7 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
-    std::atomic<bool> registered{false};
+    std::atomic<bool> is_public{false};
 
     MPPTaskScheduleEntry schedule_entry;
 

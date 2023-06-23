@@ -209,7 +209,7 @@ public:
 
     std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
 
-    std::pair<bool, String> makeTaskVisible(MPPTaskPtr task);
+    std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
