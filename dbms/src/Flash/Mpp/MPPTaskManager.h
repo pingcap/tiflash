@@ -211,6 +211,8 @@ public:
 
     std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
 
+    std::pair<bool, String> registerTask(const MPPTaskId & task_id, Context & context);
+
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
     bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
@@ -223,7 +225,7 @@ public:
 
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
 
-    std::pair<std::shared_ptr<ProcessListEntry>, String> getOrCreateQueryProcessListEntry(const MPPQueryId & query_id, const ContextPtr & context);
+    std::pair<std::shared_ptr<ProcessListEntry>, String> getQueryProcessListEntry(const MPPQueryId & query_id);
 
     String toString();
 

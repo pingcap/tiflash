@@ -246,6 +246,32 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
     LOG_WARNING(log, "Finish abort query: " + query_id.toString());
 }
 
+std::pair<bool, String> MPPTaskManager::registerTask(const MPPTaskId & task_id, Context & context)
+{
+    std::unique_lock lock(mu);
+    auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task_id.query_id);
+    if (!error_msg.empty())
+    {
+        return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
+    }
+    if (query_set == nullptr)
+        query_set = addMPPQueryTaskSet(task_id.query_id);
+    if (query_set->process_list_entry == nullptr)
+    {
+        query_set->process_list_entry = setProcessListElement(
+            context,
+            context.getDAGContext()->dummy_query_string,
+            context.getDAGContext()->dummy_ast.get(),
+            true);
+    }
+    if (query_set->isTaskRegistered(task_id))
+    {
+        return {false, "task is already registered"};
+    }
+    query_set->registerTask(task_id);
+    return {true, ""};
+}
+
 std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
 {
     if (!task->isRootMPPTask())
@@ -315,22 +341,14 @@ String MPPTaskManager::toString()
     return res + ")";
 }
 
-std::pair<std::shared_ptr<ProcessListEntry>, String> MPPTaskManager::getOrCreateQueryProcessListEntry(const MPPQueryId & query_id, const ContextPtr & context)
+std::pair<std::shared_ptr<ProcessListEntry>, String> MPPTaskManager::getQueryProcessListEntry(const MPPQueryId & query_id)
 {
     std::lock_guard lock(mu);
     auto [query_set, abort_reason] = getQueryTaskSetWithoutLock(query_id);
     if (!abort_reason.empty())
         return {nullptr, abort_reason};
-    if (query_set == nullptr)
-        query_set = addMPPQueryTaskSet(query_id);
-    if (query_set->process_list_entry == nullptr)
-    {
-        query_set->process_list_entry = setProcessListElement(
-            *context,
-            context->getDAGContext()->dummy_query_string,
-            context->getDAGContext()->dummy_ast.get(),
-            true);
-    }
+    RUNTIME_CHECK_MSG(query_set != nullptr, "Query set must be not null in getQueryProcessListEntry");
+    RUNTIME_CHECK_MSG(query_set->process_list_entry != nullptr, "query process list entry must be not null in getQueryProcessListEntry");
     return {query_set->process_list_entry, ""};
 }
 

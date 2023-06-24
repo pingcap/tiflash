@@ -78,6 +78,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     {
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
+        task->registerTask();
         task->prepare(task_request);
 
         addRetryRegion(context, response);

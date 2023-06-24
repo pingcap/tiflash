@@ -105,6 +105,8 @@ private:
 
     void unregisterTask();
 
+    void registerTask();
+
     // abort the mpp task, note this function should be non-blocking, it just set some flags
     void abort(const String & message, AbortType abort_type);
 

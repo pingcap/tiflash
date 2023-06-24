@@ -316,7 +316,7 @@ void MPPTask::unregisterTask()
 void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
 {
     /// all the mpp tasks of the same mpp query shares the same process list entry
-    auto [query_process_list_entry, aborted_reason] = task_manager->getOrCreateQueryProcessListEntry(id.query_id, context);
+    auto [query_process_list_entry, aborted_reason] = task_manager->getQueryProcessListEntry(id.query_id);
     if (!aborted_reason.empty())
         throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
     assert(query_process_list_entry != nullptr);
@@ -324,6 +324,15 @@ void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
     dag_context->setProcessListEntry(query_process_list_entry);
     context->setProcessListElement(&query_process_list_entry->get());
     current_memory_tracker = getMemoryTracker();
+}
+
+void MPPTask::registerTask()
+{
+    auto [result, reason] = manager->registerTask(id, *context);
+    if (!result)
+    {
+        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::Internal);
+    }
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
