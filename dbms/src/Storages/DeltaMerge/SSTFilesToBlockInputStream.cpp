@@ -159,6 +159,7 @@ Block SSTFilesToBlockInputStream::read()
             // else continue to decode key-value from write CF.
         }
     }
+
     // Load all key-value pairs from other CFs
     loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
     loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);

@@ -1290,7 +1290,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     };
 
     auto sync_schema = [&](TableID table_id) {
-        GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_cop_read, dagContext().getKeyspaceID()).Increment();
         auto start_time = Clock::now();
         tmt.getSchemaSyncerManager()->syncTableSchema(context, dagContext().getKeyspaceID(), table_id);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();

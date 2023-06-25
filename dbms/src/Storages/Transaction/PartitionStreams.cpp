@@ -184,7 +184,7 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
-        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
         Stopwatch watch;
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();
@@ -212,7 +212,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     RegionDataReadInfoList data_list_read;
     DecodedLockCFValuePtr lock_value;
     {
-        auto scanner = region->createCommittedScanner();
+        auto scanner = region->createCommittedScanner(true, need_data_value);
 
         /// Some sanity checks for region meta.
         {
@@ -253,12 +253,13 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
             if (!scanner.hasNext())
                 return data_list_read;
 
+            // If worked with raftstore v2, the final size may not equal to here.
             data_list_read.reserve(scanner.writeMapSize());
 
             // Tiny optimization for queries that need only handle, tso, delmark.
             do
             {
-                data_list_read.emplace_back(scanner.next(need_data_value));
+                data_list_read.emplace_back(scanner.next());
             } while (scanner.hasNext());
         }
     }
@@ -271,7 +272,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
-    auto scanner = region->createCommittedScanner(lock_region);
+    auto scanner = region->createCommittedScanner(lock_region, true);
 
     /// Some sanity checks for region meta.
     if (region->isPendingRemove())
@@ -299,7 +300,6 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     {
         std::ignore = write_type;
         std::ignore = value;
-
         remover.remove({handle, commit_ts});
     }
 }
@@ -428,7 +428,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     if (!atomic_get(false))
     {
-        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
         Stopwatch watch;
         tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
         auto schema_sync_cost = watch.elapsedMilliseconds();

@@ -39,7 +39,6 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
 
         LOG_INFO(log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
-        GET_METRIC(tiflash_schema_apply_count, type_drop_keyspace).Increment();
 
         // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
         // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
@@ -85,6 +84,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
         }
     }
 
+    GET_KEYSPACE_METRIC(tiflash_schema_version, keyspace_id).Set(cur_version);
     LOG_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
     return true;
 }
@@ -159,6 +159,9 @@ std::tuple<bool, DatabaseID, TableID> TiDBSchemaSyncer<mock_getter, mock_mapper>
 template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & context, TableID physical_table_id)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_KEYSPACE_METRIC(tiflash_schema_apply_duration_seconds, type_sync_table_schema_apply_duration, keyspace_id).Observe(watch.elapsedSeconds()); });
+
     LOG_INFO(log, "Start sync table schema, table_id={}", physical_table_id);
     auto getter = createSchemaGetter(keyspace_id);
 
@@ -168,6 +171,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
     if (!find)
     {
         LOG_WARNING(log, "Can't find related database_id and logical_table_id from table_id_map, try to syncSchemas. physical_table_id={}", physical_table_id);
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_sync_table_schema, keyspace_id).Increment();
         syncSchemas(context);
         std::tie(find, database_id, logical_table_id) = findDatabaseIDAndTableID(physical_table_id);
         if (!find)
