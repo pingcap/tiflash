@@ -16,20 +16,21 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <memory.h>
 
 namespace DB
 {
 /**
- *    CANCELLED/ERROR/FINISHED
- *               ▲
- *               │
- *  ┌────────────────────────┐
- *  │     ┌──►RUNNING◄──┐    │
- *  │     │             │    │
- *  │     ▼             ▼    │
- *  │ WATITING◄────────►IO   │
- *  └────────────────────────┘
+ *           CANCELLED/ERROR/FINISHED
+ *                      ▲
+ *                      │
+ *         ┌────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐    │
+ * INIT───►│     │             │    │
+ *         │     ▼             ▼    │
+ *         │ WATITING◄────────►IO   │
+ *         └────────────────────────┘
  */
 enum class ExecTaskStatus
 {
@@ -40,7 +41,6 @@ enum class ExecTaskStatus
     FINISHED,
     ERROR,
     CANCELLED,
-    FINALIZE,
 };
 
 class Task
@@ -50,41 +50,60 @@ public:
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
-    virtual ~Task() = default;
+    virtual ~Task();
 
-    MemoryTrackerPtr getMemTracker() const
+    ExecTaskStatus execute();
+
+    ExecTaskStatus executeIO();
+
+    ExecTaskStatus await();
+
+    // `finalize` must be called before destructuring.
+    // `TaskHelper::FINALIZE_TASK` can help this.
+    void finalize();
+
+    ALWAYS_INLINE void startTraceMemory()
     {
-        return mem_tracker;
+        assert(nullptr == current_memory_tracker);
+        assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
+        current_memory_tracker = mem_tracker_ptr;
+    }
+    ALWAYS_INLINE static void endTraceMemory()
+    {
+        CurrentMemoryTracker::submitLocalDeltaMemory();
+        current_memory_tracker = nullptr;
     }
 
-    ExecTaskStatus execute() noexcept;
-
-    ExecTaskStatus executeIO() noexcept;
-
-    ExecTaskStatus await() noexcept;
-
-    void finalize() noexcept;
-
-protected:
-    virtual ExecTaskStatus executeImpl() noexcept = 0;
-    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
-    // Avoid allocating memory in `await` if possible.
-    virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
-
-    // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalizeImpl() noexcept {}
-
-private:
-    void switchStatus(ExecTaskStatus to);
-
-    void assertStatus(ExecTaskStatus expect);
-
-protected:
-    MemoryTrackerPtr mem_tracker;
+public:
     LoggerPtr log;
 
+protected:
+    virtual ExecTaskStatus executeImpl() = 0;
+    virtual ExecTaskStatus executeIOImpl() { return ExecTaskStatus::RUNNING; }
+    // Avoid allocating memory in `await` if possible.
+    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+
+    // Used to release held resources, just like `Event::finishImpl`.
+    virtual void finalizeImpl() {}
+
 private:
-    ExecTaskStatus exec_status{ExecTaskStatus::INIT};
+    inline void switchStatus(ExecTaskStatus to);
+
+public:
+    TaskProfileInfo profile_info;
+
+    // level of multi-level feedback queue.
+    size_t mlfq_level{0};
+
+protected:
+    // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
+    MemoryTrackerPtr mem_tracker_holder;
+    // To reduce the overheads of `mem_tracker_holder.get()`
+    MemoryTracker * mem_tracker_ptr;
+
+    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+
+    bool is_finalized = false;
 };
 using TaskPtr = std::unique_ptr<Task>;
 

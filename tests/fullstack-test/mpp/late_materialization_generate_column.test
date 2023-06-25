@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Ltd.
+# Copyright 2023 PingCAP, Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-mysql> CREATE TABLE test.`IDT_26539` (`COL102` float DEFAULT NULL, `COL103` float DEFAULT NULL, `COL1` float GENERATED ALWAYS AS ((`COL102` DIV 10)) VIRTUAL, `COL2` varchar(20) COLLATE utf8mb4_bin DEFAULT NULL, `COL4` datetime DEFAULT NULL, `COL3` bigint DEFAULT NULL, `COL5` float DEFAULT NULL, KEY `UK_COL1` (`COL1`) /*!80000 INVISIBLE */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+mysql> CREATE TABLE test.`IDT_26539` (`COL102` float DEFAULT NULL, `COL103` float DEFAULT NULL, `COL1` float GENERATED ALWAYS AS ((`COL102` DIV 10)) VIRTUAL, `COL2` varchar(20) COLLATE utf8mb4_bin DEFAULT NULL, `COL4` datetime DEFAULT NULL, `COL3` bigint DEFAULT NULL, `COL5` time DEFAULT NULL, KEY `UK_COL1` (`COL1`) /*!80000 INVISIBLE */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) values (NULL, NULL, NULL, NULL, NULL, NULL);
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
 mysql> insert into test.IDT_26539 (COL102, COL103, COL2, COL4, COL3, COL5) select COL102, COL103, COL2, COL4, COL3, COL5 from test.IDT_26539;
@@ -71,3 +71,4 @@ mysql> set tidb_isolation_read_engines='tiflash'; select * from test.IDT_26539 w
 +--------+--------+------+------+------+------+------+
 
 mysql> set tidb_isolation_read_engines='tiflash'; select * from test.IDT_26539 where col1 is not NULL and col4 is not NULL;
+mysql> drop TABLE if exists test.`IDT_26539`;

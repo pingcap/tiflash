@@ -25,7 +25,7 @@
 # Data.
 ## does not test float32/float64 since the result is unstable, and usually it is meaningless to partition by float32/float64 column
 => DBGInvoke __mock_tidb_table(default, test1, 'col_1 Int8, col_2 UInt8, col_3 Int16, col_4 UInt16, col_5 Int32, col_6 UInt32, col_7 Int64, col_8 UInt64, col_9 Decimal(5,2), col_10 Decimal(10, 2), col_11 Decimal(30, 2), col_12 Decimal(40, 2), col_13 MyDate, col_14 MyDateTime, col_15 MyDateTime(3), col_16 String, col_17 Enum16(\'male\' = 1, \'female\' = 2, \'both\' = 3, \'unknown\' = 4)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test1)
 => DBGInvoke __put_region(4, 0, 100, default, test1)
 => DBGInvoke __put_region(5, 100, 200, default, test1)
 => DBGInvoke __put_region(6, 200, 300, default, test1)
@@ -133,7 +133,7 @@
 └─────────────────────┴─────────────────────┘
 
 => DBGInvoke __mock_tidb_table(default, test2, 'col_1 Nullable(Int8), col_2 Nullable(UInt8), col_3 Nullable(Int16), col_4 Nullable(UInt16), col_5 Nullable(Int32), col_6 Nullable(UInt32), col_7 Nullable(Int64), col_8 Nullable(UInt64), col_9 Nullable(Decimal(5,2)), col_10 Nullable(Decimal(10, 2)), col_11 Nullable(Decimal(30, 2)), col_12 Nullable(Decimal(40, 2)), col_13 Nullable(MyDate), col_14 Nullable(MyDateTime), col_15 Nullable(MyDateTime(3)), col_16 Nullable(String), col_17 Nullable(Enum16(\'male\' = 1, \'female\' = 2, \'both\' = 3, \'unknown\' = 4))')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test2)
 => DBGInvoke __put_region(7, 0, 100, default, test2)
 => DBGInvoke __put_region(8, 100, 200, default, test2)
 => DBGInvoke __put_region(9, 200, 300, default, test2)

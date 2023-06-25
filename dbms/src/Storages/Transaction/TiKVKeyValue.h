@@ -27,11 +27,6 @@ struct StringObject : std::string
 public:
     using Base = std::string;
 
-    struct Hash
-    {
-        std::size_t operator()(const StringObject & x) const { return std::hash<Base>()(x); }
-    };
-
     StringObject() = default;
     StringObject(Base && str_)
         : Base(std::move(str_))
@@ -46,6 +41,12 @@ public:
         : Base(str)
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
+
+    template <bool a, typename = std::enable_if_t<a == is_key>>
+    static StringObject<is_key> copyFromObj(const StringObject<a> & other)
+    {
+        return StringObject(other.data(), other.dataSize());
+    }
 
     DISALLOW_COPY(StringObject);
     StringObject & operator=(StringObject && a)
@@ -103,6 +104,8 @@ struct DecodedTiKVKey : std::string
 
     KeyspaceID getKeyspaceID() const;
     std::string_view getUserKey() const;
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    std::string toDebugString() const;
     static std::string makeKeyspacePrefix(KeyspaceID keyspace_id);
 };
 
@@ -147,3 +150,15 @@ private:
 };
 
 } // namespace DB
+
+namespace std
+{
+template <bool is_key>
+struct hash<DB::StringObject<is_key>>
+{
+    size_t operator()(const DB::StringObject<is_key> & k) const
+    {
+        return std::hash<std::string>()(k);
+    }
+};
+} // namespace std

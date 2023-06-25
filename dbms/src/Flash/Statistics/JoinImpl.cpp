@@ -21,7 +21,7 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
         R"("peak_build_bytes_usage":{},"build_side_child":"{}","is_spill_enabled":{},"is_spilled":{})"
-        R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_execution_time_ns":{})",
+        R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_inbound_allocated_bytes":{}, "join_build_execution_time_ns":{})",
         peak_build_bytes_usage,
         build_side_child,
         is_spill_enabled,
@@ -29,6 +29,7 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         join_build_base.rows,
         join_build_base.blocks,
         join_build_base.bytes,
+        join_build_base.allocated_bytes,
         join_build_base.execution_time_ns);
 }
 
@@ -43,13 +44,21 @@ void JoinStatistics::collectExtraRuntimeDetail()
         build_side_child = join_execute_info.build_side_root_executor_id;
         is_spill_enabled = join_execute_info.join_ptr->isEnableSpill();
         is_spilled = join_execute_info.join_ptr->isSpilled();
-        for (const auto & join_build_stream : join_execute_info.join_build_streams)
+        switch (dag_context.getExecutionMode())
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)
+        case ExecutionMode::None:
+            break;
+        case ExecutionMode::Stream:
+            for (const auto & join_build_stream : join_execute_info.join_build_streams)
             {
-                const auto & profile_info = p_stream->getProfileInfo();
-                join_build_base.append(profile_info);
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)
+                    join_build_base.append(p_stream->getProfileInfo());
             }
+            break;
+        case ExecutionMode::Pipeline:
+            for (const auto & join_build_profile_info : join_execute_info.join_build_profile_infos)
+                join_build_base.append(*join_build_profile_info);
+            break;
         }
     }
 }

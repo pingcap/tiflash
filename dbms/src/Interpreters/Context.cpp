@@ -202,6 +202,7 @@ struct ContextShared
     /// database -> table -> exception_message
     /// For the duration of the operation, an element is placed here, and an object is returned, which deletes the element in the destructor.
     /// In case the element already exists, an exception is thrown. See class DDLGuard below.
+    // TODO: now each table is global unique, so we can use only table name as key, without the database level.
     using DDLGuards = std::unordered_map<String, DDLGuard::Map>;
     DDLGuards ddl_guards;
     /// If you capture mutex and ddl_guards_mutex, then you need to grab them strictly in this order.
@@ -1761,6 +1762,17 @@ UniversalPageStoragePtr Context::tryGetWriteNodePageStorage() const
     if (shared->ps_write)
         return shared->ps_write->getUniversalPageStorage();
     return nullptr;
+}
+
+bool Context::trySyncAllDataToRemoteStore() const
+{
+    auto lock = getLock();
+    if (shared->ctx_disagg->isDisaggregatedStorageMode() && shared->ps_write)
+    {
+        shared->ps_write->setSyncAllData();
+        return true;
+    }
+    return false;
 }
 
 // In some unit tests, we may want to reinitialize WriteNodePageStorage multiple times to mock restart.

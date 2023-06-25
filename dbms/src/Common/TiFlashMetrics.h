@@ -27,6 +27,8 @@
 #include <prometheus/registry.h>
 
 #include <ext/scope_guard.h>
+#include <mutex>
+#include <shared_mutex>
 
 
 // to make GCC 11 happy
@@ -76,7 +78,8 @@ namespace DB
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
-        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                           \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
+        F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                         \
     M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),                    \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),                       \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                           \
@@ -108,20 +111,18 @@ namespace DB
         F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
         F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
-    M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
-    M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
-        F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}),                                                                         \
-        F(type_drop_keyspace, {"type", "drop_keyspace"}))                                                                                           \
-    M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter, /**/                                              \
-        F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}))                     \
+    M(tiflash_sync_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                  \
+    M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter,                                                   \
+        F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}),                     \
+        F(type_sync_table_schema, {"type", "sync_table_schema"}))                                                                                   \
     M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter,                                          \
         F(type_create_table, {"type", "create_table"}), F(type_create_db, {"type", "create_db"}),                                                   \
         F(type_drop_table, {"type", "drop_table"}), F(type_drop_db, {"type", "drop_db"}), F(type_rename_table, {"type", "rename_table"}),           \
-        F(type_add_column, {"type", "add_column"}), F(type_drop_column, {"type", "drop_column"}),                                                   \
-        F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}),                                   \
+        F(type_modify_column, {"type", "modify_column"}),   F(type_apply_partition, {"type", "apply_partition"}),                                   \
         F(type_exchange_partition, {"type", "exchange_partition"}))                                                                                 \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                                 \
-        F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.001, 2, 20}))                                                      \
+        F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                                           \
+        F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                               \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                                        \
@@ -194,6 +195,9 @@ namespace DB
         F(type_fullgc_commit, {{"type", "fullgc_commit"}},         ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
+    M(tiflash_storage_page_command_count, "Total number of PageStorage's command, such as write / read / scan / snapshot", Counter,                 \
+        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),                                                                           \
+        F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                                                                     \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                                    \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                                  \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                                   \
@@ -229,10 +233,12 @@ namespace DB
         F(type_total_establish_backoff, {{"type", "total_establish_backoff"}}, ExpBuckets{0.01, 2, 20}),                                            \
         F(type_resolve_lock, {{"type", "resolve_lock"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
         F(type_rpc_fetch_page, {{"type", "rpc_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                              \
+        F(type_write_page_cache, {{"type", "write_page_cache"}}, ExpBuckets{0.01, 2, 20}),                                                          \
         F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
-        F(type_build_read_task, {{"type", "build_read_task"}}, ExpBuckets{0.01, 2, 20}),                                                            \
-        F(type_seg_next_task, {{"type", "seg_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                                \
-        F(type_seg_build_stream, {{"type", "seg_build_stream"}}, ExpBuckets{0.01, 2, 20}))                                                          \
+        F(type_worker_fetch_page, {{"type", "worker_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                        \
+        F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                                \
+        F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                \
+        F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}))                                                                    \
     M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
         F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
         F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \
@@ -307,6 +313,8 @@ namespace DB
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                             \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                                       \
+    M(tiflash_mpp_task_monitor, "Monitor the lifecycle of MPP Task", Gauge,                                                                         \
+        F(type_longest_live_time, {"type", "longest_live_time"}),)                                                                                  \
     M(tiflash_exchange_queueing_data_bytes, "Total bytes of data contained in the queue", Gauge,                                                    \
         F(type_send, {{"type", "send_queue"}}),                                                                                                     \
         F(type_receive, {{"type", "recv_queue"}}))                                                                                                  \
@@ -344,6 +352,7 @@ namespace DB
         F(type_unknown, {"type", "unknown"}))                                                                                                       \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_put_dmfile, {{"type", "put_dmfile"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
@@ -353,6 +362,11 @@ namespace DB
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                                  \
+    M(tiflash_storage_s3_http_request_seconds, "S3 request duration breakdown in seconds", Histogram,                                               \
+        F(type_dns, {{"type", "dns"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
+        F(type_connect, {{"type", "connect"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_request, {{"type", "request"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_response, {{"type", "response"}}, ExpBuckets{0.001, 2, 20}))                                                                         \
     M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
         F(type_cpu_pending_tasks_count, {"type", "cpu_pending_tasks_count"}),                                                                       \
@@ -360,9 +374,18 @@ namespace DB
         F(type_io_pending_tasks_count, {"type", "io_pending_tasks_count"}),                                                                         \
         F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
         F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
-        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
-        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
-        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
+        F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}))                                                                     \
+    M(tiflash_pipeline_task_duration_seconds, "Bucketed histogram of pipeline task duration in seconds",                                            \
+        Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */               \
+        F(type_cpu_execute, {{"type", "cpu_execute"}}, ExpBuckets{0.005, 2, 20}),                                                                   \
+        F(type_io_execute, {{"type", "io_execute"}}, ExpBuckets{0.005, 2, 20}),                                                                     \
+        F(type_cpu_queue, {{"type", "cpu_queue"}}, ExpBuckets{0.005, 2, 20}),                                                                       \
+        F(type_io_queue, {{"type", "io_queue"}}, ExpBuckets{0.005, 2, 20}),                                                                         \
+        F(type_await, {{"type", "await"}}, ExpBuckets{0.005, 2, 20}))                                                                               \
+    M(tiflash_pipeline_task_execute_max_time_seconds_per_round, "Bucketed histogram of pipeline task execute max time per round in seconds",        \
+        Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */               \
+        F(type_cpu, {{"type", "cpu"}}, ExpBuckets{0.005, 2, 20}),                                                                                   \
+        F(type_io, {{"type", "io"}}, ExpBuckets{0.005, 2, 20}))                                                                                     \
     M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
         F(type_to_init, {"type", "to_init"}),                                                                                                       \
         F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
@@ -403,7 +426,12 @@ namespace DB
         F(type_dtfile_read_bytes, {"type", "dtfile_read_bytes"}),                                                                                   \
         F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                                     \
         F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                               \
-        F(type_page_read_bytes, {"type", "page_read_bytes"}))
+        F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                                       \
+    M(tiflash_storage_io_limiter_pending_seconds, "I/O limiter pending duration in seconds", Histogram,                                             \
+        F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                                           \
+        F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                                         \
+        F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 
@@ -450,6 +478,7 @@ struct EqualWidthBuckets
     }
 };
 
+const String keyspace_name = "keyspace";
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -460,6 +489,12 @@ struct MetricFamilyTrait<prometheus::Counter>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
     static auto & add(prometheus::Family<prometheus::Counter> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Counter> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -467,6 +502,12 @@ struct MetricFamilyTrait<prometheus::Gauge>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
     static auto & add(prometheus::Family<prometheus::Gauge> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Gauge> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -476,6 +517,13 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
+    }
+
+    static auto & add(prometheus::Family<prometheus::Histogram> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = std::get<0>(arg);
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map, std::move(std::get<1>(arg)));
     }
 };
 
@@ -491,7 +539,11 @@ struct MetricFamily
         const std::string & help,
         std::initializer_list<MetricArgType> args)
     {
+        store_args = args;
+
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
+        store_family = &family;
+
         metrics.reserve(args.size() ? args.size() : 1);
         for (auto arg : args)
         {
@@ -505,10 +557,45 @@ struct MetricFamily
         }
     }
 
+    void addMetricsForKeyspace(uint32_t keyspace_id)
+    {
+        std::vector<T *> metrics_temp;
+
+        for (auto arg : store_args)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, std::forward<MetricArgType>(arg));
+            metrics_temp.emplace_back(&metric);
+        }
+
+        if (store_args.size() == 0)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, MetricArgType{});
+            metrics_temp.emplace_back(&metric);
+        }
+        metrics_map[keyspace_id] = metrics_temp;
+    }
+
     T & get(size_t idx = 0) { return *(metrics[idx]); }
+    T & get(size_t idx, uint32_t keyspace_id)
+    {
+        {
+            std::unique_lock<std::shared_mutex> lock(shared_mutex);
+            if (metrics_map.find(keyspace_id) == metrics_map.end())
+            {
+                addMetricsForKeyspace(keyspace_id);
+            }
+        }
+        std::shared_lock<std::shared_mutex> lock(shared_mutex);
+        return *(metrics_map[keyspace_id][idx]);
+    }
 
 private:
+    std::shared_mutex shared_mutex;
     std::vector<T *> metrics;
+    prometheus::Family<T> * store_family;
+    std::vector<MetricArgType> store_args;
+
+    std::unordered_map<uint32_t, std::vector<T *>> metrics_map; // keyspace_id --> metrics
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -520,8 +607,13 @@ class TiFlashMetrics
 public:
     static TiFlashMetrics & instance();
 
+    void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
+
 private:
     TiFlashMetrics();
+
+    prometheus::Counter * getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &);
+    void removeReplicaSyncRUCounter(UInt32 keyspace_id);
 
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
@@ -541,6 +633,10 @@ private:
     using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
+
+    prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
+    std::mutex replica_sync_ru_mtx;
+    std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
@@ -571,19 +667,33 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #ifndef GTEST_TIFLASH_METRICS
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TiFlashMetrics::instance().family.get(0, keyspace_id)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TiFlashMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #else
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TestMetrics::instance().family.get(0, keyspace_id)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TestMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #endif
 #define GET_METRIC(...)                                             \
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
+
+#define GET_KEYSPACE_METRIC(...)                                                                               \
+    __GET_KEYSPACE_METRIC_MACRO(__VA_ARGS__, __GET_KEYSPACE_METRIC_1, __GET_KEYSPACE_METRIC_0, __GET_METRIC_0) \
     (__VA_ARGS__)
 
 #define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \

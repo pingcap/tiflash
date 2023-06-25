@@ -33,11 +33,6 @@ namespace DB
     M(exception_between_rename_table_data_and_metadata)           \
     M(exception_between_create_database_meta_and_directory)       \
     M(exception_before_rename_table_old_meta_removed)             \
-    M(exception_after_step_1_in_exchange_partition)               \
-    M(exception_before_step_2_rename_in_exchange_partition)       \
-    M(exception_after_step_2_in_exchange_partition)               \
-    M(exception_before_step_3_rename_in_exchange_partition)       \
-    M(exception_after_step_3_in_exchange_partition)               \
     M(region_exception_after_read_from_storage_some_error)        \
     M(region_exception_after_read_from_storage_all_error)         \
     M(exception_before_dmfile_remove_encryption)                  \
@@ -49,6 +44,7 @@ namespace DB
     M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_before_mpp_non_root_task_run)                     \
     M(exception_during_mpp_non_root_task_run)                     \
+    M(exception_during_query_run)                                 \
     M(exception_before_mpp_register_root_mpp_task)                \
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
@@ -66,12 +62,12 @@ namespace DB
     M(exception_mpp_hash_probe)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
-    M(exception_between_schema_change_in_the_same_diff)           \
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
     M(exception_during_spill)                                     \
-    M(force_fail_to_create_etcd_session)
+    M(force_fail_to_create_etcd_session)                          \
+    M(force_remote_read_for_batch_cop_once)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -101,7 +97,8 @@ namespace DB
     M(force_set_mocked_s3_object_mtime)                      \
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
-    M(exception_after_large_write_exceed)
+    M(exception_after_large_write_exceed)                    \
+    M(exception_when_fetch_disagg_pages)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -121,7 +118,6 @@ namespace DB
     M(pause_when_altering_dt_store)       \
     M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)
-
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
@@ -145,6 +141,8 @@ namespace DB
     M(random_pipeline_model_event_finish_failpoint)     \
     M(random_pipeline_model_operator_run_failpoint)     \
     M(random_pipeline_model_cancel_failpoint)           \
+    M(random_pipeline_model_execute_prefix_failpoint)   \
+    M(random_pipeline_model_execute_suffix_failpoint)   \
     M(random_spill_to_disk_failpoint)                   \
     M(random_restore_from_disk_failpoint)               \
     M(random_exception_when_connect_local_tunnel)       \
@@ -317,6 +315,22 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         enableRandomFailPoint(pair_tokens[0], rate);
     }
     LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+}
+
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+{
+    String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
+    if (random_fail_point_cfg.empty())
+        return;
+
+    Poco::StringTokenizer string_tokens(random_fail_point_cfg, ",");
+    for (const auto & string_token : string_tokens)
+    {
+        Poco::StringTokenizer pair_tokens(string_token, "-");
+        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        disableFailPoint(pair_tokens[0]);
+    }
+    LOG_INFO(log, "Disable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)

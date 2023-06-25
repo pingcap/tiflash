@@ -18,7 +18,6 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
-#include <Operators/Operator.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -101,9 +100,7 @@ public:
     Timestamp getTombstone() const { return tombstone; }
     void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
-    /// Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    /// Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
-    virtual void alterFromTiDB(
+    virtual void updateTombstone(
         const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
@@ -112,6 +109,15 @@ public:
         const Context & context)
         = 0;
 
+    virtual void alterSchemaChange(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const String & database_name,
+        const String & table_name,
+        const Context & context)
+        = 0;
+
+    virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
@@ -174,19 +180,6 @@ public:
     virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    virtual SourceOps readSourceOps(
-        PipelineExecutorStatus &,
-        const Names &,
-        const SelectQueryInfo &,
-        const Context &,
-        size_t,
-        unsigned)
-    {
-        throw Exception(
-            fmt::format("Method readSourceOps is not supported by storage {}", getName()),
-            ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:

@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSourceOp.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 
 namespace DB
 {
@@ -45,7 +46,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     {
         RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
         schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
-        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID()));
+        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_scan.getLogicalTableID(), nullptr, false, table_scan.getRuntimeFilterIDs(), 10000));
     }
     else
     {
@@ -80,12 +81,14 @@ PhysicalMockTableScan::PhysicalMockTableScan(
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
     Int64 table_id_,
-    bool keep_order_)
+    bool keep_order_,
+    const std::vector<Int32> & runtime_filter_ids)
     : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
     , keep_order(keep_order_)
+    , runtime_filter_ids(runtime_filter_ids)
 {}
 
 PhysicalPlanNodePtr PhysicalMockTableScan::build(
@@ -103,31 +106,29 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
         Block(schema),
         mock_streams,
         table_scan.getLogicalTableID(),
-        table_scan.keepOrder());
+        table_scan.keepOrder(),
+        table_scan.getRuntimeFilterIDs());
     return physical_mock_table_scan;
 }
 
-void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context /*context*/, size_t /*max_streams*/)
 {
     RUNTIME_CHECK(pipeline.streams.empty());
+    buildRuntimeFilterInLocalStream(context);
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::buildPipeline(
-    PipelineBuilder & builder,
+void PhysicalMockTableScan::buildPipelineExecGroupImpl(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
-{
-    buildSourceOps(context, exec_status);
-    PhysicalPlanNode::buildPipeline(builder, context, exec_status);
-}
-
-void PhysicalMockTableScan::buildSourceOps(Context & context, PipelineExecutorStatus & exec_status)
+    size_t)
 {
     if (context.mockStorage()->useDeltaMerge())
     {
-        source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(
+        context.mockStorage()->buildExecFromDeltaMerge(
             exec_status,
+            group_builder,
             context,
             table_id,
             context.getMaxStreams(),
@@ -135,34 +136,15 @@ void PhysicalMockTableScan::buildSourceOps(Context & context, PipelineExecutorSt
     }
     else
     {
-        source_ops.clear();
         for (const auto & stream : mock_streams)
         {
-            source_ops.emplace_back(
+            group_builder.addConcurrency(
                 std::make_unique<BlockInputStreamSourceOp>(
                     exec_status,
                     log->identifier(),
                     stream));
         }
     }
-}
-
-void PhysicalMockTableScan::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
-    PipelineExecGroupBuilder & group_builder,
-    Context & context,
-    size_t)
-{
-    // For simple operator tests in gtest_simple_operator.cpp
-    if (source_ops.empty())
-    {
-        buildSourceOps(context, exec_status);
-    }
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)
@@ -179,7 +161,7 @@ void PhysicalMockTableScan::updateStreams(Context & context)
 {
     mock_streams.clear();
     RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_id));
-    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &filter_conditions));
+    mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(context, table_id, &filter_conditions, false, runtime_filter_ids, 10000));
 }
 
 bool PhysicalMockTableScan::setFilterConditions(Context & context, const String & filter_executor_id, const tipb::Selection & selection)
@@ -207,5 +189,18 @@ const String & PhysicalMockTableScan::getFilterConditionsId() const
 Int64 PhysicalMockTableScan::getLogicalTableID() const
 {
     return table_id;
+}
+
+void PhysicalMockTableScan::buildRuntimeFilterInLocalStream(Context & context)
+{
+    for (const auto & local_stream : mock_streams)
+    {
+        if (auto * p_stream = dynamic_cast<DM::UnorderedInputStream *>(local_stream.get()))
+        {
+            auto runtime_filter_list = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
+            // todo config max wait time
+            p_stream->setRuntimeFilterInfo(runtime_filter_list, rf_max_wait_time_ms);
+        }
+    }
 }
 } // namespace DB

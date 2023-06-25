@@ -23,22 +23,32 @@
 
 namespace DB
 {
-// Hold the shared_ptr of memory tracker.
-// To avoid the current_memory_tracker being an illegal pointer.
-#define TRACE_MEMORY(task)                         \
-    assert(nullptr == current_memory_tracker);     \
-    auto memory_tracker = (task)->getMemTracker(); \
-    MemoryTrackerSetter memory_tracker_setter{true, memory_tracker.get()};
-
-#define ASSERT_MEMORY_TRACKER                  \
-    assert(nullptr == current_memory_tracker); \
-    assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
-
 #define FINISH_STATUS \
     ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR : case ExecTaskStatus::CANCELLED
 
 #define UNEXPECTED_STATUS(logger, status) \
     RUNTIME_ASSERT(false, (logger), "Unexpected task status {}", magic_enum::enum_name(status));
+
+#define FINALIZE_TASK(task) \
+    (task)->finalize();     \
+    (task).reset();
+
+#define FINALIZE_TASKS(tasks)   \
+    for (auto & task : (tasks)) \
+    {                           \
+        task->finalize();       \
+        task.reset();           \
+    }
+
+#define CATCH_AND_TERMINATE(log)                      \
+    catch (...)                                       \
+    {                                                 \
+        RUNTIME_ASSERT(                               \
+            false,                                    \
+            (log),                                    \
+            "Unexpected error reported, detail:\n{}", \
+            getCurrentExceptionMessage(true, true));  \
+    }
 
 static constexpr int64_t YIELD_MAX_TIME_SPENT_NS = 100'000'000L;
 

@@ -16,7 +16,9 @@
 
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/RuntimeFilter.h>
 #include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -197,6 +199,10 @@ struct TiFlashJoin
         const Block & left_input_header,
         const Block & right_input_header,
         const ExpressionActionsPtr & probe_prepare_join_actions) const;
+
+    std::vector<RuntimeFilterPtr> genRuntimeFilterList(const Context & context,
+                                                       const Block & input_header,
+                                                       const LoggerPtr & log);
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column

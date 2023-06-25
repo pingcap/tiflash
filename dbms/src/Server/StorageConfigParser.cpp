@@ -14,6 +14,7 @@
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #include <cmath>
+#include <compare>
 #include <cstdlib>
 #include <filesystem>
 #include <string_view>
@@ -566,6 +567,8 @@ void StorageS3Config::parse(const String & content)
     RUNTIME_CHECK(request_timeout_ms > 0);
     readConfig(table, "root", root);
     root = getNormalizedS3Root(root); // ensure ends with '/'
+    readConfig(table, "enable_http_pool", enable_http_pool);
+    readConfig(table, "enable_poco_client", enable_poco_client);
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -592,7 +595,8 @@ String StorageS3Config::toString() const
         "endpoint={} bucket={} root={} "
         "max_connections={} max_redirections={} "
         "connection_timeout_ms={} request_timeout_ms={} "
-        "access_key_id_size={} secret_access_key_size={}"
+        "access_key_id_size={} secret_access_key_size={} "
+        "enable_http_pool={} enable_poco_client={}"
         "}}",
         endpoint,
         bucket,
@@ -602,7 +606,9 @@ String StorageS3Config::toString() const
         connection_timeout_ms,
         request_timeout_ms,
         access_key_id.size(),
-        secret_access_key.size());
+        secret_access_key.size(),
+        enable_http_pool,
+        enable_poco_client);
 }
 
 void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
@@ -638,7 +644,10 @@ void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & l
     readConfig(table, "dtfile_level", dtfile_level);
     RUNTIME_CHECK(dtfile_level <= 100);
     readConfig(table, "delta_rate", delta_rate);
-    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
+    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.0) && std::islessequal(delta_rate, 1.0), delta_rate);
+    if (delta_rate == 0.0)
+        LOG_WARNING(log, "Starting with unlimited delta page cache capacity, delta_rate={}", delta_rate);
+
     readConfig(table, "reserved_rate", reserved_rate);
     RUNTIME_CHECK(std::isgreaterequal(reserved_rate, 0.0) && std::islessequal(reserved_rate, 0.5), reserved_rate);
     RUNTIME_CHECK(std::islessequal(delta_rate + reserved_rate, 1.0), delta_rate, reserved_rate);

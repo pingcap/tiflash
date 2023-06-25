@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -68,12 +69,9 @@ static void writeRegionDataToStorage(
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
-        if (storage == nullptr || storage->isTombstone())
+        if (storage == nullptr)
         {
-            if (!force_decode) // Need to update.
-                return false;
-            if (storage == nullptr) // Table must have just been GC-ed.
-                return true;
+            return force_decode;
         }
 
         /// Get a structure read lock throughout decode, during which schema must not change.
@@ -186,9 +184,11 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
-        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
-
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(log, "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
         if (!atomic_read_write(true))
         {
             // Failure won't be tolerated this time.
@@ -212,7 +212,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     RegionDataReadInfoList data_list_read;
     DecodedLockCFValuePtr lock_value;
     {
-        auto scanner = region->createCommittedScanner();
+        auto scanner = region->createCommittedScanner(true, need_data_value);
 
         /// Some sanity checks for region meta.
         {
@@ -253,12 +253,13 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
             if (!scanner.hasNext())
                 return data_list_read;
 
+            // If worked with raftstore v2, the final size may not equal to here.
             data_list_read.reserve(scanner.writeMapSize());
 
             // Tiny optimization for queries that need only handle, tso, delmark.
             do
             {
-                data_list_read.emplace_back(scanner.next(need_data_value));
+                data_list_read.emplace_back(scanner.next());
             } while (scanner.hasNext());
         }
     }
@@ -271,7 +272,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
-    auto scanner = region->createCommittedScanner(lock_region);
+    auto scanner = region->createCommittedScanner(lock_region, true);
 
     /// Some sanity checks for region meta.
     if (region->isPendingRemove())
@@ -299,7 +300,6 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     {
         std::ignore = write_type;
         std::ignore = value;
-
         remover.remove({handle, commit_ts});
     }
 }
@@ -428,8 +428,11 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     if (!atomic_get(false))
     {
-        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
+        GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
+        Stopwatch watch;
+        tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, table_id);
+        auto schema_sync_cost = watch.elapsedMilliseconds();
+        LOG_INFO(Logger::get("AtomicGetStorageSchema"), "Table {} sync schema cost {} ms", table_id, schema_sync_cost);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",

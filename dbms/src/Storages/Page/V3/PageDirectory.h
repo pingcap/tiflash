@@ -368,7 +368,7 @@ public:
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
-    void copyCheckpointInfoFromEdit(PageEntriesEdit & edit);
+    size_t copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
@@ -414,6 +414,13 @@ public:
         return u;
     }
 
+    // `writers` should be used under the protection of apply_mutex
+    // So don't use this function in production code
+    size_t getWritersQueueSizeForTest()
+    {
+        return writers.size();
+    }
+
     // No copying and no moving
     DISALLOW_COPY_AND_MOVE(PageDirectory);
 
@@ -455,7 +462,8 @@ private:
         std::condition_variable cv;
     };
 
-    // return the last writer in the group
+    // Return the last writer in the group
+    // All the edit in the write group will be merged into `first->edit`.
     Writer * buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/);
 
 private:

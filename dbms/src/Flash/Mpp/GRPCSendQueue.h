@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -77,8 +77,10 @@ template <typename T>
 class GRPCSendQueue
 {
 public:
-    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & l)
-        : send_queue(queue_size)
+    using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
+
+    GRPCSendQueue(const CapacityLimits & queue_limits, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage, grpc_call * call, const LoggerPtr & l)
+        : send_queue(queue_limits, std::move(get_auxiliary_memory_usage))
         , log(l)
         , kick_send_tag([this]() { return kickTagAction(); })
     {
@@ -92,8 +94,8 @@ public:
     }
 
     // For gtest usage.
-    GRPCSendQueue(size_t queue_size, GRPCSendKickFunc func)
-        : send_queue(queue_size)
+    GRPCSendQueue(const CapacityLimits & queue_limits, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage, GRPCSendKickFunc func)
+        : send_queue(queue_limits, std::move(get_auxiliary_memory_usage))
         , log(Logger::get())
         , kick_func(func)
         , kick_send_tag([this]() { return kickTagAction(); })
@@ -120,9 +122,9 @@ public:
         return ret;
     }
 
-    bool nonBlockingPush(T && data)
+    bool forcePush(T && data)
     {
-        auto ret = send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+        auto ret = send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
         if (ret)
         {
             kickCompletionQueue();
@@ -237,7 +239,7 @@ private:
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
-    ConcurrentIOQueue<T> send_queue;
+    LooseBoundedMPMCQueue<T> send_queue;
 
     const LoggerPtr log;
 

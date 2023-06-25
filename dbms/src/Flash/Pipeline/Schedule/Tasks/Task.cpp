@@ -29,18 +29,28 @@ extern const char random_pipeline_model_task_construct_failpoint[];
 namespace
 {
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
-void addToStatusMetrics(ExecTaskStatus to)
+ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 {
+#ifdef __APPLE__
 #define M(expect_status, metric_name)                                                \
     case (expect_status):                                                            \
     {                                                                                \
         GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name).Increment(); \
         break;                                                                       \
     }
+#else
+#define M(expect_status, metric_name)                                                                                \
+    case (expect_status):                                                                                            \
+    {                                                                                                                \
+        thread_local auto & metrics_##metric_name = GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name); \
+        (metrics_##metric_name).Increment();                                                                         \
+        break;                                                                                                       \
+    }
+#endif
 
+    // It is impossible for any task to change to init status.
     switch (to)
     {
-        M(ExecTaskStatus::INIT, type_to_init)
         M(ExecTaskStatus::WAITING, type_to_waiting)
         M(ExecTaskStatus::RUNNING, type_to_running)
         M(ExecTaskStatus::IO, type_to_io)
@@ -48,95 +58,93 @@ void addToStatusMetrics(ExecTaskStatus to)
         M(ExecTaskStatus::ERROR, type_to_error)
         M(ExecTaskStatus::CANCELLED, type_to_cancelled)
     default:
-        throw Exception(fmt::format("Unknown task status: {}.", magic_enum::enum_name(to)), ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_ASSERT(false, "unexpected task status: {}.", magic_enum::enum_name(to));
     }
 
 #undef M
 }
 } // namespace
 
-#define CHECK_FINISHED                                        \
-    if unlikely (exec_status == ExecTaskStatus::FINISHED      \
-                 || exec_status == ExecTaskStatus::ERROR      \
-                 || exec_status == ExecTaskStatus::CANCELLED) \
-        return exec_status;
-
 Task::Task()
-    : mem_tracker(nullptr)
-    , log(Logger::get())
+    : log(Logger::get())
+    , mem_tracker_holder(nullptr)
+    , mem_tracker_ptr(nullptr)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
 Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
-    : mem_tracker(std::move(mem_tracker_))
-    , log(Logger::get(req_id))
+    : log(Logger::get(req_id))
+    , mem_tracker_holder(std::move(mem_tracker_))
+    , mem_tracker_ptr(mem_tracker_holder.get())
 {
+    assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
-ExecTaskStatus Task::execute() noexcept
+Task::~Task()
 {
-    CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
-    assertStatus(ExecTaskStatus::RUNNING);
+    if unlikely (!is_finalized)
+    {
+        LOG_WARNING(
+            log,
+            "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason is that an error was reported during task creation",
+            magic_enum::enum_name(task_status));
+    }
+}
+
+ExecTaskStatus Task::execute()
+{
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
     switchStatus(executeImpl());
-    return exec_status;
+    return task_status;
 }
 
-ExecTaskStatus Task::executeIO() noexcept
+ExecTaskStatus Task::executeIO()
 {
-    CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
-    assertStatus(ExecTaskStatus::IO);
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
-    return exec_status;
+    return task_status;
 }
 
-ExecTaskStatus Task::await() noexcept
+ExecTaskStatus Task::await()
 {
-    CHECK_FINISHED
-    assert(getMemTracker().get() == current_memory_tracker);
-    assertStatus(ExecTaskStatus::WAITING);
+    assert(mem_tracker_ptr == current_memory_tracker);
+    assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
-    return exec_status;
+    return task_status;
 }
 
-void Task::finalize() noexcept
+void Task::finalize()
 {
-    RUNTIME_ASSERT(
-        exec_status == ExecTaskStatus::FINISHED
-            || exec_status == ExecTaskStatus::ERROR
-            || exec_status == ExecTaskStatus::CANCELLED,
-        log,
-        "finalize must be called in FINISHED/ERROR/CANCELLED status, but actual status is {}",
-        magic_enum::enum_name(exec_status));
-
     // To make sure that `finalize` only called once.
-    exec_status = ExecTaskStatus::FINALIZE;
+    RUNTIME_ASSERT(
+        !is_finalized,
+        log,
+        "finalize can only be called once.");
+    is_finalized = true;
+
     finalizeImpl();
+
+    profile_info.reportMetrics();
+#ifndef NDEBUG
+    LOG_TRACE(log, "task finalize with profile info: {}", profile_info.toJson());
+#endif // !NDEBUG
 }
 
 void Task::switchStatus(ExecTaskStatus to)
 {
-    if (exec_status != to)
+    if (task_status != to)
     {
-        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+#ifndef NDEBUG
+        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(task_status), magic_enum::enum_name(to));
+#endif // !NDEBUG
         addToStatusMetrics(to);
-        exec_status = to;
+        task_status = to;
     }
-}
-
-void Task::assertStatus(ExecTaskStatus expect)
-{
-    RUNTIME_ASSERT(
-        exec_status == expect || exec_status == ExecTaskStatus::INIT,
-        log,
-        "actual status is {}, but expect status are {} and {}",
-        magic_enum::enum_name(exec_status),
-        magic_enum::enum_name(expect),
-        magic_enum::enum_name(ExecTaskStatus::INIT));
 }
 } // namespace DB

@@ -22,7 +22,7 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64, col_3 Nullable(String)')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 
 => DBGInvoke dag('select uniqRawRes(col_2) from default.test group by col_3')

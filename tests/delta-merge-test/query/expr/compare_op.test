@@ -21,7 +21,7 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'id Int64, c1 String')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 0, 'y\0\0\0\0\0\0')
 

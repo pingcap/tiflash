@@ -15,17 +15,17 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPool.h>
-#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
+#include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/WaitReactor.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
 
 namespace DB
 {
 struct TaskSchedulerConfig
 {
-    size_t cpu_task_thread_pool_size;
-    size_t io_task_thread_pool_size;
+    ThreadPoolConfig cpu_task_thread_pool_config;
+    ThreadPoolConfig io_task_thread_pool_config;
 };
 
 /**
@@ -58,7 +58,7 @@ public:
 
     ~TaskScheduler();
 
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
+    void submit(std::vector<TaskPtr> & tasks);
 
     void submitToWaitReactor(TaskPtr && task);
     void submitToCPUTaskThreadPool(TaskPtr && task);
@@ -76,8 +76,5 @@ private:
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
-
-    friend class TaskThreadPool<CPUImpl>;
-    friend class WaitReactor;
 };
 } // namespace DB

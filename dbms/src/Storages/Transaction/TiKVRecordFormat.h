@@ -68,6 +68,7 @@ static const char GC_FENCE_PREFIX = 'F';
 static const char LAST_CHANGE_PREFIX = 'l';
 static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
 static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
+static const char PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX = 'F';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -157,15 +158,9 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     WriteBufferFromOwnString ss;
 
-    std::unordered_map<String, size_t> column_name_columns_index_map;
-    for (size_t i = 0; i < table_info.columns.size(); i++)
-    {
-        column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-    }
     for (size_t i = 0; i < keys.size(); i++)
     {
-        auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-        DB::EncodeDatum(keys[i], table_info.columns[idx].getCodecFlag(), ss);
+        DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
     }
     return encodeAsTiKVKey(key + ss.releaseStr());
 }

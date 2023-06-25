@@ -85,7 +85,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         Stopwatch watch;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         auto block_size = blocks.size();
-        LOG_DEBUG(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
+        LOG_DEBUG(spiller->logger, "Spilling {} blocks data", block_size);
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_spill);
 
@@ -96,6 +96,9 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         {
             if (unlikely(!block || block.rows() == 0))
                 continue;
+            /// erase constant column
+            spiller->removeConstantColumns(block);
+            RUNTIME_CHECK_MSG(block.columns() > 0, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
             if (unlikely(writer == nullptr))
             {
                 std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();

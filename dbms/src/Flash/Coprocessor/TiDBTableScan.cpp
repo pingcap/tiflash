@@ -29,10 +29,17 @@ TiDBTableScan::TiDBTableScan(
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
-    , is_fast_scan(table_scan->tbl_scan().is_fast_scan())
+    , is_fast_scan(is_partition_table_scan ? table_scan->partition_table_scan().is_fast_scan() : table_scan->tbl_scan().is_fast_scan())
 {
+    RUNTIME_CHECK_MSG(!keep_order || pushed_down_filters.empty(), "Bad TiDB table scan executor: push down filter is not empty when keep order is true");
+
     if (is_partition_table_scan)
     {
+        for (const auto & rf_pb : table_scan->partition_table_scan().runtime_filter_list())
+        {
+            runtime_filter_ids.push_back(rf_pb.id());
+        }
+        max_wait_time_ms = table_scan->partition_table_scan().max_wait_time_ms();
         if (table_scan->partition_table_scan().has_table_id())
             logical_table_id = table_scan->partition_table_scan().table_id();
         else
@@ -52,6 +59,11 @@ TiDBTableScan::TiDBTableScan(
     }
     else
     {
+        for (const auto & rf_pb : table_scan->tbl_scan().runtime_filter_list())
+        {
+            runtime_filter_ids.push_back(rf_pb.id());
+        }
+        max_wait_time_ms = table_scan->tbl_scan().max_wait_time_ms();
         if (table_scan->tbl_scan().next_read_engine() != tipb::EngineType::Local)
             throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
@@ -79,6 +91,7 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         for (auto id : partition_table_scan.primary_prefix_column_ids())
             tipb_table_scan->add_primary_prefix_column_ids(id);
         tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
+        tipb_table_scan->set_keep_order(false);
     }
     else
     {

@@ -54,7 +54,6 @@ void recordJoinExecuteInfo(
     RUNTIME_CHECK(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -121,6 +120,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     tiflash_join.fillJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names, join_non_equal_conditions);
 
     const Settings & settings = context.getSettingsRef();
+    size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
+    if (settings.enforce_enable_pipeline && max_bytes_before_external_join > 0)
+    {
+        // Currently, the pipeline model does not support disk-based join, so when enforce_enable_pipeline is true, the disk-based join will be disabled.
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
+    }
     SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     size_t max_block_size = settings.max_block_size;
@@ -130,6 +136,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     Names join_output_column_names;
     for (const auto & col : join_output_schema)
         join_output_column_names.emplace_back(col.name);
+
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
+    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
+
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -138,7 +149,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         log->identifier(),
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
-        settings.max_bytes_before_external_join,
+        max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
         settings.join_restore_concurrency,
@@ -146,10 +157,12 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
+        settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
-        context.isTest());
+        context.isTest(),
+        runtime_filter_list);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
@@ -207,7 +220,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();
