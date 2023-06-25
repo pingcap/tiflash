@@ -211,7 +211,7 @@ public:
 
     std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
 
-    std::pair<bool, String> registerTask(const MPPTaskId & task_id, Context & context);
+    std::pair<bool, String> registerTask(MPPTask * task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
@@ -224,8 +224,6 @@ public:
     std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 
     void abortMPPQuery(const MPPQueryId & query_id, const String & reason, AbortType abort_type);
-
-    std::pair<std::shared_ptr<ProcessListEntry>, String> getQueryProcessListEntry(const MPPQueryId & query_id);
 
     String toString();
 

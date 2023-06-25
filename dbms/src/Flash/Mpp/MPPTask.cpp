@@ -45,8 +45,8 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char exception_before_mpp_register_non_root_mpp_task[];
-extern const char exception_before_mpp_register_root_mpp_task[];
+extern const char exception_before_mpp_make_non_root_mpp_task_public[];
+extern const char exception_before_mpp_make_root_mpp_task_public[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
@@ -69,15 +69,15 @@ void injectFailPointBeforeRegisterTunnel(bool is_root_task)
     }
 }
 
-void injectFailPointBeforeRegisterMPPTask(bool is_root_task)
+void injectFailPointBeforeMakeMPPTaskPublic(bool is_root_task)
 {
     if (is_root_task)
     {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_root_mpp_task_public);
     }
     else
     {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_public);
     }
 }
 
@@ -113,6 +113,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , log(Logger::get(id.toString()))
     , mpp_task_statistics(id, meta.address())
 {
+    assert(manager != nullptr);
     current_memory_tracker = nullptr;
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
@@ -313,26 +314,14 @@ void MPPTask::unregisterTask()
         LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
-void MPPTask::initProcessListEntry(MPPTaskManagerPtr & task_manager)
+void MPPTask::initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry)
 {
     /// all the mpp tasks of the same mpp query shares the same process list entry
-    auto [query_process_list_entry, aborted_reason] = task_manager->getQueryProcessListEntry(id.query_id);
-    if (!aborted_reason.empty())
-        throw TiFlashException(fmt::format("MPP query is already aborted, aborted reason: {}", aborted_reason), Errors::Coprocessor::Internal);
     assert(query_process_list_entry != nullptr);
     process_list_entry_holder.process_list_entry = query_process_list_entry;
     dag_context->setProcessListEntry(query_process_list_entry);
     context->setProcessListElement(&query_process_list_entry->get());
     current_memory_tracker = getMemoryTracker();
-}
-
-void MPPTask::registerTask()
-{
-    auto [result, reason] = manager->registerTask(id, *context);
-    if (!result)
-    {
-        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::Internal);
-    }
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -392,19 +381,22 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
-    auto task_manager = tmt_context.getMPPTaskManager();
-    initProcessListEntry(task_manager);
+    auto [result, reason] = manager->registerTask(this);
+    if (!result)
+    {
+        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::Internal);
+    }
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
     registerTunnels(task_request);
 
-    LOG_DEBUG(log, "begin to register the task {}", id.toString());
+    LOG_DEBUG(log, "begin to make the task {} public", id.toString());
 
-    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
-    auto [result, reason] = task_manager->makeTaskPublic(shared_from_this());
+    injectFailPointBeforeMakeMPPTaskPublic(dag_context->isRootMPPTask());
+    std::tie(result, reason) = manager->makeTaskPublic(shared_from_this());
     if (!result)
     {
-        throw TiFlashException(fmt::format("Failed to register MPP Task {}, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(fmt::format("Failed to make MPP Task {} public, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);
     }
 
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());

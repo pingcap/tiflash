@@ -34,7 +34,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_task_manager_find_task_failure_failpoint[];
-extern const char pause_before_register_non_root_mpp_task[];
+extern const char pause_before_make_non_root_mpp_task_public[];
 } // namespace FailPoints
 
 MPPQueryTaskSet::~MPPQueryTaskSet()
@@ -246,29 +246,33 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
     LOG_WARNING(log, "Finish abort query: " + query_id.toString());
 }
 
-std::pair<bool, String> MPPTaskManager::registerTask(const MPPTaskId & task_id, Context & context)
+std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
 {
     std::unique_lock lock(mu);
-    auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task_id.query_id);
+    auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task->id.query_id);
     if (!error_msg.empty())
     {
         return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
     }
+
+    auto & context = task->context;
+
     if (query_set == nullptr)
-        query_set = addMPPQueryTaskSet(task_id.query_id);
+        query_set = addMPPQueryTaskSet(task->id.query_id);
     if (query_set->process_list_entry == nullptr)
     {
         query_set->process_list_entry = setProcessListElement(
-            context,
-            context.getDAGContext()->dummy_query_string,
-            context.getDAGContext()->dummy_ast.get(),
+            *context,
+            context->getDAGContext()->dummy_query_string,
+            context->getDAGContext()->dummy_ast.get(),
             true);
     }
-    if (query_set->isTaskRegistered(task_id))
+    if (query_set->isTaskRegistered(task->id))
     {
         return {false, "task is already registered"};
     }
-    query_set->registerTask(task_id);
+    query_set->registerTask(task->id);
+    task->initProcessListEntry(query_set->process_list_entry);
     return {true, ""};
 }
 
@@ -276,7 +280,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
 {
     if (!task->isRootMPPTask())
     {
-        FAIL_POINT_PAUSE(FailPoints::pause_before_register_non_root_mpp_task);
+        FAIL_POINT_PAUSE(FailPoints::pause_before_make_non_root_mpp_task_public);
     }
     std::unique_lock lock(mu);
     auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task->id.query_id);
@@ -284,13 +288,15 @@ std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
     {
         return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
     }
-    /// query_set must not be nullptr if the current query is not aborted since MPPTask::initProcessListEntry
-    /// will always create the query_set
-    RUNTIME_CHECK_MSG(query_set != nullptr, "query set must not be null when make task visible");
     if (query_set->findMPPTask(task->id) != nullptr)
     {
         return {false, "task is already visible"};
     }
+    /// query_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
+    /// always create the query_set
+    RUNTIME_CHECK_MSG(query_set != nullptr, "query set must not be null when make task visible");
+    RUNTIME_CHECK_MSG(query_set->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
+                      "Task process list entry should always be the same as query process list entry");
     query_set->makeTaskVisible(task);
     /// cancel all the alarm waiting on this task
     auto alarm_it = query_set->alarms.find(task->id.task_id);
@@ -339,17 +345,6 @@ String MPPTaskManager::toString()
         });
     }
     return res + ")";
-}
-
-std::pair<std::shared_ptr<ProcessListEntry>, String> MPPTaskManager::getQueryProcessListEntry(const MPPQueryId & query_id)
-{
-    std::lock_guard lock(mu);
-    auto [query_set, abort_reason] = getQueryTaskSetWithoutLock(query_id);
-    if (!abort_reason.empty())
-        return {nullptr, abort_reason};
-    RUNTIME_CHECK_MSG(query_set != nullptr, "Query set must be not null in getQueryProcessListEntry");
-    RUNTIME_CHECK_MSG(query_set->process_list_entry != nullptr, "query process list entry must be not null in getQueryProcessListEntry");
-    return {query_set->process_list_entry, ""};
 }
 
 std::pair<MPPQueryTaskSetPtr, String> MPPTaskManager::getQueryTaskSetWithoutLock(const MPPQueryId & query_id)
