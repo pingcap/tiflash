@@ -14,8 +14,6 @@
 
 #include <Flash/Mpp/ReceivedMessageQueue.h>
 
-#include "magic_enum.hpp"
-
 namespace DB
 {
 namespace FailPoints
