@@ -901,93 +901,47 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     auto sync_all_schema_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
     auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
 
-
     for (const auto & db : all_schemas)
     {
-        auto task = [this, &db, &db_set] {
-            {
-                std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-                if (databases.find(db->id) == databases.end())
-                {
-                    shared_lock.unlock();
-                    applyCreateSchema(db);
-                    db_set.emplace(name_mapper.mapDatabaseName(*db));
-                    LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
-                }
-            }
-
-            std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-            for (auto & table : tables)
-            {
-                LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
-
-                /// Ignore view and sequence.
-                if (table->is_view || table->is_sequence)
-                {
-                    LOG_INFO(log, "Table {} is a view or sequence, ignoring.", name_mapper.debugCanonicalName(*db, *table));
-                    continue;
-                }
-
-                table_id_map.emplaceTableID(table->id, db->id);
-                LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
-
-                applyCreatePhysicalTable(db, table);
-                if (table->isLogicalPartitionTable())
-                {
-                    for (const auto & part_def : table->partition.definitions)
-                    {
-                        LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table->id);
-                        table_id_map.emplacePartitionTableID(part_def.id, table->id);
-                    }
-                }
-            }
-        };
-        sync_all_schema_wait_group->schedule(task);
+        std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
+        if (databases.find(db->id) == databases.end())
+        {
+            shared_lock.unlock();
+            applyCreateSchema(db);
+            db_set.emplace(name_mapper.mapDatabaseName(*db));
+            LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
+        }
     }
-    sync_all_schema_wait_group->wait();
 
+    // TODO:make parallel to speed up
+    for (const auto & db : all_schemas)
+    {
+        std::vector<TableInfoPtr> tables = getter.listTables(db->id);
+        for (auto & table : tables)
+        {
+            LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
 
-    // for (const auto & db : all_schemas)
-    // {
-    //     std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
-    //     if (databases.find(db->id) == databases.end())
-    //     {
-    //         shared_lock.unlock();
-    //         applyCreateSchema(db);
-    //         db_set.emplace(name_mapper.mapDatabaseName(*db));
-    //         LOG_DEBUG(log, "Database {} created during sync all schemas", name_mapper.debugDatabaseName(*db));
-    //     }
-    // }
+            /// Ignore view and sequence.
+            if (table->is_view || table->is_sequence)
+            {
+                LOG_INFO(log, "Table {} is a view or sequence, ignoring.", name_mapper.debugCanonicalName(*db, *table));
+                continue;
+            }
 
-    // // TODO:make parallel to speed up
-    // for (const auto & db : all_schemas)
-    // {
-    //     std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-    //     for (auto & table : tables)
-    //     {
-    //         LOG_INFO(log, "Table {} syncing during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
+            table_id_map.emplaceTableID(table->id, db->id);
+            LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
 
-    //         /// Ignore view and sequence.
-    //         if (table->is_view || table->is_sequence)
-    //         {
-    //             LOG_INFO(log, "Table {} is a view or sequence, ignoring.", name_mapper.debugCanonicalName(*db, *table));
-    //             continue;
-    //         }
-
-    //         table_id_map.emplaceTableID(table->id, db->id);
-    //         LOG_DEBUG(log, "register table to table_id_map, database_id={} table_id={}", db->id, table->id);
-
-    //         applyCreatePhysicalTable(db, table);
-    //         if (table->isLogicalPartitionTable())
-    //         {
-    //             for (const auto & part_def : table->partition.definitions)
-    //             {
-    //                 LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table->id);
-    //                 table_id_map.emplacePartitionTableID(part_def.id, table->id);
-    //             }
-    //         }
-    //     }
-    // }
+            applyCreatePhysicalTable(db, table);
+            if (table->isLogicalPartitionTable())
+            {
+                for (const auto & part_def : table->partition.definitions)
+                {
+                    LOG_DEBUG(log, "register table to table_id_map for partition table, partition_id={} table_id={}", part_def.id, table->id);
+                    table_id_map.emplacePartitionTableID(part_def.id, table->id);
+                }
+            }
+        }
+    }
 
     // TODO:can be removed if we don't save the .sql
     /// Drop all unmapped tables.
