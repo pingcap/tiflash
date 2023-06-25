@@ -14,6 +14,8 @@
 
 #include <Flash/Mpp/ReceivedMessageQueue.h>
 
+#include "magic_enum.hpp"
+
 namespace DB
 {
 namespace FailPoints
@@ -65,10 +67,18 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
             assert(recv_msg != nullptr);
             if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
             {
-                auto pop_result [[maybe_unused]] = grpc_recv_queue->dequeue();
+#ifndef NDEBUG
+                ReceivedMessagePtr original_msg;
+                auto pop_result = grpc_recv_queue->tryPop(original_msg);
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
                 /// so even use tryPop, the result must not be empty
-                assert(pop_result != MPMCQueueResult::EMPTY);
+                RUNTIME_CHECK_MSG(pop_result != MPMCQueueResult::EMPTY, "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
+                if likely (original_msg != nullptr)
+                    RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
+#else
+                // Use `dequeue` to reduce the overheads of `~shared_ptr<ReceivedMessage>` in release build.
+                grpc_recv_queue->dequeue();
+#endif
             }
         }
         return res;

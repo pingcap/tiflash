@@ -207,7 +207,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:
@@ -256,7 +256,7 @@ public:
 
     bool isWritable() const override
     {
-        return !queue.isFull();
+        return queue.isWritable();
     }
 
     void cancelWith(const String & reason) override
@@ -438,7 +438,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:

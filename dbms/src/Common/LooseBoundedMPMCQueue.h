@@ -21,9 +21,9 @@
 namespace DB
 {
 /** A simple thread-safe loose-bounded concurrent queue and basically compatible with MPMCQueue.
-  * Provide functions `forcePush` and `isFull` to support asynchronous writes.
+  * Provide functions `forcePush` and `isWritable` to support asynchronous writes.
   * ```
-  * while (queue.isFull()) {}
+  * while (!queue.isWritable()) {}
   * queue.forcePush(std::move(obj));
   * ```
   */
@@ -34,7 +34,7 @@ public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
     using PushCallback = std::function<void(const T & element)>;
 
-    LooseBoundedMPMCQueue(
+    explicit LooseBoundedMPMCQueue(
         const CapacityLimits & capacity_limits_,
         ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; },
         PushCallback && push_callback_ = {})
@@ -168,10 +168,13 @@ public:
         return queue.size();
     }
 
-    bool isFull() const
+    bool isWritable() const
     {
         std::lock_guard lock(mu);
-        return isFullWithoutLock();
+        // When the queue is not in normal status, isWritable returns true to ensure that forcePush can be called.
+        if unlikely (status != MPMCQueueStatus::NORMAL)
+            return true;
+        return !isFullWithoutLock();
     }
 
     MPMCQueueStatus getStatus() const

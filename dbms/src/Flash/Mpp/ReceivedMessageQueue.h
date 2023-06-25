@@ -88,7 +88,7 @@ public:
     }
     bool isWritable() const
     {
-        return !msg_channel->isFull();
+        return msg_channel->isWritable();
     }
 };
 } // namespace DB
