@@ -102,7 +102,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         return {nullptr, error_msg};
     }
 
-    auto task = query_set == nullptr ? nullptr : query_set->findMPPTask(id);
+    auto * task = query_set == nullptr ? nullptr : query_set->findMPPTask(id);
     if (task == nullptr)
     {
         /// task not found or not visible yet

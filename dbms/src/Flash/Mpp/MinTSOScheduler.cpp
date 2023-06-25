@@ -109,7 +109,7 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
         {
             while (!query_task_set->waiting_tasks.empty())
             {
-                auto task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
+                auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
                 if (task != nullptr)
                     task->scheduleThisTask(ScheduleState::FAILED);
                 query_task_set->waiting_tasks.pop();
@@ -165,7 +165,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
         {
-            auto task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
+            auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
             bool has_error = false;
             if (task != nullptr && !scheduleImp(current_query_id, query_task_set, task->getScheduleEntry(), true, has_error))
             {
