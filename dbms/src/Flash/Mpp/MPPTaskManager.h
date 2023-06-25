@@ -53,7 +53,7 @@ struct MPPQueryTaskSet
         return state == Normal || state == Aborted;
     }
     ~MPPQueryTaskSet();
-    MPPTaskPtr findMPPTask(const MPPTaskId & task_id) const;
+    MPPTask * findMPPTask(const MPPTaskId & task_id) const;
     bool isTaskRegistered(const MPPTaskId & task_id) const
     {
         return task_map.find(task_id) != task_map.end();
@@ -209,9 +209,11 @@ public:
 
     std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
 
-    std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
-
+    /// registerTask make the task info stored in MPPTaskManager, but it is still not visible to other mpp tasks before makeTaskPublic.
+    /// After registerTask, the related query_task_set can't be cleaned before unregisterTask is called
     std::pair<bool, String> registerTask(MPPTask * task);
+
+    std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 

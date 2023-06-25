@@ -47,12 +47,12 @@ MPPQueryTaskSet::~MPPQueryTaskSet()
     }
 }
 
-MPPTaskPtr MPPQueryTaskSet::findMPPTask(const MPPTaskId & task_id) const
+MPPTask * MPPQueryTaskSet::findMPPTask(const MPPTaskId & task_id) const
 {
     const auto & it = task_map.find(task_id);
     if (it == task_map.end())
         return nullptr;
-    return it->second;
+    return it->second.get();
 }
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
@@ -149,7 +149,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     const auto & meta = request->sender_meta();
     MPPTaskId id{meta};
     String req_info = fmt::format("tunnel{}+{}", request->sender_meta().task_id(), request->receiver_meta().task_id());
-    MPPTaskPtr task = nullptr;
+    MPPTask * task = nullptr;
     bool cancelled = false;
     String error_message;
     std::unique_lock lock(mu);
