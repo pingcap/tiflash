@@ -45,6 +45,7 @@ extern const int TABLE_IS_DROPPED;
 namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
+extern const char proactive_flush_before_persist_region[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -242,12 +243,13 @@ RegionManager::RegionWriteLock KVStore::genRegionWriteLock(const KVStoreTaskLock
     return region_manager.genRegionWriteLock();
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(
+EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     raft_cmdpb::RaftCmdRequest && request,
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TMTContext & tmt,
+    DM::WriteResult & write_result)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -280,17 +282,17 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
             throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
         }
     }
-    return handleWriteRaftCmd(
+    return handleWriteRaftCmdInner(
         WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
         region_id,
         index,
         term,
-        tmt);
+        tmt,
+        write_result);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result)
 {
-    DM::WriteResult write_result = std::nullopt;
     EngineStoreApplyRes res;
     {
         auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
@@ -305,6 +307,10 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
         write_result = std::move(w);
         res = r;
     }
+    /// Safety:
+    /// This call is from Proxy's applying thread of this region, so:
+    /// 1. No other thread can write from raft to this region even if we unlocked here.
+    /// 2. If `compactLogByRowKeyRange` causes a write stall, it will be forwarded to raft layer.
     if (write_result)
     {
         auto & inner = write_result.value();
@@ -314,6 +320,28 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
         }
     }
     return res;
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt)
+{
+    DM::WriteResult write_result;
+    return handleWriteRaftCmdInner(std::move(request), region_id, index, term, tmt, write_result);
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    DM::WriteResult write_result;
+    return handleWriteRaftCmdInner(cmds, region_id, index, term, tmt, write_result);
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmdDebug(raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result)
+{
+    return handleWriteRaftCmdInner(std::move(request), region_id, index, term, tmt, write_result);
 }
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
@@ -900,6 +928,27 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 // 3. notify regions to compact log and store fushed state with applied index/term before flushing cache.
 void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
+    if (is_background)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
+    }
+
+    Stopwatch general_watch;
+    SCOPE_EXIT({
+        if (is_background)
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg).Observe(general_watch.elapsedSeconds());
+        }
+        else
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(general_watch.elapsedSeconds());
+        }
+    });
+
     auto storage = tmt.getStorages().get(keyspace_id, table_id);
     if (unlikely(storage == nullptr))
     {
@@ -912,7 +961,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
                                 TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
     Stopwatch watch;
 
-    LOG_DEBUG(log, "Start proactive compact region range [{},{}]", range.first.toDebugString(), range.second.toDebugString());
+    LOG_INFO(log, "Start proactive flush region range [{},{}] [table_id={}] [keyspace_id={}] [is_background={}]", range.first.toDebugString(), range.second.toDebugString(), table_id, keyspace_id, is_background);
     std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange, RegionPtr>> region_compact_indexes;
     {
         auto task_lock = genTaskLock();
@@ -947,6 +996,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
             region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
         }
     }
+    FAIL_POINT_PAUSE(FailPoints::proactive_flush_before_persist_region);
     // Flush all segments in the range of regions.
     // TODO: combine adjacent range to do one flush.
     for (const auto & region : region_compact_indexes)
@@ -981,7 +1031,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     }
     auto elapsed_notify_proxy = watch.elapsedMilliseconds();
 
-    LOG_DEBUG(log, "Finished proactive compact region range [{},{}], couple_flush {} notify_proxy {}", range.first.toDebugString(), range.second.toDebugString(), elapsed_coupled_flush, elapsed_notify_proxy);
+    LOG_DEBUG(log, "Finished proactive flush region range [{},{}] of {} regions. [couple_flush={}] [notify_proxy={}] [table_id={}] [keyspace_id={}] [is_background={}]", range.first.toDebugString(), range.second.toDebugString(), region_compact_indexes.size(), elapsed_coupled_flush, elapsed_notify_proxy, table_id, keyspace_id, is_background);
 }
 
 // The caller will guarantee that delta cache has been flushed.

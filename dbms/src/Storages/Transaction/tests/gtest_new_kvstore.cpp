@@ -21,7 +21,7 @@ namespace tests
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     {
         auto applied_index = 0;
@@ -156,7 +156,7 @@ CATCH
 TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     {
         auto region_id = 1;
         {
@@ -193,7 +193,7 @@ CATCH
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     // CompactLog and passive persistence
     {
         KVStore & kvs = getKVS();
@@ -336,7 +336,7 @@ static void validate(KVStore & kvs, std::unique_ptr<MockRaftStoreProxy> & proxy_
 TEST_F(RegionKVStoreTest, KVStoreSnapshotV1)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     {
         UInt64 region_id = 1;
         TableID table_id;
@@ -510,7 +510,7 @@ CATCH
 TEST_F(RegionKVStoreTest, KVStoreSnapshotV2)
 try
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     UInt64 region_id = 1;
     TableID table_id;
     {

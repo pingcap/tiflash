@@ -20,14 +20,18 @@
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <google/protobuf/text_format.h>
+
 
 namespace DB
 {
@@ -412,6 +416,38 @@ void MockRaftStoreProxy::debugAddRegions(
     }
 }
 
+void MockRaftStoreProxy::loadRegionFromKVStore(
+    KVStore & kvs,
+    TMTContext & tmt,
+    UInt64 region_id)
+{
+    UNUSED(tmt);
+    auto kvr = kvs.getRegion(region_id);
+    auto ori_r = getRegion(region_id);
+    auto commit_index = RAFT_INIT_LOG_INDEX;
+    auto commit_term = RAFT_INIT_LOG_TERM;
+    if (!ori_r)
+    {
+        regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
+    }
+    else
+    {
+        commit_index = ori_r->getLatestCommitIndex();
+        commit_term = ori_r->getLatestCommitTerm();
+    }
+    MockProxyRegionPtr r = getRegion(region_id);
+    {
+        r->state = kvr->mutMeta().getRegionState().getBase();
+        r->apply = kvr->mutMeta().clonedApplyState();
+        if (r->apply.commit_index() == 0)
+        {
+            r->apply.set_commit_index(commit_index);
+            r->apply.set_commit_term(commit_term);
+        }
+    }
+    LOG_INFO(log, "loadRegionFromKVStore [region_id={}] region_state {} apply_state {}", region_id, r->state.DebugString(), r->apply.DebugString());
+}
+
 std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     UInt64 region_id,
     std::vector<HandleID> && keys,
@@ -609,7 +645,8 @@ void MockRaftStoreProxy::doApply(
     TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
-    uint64_t index)
+    uint64_t index,
+    std::optional<bool> check_proactive_flush)
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
@@ -658,7 +695,21 @@ void MockRaftStoreProxy::doApply(
     if (cmd.has_raw_write_request())
     {
         // TiFlash write
-        kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+        DB::DM::WriteResult write_task;
+        kvs.handleWriteRaftCmdDebug(std::move(request), region_id, index, term, tmt, write_task);
+        if (check_proactive_flush)
+        {
+            if (check_proactive_flush.value())
+            {
+                // fg flush
+                ASSERT(write_task.has_value());
+            }
+            else
+            {
+                // bg flush
+                ASSERT(!write_task.has_value());
+            }
+        }
     }
     if (cmd.has_admin_request())
     {
@@ -678,6 +729,14 @@ void MockRaftStoreProxy::doApply(
             auto i = cmd.admin().request.compact_log().compact_index();
             // TODO We should remove (0, index] here, it is enough to remove exactly index now.
             region->commands.erase(i);
+        }
+        else if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::BatchSplit)
+        {
+            for (auto && sp : cmd.admin().response.splits().regions())
+            {
+                auto r = sp.id();
+                loadRegionFromKVStore(kvs, tmt, r);
+            }
         }
     }
 
@@ -826,6 +885,20 @@ TableID MockRaftStoreProxy::bootstrapTable(
     schema_syncer->syncSchemas(ctx, NullspaceID);
     this->table_id = table_id;
     return table_id;
+}
+
+std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t) const
+{
+    WriteBufferFromOwnString buff;
+    writeChar(RecordKVFormat::CFModifyFlag::PutFlag, buff);
+    EncodeVarUInt(tso, buff);
+    std::string value_write = buff.releaseStr();
+    buff.restart();
+    auto && table_info = MockTiDB::instance().getTableInfoByID(table_id);
+    std::vector<Field> f{Field{std::move(t)}};
+    encodeRowV1(*table_info, f, buff);
+    std::string value_default = buff.releaseStr();
+    return std::make_pair(value_write, value_default);
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)

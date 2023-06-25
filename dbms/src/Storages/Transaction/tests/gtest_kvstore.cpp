@@ -120,7 +120,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             auto tar = kvs.getRegion(tar_region_id);
             ASSERT_EQ(
-                tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()),
+                tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()).first,
                 EngineStoreApplyRes::None);
         }
         {

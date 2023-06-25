@@ -100,6 +100,8 @@ extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
 extern const char exception_before_drop_segment[];
 extern const char exception_after_drop_segment[];
+extern const char proactive_flush_before_persist_region[];
+extern const char proactive_flush_force_set_type[];
 } // namespace FailPoints
 
 namespace DM
@@ -533,7 +535,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
                              handle_column);
         }
     }
-    return block;
+    return std::move(block);
 }
 
 DM::WriteResult DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
@@ -1371,6 +1373,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
+
     bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes);
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
@@ -1411,6 +1414,29 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
     fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
+    fiu_do_on(FailPoints::proactive_flush_force_set_type, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::proactive_flush_force_set_type); v)
+        {
+            auto set_kind = std::any_cast<std::shared_ptr<std::atomic<int>>>(v.value());
+            auto set_kind_int = set_kind->load();
+            if (set_kind_int == 1)
+            {
+                LOG_INFO(log, "!!!! AAAAA 1");
+                should_foreground_flush = true;
+                should_background_flush = false;
+            }
+            else if (set_kind_int == 2)
+            {
+                LOG_INFO(log, "!!!! AAAAA 2");
+                should_foreground_flush = false;
+                should_background_flush = true;
+            }
+        }
+    });
+
+    LOG_INFO(log, "!!!!! segment_limit_rows {} segment_limit_bytes {} delta_cache_limit_rows {} delta_cache_limit_bytes {}, {}. should_foreground_flush {} should_background_flush {}", segment_limit_rows, segment_limit_bytes, delta_cache_limit_rows, delta_cache_limit_bytes, StackTrace().toString(), should_foreground_flush, should_background_flush);
+
+
     auto try_add_background_task = [&](const BackgroundTask & task) {
         if (shutdown_called.load(std::memory_order_relaxed))
             return;
@@ -1424,6 +1450,9 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         else
             background_task_handle->wake();
     };
+
+    /// Note a bg flush task may still be added even when we have a fg flush here.
+    /// This bg flush may be better since it may update delta index.
 
     /// Flush is always try first.
     if (thread_type != ThreadType::Read)
@@ -1443,7 +1472,7 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
             delta_last_try_flush_rows = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
-            LOG_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
+            LOG_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={} input_type={}", thread_type, segment->info(), magic_enum::enum_name(input_type));
             segment->flushCache(*dm_context);
             if (input_type == InputType::RaftLog)
             {

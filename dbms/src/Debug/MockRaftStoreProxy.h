@@ -209,6 +209,11 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<UInt64> region_ids,
         std::vector<std::pair<std::string, std::string>> && ranges);
 
+    void loadRegionFromKVStore(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id);
+
     /// We assume that we generate one command, and immediately commit.
     /// Normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
@@ -280,7 +285,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         const FailCond & cond,
         UInt64 region_id,
-        uint64_t index);
+        uint64_t index,
+        std::optional<bool> check_proactive_flush = std::nullopt);
 
     void replay(
         KVStore & kvs,
@@ -293,6 +299,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         auto _ = genLockGuard();
         regions.clear();
     }
+
+    std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
     MockRaftStoreProxy()
     {

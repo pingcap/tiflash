@@ -69,6 +69,7 @@ static DM::WriteResult writeRegionDataToStorage(
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(keyspace_id, table_id);
+
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.

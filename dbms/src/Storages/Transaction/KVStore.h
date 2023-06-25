@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
@@ -113,6 +114,15 @@ public:
         UInt64 term,
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmdDebug(raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
+    EngineStoreApplyRes handleWriteRaftCmdInner(
+        raft_cmdpb::RaftCmdRequest && request,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt,
+        DM::WriteResult & write_result);
+    EngineStoreApplyRes handleWriteRaftCmdInner(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);

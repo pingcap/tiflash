@@ -927,26 +927,6 @@ void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const R
     auto & tmt = dm_context->db_context.getTMTContext();
     auto & kv_store = tmt.getKVStore();
 
-    if (is_background)
-    {
-        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
-    }
-    else
-    {
-        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
-    }
-
-    Stopwatch watch;
-    SCOPE_EXIT({
-        if (is_background)
-        {
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg).Observe(watch.elapsedSeconds());
-        }
-        else
-        {
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(watch.elapsedSeconds());
-        }
-    });
     kv_store->compactLogByRowKeyRange(tmt, range, keyspace_id, physical_table_id, is_background);
 }
 } // namespace DM

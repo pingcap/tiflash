@@ -197,7 +197,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
         if (new_region_index == -1)
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": region index not found", ErrorCodes::LOGICAL_ERROR);
 
-        RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
+        RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.clonedApplyState());
         new_meta.setApplied(index, term);
         meta.assignRegionMeta(std::move(new_meta));
     }
