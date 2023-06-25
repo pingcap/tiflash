@@ -1851,7 +1851,6 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore(ThreadPool * thread
             table_column_info->table_name,
             tidb_table_info.keyspace_id,
             tidb_table_info.id,
-            tidb_table_info.keyspace_id,
             tidb_table_info.replica_info.count > 0,
             std::move(table_column_info->table_column_defines),
             std::move(table_column_info->handle_column_define),
