@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <TestUtils/ExecutorTestUtils.h>
-#include <tipb/expression.pb.h>
-#include <TestUtils/mockExecutor.h>
 #include <Debug/MockExecutor/WindowBinder.h>
+#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/mockExecutor.h>
+#include <tipb/expression.pb.h>
 
 #include <memory>
 
@@ -26,20 +26,20 @@ namespace DB::tests
 class WindowTest : public ExecutorTest
 {
 protected:
-// TODO
-//   1. different range_val type, and could support Decimal type
-//   2. could choose plus or minus function
-//   ...
-mock::MockWindowFrameBound buildRangeFrameBound(
-    tipb::WindowBoundType bound_type_,
-    tipb::RangeCmpDataType cmp_data_type_,
-    const String & order_by_col_name,
-    Int64 range_val)
-{
-    mock::BuildRangeFrameHelper helper;
-    helper.range_aux_func = plusInt(col(order_by_col_name), lit(Field(range_val)));
-    helper.context = context.context;
-    return mock::MockWindowFrameBound(bound_type_, cmp_data_type_, helper);
-}
+    // TODO
+    //   1. different range_val type, and could support Decimal type
+    //   2. could choose plus or minus function
+    //   ...
+    mock::MockWindowFrameBound buildRangeFrameBound(
+        tipb::WindowBoundType bound_type_,
+        tipb::RangeCmpDataType cmp_data_type_,
+        const String & order_by_col_name,
+        Int64 range_val)
+    {
+        mock::BuildRangeFrameHelper helper;
+        helper.range_aux_func = plusInt(col(order_by_col_name), lit(Field(range_val)));
+        helper.context = context.context;
+        return mock::MockWindowFrameBound(bound_type_, cmp_data_type_, helper);
+    }
 };
 } // namespace DB::tests

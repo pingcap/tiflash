@@ -143,6 +143,7 @@ struct WindowDescription
     Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;
 
     // ascending or descending for order by column
+    // only used for range frame type
     bool is_desc;
 
     void setWindowFrame(const tipb::WindowFrame & frame_);

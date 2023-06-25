@@ -107,8 +107,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
     {
         /// ColumnNothing compares size only
-        const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
-        const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
+        const auto * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
+        const auto * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
         ASSERT_EQUAL(expected_nothing && actual_nothing, true, "One of columns is ColumnNothing, while the other is not");
         ASSERT_EQUAL(expected_nothing->size(), actual_nothing->size(), fmt::format("Column size not match, expected {} actual {}", actual_nothing->size(), expected_nothing->size()));
         return ::testing::AssertionSuccess();

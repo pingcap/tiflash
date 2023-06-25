@@ -338,7 +338,8 @@ void initBeforeWindow(
 
     window_desc.before_window = chain.getLastActions();
     setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
-    chain.finalize();
+
+    // We should not call finalize here as some useful columns will be unexpected removed
     chain.clear();
 }
 

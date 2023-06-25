@@ -642,7 +642,13 @@ RowNumber WindowTransformAction::stepToFrameEndForRangeImpl()
 template <typename T, bool is_begin, bool is_desc>
 RowNumber WindowTransformAction::stepToFrameForRangeImpl()
 {
-    RowNumber cursor = prev_frame_end;
+    RowNumber cursor;
+
+    if constexpr (is_begin)
+        cursor = prev_frame_start;
+    else
+        cursor = prev_frame_end;
+
     const ColumnPtr & cur_row_order_column = inputAt(current_row)[order_column_indices[0]];
     typename ActualCmpDataType<T>::Type current_row_value = getValue<T>(cur_row_order_column, current_row.row);
     size_t cursor_column_idx;

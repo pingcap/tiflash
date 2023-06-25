@@ -44,6 +44,7 @@ public:
         std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
+            std::cout << "block_size: " << block_size << std::endl;
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
@@ -77,6 +78,7 @@ public:
                            .window(function, {ORDER_COL_NAME, false}, {PARTITION_COL_NAME, false}, mock_frame)
                            .build(context);
 
+        // TODO input column type should be converted when test frame type is range
         ColumnsWithTypeAndName expect = input;
         expect.push_back(result);
         executeWithConcurrencyAndBlockSize(request, expect);
@@ -124,7 +126,7 @@ public:
         MockWindowFrame mock_frame;
         mock_frame.type = tipb::WindowFrameType::Ranges;
         mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
-        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
 
         std::vector<Int64> frame_start_range{0, 1, 3, 10};
         std::vector<std::vector<Int64>> res{
@@ -135,16 +137,15 @@ public:
 
         for (size_t i = 0; i < frame_start_range.size(); ++i)
         {
+            std::cout << "window debug i: " << i << std::endl;
             mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, frame_start_range[i]);
-            std::cout << "ddebug1111111111" << std::endl;
             executeFunctionAndAssert(
-                toVec<Type>(res[i]),
+                toVec<Int64>(res[i]),
                 FirstValue(value_col),
                 {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
                  toVec<Type>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
                  toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
                 mock_frame);
-            std::cout << "ddebug222222222222" << std::endl;
         }
     }
 
@@ -228,7 +229,16 @@ TEST_F(FirstValue, firstValueWithRangeFrameType)
 try
 {
     // TODO support unsigned int.
-    testIntForRangeFrame<Int8>();
+    testIntForRangeFrame<Int64>();
+    // int to int
+    // float to float
+    // decimal to decimal
+    // int to float
+    // int to decimal
+    // float to int
+    // float to decimal
+    // decimal to int
+    // decimal to float
 }
 CATCH
 

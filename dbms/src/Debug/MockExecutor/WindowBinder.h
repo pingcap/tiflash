@@ -60,7 +60,14 @@ public:
     tipb::WindowBoundType getBoundType() const { return bound_type; }
     bool isUnbounded() const { return is_unbounded; }
     UInt64 getOffset() const { return offset; }
-    tipb::Expr * getRangeFrame() const { return range_frame.get(); }
+
+    tipb::Expr * robRangeFrame()
+    {
+        auto * tmp = range_frame;
+        range_frame = nullptr;
+        return tmp;
+    }
+
     tipb::RangeCmpDataType getCmpDataType() const { return cmp_data_type; }
 
     // This is a range frame type when range_frame_helper.range_aux_func is set.
@@ -71,14 +78,14 @@ public:
 
     void buildRangeFrameAuxFunction(const DAGSchema & input)
     {
-        range_frame = std::make_shared<tipb::Expr>();
+        range_frame = new tipb::Expr();
         auto * ast_func = typeid_cast<ASTFunction *>(range_frame_helper.range_aux_func.get());
         if (ast_func == nullptr)
             throw Exception("Building range frame needs ASTFunction");
 
         // collator is useless when building range frame,
         // because range frame's order by column is forbidden to be string type
-        functionToPB(input, ast_func, range_frame.get(), 0, *range_frame_helper.context);
+        functionToPB(input, ast_func, range_frame, 0, *range_frame_helper.context);
     }
 
 private:
@@ -91,7 +98,7 @@ private:
 
     // only for range frame type
     // Self class is responsible for creating and destroy this pointer
-    std::shared_ptr<tipb::Expr> range_frame;
+    tipb::Expr * range_frame = nullptr;
 };
 
 struct MockWindowFrame
