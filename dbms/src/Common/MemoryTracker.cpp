@@ -73,7 +73,7 @@ static Poco::Logger * getLogger()
 
 static String memoryUsageDetail()
 {
-    return fmt::format("QueryStorageTaskTotal={}, RNFetchPages={}",
+    return fmt::format("StorageTaskTotal={}, RNFetchPages={}",
                        formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get()),
                        formatReadableSizeWithBinarySuffix(rn_fetch_pages_mem_tracker->get()));
 }
