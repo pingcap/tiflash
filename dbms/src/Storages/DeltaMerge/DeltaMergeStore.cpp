@@ -200,20 +200,21 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
                                  const Settings & settings_,
-                                 ThreadPool * thread_pool)
+                                 ThreadPool * thread_pool,
+                                 )
     : global_context(db_context.getGlobalContext())
     , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id_)
-    , keyspace_id(keyspace_id_)
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
+    , keyspace_id(keyspace_id_)
     , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     replica_exist.store(has_replica);
