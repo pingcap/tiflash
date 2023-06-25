@@ -440,7 +440,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
 };
 
 /// insert Block into one map, don't need acquire lock inside this function
-template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool need_record_not_insert_rows>
 void NO_INLINE insertBlockIntoMapTypeCase(
     JoinPartition & join_partition,
     size_t rows,
@@ -448,9 +448,9 @@ void NO_INLINE insertBlockIntoMapTypeCase(
     const Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
-    ConstNullMapPtr null_map)
+    ConstNullMapPtr null_map,
+    RowsNotInsertToMap * rows_not_inserted_to_map)
 {
-    auto * rows_not_inserted_to_map = join_partition.getRowsNotInsertedToMap();
     auto & pool = *join_partition.getPartitionPool();
 
     Map & map = join_partition.template getHashMap<Map>();
@@ -461,14 +461,17 @@ void NO_INLINE insertBlockIntoMapTypeCase(
     bool null_need_materialize = isNullAwareSemiFamily(join_partition.getJoinKind());
     for (size_t i = 0; i < rows; ++i)
     {
-        if (has_null_map && (*null_map)[i])
+        if constexpr (has_null_map)
         {
-            if (rows_not_inserted_to_map)
+            if ((*null_map)[i])
             {
-                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
-                rows_not_inserted_to_map->insertRow(stored_block, i, null_need_materialize, pool);
+                if constexpr (need_record_not_insert_rows)
+                {
+                    /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
+                    rows_not_inserted_to_map->insertRow(stored_block, i, null_need_materialize, pool);
+                }
+                continue;
             }
-            continue;
         }
 
         Inserter<STRICTNESS, Map, KeyGetter>::insert(
@@ -482,7 +485,7 @@ void NO_INLINE insertBlockIntoMapTypeCase(
 }
 
 /// insert Block into maps, for each map, need to acquire lock before insert
-template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool need_record_not_insert_rows>
 void NO_INLINE insertBlockIntoMapsTypeCase(
     JoinPartitions & join_partitions,
     size_t rows,
@@ -491,10 +494,10 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    size_t stream_index)
+    size_t stream_index,
+    RowsNotInsertToMap * rows_not_inserted_to_map)
 {
     auto & current_join_partition = join_partitions[stream_index];
-    auto * rows_not_inserted_to_map = current_join_partition->getRowsNotInsertedToMap();
     auto & pool = *current_join_partition->getPartitionPool();
 
     /// use this map to calculate key hash
@@ -510,7 +513,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     /// 2. hash value is calculated twice, maybe we can refine the code to cache the hash value
     /// 3. extra memory to store the segment index info
     std::vector<std::vector<size_t>> segment_index_info;
-    if (has_null_map && rows_not_inserted_to_map)
+    if constexpr (has_null_map && need_record_not_insert_rows)
     {
         segment_index_info.resize(segment_size + 1);
     }
@@ -529,8 +532,8 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         {
             if ((*null_map)[i])
             {
-                if (rows_not_inserted_to_map)
-                    segment_index_info[segment_index_info.size() - 1].push_back(i);
+                if constexpr (need_record_not_insert_rows)
+                    segment_index_info.back().push_back(i);
                 continue;
             }
         }
@@ -555,7 +558,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes[i] = insert_index;
     }
     bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
-    while (!insert_indexes.empty())
+    while (likely(!insert_indexes.empty()))
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         size_t segment_index = insert_indexes.back();
@@ -571,10 +574,13 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         }
         else
         {
-#define INSERT(join_partition, segment_index)                 \
-    auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & i : (segment_index))                          \
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers);
+#define INSERT(join_partition, segment_index)                                                                              \
+    auto & current_map = (join_partition)->getHashMap<Map>();                                                              \
+    for (auto & i : (segment_index))                                                                                       \
+    {                                                                                                                      \
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers); \
+    }
+
             auto & join_partition = join_partitions[segment_index];
             if (auto spin_lock = join_partition->spinLockPartition(); spin_lock)
             {
@@ -582,14 +588,20 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
             }
             else
             {
-                if (insert_indexes.empty())
+                // If there is only one segment left, there is no need to use spin locks
+                // since it only causes unnecessary CPU consumption,
+                // and a blocking lock can be used directly.
+                if unlikely (insert_indexes.empty())
                 {
                     auto lock = join_partition->lockPartition();
                     INSERT(join_partition, segment_index_info[segment_index]);
-                    break;
                 }
-                insert_indexes.push_front(segment_index);
+                else
+                {
+                    insert_indexes.push_front(segment_index);
+                }
             }
+
 #undef INSERT
         }
     }
@@ -610,39 +622,68 @@ void insertBlockIntoMapsImplType(
     bool enable_join_spill)
 {
     auto & current_join_partition = join_partitions[stream_index];
+    auto * rows_not_inserted_to_map = current_join_partition->getRowsNotInsertedToMap();
     if (enable_join_spill)
     {
         /// case 1, join with spill support, the partition level lock is acquired in `Join::insertFromBlock`
         if (null_map)
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
         else
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
         return;
     }
     else if (enable_fine_grained_shuffle)
     {
         /// case 2, join with fine_grained_shuffle, no need to acquire any lock
         if (null_map)
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
         else
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
     }
     else if (insert_concurrency > 1)
     {
         /// case 3, normal join with concurrency > 1, will acquire lock in `insertBlockIntoMapsTypeCase`
         if (null_map)
-            insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index);
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true, true>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, true, false>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, nullptr);
+        }
         else
-            insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, false>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index);
+        {
+            insertBlockIntoMapsTypeCase<STRICTNESS, KeyGetter, Map, false, false>(join_partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, nullptr);
+        }
     }
     else
     {
         /// case 4, normal join with concurrency == 1, no need to acquire any lock
         RUNTIME_CHECK(stream_index == 0);
         if (null_map)
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            if (rows_not_inserted_to_map)
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, true>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map);
+            else
+                insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, true, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
         else
-            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map);
+        {
+            insertBlockIntoMapTypeCase<STRICTNESS, KeyGetter, Map, false, false>(*current_join_partition, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr);
+        }
     }
 }
 
