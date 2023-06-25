@@ -166,14 +166,13 @@ extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 
 // Initialize in `initStorageMemoryTracker`.
 // If a memory tracker of storage tasks is driven by query, it should inherit `sub_root_of_query_storage_task_mem_trackers`.
-// root_of_query_mem_trackers
-//             |-- sub_root_of_query_storage_task_mem_trackers
-//                                    |-- rn_fetch_pages_mem_tracker
+// Since it is difficult to maintain synchronization with the root_of_query_mem_trackers, it is not inherited from root_of_query_mem_trackers.
+// sub_root_of_query_storage_task_mem_trackers
+//                  |-- rn_fetch_pages_mem_tracker
 extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
 extern std::shared_ptr<MemoryTracker> rn_fetch_pages_mem_tracker;
 
-void initMemoryTracker();
-void resetMemoryTracker();
+void initMemoryTracker(Int64 limit, Int64 larger_than_limit);
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

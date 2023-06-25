@@ -248,7 +248,6 @@ ProcessListEntry::~ProcessListEntry()
         /// Reset MemoryTracker, similarly (see above).
         parent.total_memory_tracker->logPeakMemoryUsage();
         parent.total_memory_tracker->reset();
-        resetMemoryTracker(); // Reset long lived memory tracker of root_of_query_mem_trackers's children.
         parent.total_network_throttler.reset();
     }
 }

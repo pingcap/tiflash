@@ -259,23 +259,18 @@ std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::creat
 std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
 std::shared_ptr<MemoryTracker> rn_fetch_pages_mem_tracker;
 
-void initMemoryTracker()
+void initMemoryTracker(Int64 limit, Int64 larger_than_limit)
 {
+    LOG_INFO(getLogger(), "Storage task memory limit={}, larger_than_limit={}", formatReadableSizeWithBinarySuffix(limit), formatReadableSizeWithBinarySuffix(larger_than_limit));
     RUNTIME_CHECK(sub_root_of_query_storage_task_mem_trackers == nullptr);
-    sub_root_of_query_storage_task_mem_trackers = MemoryTracker::create();
-    sub_root_of_query_storage_task_mem_trackers->setNext(root_of_query_mem_trackers.get());
+    sub_root_of_query_storage_task_mem_trackers = MemoryTracker::create(limit);
+    sub_root_of_query_storage_task_mem_trackers->setBytesThatRssLargerThanLimit(larger_than_limit);
     sub_root_of_query_storage_task_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingQueryStorageTask);
 
     RUNTIME_CHECK(rn_fetch_pages_mem_tracker == nullptr);
     rn_fetch_pages_mem_tracker = MemoryTracker::create();
     rn_fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
     rn_fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingRNWorkerFetchPages);
-}
-
-void resetMemoryTracker()
-{
-    sub_root_of_query_storage_task_mem_trackers->reset();
-    rn_fetch_pages_mem_tracker->reset();
 }
 
 namespace CurrentMemoryTracker
