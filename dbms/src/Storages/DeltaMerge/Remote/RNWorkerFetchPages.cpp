@@ -114,7 +114,7 @@ std::shared_ptr<disaggregated::FetchDisaggPagesRequest> buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
-    MemoryTrackerSetter setter(true, rn_fetch_pages_mem_tracker.get());
+    MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
         // This metric is per-segment.
@@ -204,7 +204,7 @@ void RNWorkerFetchPages::doFetchPages(
         if (bool more = stream_resp->Read(packet.get()); !more)
             break;
 
-        MemTrackerWrapper packet_mem_tracker_wrapper(packet->SpaceUsedLong(), rn_fetch_pages_mem_tracker.get());
+        MemTrackerWrapper packet_mem_tracker_wrapper(packet->SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
         if (!rpc_is_observed)
         {
@@ -230,7 +230,7 @@ void RNWorkerFetchPages::doFetchPages(
             DM::RemotePb::RemotePage remote_page;
             bool parsed = remote_page.ParseFromString(page);
             RUNTIME_CHECK_MSG(parsed, "Failed to parse page data (from {})", seg_task->info());
-            MemTrackerWrapper remote_page_mem_tracker_wrapper(remote_page.SpaceUsedLong(), rn_fetch_pages_mem_tracker.get());
+            MemTrackerWrapper remote_page_mem_tracker_wrapper(remote_page.SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
             RUNTIME_CHECK(
                 remaining_pages_to_fetch.contains(remote_page.page_id()),

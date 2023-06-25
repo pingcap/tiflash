@@ -26,7 +26,7 @@
 namespace CurrentMetrics
 {
 extern const Metric MemoryTrackingQueryStorageTask;
-extern const Metric MemoryTrackingRNWorkerFetchPages;
+extern const Metric MemoryTrackingFetchPages;
 } // namespace CurrentMetrics
 
 std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
@@ -75,7 +75,7 @@ static String memoryUsageDetail()
 {
     return fmt::format("StorageTaskTotal={}, RNFetchPages={}",
                        formatReadableSizeWithBinarySuffix(sub_root_of_query_storage_task_mem_trackers->get()),
-                       formatReadableSizeWithBinarySuffix(rn_fetch_pages_mem_tracker->get()));
+                       formatReadableSizeWithBinarySuffix(fetch_pages_mem_tracker->get()));
 }
 
 void MemoryTracker::logPeakMemoryUsage() const
@@ -257,7 +257,7 @@ std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::c
 std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
 
 std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
-std::shared_ptr<MemoryTracker> rn_fetch_pages_mem_tracker;
+std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
 
 void initMemoryTracker(Int64 limit, Int64 larger_than_limit)
 {
@@ -267,10 +267,10 @@ void initMemoryTracker(Int64 limit, Int64 larger_than_limit)
     sub_root_of_query_storage_task_mem_trackers->setBytesThatRssLargerThanLimit(larger_than_limit);
     sub_root_of_query_storage_task_mem_trackers->setAmountMetric(CurrentMetrics::MemoryTrackingQueryStorageTask);
 
-    RUNTIME_CHECK(rn_fetch_pages_mem_tracker == nullptr);
-    rn_fetch_pages_mem_tracker = MemoryTracker::create();
-    rn_fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
-    rn_fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingRNWorkerFetchPages);
+    RUNTIME_CHECK(fetch_pages_mem_tracker == nullptr);
+    fetch_pages_mem_tracker = MemoryTracker::create();
+    fetch_pages_mem_tracker->setNext(sub_root_of_query_storage_task_mem_trackers.get());
+    fetch_pages_mem_tracker->setAmountMetric(CurrentMetrics::MemoryTrackingFetchPages);
 }
 
 namespace CurrentMemoryTracker
