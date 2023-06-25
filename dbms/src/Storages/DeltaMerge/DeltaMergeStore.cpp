@@ -200,7 +200,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
                                  const Settings & settings_,
-                                 ThreadPool * thread_pool,)
+                                 ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
     , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
