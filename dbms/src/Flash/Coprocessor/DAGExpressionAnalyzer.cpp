@@ -252,14 +252,16 @@ void setAuxiliaryColumnInfo(
     {
         size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
         window_desc.frame.begin_range_auxiliary_column_index = begin_aux_col_idx; // Set auxiliary columns' indexes
-        window_desc.begin_aux_col_type = getColumnType(tmp_block.getByName(begin_aux_col_name).column); // Set auxiliary columns' types
+        const auto & col_and_name = tmp_block.getByName(begin_aux_col_name);
+        window_desc.begin_aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set auxiliary columns' types
     }
 
     if (!end_aux_col_name.empty())
     {
         size_t end_aux_col_idx = tmp_block.getPositionByName(end_aux_col_name);
         window_desc.frame.end_range_auxiliary_column_index = end_aux_col_idx; // Set auxiliary columns' indexes
-        window_desc.end_aux_col_type = getColumnType(tmp_block.getByName(end_aux_col_name).column); // Set auxiliary columns' types
+        const auto & col_and_name = tmp_block.getByName(end_aux_col_name);
+        window_desc.end_aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set auxiliary columns' types
     }
 }
 

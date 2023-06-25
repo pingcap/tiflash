@@ -136,7 +136,7 @@ public:
         for (size_t i = 0; i < frame_start_range.size(); ++i)
         {
             mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, frame_start_range[i]);
-            std::cout << "1111111111" << std::endl;
+            std::cout << "ddebug1111111111" << std::endl;
             executeFunctionAndAssert(
                 toVec<Type>(res[i]),
                 FirstValue(value_col),
@@ -144,7 +144,7 @@ public:
                  toVec<Type>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
                  toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
                 mock_frame);
-            std::cout << "222222222222" << std::endl;
+            std::cout << "ddebug222222222222" << std::endl;
         }
     }
 
