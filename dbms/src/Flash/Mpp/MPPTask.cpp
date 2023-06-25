@@ -47,6 +47,8 @@ namespace FailPoints
 {
 extern const char exception_before_mpp_make_non_root_mpp_task_public[];
 extern const char exception_before_mpp_make_root_mpp_task_public[];
+extern const char exception_before_mpp_register_non_root_mpp_task[];
+extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
@@ -78,6 +80,18 @@ void injectFailPointBeforeMakeMPPTaskPublic(bool is_root_task)
     else
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_public);
+    }
+}
+
+void injectFailPointBeforeRegisterMPPTask(bool is_root_task)
+{
+    if (is_root_task)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
     }
 }
 
@@ -381,6 +395,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
+    injectFailPointBeforeRegisterMPPTask(dag_context->isRootMPPTask());
     auto [result, reason] = manager->registerTask(this);
     if (!result)
     {

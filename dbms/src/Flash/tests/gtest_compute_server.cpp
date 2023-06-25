@@ -22,7 +22,9 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_before_mpp_register_non_root_mpp_task[];
+extern const char exception_before_mpp_make_non_root_mpp_task_public[];
 extern const char exception_before_mpp_register_root_mpp_task[];
+extern const char exception_before_mpp_make_root_mpp_task_public[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
@@ -804,7 +806,8 @@ try
     setCancelTest();
     std::vector<String> failpoint_names{
         FailPoints::exception_before_mpp_register_non_root_mpp_task,
-        FailPoints::exception_before_mpp_register_root_mpp_task,
+        FailPoints::exception_before_mpp_make_non_root_mpp_task_public,
+        FailPoints::exception_before_mpp_make_root_mpp_task_public,
         FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task,
         FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task,
         FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task,

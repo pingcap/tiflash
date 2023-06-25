@@ -35,6 +35,7 @@ namespace FailPoints
 {
 extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_make_non_root_mpp_task_public[];
+extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
 MPPQueryTaskSet::~MPPQueryTaskSet()
@@ -248,6 +249,10 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
 
 std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
 {
+    if (!task->isRootMPPTask())
+    {
+        FAIL_POINT_PAUSE(FailPoints::pause_before_register_non_root_mpp_task);
+    }
     std::unique_lock lock(mu);
     auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task->id.query_id);
     if (!error_msg.empty())
