@@ -897,10 +897,6 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 
     std::unordered_set<String> db_set;
 
-    size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
-    auto sync_all_schema_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
-    auto sync_all_schema_wait_group = sync_all_schema_thread_pool.waitGroup();
-
     for (const auto & db : all_schemas)
     {
         std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
