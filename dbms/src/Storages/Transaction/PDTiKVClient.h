@@ -101,6 +101,7 @@ struct PDClientHelper
             {
                 auto safe_point = pd_client->getGCSafePoint();
                 cached_gc_safe_point = safe_point;
+                LOG_DEBUG(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
                 safe_point_last_update_time = std::chrono::steady_clock::now();
                 return safe_point;
             }
