@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <DataStreams/RuntimeFilter.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
@@ -107,4 +107,4 @@ private:
 
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
 };
-}
+} // namespace DB

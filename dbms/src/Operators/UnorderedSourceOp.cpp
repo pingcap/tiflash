@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/UnorderedSourceOp.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
+#include <Operators/UnorderedSourceOp.h>
+
 #include <memory>
 
 namespace DB
