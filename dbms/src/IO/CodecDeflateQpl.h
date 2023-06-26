@@ -22,7 +22,7 @@
 #include <memory>
 #include <random>
 
-#include "qpl/qpl.h"
+#include <qpl/qpl.h>
 
 //qpl block size for storing compressed data,aligned with ZLIB.
 #define QPL_Compressbound(isize) ((isize) + ((isize) >> 12) + ((isize) >> 14) + ((isize) >> 25) + 13)
