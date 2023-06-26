@@ -247,7 +247,8 @@ void MockStorage::buildExecFromDeltaMerge(
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
+        // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
+        auto build_ret = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         storage->read(
             exec_status_,
             group_builder,
@@ -259,9 +260,9 @@ void MockStorage::buildExecFromDeltaMerge(
         auto log = Logger::get("test for late materialization");
         auto input_header = group_builder.getCurrentHeader();
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status_, log->identifier(), input_header, before_where, filter_column_name));
+            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status_, log->identifier(), input_header, std::get<0>(build_ret), std::get<1>(build_ret)));
         });
-        executeExpression(exec_status_, group_builder, project_after_where, log);
+        executeExpression(exec_status_, group_builder, std::get<2>(build_ret), log);
     }
     else
     {
