@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Operators/UnorderedSourceOp.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/RFWaitTask.h>
+#include <memory>
 
 namespace DB
 {
@@ -49,5 +52,39 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
         else
             return OperatorStatus::HAS_OUTPUT;
     }
+}
+
+void UnorderedSourceOp::operatePrefixImpl()
+{
+    std::call_once(task_pool->addToSchedulerFlag(), [&]() {
+        if (runtime_filter_list.empty())
+        {
+            DM::SegmentReadTaskScheduler::instance().add(task_pool);
+        }
+        else
+        {
+            if (max_wait_time_ms <= 0)
+            {
+                // Check if the RuntimeFilters is ready immediately.
+                RuntimeFilteList ready_rf_list;
+                for (const RuntimeFilterPtr & rf : runtime_filter_list)
+                {
+                    if (rf->isReady())
+                        ready_rf_list.push_back(rf);
+                }
+                for (const RuntimeFilterPtr & rf : ready_rf_list)
+                {
+                    auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
+                    task_pool->appendRSOperator(rs_operator);
+                }
+                DM::SegmentReadTaskScheduler::instance().add(task_pool);
+            }
+            else
+            {
+                // Poll and check if the RuntimeFilters is ready in the WaitReactor.
+                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(log->identifier(), exec_status, task_pool, max_wait_time_ms, std::move(runtime_filter_list)));
+            }
+        }
+    });
 }
 } // namespace DB

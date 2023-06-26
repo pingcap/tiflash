@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -33,10 +34,14 @@ public:
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         const DM::ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
-        const String & req_id)
+        const String & req_id,
+        const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
+        int max_wait_time_ms_ = 0)
         : SourceOp(exec_status_, req_id)
         , task_pool(task_pool_)
         , ref_no(0)
+        , runtime_filter_list(runtime_filter_list_)
+        , max_wait_time_ms(max_wait_time_ms_)
     {
         setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
@@ -57,10 +62,7 @@ public:
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
-    void operatePrefixImpl() override
-    {
-        std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
-    }
+    void operatePrefixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
@@ -69,5 +71,9 @@ private:
     DM::SegmentReadTaskPoolPtr task_pool;
     std::optional<Block> t_block;
     int64_t ref_no;
+
+    // runtime filter
+    RuntimeFilteList runtime_filter_list;
+    int max_wait_time_ms;
 };
 } // namespace DB
