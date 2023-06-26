@@ -5133,6 +5133,13 @@
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
               "refId": "D"
+            },
+            {
+              "expr": "sum(tiflash_sync_schema_applying{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"$type\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "applying-{{instance}}",
+              "refId": "E"
             }
           ],
           "thresholds": [],

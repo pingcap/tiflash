@@ -23,12 +23,17 @@ template <bool mock_getter, bool mock_mapper>
 bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
 {
     std::lock_guard<std::mutex> lock(mutex_for_sync_schema);
+
+    GET_METRIC(tiflash_sync_schema_applying).Increment();
+
     auto getter = createSchemaGetter(keyspace_id);
     const Int64 version = getter.getVersion();
 
-    // TODO: we need support metrics contains keyspace info.
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_sync_schema_applying).Decrement();
+    });
 
     if (version == SchemaGetter::SchemaVersionNotExist)
     {

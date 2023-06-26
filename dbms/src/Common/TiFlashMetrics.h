@@ -108,6 +108,7 @@ namespace DB
         F(type_passthrough_none_compression_remote, {"type", "passthrough_none_compression_remote"}),                                               \
         F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
         F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
+    M(tiflash_sync_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                  \
     M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter,                                                   \
         F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}),                     \
         F(type_sync_table_schema, {"type", "sync_table_schema"}))                                                                                   \
