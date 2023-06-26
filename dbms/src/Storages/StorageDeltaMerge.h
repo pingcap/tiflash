@@ -139,13 +139,19 @@ public:
         const String & table_name,
         const Context & context) override;
 
-    // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(
+    void updateTombstone(
         const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
         const TiDB::TableInfo & table_info,
         const SchemaNameMapper & name_mapper,
+        const Context & context) override;
+
+    void alterSchemaChange(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const String & database_name,
+        const String & table_name,
         const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
@@ -222,7 +228,6 @@ private:
         const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
-        DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
@@ -233,7 +238,8 @@ private:
         return store_inited.load(std::memory_order_acquire);
     }
     void updateTableColumnInfo();
-    DM::ColumnDefines getStoreColumnDefines() const;
+    ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info);
+    DM::ColumnDefines getStoreColumnDefines() const override;
     bool dataDirExist();
     void shutdownImpl();
 

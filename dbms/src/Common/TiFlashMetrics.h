@@ -28,6 +28,7 @@
 
 #include <ext/scope_guard.h>
 #include <mutex>
+#include <shared_mutex>
 
 
 // to make GCC 11 happy
@@ -77,7 +78,8 @@ namespace DB
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
-        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                           \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
+        F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                         \
     M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),                    \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),                       \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                           \
@@ -109,20 +111,18 @@ namespace DB
         F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
         F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
-    M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
-    M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
-        F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}),                                                                         \
-        F(type_drop_keyspace, {"type", "drop_keyspace"}))                                                                                           \
-    M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter, /**/                                              \
-        F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}))                     \
+    M(tiflash_sync_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                  \
+    M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter,                                                   \
+        F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}),                     \
+        F(type_sync_table_schema, {"type", "sync_table_schema"}))                                                                                   \
     M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter,                                          \
         F(type_create_table, {"type", "create_table"}), F(type_create_db, {"type", "create_db"}),                                                   \
         F(type_drop_table, {"type", "drop_table"}), F(type_drop_db, {"type", "drop_db"}), F(type_rename_table, {"type", "rename_table"}),           \
-        F(type_add_column, {"type", "add_column"}), F(type_drop_column, {"type", "drop_column"}),                                                   \
-        F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}),                                   \
+        F(type_modify_column, {"type", "modify_column"}),   F(type_apply_partition, {"type", "apply_partition"}),                                   \
         F(type_exchange_partition, {"type", "exchange_partition"}))                                                                                 \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                                 \
-        F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.001, 2, 20}))                                                      \
+        F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                                           \
+        F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                               \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                                        \
@@ -478,6 +478,7 @@ struct EqualWidthBuckets
     }
 };
 
+const String keyspace_name = "keyspace";
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -488,6 +489,12 @@ struct MetricFamilyTrait<prometheus::Counter>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
     static auto & add(prometheus::Family<prometheus::Counter> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Counter> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -495,6 +502,12 @@ struct MetricFamilyTrait<prometheus::Gauge>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
     static auto & add(prometheus::Family<prometheus::Gauge> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
+    static auto & add(prometheus::Family<prometheus::Gauge> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map);
+    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -504,6 +517,13 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
+    }
+
+    static auto & add(prometheus::Family<prometheus::Histogram> & family, uint32_t keyspace_id, ArgType && arg)
+    {
+        std::map<std::string, std::string> map = std::get<0>(arg);
+        map[keyspace_name] = std::to_string(keyspace_id);
+        return family.Add(map, std::move(std::get<1>(arg)));
     }
 };
 
@@ -519,7 +539,11 @@ struct MetricFamily
         const std::string & help,
         std::initializer_list<MetricArgType> args)
     {
+        store_args = args;
+
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
+        store_family = &family;
+
         metrics.reserve(args.size() ? args.size() : 1);
         for (auto arg : args)
         {
@@ -533,10 +557,45 @@ struct MetricFamily
         }
     }
 
+    void addMetricsForKeyspace(uint32_t keyspace_id)
+    {
+        std::vector<T *> metrics_temp;
+
+        for (auto arg : store_args)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, std::forward<MetricArgType>(arg));
+            metrics_temp.emplace_back(&metric);
+        }
+
+        if (store_args.size() == 0)
+        {
+            auto & metric = MetricTrait::add(*store_family, keyspace_id, MetricArgType{});
+            metrics_temp.emplace_back(&metric);
+        }
+        metrics_map[keyspace_id] = metrics_temp;
+    }
+
     T & get(size_t idx = 0) { return *(metrics[idx]); }
+    T & get(size_t idx, uint32_t keyspace_id)
+    {
+        {
+            std::unique_lock<std::shared_mutex> lock(shared_mutex);
+            if (metrics_map.find(keyspace_id) == metrics_map.end())
+            {
+                addMetricsForKeyspace(keyspace_id);
+            }
+        }
+        std::shared_lock<std::shared_mutex> lock(shared_mutex);
+        return *(metrics_map[keyspace_id][idx]);
+    }
 
 private:
+    std::shared_mutex shared_mutex;
     std::vector<T *> metrics;
+    prometheus::Family<T> * store_family;
+    std::vector<MetricArgType> store_args;
+
+    std::unordered_map<uint32_t, std::vector<T *>> metrics_map; // keyspace_id --> metrics
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -608,19 +667,33 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #ifndef GTEST_TIFLASH_METRICS
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TiFlashMetrics::instance().family.get(0, keyspace_id)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TiFlashMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #else
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TestMetrics::instance().family.get(0, keyspace_id)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TestMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #endif
 #define GET_METRIC(...)                                             \
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
+
+#define GET_KEYSPACE_METRIC(...)                                                                               \
+    __GET_KEYSPACE_METRIC_MACRO(__VA_ARGS__, __GET_KEYSPACE_METRIC_1, __GET_KEYSPACE_METRIC_0, __GET_METRIC_0) \
     (__VA_ARGS__)
 
 #define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \

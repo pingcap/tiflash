@@ -575,7 +575,6 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
             LoggerPtr local_log = Logger::get(fmt::format("{} {}", exc_log->identifier(), req_info));
 
             LocalRequestHandler local_request_handler(
-                getMemoryTracker(),
                 [this, log = local_log](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg, log);
                 },

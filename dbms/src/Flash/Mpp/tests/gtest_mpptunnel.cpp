@@ -191,7 +191,6 @@ public:
         for (auto & tunnel : tunnels)
         {
             LocalRequestHandler local_request_handler(
-                nullptr,
                 [this](bool meet_error, const String & local_err_msg) {
                     this->connectionDone(meet_error, local_err_msg);
                 },
@@ -656,7 +655,6 @@ try
     ReceivedMessageQueue received_message_queue(mock_ptr, Logger::get(), 1, false, 0);
 
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
@@ -677,7 +675,6 @@ try
     AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
     ReceivedMessageQueue queue(mock_ptr, Logger::get(), 1, false, 0);
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},

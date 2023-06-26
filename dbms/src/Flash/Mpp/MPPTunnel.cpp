@@ -460,9 +460,6 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSenderV1::readForLocal()
     if (result == MPMCQueueResult::OK)
     {
         MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
-
-        // switch tunnel's memory tracker into receiver's
-        res->switchMemTracker(current_memory_tracker);
         return res;
     }
     else if (result == MPMCQueueResult::CANCELLED)

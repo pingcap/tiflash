@@ -15,24 +15,53 @@
 mysql> drop table if exists test.t
 mysql> create table test.t(a int)
 mysql> alter table test.t set tiflash replica 1
-
+mysql> insert into test.t values (1)
 func> wait_table test t
 
 >> DBGInvoke __refresh_schemas()
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++------+
+| a    |
++------+
+|    1 |
++------+
 
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
 │ 1                                  │
 └────────────────────────────────────┘
 
+
+mysql> alter table test.t set tiflash replica 0
+
+>> DBGInvoke __refresh_schemas()
+
+>> DBGInvoke get_tiflash_replica_count("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│ 0                                  │
+└────────────────────────────────────┘
+
+
 # test replica for partition tables
 mysql> drop table if exists test.t
 mysql> create table test.t (x int) partition by range (x) (partition p0 values less than (5), partition p1 values less than (10));
+mysql> insert into test.t values (1);
+mysql> insert into test.t values (8);
+
 mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
 >> DBGInvoke __refresh_schemas()
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++------+
+| x    |
++------+
+|    1 |
+|    8 |
++------+
 
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
@@ -46,8 +75,18 @@ func> wait_table test t
 
 # test replica for add partition tables after set replica
 mysql> alter table test.t add partition (partition p2 values less than (2010));
+mysql> insert into test.t values (50);
 
->> DBGInvoke __refresh_schemas()
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t;
++----+
+| x  |
++----+
+|  1 |
++----+
+|  8 |
++----+
+| 50 |
++----+
 
 >> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t")
 ┌─get_partition_tables_tiflash_replica_count(test, t)─┐

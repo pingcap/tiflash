@@ -147,7 +147,7 @@ void onExceptionBeforeStart(const String & query, Context & context, time_t curr
 }
 
 std::tuple<ASTPtr, BlockIO> executeQueryImpl(
-    IQuerySource & query_src,
+    SQLQuerySource & query_src,
     Context & context,
     bool internal,
     QueryProcessingStage::Enum stage)
@@ -205,7 +205,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         ProcessList::EntryPtr process_list_entry;
         if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
-            process_list_entry = setProcessListElement(context, query, ast.get());
+            process_list_entry = setProcessListElement(context, query, ast.get(), false);
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
@@ -401,7 +401,8 @@ void prepareForInputStream(
 std::shared_ptr<ProcessListEntry> setProcessListElement(
     Context & context,
     const String & query,
-    const IAST * ast)
+    const IAST * ast,
+    bool is_dag_task)
 {
     assert(ast);
     auto total_memory = context.getServerInfo().has_value() ? context.getServerInfo()->memory_info.capacity : 0;
@@ -410,7 +411,8 @@ std::shared_ptr<ProcessListEntry> setProcessListElement(
         ast,
         context.getClientInfo(),
         context.getSettingsRef(),
-        total_memory);
+        total_memory,
+        is_dag_task);
     context.setProcessListElement(&process_list_entry->get());
     return process_list_entry;
 }

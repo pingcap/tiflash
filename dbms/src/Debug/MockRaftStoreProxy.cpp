@@ -24,9 +24,11 @@
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
 
 namespace DB
@@ -134,6 +136,14 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
+RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr,
+                                              uint8_t,
+                                              int64_t)
+{
+    auto & x = as_ref(ptr);
+    return x.cluster_ver;
+}
+
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
     TiFlashRaftProxyHelper res{};
@@ -143,6 +153,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_make_async_waker = fn_make_async_waker;
     res.fn_handle_batch_read_index = fn_handle_batch_read_index;
     res.fn_get_region_local_state = fn_get_region_local_state;
+    res.fn_get_cluster_raftstore_version = fn_get_cluster_raftstore_version;
     {
         // make sure such function pointer will be set at most once.
         static std::once_flag flag;
@@ -464,7 +475,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
     std::vector<std::string> && keys,
     std::vector<std::string> && vals,
     std::vector<WriteCmdType> && cmd_types,
-    std::vector<ColumnFamilyType> && cmd_cf)
+    std::vector<ColumnFamilyType> && cmd_cf,
+    std::optional<uint64_t> forced_index)
 {
     uint64_t index = 0;
     uint64_t term = 0;
@@ -472,7 +484,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
         auto region = getRegion(region_id);
         assert(region != nullptr);
         // We have a new entry.
-        index = region->getLatestCommitIndex() + 1;
+        index = forced_index.value_or(region->getLatestCommitIndex() + 1);
+        RUNTIME_CHECK(index > region->getLatestCommitIndex());
         term = region->getLatestCommitTerm();
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
@@ -490,7 +503,11 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
 }
 
 
-std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest && request, raft_cmdpb::AdminResponse && response)
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(
+    UInt64 region_id,
+    raft_cmdpb::AdminRequest && request,
+    raft_cmdpb::AdminResponse && response,
+    std::optional<uint64_t> forced_index)
 {
     uint64_t index = 0;
     uint64_t term = 0;
@@ -498,7 +515,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id
         auto region = getRegion(region_id);
         assert(region != nullptr);
         // We have a new entry.
-        index = region->getLatestCommitIndex() + 1;
+        index = forced_index.value_or(region->getLatestCommitIndex() + 1);
+        RUNTIME_CHECK(index > region->getLatestCommitIndex());
         term = region->getLatestCommitTerm();
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
@@ -513,10 +531,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id
     return std::make_tuple(index, term);
 }
 
-std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index)
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCompactLog(MockProxyRegionPtr region, UInt64 compact_index)
 {
-    auto region = getRegion(region_id);
-    assert(region != nullptr);
     raft_cmdpb::AdminRequest request;
     raft_cmdpb::AdminResponse response;
     request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
@@ -526,7 +542,7 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
     {
         request.mutable_compact_log()->set_compact_term(region->commands[compact_index].term);
     }
-    return adminCommand(region_id, std::move(request), std::move(response));
+    return std::make_tuple(request, response);
 }
 
 std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2)
@@ -761,17 +777,19 @@ void MockRaftStoreProxy::Cf::insert_raw(std::string key, std::string val)
     kvs.emplace_back(std::move(key), std::move(val));
 }
 
-void MockRaftStoreProxy::snapshot(
+RegionPtr MockRaftStoreProxy::snapshot(
     KVStore & kvs,
     TMTContext & tmt,
     UInt64 region_id,
     std::vector<Cf> && cfs,
     uint64_t index,
-    uint64_t term)
+    uint64_t term,
+    std::optional<uint64_t> deadline_index)
 {
     auto region = getRegion(region_id);
     auto old_kv_region = kvs.getRegion(region_id);
     // We have catch up to index by snapshot.
+    // So we assume there are new data updated, so we inc index by 1.
     if (index == 0)
     {
         index = region->getLatestCommitIndex() + 1;
@@ -797,12 +815,16 @@ void MockRaftStoreProxy::snapshot(
         snaps,
         index,
         term,
+        deadline_index,
         tmt);
 
     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{new_kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
     new_kv_region->setApplied(index, term);
+
+    // Region changes during applying snapshot, must re-get.
+    return kvs.getRegion(region_id);
 }
 
 TableID MockRaftStoreProxy::bootstrapTable(
@@ -825,10 +847,24 @@ TableID MockRaftStoreProxy::bootstrapTable(
     MockTiDB::instance().newTable("d", "prevt" + toString(random()), columns, tso, "", "dt");
     UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
-    auto schema_syncer = tmt.getSchemaSyncer();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
     schema_syncer->syncSchemas(ctx, NullspaceID);
     this->table_id = table_id;
     return table_id;
+}
+
+std::pair<std::string, std::string> MockRaftStoreProxy::generateTiKVKeyValue(uint64_t tso, int64_t t) const
+{
+    WriteBufferFromOwnString buff;
+    writeChar(RecordKVFormat::CFModifyFlag::PutFlag, buff);
+    EncodeVarUInt(tso, buff);
+    std::string value_write = buff.releaseStr();
+    buff.restart();
+    auto && table_info = MockTiDB::instance().getTableInfoByID(table_id);
+    std::vector<Field> f{Field{std::move(t)}};
+    encodeRowV1(*table_info, f, buff);
+    std::string value_default = buff.releaseStr();
+    return std::make_pair(value_write, value_default);
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)

@@ -15,13 +15,16 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
+#include <Interpreters/executeQuery.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -33,6 +36,15 @@ namespace FailPoints
 extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
+
+MPPQueryTaskSet::~MPPQueryTaskSet()
+{
+    if likely (process_list_entry != nullptr)
+    {
+        auto peak_memory = process_list_entry->get().getMemoryTrackerPtr()->getPeak();
+        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_query).Observe(peak_memory);
+    }
+}
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
@@ -235,13 +247,12 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
     }
-    if (query_set != nullptr && query_set->task_map.find(task->id) != query_set->task_map.end())
+    /// query_set must not be nullptr if the current query is not aborted since MPPTask::initProcessListEntry
+    /// will always create the query_set
+    RUNTIME_CHECK_MSG(query_set != nullptr, "query set must not be null when register task");
+    if (query_set->task_map.find(task->id) != query_set->task_map.end())
     {
         return {false, "task has been registered"};
-    }
-    if (query_set == nullptr) /// the first one
-    {
-        query_set = addMPPQueryTaskSet(task->id.query_id);
     }
     query_set->task_map.emplace(task->id, task);
     /// cancel all the alarm waiting on this task
@@ -291,6 +302,25 @@ String MPPTaskManager::toString()
             res += it.first.toString() + ", ";
     }
     return res + ")";
+}
+
+std::pair<std::shared_ptr<ProcessListEntry>, String> MPPTaskManager::getOrCreateQueryProcessListEntry(const MPPQueryId & query_id, const ContextPtr & context)
+{
+    std::lock_guard lock(mu);
+    auto [query_set, abort_reason] = getQueryTaskSetWithoutLock(query_id);
+    if (!abort_reason.empty())
+        return {nullptr, abort_reason};
+    if (query_set == nullptr)
+        query_set = addMPPQueryTaskSet(query_id);
+    if (query_set->process_list_entry == nullptr)
+    {
+        query_set->process_list_entry = setProcessListElement(
+            *context,
+            context->getDAGContext()->dummy_query_string,
+            context->getDAGContext()->dummy_ast.get(),
+            true);
+    }
+    return {query_set->process_list_entry, ""};
 }
 
 std::pair<MPPQueryTaskSetPtr, String> MPPTaskManager::getQueryTaskSetWithoutLock(const MPPQueryId & query_id)
