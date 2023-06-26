@@ -31,6 +31,16 @@ public:
     static constexpr size_t concurrency = 10;
 };
 
+#define WRAP_FOR_RF_TEST_BEGIN                     \
+    enablePlanner(true);                           \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_RF_TEST_END \
+    }
+
 TEST_F(RuntimeFilterExecutorTestRunner, RuntimeFilterTest)
 try
 {
@@ -50,14 +60,14 @@ try
                                 {toNullableVec<Int32>("k1", {2, 2, 3, 4}),
                                  toNullableVec<Int32>("k2", {2, 2, 3, 4})});
 
-    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_RF_TEST_BEGIN
     {
         // without runtime filter, table_scan_0 return 3 rows
         auto request = context
                            .scan("test_db", "left_table")
                            .join(context.receive("right_exchange_table"), tipb::JoinType::TypeInnerJoin, {col("k1")})
                            .build(context);
-        Expect expect{{"table_scan_0", {3, 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
+        Expect expect{{"table_scan_0", {3, enable_pipeline ? concurrency : 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
         testForExecutionSummary(request, expect);
     }
 
@@ -68,12 +78,15 @@ try
                            .scan("test_db", "left_table", std::vector<int>{1})
                            .join(context.receive("right_exchange_table"), tipb::JoinType::TypeInnerJoin, {col("k1")}, rf)
                            .build(context);
-        Expect expect{{"table_scan_0", {2, 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
+        Expect expect{{"table_scan_0", {2, enable_pipeline ? concurrency : 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
         testForExecutionSummary(request, expect);
     }
-    WRAP_FOR_TEST_END
+    WRAP_FOR_RF_TEST_END
 }
 CATCH
+
+#undef WRAP_FOR_RF_TEST_BEGIN
+#undef WRAP_FOR_RF_TEST_END
 
 } // namespace tests
 } // namespace DB
