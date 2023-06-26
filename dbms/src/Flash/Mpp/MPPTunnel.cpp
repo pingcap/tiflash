@@ -355,9 +355,9 @@ bool MPPTunnel::isWritable() const
         return false;
     }
     case TunnelStatus::Connected:
+    case TunnelStatus::WaitingForSenderFinish:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isWritable();
-    case TunnelStatus::WaitingForSenderFinish:
     case TunnelStatus::Finished:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));

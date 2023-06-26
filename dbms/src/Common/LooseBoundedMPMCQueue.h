@@ -21,7 +21,7 @@
 namespace DB
 {
 /** A simple thread-safe loose-bounded concurrent queue and basically compatible with MPMCQueue.
-  * Provide functions `forcePush` and `isWritable` to support asynchronous writes.
+  * Provide functions `forcePush` and `isWritable` to support non-blocking writes.
   * ```
   * while (!queue.isWritable()) {}
   * queue.forcePush(std::move(obj));

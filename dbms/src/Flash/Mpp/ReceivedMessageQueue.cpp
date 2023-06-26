@@ -74,7 +74,6 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                 if likely (original_msg != nullptr)
                     RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
 #else
-                // Use `dequeue` to reduce the overheads of `~shared_ptr<ReceivedMessage>` in release build.
                 grpc_recv_queue->dequeue();
 #endif
             }
