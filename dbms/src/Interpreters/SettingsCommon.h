@@ -777,7 +777,11 @@ public:
             return CompressionMethod::QPL;
 #endif
 
+#ifdef USE_QPL
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#else
+        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#endif
     }
 
     String toString() const
