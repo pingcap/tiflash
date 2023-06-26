@@ -61,6 +61,16 @@ public:
 
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
+    // only for unit test
+    // The logic order of unit test is error, it will build source_op firstly and register rf secondly.
+    // It causes source_op could not get RF list in constructor.
+    // So, for unit test, it should call this function separated.
+    void setRuntimeFilterInfo(const RuntimeFilteList & runtime_filter_list_, int max_wait_time_ms_)
+    {
+        waiting_rf_list = runtime_filter_list_;
+        max_wait_time_ms = max_wait_time_ms_;
+    }
+
 protected:
     void operatePrefixImpl() override;
 

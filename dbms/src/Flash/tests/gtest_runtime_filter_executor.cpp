@@ -49,6 +49,8 @@ try
                                 {{"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}},
                                 {toNullableVec<Int32>("k1", {2, 2, 3, 4}),
                                  toNullableVec<Int32>("k2", {2, 2, 3, 4})});
+
+    WRAP_FOR_TEST_BEGIN
     {
         // without runtime filter, table_scan_0 return 3 rows
         auto request = context
@@ -69,6 +71,7 @@ try
         Expect expect{{"table_scan_0", {2, 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
         testForExecutionSummary(request, expect);
     }
+    WRAP_FOR_TEST_END
 }
 CATCH
 

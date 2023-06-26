@@ -26,6 +26,8 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Operators/FilterTransformOp.h>
+#include "Common/Logger.h"
 
 namespace DB
 {
@@ -176,7 +178,13 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     return {storage, column_names, query_info};
 }
 
-BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions, bool keep_order, std::vector<int> runtime_filter_ids, int rf_max_wait_time_ms)
+BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
+    Context & context,
+    Int64 table_id,
+    const FilterConditions * filter_conditions,
+    bool keep_order,
+    std::vector<int> runtime_filter_ids,
+    int rf_max_wait_time_ms)
 {
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
@@ -217,25 +225,64 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
 }
 
-
 void MockStorage::buildExecFromDeltaMerge(
     PipelineExecutorStatus & exec_status_,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     Int64 table_id,
     size_t concurrency,
-    bool keep_order)
+    bool keep_order,
+    const FilterConditions * filter_conditions,
+    std::vector<int> runtime_filter_ids,
+    int rf_max_wait_time_ms)
 {
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
-    // Currently don't support test for late materialization
-    storage->read(
-        exec_status_,
-        group_builder,
-        column_names,
-        query_info,
-        context,
-        context.getSettingsRef().max_block_size,
-        concurrency);
+    if (filter_conditions && filter_conditions->hasValue())
+    {
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            filter_conditions->conditions,
+            pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
+        storage->read(
+            exec_status_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+        auto log = Logger::get("test for late materialization");
+        auto input_header = group_builder.getCurrentHeader();
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status_, log->identifier(), input_header, before_where, filter_column_name));
+        });
+        executeExpression(exec_status_, group_builder, project_after_where, log);
+    }
+    else
+    {
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            google::protobuf::RepeatedPtrField<tipb::Expr>(),
+            pushed_down_filters, // Not care now
+            mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]),
+            runtime_filter_ids,
+            rf_max_wait_time_ms,
+            context.getTimezoneInfo());
+        storage->read(
+            exec_status_,
+            group_builder,
+            column_names,
+            query_info,
+            context,
+            context.getSettingsRef().max_block_size,
+            concurrency);
+    }
 }
 
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)

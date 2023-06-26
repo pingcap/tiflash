@@ -105,6 +105,7 @@ try
 {
     std::vector<bool> keep_order_opt{false, true};
 
+    WRAP_FOR_TEST_BEGIN
     for (auto keep_order : keep_order_opt)
     {
         auto request = context
@@ -191,6 +192,7 @@ try
             {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
              {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
     }
+    WRAP_FOR_TEST_END
 }
 CATCH
 

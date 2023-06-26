@@ -18,8 +18,6 @@
 
 #include <memory>
 
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
-
 namespace DB
 {
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
