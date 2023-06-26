@@ -105,11 +105,11 @@ public:
     {
         // versioned_ref_counts being nullptr always means ref count 1
         RUNTIME_CHECK(ref_count > 0);
-        if (versioned_ref_counts == nullptr && ref_count == 1)
+        RUNTIME_CHECK(!versioned_ref_counts);
+        if (ref_count == 1)
         {
             return;
         }
-        RUNTIME_CHECK(versioned_ref_counts == nullptr);
         versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
         // empty `versioned_ref_counts` means ref count 1, so the ref count delta here is ref_count - 1
         versioned_ref_counts->emplace_back(ver, ref_count - 1);
@@ -117,7 +117,7 @@ public:
 
     void incrRefCount(const PageVersion & ver, Int64 ref_count_delta)
     {
-        if (versioned_ref_counts == nullptr)
+        if (!versioned_ref_counts)
         {
             versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
         }
@@ -128,7 +128,8 @@ public:
     {
         if (snap_seq == 0)
         {
-            // TODO: actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
+            // When `snap_seq` is 0, it means the deref operation is caused by rewritting a ref page to a normal page.
+            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
             // But collpase it when `snap_seq` is not zero should be enough. So we just do an append here.
             versioned_ref_counts->emplace_back(PageVersion(0, 0), -deref_count_delta);
         }
@@ -160,7 +161,7 @@ public:
 
     Int64 getRefCountInSnap(UInt64 snap_seq) const
     {
-        if (versioned_ref_counts == nullptr)
+        if (!versioned_ref_counts)
         {
             return 1;
         }
@@ -175,7 +176,7 @@ public:
 
     Int64 getLatestRefCount() const
     {
-        if (versioned_ref_counts == nullptr)
+        if (!versioned_ref_counts)
         {
             return 1;
         }
