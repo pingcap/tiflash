@@ -21,7 +21,6 @@ void TokenBucket::put(double n)
 {
     RUNTIME_CHECK(n >= 0.0);
     tokens += n;
-    compact(std::chrono::steady_clock::now());
 }
 
 bool TokenBucket::consume(double n)
@@ -38,16 +37,23 @@ bool TokenBucket::consume(double n)
     return true;
 }
 
+double TokenBucket::peek(const TokenBucket::TimePoint & timepoint) const
+{
+    return tokens + getDynamicTokens(timepoint);
+}
+
 void TokenBucket::reConfig(double new_tokens, double new_fill_rate, double new_capacity)
 {
     RUNTIME_CHECK(new_fill_rate >= 0.0);
     RUNTIME_CHECK(new_capacity >= 0.0);
 
+    auto now = std::chrono::steady_clock::now();
     tokens = new_tokens;
     fill_rate = new_fill_rate;
     capacity = new_capacity;
-    compact(std::chrono::steady_clock::now());
 
+    compact(now);
+    // Update because token number may increase, which may cause token_changed be nigative.
     last_get_avg_speed_tokens = tokens;
     last_get_avg_speed_timepoint = std::chrono::steady_clock::now();
 }
@@ -56,19 +62,18 @@ double TokenBucket::getAvgSpeedPerSec()
 {
     auto now = std::chrono::steady_clock::now();
     auto dura = std::chrono::duration_cast<std::chrono::seconds>(now - last_get_avg_speed_timepoint);
+
+    compact(now);
     double token_changed = last_get_avg_speed_tokens - tokens;
 
+    // If dura less than 1 sec, return last sec avg speed.
     if (dura.count() >= 1)
+    {
         avg_speed_per_sec = token_changed / dura.count();
+        last_get_avg_speed_tokens = tokens;
+        last_get_avg_speed_timepoint = now;
+    }
     return avg_speed_per_sec;
-}
-
-double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) const
-{
-    RUNTIME_CHECK(timepoint >= last_compact_timepoint);
-    auto elspased = timepoint - last_compact_timepoint;
-    auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
-    return elapsed_second * fill_rate;
 }
 
 void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
@@ -79,8 +84,12 @@ void TokenBucket::compact(const TokenBucket::TimePoint & timepoint)
     last_compact_timepoint = timepoint;
 }
 
-double TokenBucket::peek(const TokenBucket::TimePoint & timepoint) const
+double TokenBucket::getDynamicTokens(const TokenBucket::TimePoint & timepoint) const
 {
-    return tokens + getDynamicTokens(timepoint);
+    RUNTIME_CHECK(timepoint >= last_compact_timepoint);
+    auto elspased = timepoint - last_compact_timepoint;
+    auto elapsed_second = std::chrono::duration_cast<std::chrono::seconds>(elspased).count();
+    return elapsed_second * fill_rate;
 }
+
 } // namespace DB

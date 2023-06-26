@@ -19,8 +19,8 @@ namespace DB
 {
 
 // There are two mode of TokenBucket:
-// 1. fill_rate == 0: bucket is static, a.k.a stops filling token.
-// 2. fill_rate > 0: bucket is dynamic.
+// 1. fill_rate == 0: Bucket is static. Will fetch tokens from GAC.
+// 2. fill_rate > 0: bucket is dynamic. Will serve as a local token bucket.
 // NOTE: not thread safe!
 class TokenBucket final
 {
@@ -35,7 +35,7 @@ public:
         , last_get_avg_speed_timepoint(std::chrono::steady_clock::time_point::min())
         , last_get_avg_speed_tokens(init_tokens_)
         , avg_speed_per_sec(0.0)
-        , low_token_threshold(0.8 * init_tokens_)
+        , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * init_tokens_)
     {}
 
     ~TokenBucket() = default;
@@ -44,11 +44,11 @@ public:
     void put(double n);
 
     // Consume tokens in bucket:
-    // 1. If has enough tokens, return true and update bucket.
-    // 2. Otherwise, return false and dont touch bucket.
+    // 1. If has enough tokens, return true then update bucket.
+    // 2. Otherwise, return false and will not touch bucket.
     bool consume(double n);
 
-    // Returns current tokens.
+    // Return current tokens count.
     double peek() const { return peek(std::chrono::steady_clock::now()); }
 
     double peek(const TimePoint & timepoint) const;
@@ -62,9 +62,11 @@ public:
     bool lowToken() const { return peek() <= low_token_threshold; }
 
 private:
-    double getDynamicTokens(const TimePoint & timepoint) const;
+    static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.8;
 
+    // Merge dynamic token into static token.
     void compact(const TokenBucket::TimePoint & timepoint);
+    double getDynamicTokens(const TimePoint & timepoint) const;
 
     double fill_rate;
     double tokens;
@@ -76,7 +78,6 @@ private:
     double last_get_avg_speed_tokens;
     double avg_speed_per_sec;
 
-    // gjt todo init
     double low_token_threshold;
 };
 
