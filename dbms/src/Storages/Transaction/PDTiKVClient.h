@@ -44,15 +44,15 @@ struct KeyspaceGCInfo
         ks_gc_sp_update_time = std::chrono::steady_clock::now();
     }
 
-    KeyspaceGCInfo(const KeyspaceGCInfo& other)
+    KeyspaceGCInfo(const KeyspaceGCInfo & other)
     {
         ks_gc_sp = other.ks_gc_sp;
         ks_gc_sp_update_time = std::chrono::steady_clock::now();
     }
 
-    KeyspaceGCInfo& operator=(const KeyspaceGCInfo& other)
+    KeyspaceGCInfo & operator=(const KeyspaceGCInfo & other)
     {
-        if (this != &other) 
+        if (this != &other)
         {
             ks_gc_sp = other.ks_gc_sp;
             ks_gc_sp_update_time = std::chrono::steady_clock::now();
@@ -75,7 +75,6 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
-
         // If keyspace id is `NullspaceID` it need to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
