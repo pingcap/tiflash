@@ -772,10 +772,8 @@ public:
             return CompressionMethod::LZ4HC;
         if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
+#ifdef USE_QPL
         if (lower_str == "qpl")
-#ifndef ENABLE_QPL_COMPRESSION
-            throw exception("This binary is not built with qpl support", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
-#else
             return CompressionMethod::QPL;
 #endif
 
