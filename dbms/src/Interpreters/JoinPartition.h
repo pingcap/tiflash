@@ -112,7 +112,7 @@ public:
         return trySpillBuildPartition(force, max_cached_data_bytes, lock);
     }
     std::unique_lock<std::mutex> lockPartition();
-    SpinLock spinLockPartition();
+    SpinLock spinLockPartition() { return SpinLock(partition_mutex); }
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &);
     void releaseProbePartitionBlocks(std::unique_lock<std::mutex> &);

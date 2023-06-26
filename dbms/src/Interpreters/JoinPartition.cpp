@@ -257,10 +257,6 @@ std::unique_lock<std::mutex> JoinPartition::lockPartition()
 {
     return std::unique_lock(partition_mutex);
 }
-SpinLock JoinPartition::spinLockPartition()
-{
-    return SpinLock(partition_mutex);
-}
 void JoinPartition::releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &)
 {
     auto released_bytes = build_partition.bytes;

@@ -24,9 +24,8 @@ class SpinLock : private boost::noncopyable
 public:
     explicit SpinLock(std::mutex & mu_) noexcept
         : mu(mu_)
-    {
-        locked = mu.try_lock();
-    }
+        , locked(mu.try_lock())
+    {}
 
     ~SpinLock() noexcept
     {
@@ -38,6 +37,6 @@ public:
 
 private:
     std::mutex & mu;
-    bool locked{false};
+    const bool locked;
 };
 } // namespace DB
