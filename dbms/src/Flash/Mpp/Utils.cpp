@@ -53,10 +53,16 @@ void trimStackTrace(String & message)
 static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
 static MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
-// Use ReportStatus interface to report status, instead of passing execution summaries within data packet
+// Use ReportStatus interface to report status
 bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordinator_address)
 {
     return mpp_version >= MppVersion::MppVersionV2 && !coordinator_address.empty();
+}
+
+// Use ReportStatus interface to report execution summaries, instead of passing them within mpp data packet
+bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execution_summary)
+{
+    return mpp_version >= MppVersion::MppVersionV2 && report_execution_summary;
 }
 
 // Check mpp-version is illegal

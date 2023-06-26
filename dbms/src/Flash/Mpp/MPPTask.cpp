@@ -171,7 +171,7 @@ void MPPTask::abortQueryExecutor()
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries && !ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
+    if (dag_context->collect_execution_summaries && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
         tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
@@ -547,9 +547,10 @@ void MPPTask::runImpl()
     }
     else
     {
-        /// trim the stack trace to avoid too many useless information in log
+        /// trim the stack trace to avoid too many useless information
         String trimmed_err_msg = err_msg;
         trimStackTrace(trimmed_err_msg);
+        /// tidb replaces root tasks' error message with the first error message it received, if root task completed successfully, error messages will be ignored.
         reportStatus(trimmed_err_msg);
         if (status == RUNNING)
         {
@@ -582,7 +583,7 @@ void MPPTask::reportStatus(const String & err_msg)
         mpp::TaskMeta * req_meta = req->mutable_meta();
         req_meta->CopyFrom(meta);
 
-        if (dag_context->collect_execution_summaries)
+        if (dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
         {
             tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
             if unlikely (!execution_info.SerializeToString(req->mutable_data()))
