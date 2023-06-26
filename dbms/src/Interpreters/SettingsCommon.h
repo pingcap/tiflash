@@ -782,7 +782,13 @@ public:
 
     String toString() const
     {
+#ifdef USE_QPL
         const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
+        auto compression_method_last = CompressionMethod::QPL;
+#else
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
+        auto compression_method_last = CompressionMethod::ZSTD;
+#endif
 
         if (value < CompressionMethod::LZ4 || value > CompressionMethod::QPL)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
