@@ -943,7 +943,7 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
-RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context)
+RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const
 {
     if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
     {
@@ -986,6 +986,8 @@ void StorageDeltaMerge::read(
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+
     const auto & scan_context = mvcc_query_info.scan_context;
 
     store->read(
@@ -998,6 +1000,8 @@ void StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+        runtime_filter_list,
+        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,

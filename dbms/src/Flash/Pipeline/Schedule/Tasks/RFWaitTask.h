@@ -22,9 +22,6 @@
 
 namespace DB
 {
-using RuntimeFilterPtr = std::shared_ptr<RuntimeFilter>;
-using RuntimeFilteList = std::vector<RuntimeFilterPtr>;
-
 class RFWaitTask : public Task
 {
 public:
@@ -33,12 +30,14 @@ public:
         PipelineExecutorStatus & exec_status_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         int max_wait_time_ms,
-        RuntimeFilteList && waiting_rf_list_)
+        RuntimeFilteList && waiting_rf_list_,
+        RuntimeFilteList && ready_rf_list_)
         : Task(nullptr, req_id)
         , exec_status(exec_status_)
         , task_pool(task_pool_)
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
         , waiting_rf_list(std::move(waiting_rf_list_))
+        , ready_rf_list(std::move(ready_rf_list_))
     {
         exec_status.incActiveRefCount();
     }
@@ -47,6 +46,36 @@ public:
     {
         // In order to ensure that `PipelineExecutorStatus` will not be destructed before `RFWaitTask` is destructed.
         exec_status.decActiveRefCount();
+    }
+
+    static void filterAndMoveReadyRfs(RuntimeFilteList & waiting_rf_list, RuntimeFilteList & ready_rf_list)
+    {
+        for (auto it = waiting_rf_list.begin(); it != waiting_rf_list.end();)
+        {
+            if ((*it)->isReady())
+            {
+                ready_rf_list.push_back(std::move((*it)));
+                it = waiting_rf_list.erase(it);
+            }
+            else if ((*it)->isFailed())
+            {
+                it = waiting_rf_list.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    static void submitReadyRfsAndSegmentTaskPool(const RuntimeFilteList & ready_rf_list, const DM::SegmentReadTaskPoolPtr & task_pool)
+    {
+        for (const RuntimeFilterPtr & rf : ready_rf_list)
+        {
+            auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
+            task_pool->appendRSOperator(rs_operator);
+        }
+        DM::SegmentReadTaskScheduler::instance().add(task_pool);
     }
 
 private:
@@ -61,30 +90,10 @@ private:
             return ExecTaskStatus::CANCELLED;
         try
         {
-            for (auto it = waiting_rf_list.begin(); it != waiting_rf_list.end();)
-            {
-                if ((*it)->isReady())
-                {
-                    ready_rf_list.push_back(std::move((*it)));
-                    it = waiting_rf_list.erase(it);
-                }
-                else if ((*it)->isFailed())
-                {
-                    it = waiting_rf_list.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
+            filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
             if (waiting_rf_list.empty() || stopwatch.elapsed() >= max_wait_time_ns)
             {
-                for (const RuntimeFilterPtr & rf : ready_rf_list)
-                {
-                    auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
-                    task_pool->appendRSOperator(rs_operator);
-                }
-                DM::SegmentReadTaskScheduler::instance().add(task_pool);
+                submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
                 return ExecTaskStatus::FINISHED;
             }
             return ExecTaskStatus::WAITING;

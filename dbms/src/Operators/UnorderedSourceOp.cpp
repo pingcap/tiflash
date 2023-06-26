@@ -18,6 +18,8 @@
 
 #include <memory>
 
+#include "Flash/Pipeline/Schedule/Tasks/Task.h"
+
 namespace DB
 {
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
@@ -58,32 +60,24 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
 void UnorderedSourceOp::operatePrefixImpl()
 {
     std::call_once(task_pool->addToSchedulerFlag(), [&]() {
-        if (runtime_filter_list.empty())
+        if (waiting_rf_list.empty())
         {
             DM::SegmentReadTaskScheduler::instance().add(task_pool);
         }
         else
         {
-            if (max_wait_time_ms <= 0)
+            // Check if the RuntimeFilters is ready immediately.
+            RuntimeFilteList ready_rf_list;
+            RFWaitTask::filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
+
+            if (max_wait_time_ms <= 0 || waiting_rf_list.empty())
             {
-                // Check if the RuntimeFilters is ready immediately.
-                RuntimeFilteList ready_rf_list;
-                for (const RuntimeFilterPtr & rf : runtime_filter_list)
-                {
-                    if (rf->isReady())
-                        ready_rf_list.push_back(rf);
-                }
-                for (const RuntimeFilterPtr & rf : ready_rf_list)
-                {
-                    auto rs_operator = rf->parseToRSOperator(task_pool->getColumnToRead());
-                    task_pool->appendRSOperator(rs_operator);
-                }
-                DM::SegmentReadTaskScheduler::instance().add(task_pool);
+                RFWaitTask::submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
             }
             else
             {
                 // Poll and check if the RuntimeFilters is ready in the WaitReactor.
-                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(log->identifier(), exec_status, task_pool, max_wait_time_ms, std::move(runtime_filter_list)));
+                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(log->identifier(), exec_status, task_pool, max_wait_time_ms, std::move(waiting_rf_list), std::move(ready_rf_list)));
             }
         }
     });

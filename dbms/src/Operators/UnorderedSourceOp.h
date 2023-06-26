@@ -40,7 +40,7 @@ public:
         : SourceOp(exec_status_, req_id)
         , task_pool(task_pool_)
         , ref_no(0)
-        , runtime_filter_list(runtime_filter_list_)
+        , waiting_rf_list(runtime_filter_list_)
         , max_wait_time_ms(max_wait_time_ms_)
     {
         setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
@@ -73,7 +73,7 @@ private:
     int64_t ref_no;
 
     // runtime filter
-    RuntimeFilteList runtime_filter_list;
+    RuntimeFilteList waiting_rf_list;
     int max_wait_time_ms;
 };
 } // namespace DB

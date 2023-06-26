@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 enum class RuntimeFilterStatus
 {
     NOT_READY,
@@ -101,5 +100,7 @@ private:
     std::mutex inner_mutex;
     std::condition_variable inner_cv;
 };
+using RuntimeFilterPtr = std::shared_ptr<RuntimeFilter>;
+using RuntimeFilteList = std::vector<RuntimeFilterPtr>;
 
 } // namespace DB
