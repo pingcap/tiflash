@@ -794,7 +794,7 @@ public:
         auto compression_method_last = CompressionMethod::ZSTD;
 #endif
 
-        if (value < CompressionMethod::LZ4 || value > CompressionMethod::QPL)
+        if (value < CompressionMethod::LZ4 || value > compression_method_last)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 
         return strings[static_cast<size_t>(value)];
