@@ -1,5 +1,5 @@
 #ifdef ENABLE_QPL_COMPRESSION
-#include "CodecDeflateQpl.h"
+#include <IO/CodecDeflateQpl.h>
 
 #include <Common/Exception.h>
 
