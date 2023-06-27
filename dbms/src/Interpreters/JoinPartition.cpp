@@ -607,7 +607,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         }
     }
 
-    // Next, use blocking locks to process the remaining segments to avoid unnecessary cpu consumption.
+    // Next use blocking locks to insert the remaining segments to avoid unnecessary cpu consumption.
     for (auto segment_index : insert_indexes)
     {
         if (segment_index == segment_size)
