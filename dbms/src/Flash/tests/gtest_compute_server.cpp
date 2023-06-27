@@ -118,10 +118,10 @@ public:
 
     void addOneQuery(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPQueryId> & query_ids)
     {
-        running_queries.emplace_back([&, query_ts]() {
-            auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
-            MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
-            query_ids.push_back(query_id);
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        query_ids.push_back(query_id);
+        running_queries.emplace_back([&, properties]() {
             try
             {
                 auto tasks = prepareMPPTasks(context
