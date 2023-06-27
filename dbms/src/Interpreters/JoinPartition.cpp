@@ -257,6 +257,10 @@ std::unique_lock<std::mutex> JoinPartition::lockPartition()
 {
     return std::unique_lock(partition_mutex);
 }
+std::unique_lock<std::mutex> JoinPartition::tryLockPartition()
+{
+    return std::unique_lock(partition_mutex, std::try_to_lock);
+}
 void JoinPartition::releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &)
 {
     auto released_bytes = build_partition.bytes;
@@ -546,61 +550,80 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         segment_index_info[segment_index].push_back(i);
     }
 
-    std::deque<size_t> insert_indexes;
-    insert_indexes.resize(segment_index_info.size());
+    std::list<size_t> insert_indexes;
     for (size_t i = 0; i < segment_index_info.size(); ++i)
     {
         size_t insert_index = (i + stream_index) % segment_index_info.size();
-        insert_indexes[i] = insert_index;
+        insert_indexes.emplace_back(insert_index);
     }
-    bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());
-    while (likely(!insert_indexes.empty()))
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
-        size_t segment_index = insert_indexes.back();
-        insert_indexes.pop_back();
-        if (segment_index == segment_size)
-        {
-            /// null value
-            /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
-            /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
-            RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
-            for (auto index : segment_index_info[segment_index])
-                rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
-        }
-        else
-        {
-#define INSERT(join_partition, segment_index)                                                                              \
+
+#define INSERT_TO_MAP(join_partition, segment_index)                                                                       \
     auto & current_map = (join_partition)->getHashMap<Map>();                                                              \
     for (auto & i : (segment_index))                                                                                       \
     {                                                                                                                      \
         Inserter<STRICTNESS, Map, KeyGetter>::insert(current_map, key_getter, stored_block, i, pool, sort_key_containers); \
     }
 
-            auto & join_partition = join_partitions[segment_index];
-            if (auto spin_lock = join_partition->spinLockPartition(); spin_lock)
+#define INSERT_TO_NOT_INSERTED_MAP                                                                      \
+    /* null value */                                                                                    \
+    /* here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread */   \
+    /* for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map */ \
+    assert(rows_not_inserted_to_map != nullptr);                                                        \
+    assert(segment_index_info.size() == (1 + segment_size));                                            \
+    bool null_need_materialize = isNullAwareSemiFamily(current_join_partition->getJoinKind());          \
+    for (auto index : segment_index_info[segment_size])                                                 \
+    {                                                                                                   \
+        rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);          \
+    }
+
+    // First use tryLock to traverse twice to find all segments that can acquire locks immediately and execute insert.
+    //
+    // If there is only one segment left, there is no need to use try locks
+    // since it only causes unnecessary CPU consumption, and a blocking lock can be used directly.
+    for (size_t i = 0; i <= 1 && insert_indexes.size() > 1; ++i)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
+        for (auto it = insert_indexes.begin(); it != insert_indexes.end();)
+        {
+            auto segment_index = *it;
+            if (segment_index == segment_size)
             {
-                INSERT(join_partition, segment_index_info[segment_index]);
+                INSERT_TO_NOT_INSERTED_MAP
+                it = insert_indexes.erase(it);
             }
             else
             {
-                // If there is only one segment left, there is no need to use spin locks
-                // since it only causes unnecessary CPU consumption,
-                // and a blocking lock can be used directly.
-                if unlikely (insert_indexes.empty())
+                auto & join_partition = join_partitions[segment_index];
+                if (auto try_lock = join_partition->tryLockPartition(); try_lock)
                 {
-                    auto lock = join_partition->lockPartition();
-                    INSERT(join_partition, segment_index_info[segment_index]);
+                    INSERT_TO_MAP(join_partition, segment_index_info[segment_index]);
+                    it = insert_indexes.erase(it);
                 }
                 else
                 {
-                    insert_indexes.push_front(segment_index);
+                    ++it;
                 }
             }
-
-#undef INSERT
         }
     }
+
+    // Next, use blocking locks to process the remaining segments to avoid unnecessary cpu consumption.
+    for (auto segment_index : insert_indexes)
+    {
+        if (segment_index == segment_size)
+        {
+            INSERT_TO_NOT_INSERTED_MAP
+        }
+        else
+        {
+            auto & join_partition = join_partitions[segment_index];
+            auto lock = join_partition->lockPartition();
+            INSERT_TO_MAP(join_partition, segment_index_info[segment_index]);
+        }
+    }
+
+#undef INSERT_TO_MAP
+#undef INSERT_TO_NOT_INSERTED_MAP
 }
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>

@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Columns/ColumnNullable.h>
-#include <Common/SpinLock.h>
 #include <Core/Block.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/JoinHashMap.h>
@@ -112,7 +111,7 @@ public:
         return trySpillBuildPartition(force, max_cached_data_bytes, lock);
     }
     std::unique_lock<std::mutex> lockPartition();
-    SpinLock spinLockPartition() { return SpinLock(partition_mutex); }
+    std::unique_lock<std::mutex> tryLockPartition();
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseBuildPartitionBlocks(std::unique_lock<std::mutex> &);
     void releaseProbePartitionBlocks(std::unique_lock<std::mutex> &);
