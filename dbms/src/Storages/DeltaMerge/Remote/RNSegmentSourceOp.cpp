@@ -19,6 +19,8 @@
 
 #include <magic_enum.hpp>
 
+#include "Operators/Operator.h"
+
 namespace DB::DM::Remote
 {
 
@@ -67,7 +69,8 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
     {
         // Start timing the time of get next ready task.
         wait_stop_watch.start();
-        return OperatorStatus::WAITING;
+        // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
+        return awaitImpl();
     }
 }
 
@@ -135,11 +138,12 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
     }
     else
     {
-        // Current stream is drained, try to get next stream.
+        // Current stream is drained, try to get next ready task.
         current_seg_task = nullptr;
         // Start timing the time of get next ready task.
         wait_stop_watch.start();
-        return OperatorStatus::WAITING;
+        // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
+        return awaitImpl();
     }
 }
 

@@ -38,7 +38,6 @@ public:
 
     explicit RNSegmentSourceOp(const Options & options)
         : SourceOp(options.exec_status, String(options.debug_tag))
-        , log(Logger::get(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
     {
@@ -66,7 +65,6 @@ protected:
     OperatorStatus executeIOImpl() override;
 
 private:
-    const LoggerPtr log;
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
