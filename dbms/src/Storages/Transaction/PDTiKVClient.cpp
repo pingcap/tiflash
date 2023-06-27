@@ -14,6 +14,8 @@
 
 #include <Storages/Transaction/PDTiKVClient.h>
 
+bool PDClientHelper::enable_safepoint_v2 = false;
+
 namespace DB
 {
 

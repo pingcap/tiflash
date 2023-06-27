@@ -270,7 +270,7 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-bool PDClientHelper::enable_safepoint_v2 = false;
+//bool PDClientHelper::enable_safepoint_v2 = false;
 
 struct TiFlashProxyConfig
 {
