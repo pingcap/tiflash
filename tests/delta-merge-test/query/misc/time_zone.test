@@ -22,7 +22,7 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 MyDate, col_2 default \'asTiDBType|timestamp(5)\', col_3 MyDatetime')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, '2019-06-10', '2019-06-10 09:00:00', '2019-06-10 09:00:00')
 => DBGInvoke __raft_insert_row(default, test, 4, 51, '2019-06-11', '2019-06-11 07:00:00', '2019-06-11 09:00:00')

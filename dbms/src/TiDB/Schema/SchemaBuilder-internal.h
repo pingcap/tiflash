@@ -35,8 +35,6 @@ struct TableInfo;
 }
 namespace DB
 {
-std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableInfo & table_info);
-
 constexpr char tmpNamePrefix[] = "_tiflash_tmp_";
 
 struct TmpTableNameGenerator
