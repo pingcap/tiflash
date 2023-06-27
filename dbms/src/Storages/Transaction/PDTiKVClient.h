@@ -75,7 +75,6 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
-        LOG_DEBUG(Logger::get(), "getGCSafePointWithRetry, enable_safepoint_v2={},keyspace_id={}", enable_safepoint_v2,keyspace_id);
         // If keyspace id is `NullspaceID` it need to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
@@ -101,7 +100,7 @@ struct PDClientHelper
             {
                 auto safe_point = pd_client->getGCSafePoint();
                 cached_gc_safe_point = safe_point;
-                LOG_DEBUG(Logger::get(), "use safe point v1, gc_safe_point={}, enable_safepoint_v2={},keyspace_id={}", safe_point, enable_safepoint_v2,keyspace_id);
+                LOG_DEBUG(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
                 safe_point_last_update_time = std::chrono::steady_clock::now();
                 return safe_point;
             }
