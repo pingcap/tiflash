@@ -14,8 +14,6 @@
 
 #include <Storages/Transaction/PDTiKVClient.h>
 
-bool PDClientHelper::enable_safepoint_v2 = false;
-
 namespace DB
 {
 
@@ -28,6 +26,7 @@ std::atomic<Timestamp> PDClientHelper::cached_gc_safe_point = 0;
 std::atomic<std::chrono::time_point<std::chrono::steady_clock>> PDClientHelper::safe_point_last_update_time;
 
 // Keyspace gc safepoint cache and update time.
+bool PDClientHelper::enable_safepoint_v2 = false;
 std::unordered_map<KeyspaceID, KeyspaceGCInfo> PDClientHelper::ks_gc_sp_map;
 std::shared_mutex PDClientHelper::ks_gc_sp_mutex;
 
