@@ -115,6 +115,29 @@ public:
             {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
             {toNullableVec<Int32>("s1", join_r_s1), toNullableVec<String>("s2", join_r_s2), toNullableVec<String>("s3", join_r_s3)});
     }
+
+    void addOneQuery(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPQueryId> & query_ids)
+    {
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
+        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        query_ids.push_back(query_id);
+        running_queries.emplace_back([&, properties]() {
+            try
+            {
+                auto tasks = prepareMPPTasks(context
+                                                 .scan("test_db", "l_table")
+                                                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                 .project({col("max(l_table.s)"), col("l_table.s")}),
+                                             properties);
+                executeMPPTasks(tasks, properties);
+            }
+            catch (...)
+            {
+                MockComputeServerManager::instance().cancelQuery(query_id);
+                EXPECT_TRUE(assertQueryCancelled(query_id));
+            }
+        });
+    }
 };
 
 
@@ -846,6 +869,74 @@ try
         }
     }
     WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
+TEST_F(ComputeServerRunner, testMinTSOActiveSetSoftLimit)
+try
+{
+    UInt64 active_set_soft_limit = 2;
+    context.context->setSetting("task_scheduler_active_set_soft_limit", active_set_soft_limit);
+    startServers(1);
+    setCancelTest();
+    ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
+    ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+    std::vector<std::thread> running_queries;
+    std::vector<MPPQueryId> query_ids;
+    try
+    {
+        /// case 1, min tso can be added
+        for (size_t i = 0; i < active_set_soft_limit; ++i)
+        {
+            addOneQuery(i + 10, running_queries, query_ids);
+        }
+        using namespace std::literals::chrono_literals;
+        std::this_thread::sleep_for(2s);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        addOneQuery(1, running_queries, query_ids);
+        std::this_thread::sleep_for(2s);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 3);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        for (const auto & query_id : query_ids)
+            MockComputeServerManager::instance().cancelQuery(query_id);
+        for (auto & t : running_queries)
+            t.join();
+        running_queries.clear();
+        query_ids.clear();
+        /// case 2, non-min tso can't be added
+        for (size_t i = 0; i < active_set_soft_limit; ++i)
+        {
+            addOneQuery((i + 1) * 20, running_queries, query_ids);
+        }
+        using namespace std::literals::chrono_literals;
+        std::this_thread::sleep_for(2s);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        addOneQuery(30, running_queries, query_ids);
+        std::this_thread::sleep_for(2s);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 1);
+        /// cancel 1 running query
+        MockComputeServerManager::instance().cancelQuery(query_ids[0]);
+        running_queries[0].join();
+        std::this_thread::sleep_for(2s);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        for (size_t i = 1; i < running_queries.size(); i++)
+            MockComputeServerManager::instance().cancelQuery(query_ids[i]);
+        for (size_t i = 1; i < running_queries.size(); i++)
+            running_queries[i].join();
+    }
+    catch (...)
+    {
+        for (const auto & query_id : query_ids)
+            MockComputeServerManager::instance().cancelQuery(query_id);
+        for (auto & t : running_queries)
+            if (t.joinable())
+                t.join();
+        throw;
+    }
 }
 CATCH
 
