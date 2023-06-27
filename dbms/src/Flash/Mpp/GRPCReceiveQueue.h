@@ -204,6 +204,14 @@ public:
         return ret;
     }
 
+    MPMCQueueResult dequeue()
+    {
+        auto ret = recv_queue->dequeue();
+        if (ret == MPMCQueueResult::OK)
+            kickCompletionQueue();
+        return ret;
+    }
+
     // When the queue is full GRPCReceiveQueue will not save the tag.
     // This action should be taken by the caller.
     template <typename U>
