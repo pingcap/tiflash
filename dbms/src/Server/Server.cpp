@@ -1485,7 +1485,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_FMT_DEBUG(log, "Load metadata done.");
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
-    for (int i = 0; i < 60; i++) // retry for 3 mins
+    Stopwatch watch;
+    while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
     {
         try
         {
