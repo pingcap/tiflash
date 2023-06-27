@@ -610,6 +610,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     // Next use blocking locks to insert the remaining segments to avoid unnecessary cpu consumption.
     for (auto segment_index : insert_indexes)
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         if (segment_index == segment_size)
         {
             INSERT_TO_NOT_INSERTED_MAP
