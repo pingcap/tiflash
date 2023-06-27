@@ -118,10 +118,7 @@ OperatorStatus RNSegmentSourceOp::awaitImpl()
 
 OperatorStatus RNSegmentSourceOp::executeIOImpl()
 {
-    if unlikely (done)
-        return OperatorStatus::HAS_OUTPUT;
-
-    if unlikely (t_block.has_value())
+    if unlikely (done || t_block.has_value())
         return OperatorStatus::HAS_OUTPUT;
 
     if unlikely (!current_seg_task)
@@ -146,5 +143,4 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
         return awaitImpl();
     }
 }
-
 } // namespace DB::DM::Remote
