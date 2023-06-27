@@ -43,7 +43,6 @@ namespace DB
     M(exception_before_dmfile_remove_encryption)                  \
     M(exception_before_dmfile_remove_from_disk)                   \
     M(force_triggle_background_merge_delta)                       \
-    M(force_triggle_foreground_flush)                             \
     M(exception_before_mpp_register_non_root_mpp_task)            \
     M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \

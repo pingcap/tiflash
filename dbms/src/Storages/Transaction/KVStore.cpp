@@ -310,13 +310,13 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(const WriteCmdsView & cmds,
     /// Safety:
     /// This call is from Proxy's applying thread of this region, so:
     /// 1. No other thread can write from raft to this region even if we unlocked here.
-    /// 2. If `compactLogByRowKeyRange` causes a write stall, it will be forwarded to raft layer.
+    /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
     if (write_result)
     {
         auto & inner = write_result.value();
         for (auto it = inner.pending_flush_ranges.begin(); it != inner.pending_flush_ranges.end(); it++)
         {
-            compactLogByRowKeyRange(tmt, *it, inner.keyspace_id, inner.table_id, false);
+            proactiveFlushCacheAndRegion(tmt, *it, inner.keyspace_id, inner.table_id, false);
         }
     }
     return res;
@@ -926,7 +926,7 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 // 1. store applied index and applied term,
 // 2. flush cache,
 // 3. notify regions to compact log and store fushed state with applied index/term before flushing cache.
-void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
+void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
     if (is_background)
     {
@@ -953,7 +953,7 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
-                    "compactLogByRowKeyRange can not get table for table id {}, ignored",
+                    "proactiveFlushCacheAndRegion can not get table for table id {}, ignored",
                     table_id);
         return;
     }
@@ -962,6 +962,9 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     Stopwatch watch;
 
     LOG_INFO(log, "Start proactive flush region range [{},{}] [table_id={}] [keyspace_id={}] [is_background={}]", range.first.toDebugString(), range.second.toDebugString(), table_id, keyspace_id, is_background);
+    /// It finds r1,r2,r3 in the following case.
+    ///     |------ range ------|
+    /// |--- r1 ---|--- r2 ---|--- r3 ---|
     std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange, RegionPtr>> region_compact_indexes;
     {
         auto task_lock = genTaskLock();
@@ -1002,22 +1005,25 @@ void KVStore::compactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & 
     for (const auto & region : region_compact_indexes)
     {
         auto region_rowkey_range = std::get<2>(region.second);
-
+        auto region_id = region.first;
+        auto region_ptr = std::get<3>(region.second);
         if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
         {
             // `region_rowkey_range` belongs to rowkey_range.
             // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
-            // This segment has flushed, skip it.
-            LOG_DEBUG(log, "flushed segment of region {}", region.first);
-            continue;
+            // This segment has flushed. However, we still need to persist the region.
+            LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}]", region.first, std::get<0>(region.second), std::get<1>(region.second));
+            auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+            persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
         }
-        auto region_id = region.first;
-        auto region_ptr = std::get<3>(region.second);
-        LOG_DEBUG(log, "flush extra segment of region {}, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
-        // Both flushCache and persistRegion should be protected by region task lock.
-        auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-        storage->flushCache(tmt.getContext(), std::get<2>(region.second));
-        persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
+        else
+        {
+            LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
+            // Both flushCache and persistRegion should be protected by region task lock.
+            auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+            storage->flushCache(tmt.getContext(), std::get<2>(region.second));
+            persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
+        }
     }
     auto elapsed_coupled_flush = watch.elapsedMilliseconds();
     watch.restart();
@@ -1057,10 +1063,17 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
     }
     auto f = [&]() {
-        region->setFlushedState(compact_index, compact_term);
-        region->markCompactLog();
-        region->cleanApproxMemCacheInfo();
-        getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
+        // So proxy can get the current compact state of this region of TiFlash's side.
+        // TODO This is for `exec_compact_log`. Check out what it does exactly.
+        // TODO flushed state is never persisted, checkout if this will lead to a problem.
+        auto flush_state = region->getFlushedState();
+        if (flush_state.applied_index < compact_index)
+        {
+            region->setFlushedState(compact_index, compact_term);
+            region->markCompactLog();
+            region->cleanApproxMemCacheInfo();
+            getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term, compact_index);
+        }
     };
     if (lock_held)
     {

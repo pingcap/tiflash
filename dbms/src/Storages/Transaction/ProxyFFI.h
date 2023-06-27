@@ -116,7 +116,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     TimerTask makeTimerTask(uint64_t time_ms) const;
     bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
     raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
-    void notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term) const;
+    void notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index) const;
 };
 
 extern "C" {

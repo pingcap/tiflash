@@ -57,19 +57,11 @@ try
         ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
         ctx.getTMTContext().getRegionTable().updateRegion(*kvr2);
     }
+    std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
     {
-        // Manually flush.
-        // auto kvr1 = kvs.getRegion(region_id);
-        // ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
-        // auto & r1_range = kvr1->getRange()->comparableKeys();
-
-        // auto keyrange = DM::RowKeyRange::newAll(false, 10);
-        // kvs.compactLogByRowKeyRange(ctx.getTMTContext(), keyrange, DB::NullspaceID, table_id, false);
-    } {
         // A fg flush and a bg flush will not deadlock.
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
-        std::shared_ptr<std::atomic<int>> ai = std::make_shared<std::atomic<int>>();
-        ai->store(1);
+        ai->store(0b1011);
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_force_set_type, ai);
         auto f1 = [&]() {
             auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
@@ -82,7 +74,7 @@ try
         };
         std::thread t1(f1);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        ai->store(2);
+        ai->store(0b1110);
         // Force bg flush.
         auto f2 = [&]() {
             auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
@@ -98,11 +90,15 @@ try
         DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
         t1.join();
         t2.join();
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
+        // We can't assert for region_id2, since bg flush may be be finished.
     }
-    return;
+    kvs.setRegionCompactLogConfig(0, 0, 0); // Every notify will take effect.
+    LOG_INFO(&Poco::Logger::get("!!!!"), "!!!!! next");
     {
         // Two fg flush will not deadlock.
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
+        ai->store(0b1011);
         auto f1 = [&]() {
             auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
             auto k1 = RecordKVFormat::genKey(table_id, 60, 111);
@@ -127,8 +123,13 @@ try
         DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
         t1.join();
         t2.join();
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
+        ASSERT_EQ(proxy_instance->getRegion(region_id2)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id2)->getLatestCommitIndex());
     }
     {
+        // An obsolete notification triggered by another region's flush shall not override.
+        kvs.notifyCompactLog(region_id, 1, 5, true, false);
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
     }
 }
 CATCH

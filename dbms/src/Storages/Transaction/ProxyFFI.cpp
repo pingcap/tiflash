@@ -855,10 +855,9 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-void TiFlashRaftProxyHelper::notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term) const
+void TiFlashRaftProxyHelper::notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index) const
 {
-    // TODO is it safe here to use compact_index as applied_index?
-    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, compact_index);
+    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, applied_index);
 }
 
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)

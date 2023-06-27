@@ -1182,6 +1182,8 @@ TEST_F(RegionKVStoreTest, RegionRange)
 
         auto res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
+        auto res2 = region_index.findByRangeChecked(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
+        ASSERT(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
 
         region_index.add(makeRegion(4, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 4)));
 
@@ -1194,6 +1196,9 @@ TEST_F(RegionKVStoreTest, RegionRange)
 
         res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 1), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
+        ASSERT_TRUE(res.find(1) != res.end());
+        ASSERT_TRUE(res.find(2) != res.end());
+        ASSERT_TRUE(res.find(4) != res.end());
 
         res = region_index.findByRangeOverlap(
             RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 2), RecordKVFormat::genKey(1, 5)));

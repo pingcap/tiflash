@@ -138,9 +138,20 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
-void fn_notify_compact_log(RaftStoreProxyPtr, uint64_t, uint64_t, uint64_t, uint64_t)
+void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
 {
-    // Do nothing
+    // Update flushed applied_index and truncated state.
+    auto & x = as_ref(ptr);
+    auto region = x.getRegion(region_id);
+    ASSERT(region);
+    LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!! fn_notify_compact_log {} commit index {} applied_index {} compact_index {} compact_term {}", region_id, region->getLatestCommitIndex(), applied_index, compact_index, compact_term);
+    ASSERT(region->getLatestCommitIndex() >= applied_index);
+    // `applied_index` in proxy's disk can be still LT applied_index here when fg flush.
+    // So we use commit_index here.
+    if (region)
+    {
+        region->updateTruncatedState(compact_index, compact_term);
+    }
 }
 
 TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
@@ -182,17 +193,26 @@ void MockProxyRegion::updateAppliedIndex(uint64_t index)
 
 uint64_t MockProxyRegion::getLatestAppliedIndex()
 {
-    return this->getApply().applied_index();
+    auto _ = genLockGuard();
+    return this->apply.applied_index();
 }
 
 uint64_t MockProxyRegion::getLatestCommitTerm()
 {
-    return this->getApply().commit_term();
+    auto _ = genLockGuard();
+    return this->apply.commit_term();
 }
 
 uint64_t MockProxyRegion::getLatestCommitIndex()
 {
-    return this->getApply().commit_index();
+    auto _ = genLockGuard();
+    return this->apply.commit_index();
+}
+
+void MockProxyRegion::updateTruncatedState(uint64_t index, uint64_t term)
+{
+    this->apply.mutable_truncated_state()->set_index(index);
+    this->apply.mutable_truncated_state()->set_term(term);
 }
 
 void MockProxyRegion::updateCommitIndex(uint64_t index)
@@ -741,6 +761,7 @@ void MockRaftStoreProxy::doApply(
     }
 
     // Proxy advance
+    // We currently consider a flush for every command for simplify.
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE)
         return;
     region->updateAppliedIndex(index);

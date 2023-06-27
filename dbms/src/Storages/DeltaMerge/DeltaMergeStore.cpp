@@ -95,7 +95,6 @@ extern const char skip_check_segment_update[];
 extern const char pause_when_writing_to_dt_store[];
 extern const char pause_when_altering_dt_store[];
 extern const char force_triggle_background_merge_delta[];
-extern const char force_triggle_foreground_flush[];
 extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
 extern const char exception_before_drop_segment[];
@@ -1412,30 +1411,19 @@ bool DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 
     fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
-    fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
     fiu_do_on(FailPoints::proactive_flush_force_set_type, {
+        // | set bg bit | bg value bit | set fg bit | fg value bit|
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::proactive_flush_force_set_type); v)
         {
-            auto set_kind = std::any_cast<std::shared_ptr<std::atomic<int>>>(v.value());
+            auto set_kind = std::any_cast<std::shared_ptr<std::atomic<size_t>>>(v.value());
             auto set_kind_int = set_kind->load();
-            if (set_kind_int == 1)
-            {
-                LOG_INFO(log, "!!!! AAAAA 1");
-                should_foreground_flush = true;
-                should_background_flush = false;
-            }
-            else if (set_kind_int == 2)
-            {
-                LOG_INFO(log, "!!!! AAAAA 2");
-                should_foreground_flush = false;
-                should_background_flush = true;
-            }
+            if ((set_kind_int >> 1) & 1)
+                should_foreground_flush = set_kind_int & 1;
+            if ((set_kind_int >> 3) & 1)
+                should_background_flush = (set_kind_int >> 2) & 1;
         }
     });
-
-    LOG_INFO(log, "!!!!! segment_limit_rows {} segment_limit_bytes {} delta_cache_limit_rows {} delta_cache_limit_bytes {}, {}. should_foreground_flush {} should_background_flush {}", segment_limit_rows, segment_limit_bytes, delta_cache_limit_rows, delta_cache_limit_bytes, StackTrace().toString(), should_foreground_flush, should_background_flush);
-
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
         if (shutdown_called.load(std::memory_order_relaxed))

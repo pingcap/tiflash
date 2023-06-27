@@ -927,7 +927,7 @@ void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const R
     auto & tmt = dm_context->db_context.getTMTContext();
     auto & kv_store = tmt.getKVStore();
 
-    kv_store->compactLogByRowKeyRange(tmt, range, keyspace_id, physical_table_id, is_background);
+    kv_store->proactiveFlushCacheAndRegion(tmt, range, keyspace_id, physical_table_id, is_background);
 }
 } // namespace DM
 } // namespace DB

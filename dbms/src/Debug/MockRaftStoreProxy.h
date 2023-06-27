@@ -35,6 +35,7 @@ struct MockProxyRegion : MutexLockWrap
     uint64_t getLatestCommitTerm();
     uint64_t getLatestCommitIndex();
     void updateCommitIndex(uint64_t index);
+    void updateTruncatedState(uint64_t index, uint64_t term);
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
