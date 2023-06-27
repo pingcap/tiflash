@@ -52,14 +52,16 @@ public:
 
     String getName() const override { return NAME; }
 
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
+protected:
     void operateSuffixImpl() override;
 
     void operatePrefixImpl() override;
 
-    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
-
-protected:
     OperatorStatus readImpl(Block & block) override;
+
+    OperatorStatus awaitImpl() override;
 
     OperatorStatus executeIOImpl() override;
 
@@ -74,6 +76,8 @@ private:
     size_t processed_seg_tasks = 0;
 
     double duration_wait_ready_task_sec = 0;
+    Stopwatch wait_stop_watch{CLOCK_MONOTONIC_COARSE};
+
     double duration_read_sec = 0;
 };
 
