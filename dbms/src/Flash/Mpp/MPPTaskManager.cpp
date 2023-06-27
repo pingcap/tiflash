@@ -34,7 +34,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_task_manager_find_task_failure_failpoint[];
-extern const char pause_before_make_non_root_mpp_task_public[];
+extern const char pause_before_make_non_root_mpp_task_active[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
@@ -128,7 +128,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
                     if (task_alarm_map_it->second.empty())
                         query_set->alarms.erase(task_alarm_map_it);
                 }
-                if (query_set->alarms.empty() && !query_set->hasActiveMPPTask())
+                if (query_set->alarms.empty() && !query_set->hasMPPTask())
                 {
                     /// if the query task set has no mpp task, it has to be removed if there is no alarms left,
                     /// otherwise the query task set itself may be left in MPPTaskManager forever
@@ -213,7 +213,7 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
                 alarm.second.Cancel();
         }
         it->second->alarms.clear();
-        if (!it->second->hasActiveMPPTask())
+        if (!it->second->hasMPPTask())
         {
             LOG_INFO(log, fmt::format("There is no mpp task for {}, finish abort", query_id.toString()));
             removeMPPQueryTaskSet(query_id, true);
@@ -227,12 +227,12 @@ void MPPTaskManager::abortMPPQuery(const MPPQueryId & query_id, const String & r
 
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id.toString());
-    task_set->forEachActiveMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
+    task_set->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
         fmt_buf.fmtAppend("{} ", it.first.toString());
     });
     LOG_WARNING(log, fmt_buf.toString());
 
-    task_set->forEachActiveMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
+    task_set->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
         if (it.second != nullptr)
             it.second->abort(reason, abort_type);
     });
@@ -281,11 +281,11 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     return {true, ""};
 }
 
-std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
+std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
 {
     if (!task->isRootMPPTask())
     {
-        FAIL_POINT_PAUSE(FailPoints::pause_before_make_non_root_mpp_task_public);
+        FAIL_POINT_PAUSE(FailPoints::pause_before_make_non_root_mpp_task_active);
     }
     std::unique_lock lock(mu);
     auto [query_set, error_msg] = getQueryTaskSetWithoutLock(task->id.query_id);
@@ -302,7 +302,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskPublic(MPPTaskPtr task)
     RUNTIME_CHECK_MSG(query_set != nullptr, "query set must not be null when make task visible");
     RUNTIME_CHECK_MSG(query_set->process_list_entry.get() == task->process_list_entry_holder.process_list_entry.get(),
                       "Task process list entry should always be the same as query process list entry");
-    query_set->makeTaskVisible(task);
+    query_set->makeTaskActive(task);
     /// cancel all the alarm waiting on this task
     auto alarm_it = query_set->alarms.find(task->id.task_id);
     if (alarm_it != query_set->alarms.end())
@@ -329,7 +329,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
         if (it->second->isTaskRegistered(id))
         {
             it->second->removeMPPTask(id);
-            if (!it->second->hasActiveMPPTask() && it->second->alarms.empty())
+            if (!it->second->hasMPPTask() && it->second->alarms.empty())
                 removeMPPQueryTaskSet(id.query_id, false);
             cv.notify_all();
             return {true, ""};
@@ -345,7 +345,7 @@ String MPPTaskManager::toString()
     String res("(");
     for (auto & query_it : mpp_query_map)
     {
-        query_it.second->forEachActiveMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
+        query_it.second->forEachMPPTask([&](const std::pair<MPPTaskId, MPPTaskPtr> & it) {
             res += it.first.toString() + ", ";
         });
     }

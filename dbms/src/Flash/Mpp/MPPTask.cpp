@@ -45,8 +45,8 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char exception_before_mpp_make_non_root_mpp_task_public[];
-extern const char exception_before_mpp_make_root_mpp_task_public[];
+extern const char exception_before_mpp_make_non_root_mpp_task_active[];
+extern const char exception_before_mpp_make_root_mpp_task_active[];
 extern const char exception_before_mpp_register_non_root_mpp_task[];
 extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
@@ -75,11 +75,11 @@ void injectFailPointBeforeMakeMPPTaskPublic(bool is_root_task)
 {
     if (is_root_task)
     {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_root_mpp_task_public);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_root_mpp_task_active);
     }
     else
     {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_public);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_make_non_root_mpp_task_active);
     }
 }
 
@@ -408,7 +408,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     LOG_DEBUG(log, "begin to make the task {} public", id.toString());
 
     injectFailPointBeforeMakeMPPTaskPublic(dag_context->isRootMPPTask());
-    std::tie(result, reason) = manager->makeTaskPublic(shared_from_this());
+    std::tie(result, reason) = manager->makeTaskActive(shared_from_this());
     if (!result)
     {
         throw TiFlashException(fmt::format("Failed to make MPP Task {} public, reason: {}", id.toString(), reason), Errors::Coprocessor::BadRequest);

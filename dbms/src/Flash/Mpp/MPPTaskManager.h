@@ -63,14 +63,14 @@ struct MPPQueryTaskSet
         assert(task_map.find(task_id) == task_map.end());
         task_map[task_id] = nullptr;
     }
-    void makeTaskVisible(const MPPTaskPtr & task)
+    void makeTaskActive(const MPPTaskPtr & task)
     {
         assert(task_map.find(task->getId()) != task_map.end());
         task_map[task->getId()] = task;
     }
-    bool hasActiveMPPTask() const { return !task_map.empty(); }
+    bool hasMPPTask() const { return !task_map.empty(); }
     template <typename F>
-    void forEachActiveMPPTask(F && f) const
+    void forEachMPPTask(F && f) const
     {
         for (const auto & it : task_map)
             f(it);
@@ -209,11 +209,11 @@ public:
 
     std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
 
-    /// registerTask make the task info stored in MPPTaskManager, but it is still not visible to other mpp tasks before makeTaskPublic.
+    /// registerTask make the task info stored in MPPTaskManager, but it is still not visible to other mpp tasks before makeTaskActive.
     /// After registerTask, the related query_task_set can't be cleaned before unregisterTask is called
     std::pair<bool, String> registerTask(MPPTask * task);
 
-    std::pair<bool, String> makeTaskPublic(MPPTaskPtr task);
+    std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
