@@ -38,7 +38,6 @@ public:
 
     explicit RNSegmentSourceOp(const Options & options)
         : SourceOp(options.exec_status, String(options.debug_tag))
-        , log(Logger::get(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
     {
@@ -52,19 +51,23 @@ public:
 
     String getName() const override { return NAME; }
 
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
+protected:
     void operateSuffixImpl() override;
 
     void operatePrefixImpl() override;
 
-    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
-
-protected:
     OperatorStatus readImpl(Block & block) override;
+
+    OperatorStatus awaitImpl() override;
 
     OperatorStatus executeIOImpl() override;
 
 private:
-    const LoggerPtr log;
+    OperatorStatus startGettingNextReadyTask();
+
+private:
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
@@ -74,6 +77,8 @@ private:
     size_t processed_seg_tasks = 0;
 
     double duration_wait_ready_task_sec = 0;
+    Stopwatch wait_stop_watch{CLOCK_MONOTONIC_COARSE};
+
     double duration_read_sec = 0;
 };
 

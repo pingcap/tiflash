@@ -43,13 +43,22 @@ void RNSegmentSourceOp::operatePrefixImpl()
     workers->startInBackground();
 }
 
+OperatorStatus RNSegmentSourceOp::startGettingNextReadyTask()
+{
+    // Start timing the time of get next ready task.
+    wait_stop_watch.start();
+    // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
+    return awaitImpl();
+}
+
 OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
 {
-    if (done)
+    if unlikely (done)
     {
         block = {};
         return OperatorStatus::HAS_OUTPUT;
     }
+
     if (t_block.has_value())
     {
         std::swap(block, t_block.value());
@@ -57,59 +66,74 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
         t_block.reset();
         return OperatorStatus::HAS_OUTPUT;
     }
-    return OperatorStatus::IO;
+
+    return current_seg_task ? OperatorStatus::IO : startGettingNextReadyTask();
+}
+
+OperatorStatus RNSegmentSourceOp::awaitImpl()
+{
+    if unlikely (done || t_block.has_value())
+    {
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        return OperatorStatus::HAS_OUTPUT;
+    }
+
+    if unlikely (current_seg_task)
+    {
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        return OperatorStatus::IO;
+    }
+
+    auto pop_result = workers->getReadyChannel()->tryPop(current_seg_task);
+    switch (pop_result)
+    {
+    case MPMCQueueResult::OK:
+        processed_seg_tasks += 1;
+        RUNTIME_CHECK(current_seg_task != nullptr);
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        return OperatorStatus::IO;
+    case MPMCQueueResult::EMPTY:
+        return OperatorStatus::WAITING;
+    case MPMCQueueResult::FINISHED:
+        current_seg_task = nullptr;
+        done = true;
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        return OperatorStatus::HAS_OUTPUT;
+    case MPMCQueueResult::CANCELLED:
+        current_seg_task = nullptr;
+        done = true;
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        throw Exception(workers->getReadyChannel()->getCancelReason());
+    default:
+        current_seg_task = nullptr;
+        done = true;
+        duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
+        throw Exception(fmt::format("Unexpected pop result {}", magic_enum::enum_name(pop_result)));
+    }
 }
 
 OperatorStatus RNSegmentSourceOp::executeIOImpl()
 {
-    if (done)
+    if unlikely (done || t_block.has_value())
         return OperatorStatus::HAS_OUTPUT;
 
-    if (!current_seg_task)
-    {
-        Stopwatch w{CLOCK_MONOTONIC_COARSE};
-        auto pop_result = workers->getReadyChannel()->pop(current_seg_task);
-        duration_wait_ready_task_sec += w.elapsedSeconds();
-
-        if (pop_result == MPMCQueueResult::OK)
-        {
-            processed_seg_tasks += 1;
-            RUNTIME_CHECK(current_seg_task != nullptr);
-        }
-        else if (pop_result == MPMCQueueResult::FINISHED)
-        {
-            current_seg_task = nullptr;
-            done = true;
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        else if (pop_result == MPMCQueueResult::CANCELLED)
-        {
-            current_seg_task = nullptr;
-            throw Exception(workers->getReadyChannel()->getCancelReason());
-        }
-        else
-        {
-            current_seg_task = nullptr;
-            RUNTIME_CHECK_MSG(false, "Unexpected pop result {}", magic_enum::enum_name(pop_result));
-        }
-    }
+    if unlikely (!current_seg_task)
+        return startGettingNextReadyTask();
 
     FilterPtr filter_ignored = nullptr;
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
     Block res = current_seg_task->getInputStream()->read(filter_ignored, false);
     duration_read_sec += w.elapsedSeconds();
-
-    if (res)
+    if likely (res)
     {
         t_block.emplace(std::move(res));
         return OperatorStatus::HAS_OUTPUT;
     }
     else
     {
-        // Current stream is drained, try read from next stream.
+        // Current stream is drained, try to get next ready task.
         current_seg_task = nullptr;
-        return OperatorStatus::IO;
+        return startGettingNextReadyTask();
     }
 }
-
 } // namespace DB::DM::Remote
