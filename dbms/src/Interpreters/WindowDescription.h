@@ -137,7 +137,7 @@ struct WindowDescription
 
     // Mark the order by column type to avoid type judge
     // each time we update the start/end frame position.
-    Window::ColumnType col_type = Window::ColumnType::UnInitialized;
+    Window::ColumnType order_by_col_type = Window::ColumnType::UnInitialized;
 
     Window::ColumnType begin_aux_col_type = Window::ColumnType::UnInitialized;
     Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;

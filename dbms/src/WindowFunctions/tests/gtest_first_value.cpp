@@ -96,7 +96,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -120,7 +120,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -148,7 +148,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -180,7 +180,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -204,7 +204,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -232,7 +232,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),
@@ -284,7 +284,7 @@ public:
 
             for (size_t i = 0; i < frame_start_range.size(); ++i)
             {
-                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, true, frame_start_range[i]);
+                mock_frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, false, frame_start_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),
                     FirstValue(value_col),

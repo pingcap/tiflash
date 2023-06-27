@@ -277,7 +277,7 @@ void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const Exp
         const String & order_by_col_name = window_desc.order_by[0].column_name;
         const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
 
-        window_desc.col_type = getColumnType(order_by_col_type_and_name.column);
+        window_desc.order_by_col_type = getColumnType(order_by_col_type_and_name.column);
         window_desc.is_desc = (window_desc.order_by[0].direction == -1);
     }
 }

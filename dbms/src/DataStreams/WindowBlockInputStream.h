@@ -197,14 +197,14 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
-    template <typename OrderByColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindFrameBoundary(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+    template <typename AuxColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
 
-    template <typename OrderByColType, typename AuxColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindFrameBoundary(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+    template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
 
-    template <typename OrderByColType, typename AuxColType, int CmpDataType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindFrameBoundaryImpl(size_t cursor_column_idx, RowNumber cursor, OrderByColType current_row_value);
+    template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc>
+    RowNumber moveCursorAndFindFrameBoundaryImpl(RowNumber cursor, AuxColType current_row_aux_value);
 
 public:
     LoggerPtr log;
