@@ -572,6 +572,7 @@ void MPPTask::runImpl()
     unregisterTask();
 }
 
+// TODO: include warning messages in report also when MPPDataPacket support warnings
 void MPPTask::reportStatus(const String & err_msg)
 {
     if (!ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
