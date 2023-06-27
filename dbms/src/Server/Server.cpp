@@ -974,6 +974,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Set whether to use safe point v2.
     PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
 
+    LOG_INFO(log, "Using PDClientHelper::enable_safepoint_v2={}", PDClientHelper::enable_safepoint_v2);
+
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
     EngineStoreServerWrap tiflash_instance_wrap{};

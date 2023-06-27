@@ -75,6 +75,7 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
+        LOG_DEBUG(Logger::get(), "getGCSafePointWithRetry, enable_safepoint_v2={}", enable_safepoint_v2);
         // If keyspace id is `NullspaceID` it need to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
