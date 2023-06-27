@@ -81,7 +81,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
                         stage = "Sync schemas";
                         done_anything = syncSchemas(keyspace);
                         if (done_anything)
-                            GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_timer, keyspace).Increment();
+                            GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                         stage = "GC";
                         done_anything = gc(gc_safe_point, keyspace);
