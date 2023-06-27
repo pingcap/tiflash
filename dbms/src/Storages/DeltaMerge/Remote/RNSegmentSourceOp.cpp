@@ -43,6 +43,14 @@ void RNSegmentSourceOp::operatePrefixImpl()
     workers->startInBackground();
 }
 
+OperatorStatus RNSegmentSourceOp::startGettingNextReadyTask()
+{
+    // Start timing the time of get next ready task.
+    wait_stop_watch.start();
+    // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
+    return awaitImpl();
+}
+
 OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
 {
     if unlikely (done)
@@ -59,17 +67,7 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    if (current_seg_task)
-    {
-        return OperatorStatus::IO;
-    }
-    else
-    {
-        // Start timing the time of get next ready task.
-        wait_stop_watch.start();
-        // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
-        return awaitImpl();
-    }
+    return current_seg_task ? OperatorStatus::IO : startGettingNextReadyTask();
 }
 
 OperatorStatus RNSegmentSourceOp::awaitImpl()
@@ -120,7 +118,7 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
         return OperatorStatus::HAS_OUTPUT;
 
     if unlikely (!current_seg_task)
-        return OperatorStatus::WAITING;
+        return startGettingNextReadyTask();
 
     FilterPtr filter_ignored = nullptr;
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
@@ -135,10 +133,7 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
     {
         // Current stream is drained, try to get next ready task.
         current_seg_task = nullptr;
-        // Start timing the time of get next ready task.
-        wait_stop_watch.start();
-        // A quick try to get the next task to reduce the overhead of switching to WaitReactor.
-        return awaitImpl();
+        return startGettingNextReadyTask();
     }
 }
 } // namespace DB::DM::Remote

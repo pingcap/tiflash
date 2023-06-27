@@ -65,6 +65,9 @@ protected:
     OperatorStatus executeIOImpl() override;
 
 private:
+    OperatorStatus startGettingNextReadyTask();
+
+private:
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
