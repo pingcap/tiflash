@@ -165,7 +165,6 @@ struct PDClientHelper
     static void remove_ks_gc_sp(KeyspaceID keyspace_id)
     {
         std::shared_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        KeyspaceGCInfo ks_gc_info;
         ks_gc_sp_map.erase(keyspace_id);
     }
 
