@@ -109,9 +109,9 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
         {
             while (!query_task_set->waiting_tasks.empty())
             {
-                auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
-                if (task_it != query_task_set->task_map.end() && task_it->second != nullptr)
-                    task_it->second->scheduleThisTask(ScheduleState::FAILED);
+                auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
+                if (task != nullptr)
+                    task->scheduleThisTask(ScheduleState::FAILED);
                 query_task_set->waiting_tasks.pop();
                 GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
             }
@@ -165,9 +165,9 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
         {
-            auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
+            auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
             bool has_error = false;
-            if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second->getScheduleEntry(), true, has_error))
+            if (task != nullptr && !scheduleImp(current_query_id, query_task_set, task->getScheduleEntry(), true, has_error))
             {
                 if (has_error)
                 {
