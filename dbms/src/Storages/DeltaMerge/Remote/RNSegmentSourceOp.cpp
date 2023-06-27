@@ -19,8 +19,6 @@
 
 #include <magic_enum.hpp>
 
-#include "Operators/Operator.h"
-
 namespace DB::DM::Remote
 {
 

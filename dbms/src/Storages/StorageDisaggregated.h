@@ -25,8 +25,6 @@
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/IStorage.h>
 
-#include "Interpreters/ExpressionActions.h"
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
