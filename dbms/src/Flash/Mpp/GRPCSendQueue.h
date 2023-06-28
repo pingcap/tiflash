@@ -205,9 +205,9 @@ public:
         return ret;
     }
 
-    bool isFull() const
+    bool isWritable() const
     {
-        return send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:
