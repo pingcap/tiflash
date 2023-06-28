@@ -79,11 +79,14 @@ protected:
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
-    std::optional<Block> t_block;
     int64_t ref_no;
 
     // runtime filter
     RuntimeFilteList waiting_rf_list;
     int max_wait_time_ms;
+
+    bool done = false;
+    Block t_block;
+
 };
 } // namespace DB

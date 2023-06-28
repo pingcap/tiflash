@@ -17,8 +17,6 @@
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
 
-#include "magic_enum.hpp"
-
 namespace DB
 {
 namespace tests
