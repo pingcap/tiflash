@@ -149,7 +149,7 @@ BlockIO InterpreterRenameQuery::execute()
         auto database = context.getDatabase(elem.from_database_name);
         if (database->getEngineName() == "TiFlash")
         {
-            DatabaseTiFlash * from_database_concrete = typeid_cast<DatabaseTiFlash *>(database.get());
+            auto * from_database_concrete = typeid_cast<DatabaseTiFlash *>(database.get());
             if (likely(from_database_concrete))
             {
                 // Keep for rename actions executed through ch-client.
