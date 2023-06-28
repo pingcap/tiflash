@@ -1,0 +1,34 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+approvers:
+  - bestwoody
+  - birdstorm
+  - breezewish
+  - CalvinNeo
+  - flowbehappy
+  - fuzhe1989
+  - fzhedu
+  - gengliqi
+  - guo-shaoge
+  - hehechen
+  - hongyunyan
+  - ichn-hu
+  - ilovesoup
+  - JaySon-Huang
+  - jiaqizho
+  - JinheLin
+  - lidezhu
+  - littlefall
+  - Lloyd-Pottiger
+  - mengxin9014
+  - SchrodingerZhu
+  - SeaRise
+  - solotzg
+  - windtalker
+  - wshwsh12
+  - XuHuaiyu
+  - yibin87
+  - ywqzzy
+  - zanmato1984
+reviewers:
+  - LiSong0214
+  - xzhangxian1008
