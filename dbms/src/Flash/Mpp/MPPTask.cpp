@@ -43,6 +43,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char exception_before_mpp_make_non_root_mpp_task_active[];
@@ -56,6 +61,7 @@ extern const char force_no_local_region_for_mpp_task[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
+
 
 namespace
 {
@@ -180,7 +186,7 @@ void MPPTask::abortQueryExecutor()
 void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries)
+    if (dag_context->collect_execution_summaries && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
         tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
@@ -539,6 +545,7 @@ void MPPTask::runImpl()
 
     if (err_msg.empty())
     {
+        reportStatus("");
         if (switchStatus(RUNNING, FINISHED))
             LOG_DEBUG(log, "finish task");
         else
@@ -556,14 +563,17 @@ void MPPTask::runImpl()
     }
     else
     {
+        /// trim the stack trace to avoid too many useless information
+        String trimmed_err_msg = err_msg;
+        trimStackTrace(trimmed_err_msg);
+        /// tidb replaces root tasks' error message with the first error message it received, if root task completed successfully, error messages will be ignored.
+        reportStatus(trimmed_err_msg);
         if (status == RUNNING)
         {
             LOG_ERROR(log, "task running meets error: {}", err_msg);
-            /// trim the stack trace to avoid too many useless information in log
-            trimStackTrace(err_msg);
             try
             {
-                handleError(err_msg);
+                handleError(trimmed_err_msg);
             }
             catch (...)
             {
@@ -576,6 +586,51 @@ void MPPTask::runImpl()
 
     LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
+}
+
+// TODO: include warning messages in report also when MPPDataPacket support warnings
+void MPPTask::reportStatus(const String & err_msg)
+{
+    if (!ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
+        return;
+
+    try
+    {
+        std::shared_ptr<mpp::ReportTaskStatusRequest> req = std::make_shared<mpp::ReportTaskStatusRequest>();
+        mpp::TaskMeta * req_meta = req->mutable_meta();
+        req_meta->CopyFrom(meta);
+
+        if (dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+        {
+            tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
+            if unlikely (!execution_info.SerializeToString(req->mutable_data()))
+            {
+                LOG_ERROR(log, "Failed to serialize TiFlash execution info");
+                return;
+            }
+        }
+
+        if (!err_msg.empty())
+        {
+            mpp::Error * err = req->mutable_error();
+            err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+            err->set_msg(err_msg);
+        }
+
+        pingcap::kv::RpcCall<mpp::ReportTaskStatusRequest> rpc_call(req);
+        auto * cluster = context->getTMTContext().getKVCluster();
+        cluster->rpc_client->sendRequest(meta.coordinator_address(), rpc_call, /*timeout=*/3);
+        const auto & resp = rpc_call.getResp();
+        if (resp->has_error())
+        {
+            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp->error().msg());
+        }
+    }
+    catch (...)
+    {
+        std::string local_err_msg = getCurrentExceptionMessage(true);
+        LOG_ERROR(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
+    }
 }
 
 void MPPTask::handleError(const String & error_msg)
