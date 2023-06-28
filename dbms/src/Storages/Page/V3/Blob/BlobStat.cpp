@@ -90,20 +90,15 @@ std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)
 
 void BlobStats::restore()
 {
-    BlobFileId max_restored_file_id = 0;
-
     for (auto & [path, stats] : stats_map)
     {
         (void)path;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
-            max_restored_file_id = std::max(stat->id, max_restored_file_id);
+            blob_file_id_manager.addFileId(stat->id);
         }
     }
-
-    // restore `roll_id`
-    roll_id = max_restored_file_id + 1;
 }
 
 std::lock_guard<std::mutex> BlobStats::lock() const
@@ -113,15 +108,6 @@ std::lock_guard<std::mutex> BlobStats::lock() const
 
 BlobStats::BlobStatPtr BlobStats::createStat(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> & guard)
 {
-    // New blob file id won't bigger than roll_id
-    if (blob_file_id > roll_id)
-    {
-        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [roll_id={}]",
-                                    blob_file_id,
-                                    roll_id),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
-
     for (auto & [path, stats] : stats_map)
     {
         (void)path;
@@ -137,15 +123,7 @@ BlobStats::BlobStatPtr BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
     }
 
     // Create a stat without checking the file_id exist or not
-    auto stat = createStatNotChecking(blob_file_id, max_caps, guard);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
-    return stat;
+    return createStatNotChecking(blob_file_id, max_caps, guard);
 }
 
 BlobStats::BlobStatPtr BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
@@ -203,14 +181,14 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &)
+std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> & lock_stats)
 {
     BlobStatPtr stat_ptr = nullptr;
 
     // No stats exist
     if (stats_map.empty())
     {
-        return std::make_pair(nullptr, roll_id);
+        return std::make_pair(nullptr, blob_file_id_manager.nextFileId(page_type, lock_stats));
     }
 
     // If the stats_map size changes, or stats_map_path_index is out of range,
@@ -226,6 +204,9 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
+            if (!BlobFileIdManager::checkBlobFileType(page_type, stat->id))
+                continue;
+
             auto defer_lock = stat->defer_lock();
             if (defer_lock.try_lock() && stat->isNormal() && stat->sm_max_caps >= buf_size)
             {
@@ -245,7 +226,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
     stats_map_path_index += path_iter_idx + 1;
 
     // Can not find a suitable stat under all paths
-    return std::make_pair(nullptr, roll_id);
+    return std::make_pair(nullptr, blob_file_id_manager.nextFileId(page_type, lock_stats));
 }
 
 BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
@@ -357,6 +338,28 @@ void BlobStats::BlobStat::recalculateSpaceMap()
 void BlobStats::BlobStat::recalculateCapacity()
 {
     sm_max_caps = smap->updateAccurateMaxCapacity();
+}
+
+void BlobStats::BlobFileIdManager::addFileId(BlobFileId file_id)
+{
+    if (isRaftFileId(file_id))
+    {
+        next_raft_id = std::max(next_raft_id, file_id + 1);
+    }
+    else
+    {
+        next_normal_id = std::max(next_normal_id, file_id + 1);
+    }
+}
+
+BlobFileId BlobStats::BlobFileIdManager::nextFileId(PageType page_type, const std::lock_guard<std::mutex> &)
+{
+    return page_type == PageType::RaftData ? next_raft_id++ : next_normal_id++;
+}
+
+bool BlobStats::BlobFileIdManager::checkBlobFileType(PageType page_type, BlobFileId file_id)
+{
+    return page_type == PageType::RaftData ? isRaftFileId(file_id) : !isRaftFileId(file_id);
 }
 
 } // namespace DB::PS::V3

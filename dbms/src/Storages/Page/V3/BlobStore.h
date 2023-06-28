@@ -71,7 +71,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr, PageType page_type = PageType::Normal);
 
     void remove(const PageEntries & del_entries);
 
@@ -98,7 +98,7 @@ public:
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(const PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
@@ -107,7 +107,7 @@ private:
      *  We will lock BlobStats until we get a BlobStat that can hold the size.
      *  Then lock the BlobStat to get the span.
      */
-    std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
+    std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size, PageType page_type);
 
     /**
      *  Request a specific BlobStat to delete a certain span.

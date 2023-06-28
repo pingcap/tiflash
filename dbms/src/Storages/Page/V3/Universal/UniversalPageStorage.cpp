@@ -79,7 +79,7 @@ size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
     return page_directory->numPagesWithPrefix(prefix);
 }
 
-void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
+void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter, PageType page_type) const
 {
     if (unlikely(write_batch.empty()))
         return;
@@ -96,7 +96,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    auto edit = blob_store->write(std::move(write_batch), write_limiter);
+    auto edit = blob_store->write(std::move(write_batch), write_limiter, page_type);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
     if (has_writes_from_remote)
     {

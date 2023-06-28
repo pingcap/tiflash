@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -118,6 +119,35 @@ public:
 
     using BlobStatPtr = std::shared_ptr<BlobStat>;
 
+    class BlobFileIdManager
+    {
+    public:
+        // Used at restart to add old blob file id to manager
+        void addFileId(BlobFileId file_id);
+
+        BlobFileId nextFileId(PageType page_type, const std::lock_guard<std::mutex> &);
+
+        static bool checkBlobFileType(PageType page_type, BlobFileId file_id);
+
+    private:
+        static inline bool isRaftFileId(BlobFileId file_id)
+        {
+            return file_id >= FIRST_RAFT_FILE_ID;
+        }
+
+    private:
+        constexpr static BlobFileId FIRST_RAFT_FILE_ID = 4611686018427387904ULL; // 2^62
+
+#ifndef DBMS_PUBLIC_GTEST
+    private:
+#else
+    public:
+#endif
+        BlobFileId next_raft_id = FIRST_RAFT_FILE_ID;
+
+        BlobFileId next_normal_id = 1;
+    };
+
 public:
     BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig & config);
 
@@ -155,7 +185,7 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-    std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
+    std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> & lock_stats);
 
     BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
@@ -184,7 +214,7 @@ private:
     BlobConfig & config;
 
     mutable std::mutex lock_stats;
-    BlobFileId roll_id = 1;
+    BlobFileIdManager blob_file_id_manager;
     // Index for selecting next path for creating new blobfile
     UInt32 stats_map_path_index = 0;
     std::map<String, std::list<BlobStatPtr>> stats_map;
