@@ -132,7 +132,7 @@ void PhysicalTableScan::buildPipeline(
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }
 
-void PhysicalTableScan::buildPipelineExecGroup(
+void PhysicalTableScan::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & /*exec_status*/,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

@@ -148,7 +148,6 @@ private:
     std::optional<StringRef> processSubstrEmptyStringExpr(const char * expr, size_t expr_size, size_t byte_pos, Int64 occur);
     std::optional<StringRef> substrImpl(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur);
 
-    void processReplaceEmptyStringExpr(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions);
     void replaceImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions);
     void replaceOneImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, Int64 occur, const Instructions & instructions);
     void replaceAllImpl(const char * subject, size_t subject_size, DB::ColumnString::Chars_t & res_data, DB::ColumnString::Offset & res_offset, Int64 byte_pos, const Instructions & instructions);

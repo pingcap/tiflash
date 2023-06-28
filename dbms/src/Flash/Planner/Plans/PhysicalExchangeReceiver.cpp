@@ -93,10 +93,10 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
     }
 }
 
-void PhysicalExchangeReceiver::buildPipelineExecGroup(
+void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t concurrency)
 {
     if (fine_grained_shuffle.enable())
@@ -111,6 +111,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
                 mpp_exchange_receiver,
                 /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));
     }
+    context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

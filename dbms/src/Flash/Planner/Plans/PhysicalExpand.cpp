@@ -76,7 +76,7 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
     executeExpression(child_pipeline, expand_actions, log, expand_extra_info);
 }
 
-void PhysicalExpand::buildPipelineExecGroup(
+void PhysicalExpand::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

@@ -33,12 +33,14 @@ public:
 
     String getName() const override;
 
-    void operatePrefix() override;
-    void operateSuffix() override;
-
 protected:
+    void operatePrefixImpl() override;
+    void operateSuffixImpl() override;
+
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus awaitImpl() override;
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 private:
     Block popFromBlockQueue();
@@ -49,5 +51,7 @@ private:
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     std::queue<Block> block_queue;
     std::optional<std::pair<pingcap::coprocessor::ResponseIter::Result, bool>> reader_res;
+
+    IOProfileInfoPtr io_profile_info;
 };
 } // namespace DB

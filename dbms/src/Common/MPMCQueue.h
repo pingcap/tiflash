@@ -279,13 +279,6 @@ public:
         return static_cast<size_t>(write_pos - read_pos);
     }
 
-    bool isFull() const
-    {
-        std::unique_lock lock(mu);
-        assert(write_pos >= read_pos && current_auxiliary_memory_usage >= 0);
-        return (write_pos - read_pos >= capacity_limits.max_size || current_auxiliary_memory_usage >= capacity_limits.max_bytes);
-    }
-
     const String & getCancelReason() const
     {
         std::unique_lock lock(mu);

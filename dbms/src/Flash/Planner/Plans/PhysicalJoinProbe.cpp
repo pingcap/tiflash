@@ -20,7 +20,7 @@
 
 namespace DB
 {
-void PhysicalJoinProbe::buildPipelineExecGroup(
+void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,

@@ -19,6 +19,7 @@
 namespace DB
 {
 struct BlockStreamProfileInfo;
+struct OperatorProfileInfo;
 struct BaseRuntimeStatistics
 {
     size_t rows = 0;
@@ -29,5 +30,6 @@ struct BaseRuntimeStatistics
     UInt64 execution_time_ns = 0;
 
     void append(const BlockStreamProfileInfo &);
+    void append(const OperatorProfileInfo &);
 };
 } // namespace DB

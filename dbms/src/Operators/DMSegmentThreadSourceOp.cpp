@@ -23,7 +23,6 @@ namespace FailPoints
 extern const char pause_when_reading_from_dt_stream[];
 } // namespace FailPoints
 
-/// If handle_real_type_ is empty, means do not convert handle column back to real type.
 DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     PipelineExecutorStatus & exec_status_,
     const DM::DMContextPtr & dm_context_,
@@ -53,7 +52,7 @@ String DMSegmentThreadSourceOp::getName() const
     return NAME;
 }
 
-void DMSegmentThreadSourceOp::operateSuffix()
+void DMSegmentThreadSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "Finish read {} rows from storage", total_rows);
 }
@@ -77,7 +76,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
 
 OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
 {
-    if (done)
+    if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
 
     while (!cur_stream)
@@ -109,8 +108,8 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
         LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
         cur_segment = {};
         cur_stream = {};
+        return OperatorStatus::IO;
     }
-    return OperatorStatus::IO;
 }
 
 } // namespace DB

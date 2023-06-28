@@ -207,7 +207,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:
@@ -256,7 +256,7 @@ public:
 
     bool isWritable() const override
     {
-        return !queue.isFull();
+        return queue.isWritable();
     }
 
     void cancelWith(const String & reason) override
@@ -354,11 +354,6 @@ private:
         if (unlikely(checkPacketErr(data)))
             return false;
 
-        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
-        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
-        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
-        data->switchMemTracker(local_request_handler.recv_mem_tracker);
-
         // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
         // is very large and causes the time of transfering data by grpc threads becomes longer, because
         // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
@@ -438,7 +433,7 @@ public:
 
     bool isWritable() const override
     {
-        return !send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:

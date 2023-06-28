@@ -60,7 +60,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
 {
     if (dag_context.is_mpp_task)
     {
-        /// for MPPTask, process list entry is created in MPPTask::prepare()
+        /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
         RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
         return dag_context.getProcessListEntry();
     }
@@ -70,7 +70,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
         auto process_list_entry = setProcessListElement(
             context,
             dag_context.dummy_query_string,
-            dag_context.dummy_ast.get());
+            dag_context.dummy_ast.get(),
+            true);
         dag_context.setProcessListEntry(process_list_entry);
         return process_list_entry;
     }
@@ -109,6 +110,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
+    dag_context.switchToStreamMode();
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
@@ -147,6 +149,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+    dag_context.switchToPipelineMode();
     return {std::move(executor)};
 }
 

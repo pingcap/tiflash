@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -60,6 +61,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     // for disagg tiflash write node
     if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        service->removeAllLocalCheckpointFiles();
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
@@ -210,9 +212,14 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     // TODO: directly write into remote store. But take care of the order
     //       of CheckpointData files, lock files, and CheckpointManifest.
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
-    auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
+    auto local_dir = getCheckpointLocalDir(upload_info.upload_sequence);
     Poco::File(local_dir).createDirectories();
     auto local_dir_str = local_dir.toString() + "/";
+    SCOPE_EXIT({
+        // No matter the local checkpoint files are uploaded successfully or fails, delete them directly.
+        // Since the directory has been created before, it should exists.
+        Poco::File(local_dir).remove(true);
+    });
 
     /*
      * If using `snapshot->sequence` as a part of manifest name, we can NOT
@@ -280,9 +287,6 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         write_stats.incremental_data_bytes,
         write_stats.compact_data_bytes);
 
-    // the checkpoint is uploaded to remote data store, remove local temp files
-    Poco::File(local_dir).remove(true);
-
     return true;
 }
 
@@ -318,4 +322,28 @@ void UniversalPageStorageService::shutdown()
         gc_handle = nullptr;
     }
 }
+
+void UniversalPageStorageService::removeAllLocalCheckpointFiles()
+{
+    Poco::File temp_dir(global_context.getTemporaryPath());
+    if (temp_dir.exists() && temp_dir.isDirectory())
+    {
+        std::vector<String> short_names;
+        temp_dir.list(short_names);
+        for (const auto & name : short_names)
+        {
+            if (startsWith(name, checkpoint_dirname_prefix))
+            {
+                auto checkpoint_dirname = global_context.getTemporaryPath() + "/" + name;
+                Poco::File(checkpoint_dirname).remove(true);
+            }
+        }
+    }
+}
+
+Poco::Path UniversalPageStorageService::getCheckpointLocalDir(UInt64 seq) const
+{
+    return Poco::Path(global_context.getTemporaryPath() + fmt::format("/{}{}", checkpoint_dirname_prefix, seq)).absolute();
+}
+
 } // namespace DB
