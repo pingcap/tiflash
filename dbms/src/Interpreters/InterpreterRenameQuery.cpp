@@ -111,12 +111,12 @@ BlockIO InterpreterRenameQuery::execute()
         if (!table_guards.count(from))
             table_guards.emplace(from,
                                  context.getDDLGuard(from.table_name,
-                                                     "Table " + from.database_name + "." + from.table_name + " is being renamed right now"));
+                                                     fmt::format("Table {}.{} is being renamed right now", from.database_name, from.table_name)));
 
         if (!table_guards.count(to))
             table_guards.emplace(to,
                                  context.getDDLGuard(to.table_name,
-                                                     "Some table right now is being renamed to " + to.database_name + "." + to.table_name));
+                                                     fmt::format("Some table right now is being renamed to {}.{}", to.database_name, to.table_name)));
 
         // Don't need any lock on "tidb_display" names, because we don't identify any table by that name in TiFlash
     }

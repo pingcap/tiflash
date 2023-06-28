@@ -111,7 +111,7 @@ BlockIO InterpreterDropQuery::execute()
         if (table)
             tables_to_drop.emplace_back(table,
                                         context.getDDLGuard(drop.table,
-                                                            "Table " + database_name + "." + drop.table + " is dropping or detaching right now"));
+                                                            fmt::format("Table {}.{} is dropping or detaching right now", database_name, drop.table)));
         else
             return {};
     }
@@ -127,7 +127,7 @@ BlockIO InterpreterDropQuery::execute()
         for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
             tables_to_drop.emplace_back(iterator->table(),
                                         context.getDDLGuard(iterator->name(),
-                                                            "Table " + database_name + "." + iterator->name() + " is dropping or detaching right now"));
+                                                            fmt::format("Table {}.{} is dropping or detaching right now", database_name, iterator->name())));
     }
 
     for (auto & table : tables_to_drop)
