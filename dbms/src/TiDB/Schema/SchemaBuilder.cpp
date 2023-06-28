@@ -905,7 +905,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     std::mutex created_db_set_mutex;
     for (const auto & db : all_schemas)
     {
-        auto task = [this, = db, &created_db_set, &created_db_set_mutex] {
+        auto task = [this, db, &created_db_set, &created_db_set_mutex] {
             {
                 std::shared_lock<std::shared_mutex> shared_lock(shared_mutex_for_databases);
                 if (databases.find(db->id) == databases.end())
