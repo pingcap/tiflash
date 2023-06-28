@@ -15,65 +15,76 @@
 #pragma once
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Operators/Operator.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::DM::Remote
 {
 
-class RNSegmentInputStream : public IProfilingBlockInputStream
+class RNSegmentSourceOp : public SourceOp
 {
     static constexpr auto NAME = "RNSegment";
-
-public:
-    ~RNSegmentInputStream() override;
-
-    String getName() const override { return NAME; }
-
-    Block getHeader() const override { return action.getHeader(); }
-
-protected:
-    Block readImpl() override
-    {
-        FilterPtr filter_ignored;
-        return readImpl(filter_ignored, false);
-    }
-
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 public:
     struct Options
     {
         std::string_view debug_tag;
+        PipelineExecutorStatus & exec_status;
         const RNWorkersPtr & workers;
         const ColumnDefines & columns_to_read;
         int extra_table_id_index;
     };
 
-    explicit RNSegmentInputStream(const Options & options)
-        : log(Logger::get(options.debug_tag))
+    explicit RNSegmentSourceOp(const Options & options)
+        : SourceOp(options.exec_status, String(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
-    {}
-
-    static BlockInputStreamPtr create(const Options & options)
     {
-        return std::make_shared<RNSegmentInputStream>(options);
+        setHeader(action.getHeader());
     }
 
+    static SourceOpPtr create(const Options & options)
+    {
+        return std::make_unique<RNSegmentSourceOp>(options);
+    }
+
+    String getName() const override { return NAME; }
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
+protected:
+    void operateSuffixImpl() override;
+
+    void operatePrefixImpl() override;
+
+    OperatorStatus readImpl(Block & block) override;
+
+    OperatorStatus awaitImpl() override;
+
+    OperatorStatus executeIOImpl() override;
+
 private:
-    const LoggerPtr log;
+    OperatorStatus startGettingNextReadyTask();
+
+private:
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
+    // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
+    std::optional<Block> t_block = std::nullopt;
+
     RNReadSegmentTaskPtr current_seg_task = nullptr;
     bool done = false;
+
+    // Count the number of segment tasks obtained.
     size_t processed_seg_tasks = 0;
 
+    // Count the time spent waiting for segment tasks to be ready.
     double duration_wait_ready_task_sec = 0;
+    Stopwatch wait_stop_watch{CLOCK_MONOTONIC_COARSE};
+
+    // Count the time consumed by reading blocks in the stream of segment tasks.
     double duration_read_sec = 0;
 };
 
