@@ -40,27 +40,9 @@ extern const int NOT_IMPLEMENTED;
 namespace
 {
 template <typename T>
-constexpr bool checkIfIntType()
+consteval bool checkIfSimpleNumericType()
 {
-    return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
-}
-
-template <typename T>
-constexpr bool checkIfFloatType()
-{
-    return std::is_same_v<T, Float32> || std::is_same_v<T, Float64>;
-}
-
-template <typename T>
-constexpr bool checkIfSimpleNumericType()
-{
-    return checkIfIntType<T>() || checkIfFloatType<T>();
-}
-
-template <typename T>
-constexpr bool checkIfDecimalType()
-{
-    return std::is_same_v<T, Decimal32> || std::is_same_v<T, Decimal64> || std::is_same_v<T, Decimal128> || std::is_same_v<T, Decimal256>;
+    return std::is_integral_v<T> || std::is_floating_point_v<T>;
 }
 
 template <typename T>
@@ -70,7 +52,7 @@ struct DecimalWithScale
         : decimal(decimal_)
         , scale(scale_)
     {
-        if constexpr (!checkIfDecimalType<T>())
+        if constexpr (!IsDecimal<T>)
             throw Exception("DecimalWithScale only accepts Decimal type.");
     }
 
@@ -84,7 +66,7 @@ using DecimalWithScale128 = DecimalWithScale<Decimal128>;
 using DecimalWithScale256 = DecimalWithScale<Decimal256>;
 
 template <typename T>
-constexpr bool checkIfDecimalWithScaleType()
+consteval bool checkIfDecimalWithScaleType()
 {
     return std::is_same_v<T, DecimalWithScale32> || std::is_same_v<T, DecimalWithScale64> || std::is_same_v<T, DecimalWithScale128> || std::is_same_v<T, DecimalWithScale256>;
 }
@@ -106,7 +88,7 @@ typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t i
         const typename ColumnVector<T>::Container & data = col->getData();
         return data[idx];
     }
-    else if (checkIfDecimalType<T>())
+    else if (IsDecimal<T>)
     {
         const auto * col = static_cast<const ColumnDecimal<T> *>(&(*col_ptr));
         const typename ColumnDecimal<T>::Container & data = col->getData();
@@ -159,7 +141,7 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     if constexpr (CmpDataType == tipb::RangeCmpDataType::Int)
     {
         // Two operand must be integer
-        if constexpr (checkIfIntType<OrderByColType>() && checkIfIntType<AuxColType>())
+        if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
             return isInRangeIntImpl<is_start, is_desc>(current_row_aux_value, cursor_value);
         throw Exception("Unexpected Data Type!");
     }
@@ -169,7 +151,7 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     }
     else
     {
-        if constexpr (checkIfFloatType<OrderByColType>() || checkIfFloatType<AuxColType>())
+        if constexpr (std::is_floating_point_v<OrderByColType> || std::is_floating_point_v<AuxColType>)
             throw Exception("Occurrence of float type at here is unexpected!");
 
         return isInRangeNotIntImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
