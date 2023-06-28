@@ -21,6 +21,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -611,7 +613,7 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     for (auto segment_index : insert_indexes)
     {
         // When segment_index is segment_size, it must be processed in first step.
-        assert(segment_index < segment_size);
+        RUNTIME_CHECK_MSG(segment_index < segment_size, "Internal Error: When segment_index is segment_size, it must be processed in first step.");
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         auto & join_partition = join_partitions[segment_index];
         auto lock = join_partition->lockPartition();
