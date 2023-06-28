@@ -79,7 +79,7 @@ struct PDClientHelper
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
             auto gc_safe_point = getGCSafePointV2WithRetry(pd_client, keyspace_id, ignore_cache, safe_point_update_interval_seconds);
-            LOG_DEBUG(Logger::get(), "use safe point v2, keyspace_id={},gc_safe_point={}", keyspace_id, gc_safe_point);
+            LOG_DEBUG(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
             return gc_safe_point;
         }
 
