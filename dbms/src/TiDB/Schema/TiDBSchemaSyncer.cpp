@@ -55,7 +55,6 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemas(Context & context)
     {
         if (version <= cur_version)
         {
-            LOG_INFO(log, " version {} is the same as cur_version {}, so do nothing", version, cur_version);
             return false;
         }
 
