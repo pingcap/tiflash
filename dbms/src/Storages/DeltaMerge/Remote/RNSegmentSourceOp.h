@@ -71,14 +71,20 @@ private:
     const RNWorkersPtr workers;
     AddExtraTableIDColumnTransformAction action;
 
+    // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
     std::optional<Block> t_block = std::nullopt;
+
     RNReadSegmentTaskPtr current_seg_task = nullptr;
     bool done = false;
+
+    // Count the number of segment tasks obtained.
     size_t processed_seg_tasks = 0;
 
+    // Count the time spent waiting for segment tasks to be ready.
     double duration_wait_ready_task_sec = 0;
     Stopwatch wait_stop_watch{CLOCK_MONOTONIC_COARSE};
 
+    // Count the time consumed by reading blocks in the stream of segment tasks.
     double duration_read_sec = 0;
 };
 
