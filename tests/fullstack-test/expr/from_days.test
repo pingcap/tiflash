@@ -39,7 +39,7 @@ mysql> set tidb_enforce_mpp=1; select a, from_days(a), to_days(from_days(a)) fro
 | 3652501 | NULL         |                  NULL |
 +---------+--------------+-----------------------+
 
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; select a, from_days(a), to_days(from_days(a)) from test.t;
+mysql> set tidb_allow_mpp=0; select a, from_days(a), to_days(from_days(a)) from test.t;
 +---------+--------------+-----------------------+
 | a       | from_days(a) | to_days(from_days(a)) |
 +---------+--------------+-----------------------+

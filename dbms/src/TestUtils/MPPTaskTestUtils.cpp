@@ -16,28 +16,14 @@
 
 namespace DB::tests
 {
-<<<<<<< HEAD
 DAGProperties getDAGPropertiesForTest(int server_num)
 =======
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id, int query_ts)
->>>>>>> 2bd982de1b (fix active_set bug in min tso scheduler (#7693))
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
-<<<<<<< HEAD
-=======
-    if (query_ts > 0)
-        properties.query_ts = query_ts;
-    if (local_query_id >= 0)
-        properties.local_query_id = local_query_id;
-    else
-        properties.local_query_id = properties.start_ts;
-    if (tidb_server_id >= 0)
-        properties.server_id = tidb_server_id;
->>>>>>> 2bd982de1b (fix active_set bug in min tso scheduler (#7693))
     return properties;
 }
 

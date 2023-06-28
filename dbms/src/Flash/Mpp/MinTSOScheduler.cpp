@@ -190,13 +190,8 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error)
 {
     auto needed_threads = schedule_entry.getNeededThreads();
-<<<<<<< HEAD
     auto check_for_new_min_tso = tso <= min_tso && estimated_thread_usage + needed_threads <= thread_hard_limit;
-    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || tso <= *active_set.rbegin()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
-=======
-    auto check_for_new_min_tso = query_id <= min_query_id && estimated_thread_usage + needed_threads <= thread_hard_limit;
-    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || active_set.find(query_id) != active_set.end()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
->>>>>>> 2bd982de1b (fix active_set bug in min tso scheduler (#7693))
+    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || active_set.find(tso) != active_set.end()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
         updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
