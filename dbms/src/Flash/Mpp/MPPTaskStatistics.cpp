@@ -94,6 +94,11 @@ tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
     return executor_statistics_collector.genExecutionSummaryResponse();
 }
 
+tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()
+{
+    return executor_statistics_collector.genTiFlashExecutionInfo();
+}
+
 void MPPTaskStatistics::logTracingJson()
 {
     LOG_INFO(
