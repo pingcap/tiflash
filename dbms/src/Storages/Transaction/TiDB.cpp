@@ -1078,6 +1078,11 @@ ColumnID TableInfo::getColumnID(const String & name) const
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
+KeyspaceID TableInfo::getKeyspaceID() const
+{
+    return keyspace_id;
+}
+
 String TableInfo::getColumnName(const ColumnID id) const
 {
     for (const auto & col : columns)
