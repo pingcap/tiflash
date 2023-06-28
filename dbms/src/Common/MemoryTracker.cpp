@@ -171,7 +171,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                                   formatReadableSizeWithBinarySuffix(current_limit));
             }
 
-            fmt_buf.fmtAppend(", details: {}", memoryUsageDetail());
+            if (sub_root_of_query_storage_task_mem_trackers)
+            {
+                fmt_buf.fmtAppend(", details: {}", memoryUsageDetail());
+            }
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
