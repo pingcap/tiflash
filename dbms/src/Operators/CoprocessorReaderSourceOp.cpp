@@ -117,8 +117,11 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
 }
 OperatorStatus CoprocessorReaderSourceOp::awaitImpl()
 {
-    if (!block_queue.empty() || reader_res)
+    if unlikely (!block_queue.empty())
         return OperatorStatus::HAS_OUTPUT;
+    if unlikely (reader_res)
+        return OperatorStatus::HAS_OUTPUT;
+
     reader_res.emplace(coprocessor_reader->nonBlockingNext());
     if (reader_res->second || reader_res->first.finished)
     {
