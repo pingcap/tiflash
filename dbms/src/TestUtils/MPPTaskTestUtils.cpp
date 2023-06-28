@@ -17,7 +17,6 @@
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num)
-=======
 {
     DAGProperties properties;
     // enable mpp
