@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
@@ -1692,18 +1693,14 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     bool try_split_task)
 {
     SegmentReadTasks tasks;
+    Stopwatch watch;
 
     std::shared_lock lock(read_write_mutex);
 
     auto range_it = sorted_ranges.begin();
     auto seg_it = segments.upper_bound(range_it->getStart());
 
-    if (seg_it == segments.end())
-    {
-        throw Exception(
-            fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()),
-            ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(seg_it != segments.end(), "Failed to locate segment begin with start in range: {}", range_it->toDebugString());
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())
     {
@@ -1715,8 +1712,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
             {
                 auto segment = seg_it->second;
                 auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-                if (unlikely(!segment_snap))
-                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                RUNTIME_CHECK_MSG(segment_snap, "Failed to get segment snap");
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
             }
 
@@ -1744,7 +1740,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
-    auto tasks_before_split = tasks.size();
+    const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
         /// Try to make task number larger or equal to expected_tasks_count.
@@ -1762,7 +1758,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_DEBUG(
         tracing_logger,
-        "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
+        "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
+        watch.elapsedMilliseconds(),
         sorted_ranges.size(),
         tasks_before_split,
         tasks.size(),
