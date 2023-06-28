@@ -21,8 +21,6 @@
 
 #include <ext/scope_guard.h>
 
-#include "Common/Exception.h"
-
 namespace DB
 {
 namespace ErrorCodes
