@@ -111,12 +111,12 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false>(k);
-                            ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
+                            auto pop_result = queue.pop<false>(k, recv_msg);
+                            ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                             if (k == 0)
-                                ASSERT_TRUE(*pop_result.second->getRespPtr(k) == fmt::format("test_{}", i));
+                                ASSERT_TRUE(*recv_msg->getRespPtr(k) == fmt::format("test_{}", i));
                             else
-                                ASSERT_TRUE(pop_result.second->getRespPtr(k) == nullptr);
+                                ASSERT_TRUE(recv_msg->getRespPtr(k) == nullptr);
                         }
                     }
                 }
@@ -125,9 +125,9 @@ try
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false>(0);
-                        ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                        ASSERT_TRUE(*pop_result.second->getRespPtr(0) == fmt::format("test_{}", i));
+                        auto pop_result = queue.pop<false>(0, recv_msg);
+                        ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
+                        ASSERT_TRUE(*recv_msg->getRespPtr(0) == fmt::format("test_{}", i));
                     }
                 }
                 ASSERT_TRUE(queue.isWritable());
@@ -167,12 +167,12 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false>(k);
-                            ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
+                            auto pop_result = queue.pop<false>(k, recv_msg);
+                            ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                             if (k == 0)
-                                ASSERT_TRUE(*pop_result.second->getRespPtr(k) == fmt::format("test_{}", i));
+                                ASSERT_TRUE(*recv_msg->getRespPtr(k) == fmt::format("test_{}", i));
                             else
-                                ASSERT_TRUE(pop_result.second->getRespPtr(k) == nullptr);
+                                ASSERT_TRUE(recv_msg->getRespPtr(k) == nullptr);
                         }
                     }
                 }
@@ -181,9 +181,9 @@ try
                     for (size_t i = 0; i < buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false>(0);
-                        ASSERT_TRUE(pop_result.first == MPMCQueueResult::OK);
-                        ASSERT_TRUE(*pop_result.second->getRespPtr(0) == fmt::format("test_{}", i));
+                        auto pop_result = queue.pop<false>(0, recv_msg);
+                        ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
+                        ASSERT_TRUE(*recv_msg->getRespPtr(0) == fmt::format("test_{}", i));
                     }
                 }
                 ASSERT_TRUE(queue.isWritable());
