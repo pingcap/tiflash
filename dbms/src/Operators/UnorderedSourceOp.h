@@ -87,6 +87,5 @@ private:
 
     bool done = false;
     Block t_block;
-
 };
 } // namespace DB
