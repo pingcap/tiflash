@@ -46,6 +46,7 @@ namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
 extern const char proactive_flush_before_persist_region[];
+extern const char passive_flush_before_persist_region[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -55,6 +56,7 @@ KVStore::KVStore(Context & context)
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
+    , region_compact_log_gap(500)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
 }
@@ -362,18 +364,20 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
+void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap)
 {
     region_compact_log_period = sec;
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
+    region_compact_log_gap = gap;
 
     LOG_INFO(
         log,
-        "threshold config: period {}, rows {}, bytes {}",
+        "threshold config: period {}, rows {}, bytes {}, gap {}",
         sec,
         rows,
-        bytes);
+        bytes,
+        gap);
 }
 
 void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
@@ -398,13 +402,14 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
     // TODO Should handle when curr_region_ptr is null.
-    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0, 0, 0);
 }
 
-bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term, uint64_t truncated_index, uint64_t truncated_term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+
     if (curr_region_ptr == nullptr)
     {
         /// If we can't find region here, we return true so proxy can trigger a CompactLog.
@@ -414,6 +419,8 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
+
+    FAIL_POINT_PAUSE(FailPoints::passive_flush_before_persist_region);
     if (force_persist)
     {
         auto & curr_region = *curr_region_ptr;
@@ -426,11 +433,11 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
     }
     else
     {
-        return canFlushRegionDataImpl(curr_region_ptr, false, try_until_succeed, tmt, region_task_lock, index, term);
+        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term, truncated_index, truncated_term);
     }
 }
 
-bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8, bool, TMTContext &, const RegionTaskLock &, UInt64, UInt64)
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term)
 {
     if (curr_region_ptr == nullptr)
     {
@@ -439,6 +446,13 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8, b
     auto & curr_region = *curr_region_ptr;
 
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
+
+    auto gap = region_compact_log_gap.load();
+    if(index > truncated_index + gap && flush_if_possible) {
+        // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
+        LOG_INFO(log, "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} log gap {}", curr_region.toString(false), index, term, truncated_index, truncated_term, gap);
+        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
+    }
 
     LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
 
@@ -1066,14 +1080,14 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         // So proxy can get the current compact state of this region of TiFlash's side.
         // TODO This is for `exec_compact_log`. Check out what it does exactly.
         // TODO flushed state is never persisted, checkout if this will lead to a problem.
-        auto flush_state = region->getFlushedState();
-        if (flush_state.applied_index < compact_index)
-        {
-            region->setFlushedState(compact_index, compact_term);
-            region->markCompactLog();
-            region->cleanApproxMemCacheInfo();
-            getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term, compact_index);
-        }
+
+        // We will notify even if `flush_state.applied_index` is greater than compact_index,
+        // since this greater `applied_index` may not trigger a compact log.
+        // We will maintain the biggest on Proxy's side.
+        region->setFlushedState(compact_index, compact_term);
+        region->markCompactLog();
+        region->cleanApproxMemCacheInfo();
+        getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term, compact_index);
     };
     if (lock_held)
     {

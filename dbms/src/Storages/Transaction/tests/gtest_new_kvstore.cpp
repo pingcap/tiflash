@@ -215,11 +215,11 @@ try
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
 
             kvr1->markCompactLog();
-            kvs.setRegionCompactLogConfig(0, 0, 0);
+            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
             auto [index2, term2] = proxy_instance->compactLog(region_id, index);
             // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
             // Notice kvs is not tmt->getKVStore(), so we can't use the ProxyFFI version.
-            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term));
+            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term, 0, 0));
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
@@ -230,13 +230,13 @@ try
             ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
             // If flush fails, and we don't insist a success.
             FailPointHelper::enableFailPoint(FailPoints::force_fail_in_flush_region_data);
-            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), false);
+            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), false);
             FailPointHelper::disableFailPoint(FailPoints::force_fail_in_flush_region_data);
             // Force flush until succeed only for testing.
-            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), 0, 0), true);
+            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), 0, 0, 0, 0), true);
             // Non existing region.
             // Flush and CompactLog will not panic.
-            ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0), true);
+            ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0, 0, 0), true);
             raft_cmdpb::AdminRequest request;
             raft_cmdpb::AdminResponse response;
             request.mutable_compact_log();
@@ -293,7 +293,7 @@ try
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), region_id, 25, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
 
         {
-            kvs.setRegionCompactLogConfig(0, 0, 0);
+            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
         }

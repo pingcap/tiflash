@@ -145,10 +145,8 @@ void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t c
     auto region = x.getRegion(region_id);
     ASSERT(region);
     LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!! fn_notify_compact_log {} commit index {} applied_index {} compact_index {} compact_term {}", region_id, region->getLatestCommitIndex(), applied_index, compact_index, compact_term);
-    ASSERT(region->getLatestCommitIndex() >= applied_index);
-    // `applied_index` in proxy's disk can be still LT applied_index here when fg flush.
-    // So we use commit_index here.
-    if (region)
+    // `applied_index` in proxy's disk can still be less than the `applied_index` here when fg flush.
+    if (region && region->getApply().truncated_state().index() < compact_index)
     {
         region->updateTruncatedState(compact_index, compact_term);
     }
@@ -543,7 +541,11 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::rawWrite(
 }
 
 
-std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest && request, raft_cmdpb::AdminResponse && response)
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(
+    UInt64 region_id,
+    raft_cmdpb::AdminRequest && request,
+    raft_cmdpb::AdminResponse && response,
+    std::optional<uint64_t> forced_index)
 {
     uint64_t index = 0;
     uint64_t term = 0;
@@ -551,7 +553,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::adminCommand(UInt64 region_id
         auto region = getRegion(region_id);
         assert(region != nullptr);
         // We have a new entry.
-        index = region->getLatestCommitIndex() + 1;
+        index = forced_index.value_or(region->getLatestCommitIndex() + 1);
+        RUNTIME_CHECK(index > region->getLatestCommitIndex());
         term = region->getLatestCommitTerm();
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
@@ -580,6 +583,20 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
         request.mutable_compact_log()->set_compact_term(region->commands[compact_index].term);
     }
     return adminCommand(region_id, std::move(request), std::move(response));
+}
+
+std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeCompactLog(MockProxyRegionPtr region, UInt64 compact_index)
+{
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
+    request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
+    request.mutable_compact_log()->set_compact_index(compact_index);
+    // Find compact term, otherwise log must have been compacted.
+    if (region->commands.contains(compact_index))
+    {
+        request.mutable_compact_log()->set_compact_term(region->commands[compact_index].term);
+    }
+    return std::make_tuple(request, response);
 }
 
 std::tuple<raft_cmdpb::AdminRequest, raft_cmdpb::AdminResponse> MockRaftStoreProxy::composeChangePeer(metapb::Region && meta, std::vector<UInt64> peer_ids, bool is_v2)
@@ -733,6 +750,18 @@ void MockRaftStoreProxy::doApply(
     }
     if (cmd.has_admin_request())
     {
+        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog)
+        {
+            auto res = kvs.tryFlushRegionData(region_id, false, true, tmt, index, term, region->getApply().truncated_state().index(), region->getApply().truncated_state().term());
+            auto compact_index = cmd.admin().request.compact_log().compact_index();
+            auto compact_term = cmd.admin().request.compact_log().compact_term();
+            if (!res) {
+                LOG_DEBUG(log, "mock pre exec reject");
+            } else {
+                region->updateTruncatedState(compact_index, compact_term);
+                LOG_DEBUG(log, "mock pre exec success, update to {},{}", compact_index, compact_term);
+            }
+        }
         kvs.handleAdminRaftCmd(std::move(cmd.admin().request), std::move(cmd.admin().response), region_id, index, term, tmt);
     }
 

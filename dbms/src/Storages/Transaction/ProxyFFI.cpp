@@ -145,12 +145,12 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
     }
 }
 
-uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term)
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term, uint64_t truncated_index, uint64_t truncated_term)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term);
+        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term, truncated_index, truncated_term);
     }
     catch (...)
     {
@@ -879,8 +879,10 @@ std::string_view buffToStrView(const BaseBuffView & buf)
     return std::string_view{buf.data, buf.len};
 }
 
-FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id)
+FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id, uint8_t acquire_lock)
 {
+    // TODO
+    UNUSED(acquire_lock);
     auto & kvstore = server->tmt->getKVStore();
     auto region_ptr = kvstore->getRegion(region_id);
     return region_ptr->getFlushedState();

@@ -61,6 +61,7 @@ try
     {
         // A fg flush and a bg flush will not deadlock.
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
+        DB::FailPointHelper::enableFailPoint(DB::FailPoints::passive_flush_before_persist_region);
         ai->store(0b1011);
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_force_set_type, ai);
         auto f1 = [&]() {
@@ -88,13 +89,14 @@ try
         std::thread t2(f2);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::passive_flush_before_persist_region);
         t1.join();
         t2.join();
         ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
         // We can't assert for region_id2, since bg flush may be be finished.
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_force_set_type);
     }
-    kvs.setRegionCompactLogConfig(0, 0, 0); // Every notify will take effect.
-    LOG_INFO(&Poco::Logger::get("!!!!"), "!!!!! next");
+    kvs.setRegionCompactLogConfig(0, 0, 0, 500); // Every notify will take effect.
     {
         // Two fg flush will not deadlock.
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
@@ -119,17 +121,49 @@ try
         };
         std::thread t1(f1);
         std::thread t2(f2);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
         t1.join();
         t2.join();
         ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
         ASSERT_EQ(proxy_instance->getRegion(region_id2)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id2)->getLatestCommitIndex());
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_force_set_type);
     }
     {
         // An obsolete notification triggered by another region's flush shall not override.
         kvs.notifyCompactLog(region_id, 1, 5, true, false);
         ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
+    }
+    {
+        // Passive flush and fg proactive flush of the same region will not deadlock, since they must be executed by order in one thread.
+        // Passive flush and fg proactive flush will not deadlock.
+        ai->store(0b1011); // Force fg
+        DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_force_set_type, ai);
+        DB::FailPointHelper::enableFailPoint(DB::FailPoints::passive_flush_before_persist_region);
+        auto f1 = [&]() {
+            auto && [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+            auto k1 = RecordKVFormat::genKey(table_id, 60, 111);
+            // Trigger a forground flush on region_id
+            auto [index, term] = proxy_instance->rawWrite(region_id, {k1}, {value_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            auto [index2, term2] = proxy_instance->rawWrite(region_id, {k1}, {value_write}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2, std::make_optional(true));
+        };
+        auto f2 = [&]() {
+            auto r2 = proxy_instance->getRegion(region_id2);
+            auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r2, 555);
+            auto && [index2, term] = proxy_instance->adminCommand(region_id2, std::move(request), std::move(response), 600);
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id2, index2);
+        };
+        std::thread t1(f1);
+        std::thread t2(f2);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::passive_flush_before_persist_region);
+        t2.join();
+        ASSERT_EQ(proxy_instance->getRegion(region_id2)->getApply().truncated_state().index(), 555);
+        DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_before_persist_region);
+        t1.join();
+        ASSERT_EQ(proxy_instance->getRegion(region_id2)->getApply().truncated_state().index(), 555);
     }
 }
 CATCH
@@ -139,7 +173,8 @@ try
 {
     {
         // Safe to abort between flushing regions.
-    } {
+    }
+    {
         // Safe to abort between flushCache and persistRegion.
     }
 }

@@ -37,7 +37,7 @@ try
         raft_cmdpb::AdminResponse response;
         auto region = kvs.getRegion(1);
         region->markCompactLog();
-        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000, 0);
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         // CompactLog always returns true now, even if we can't do a flush.
@@ -45,7 +45,7 @@ try
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0, 0, 0), false);
     }
 }
 CATCH
@@ -153,6 +153,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 
         // Test read index
         // Note `batchReadIndex` always returns latest committed index in our mock class.
+        // See `RawMockReadIndexTask::poll`.
         kvs.asyncRunReadIndexWorkers();
         SCOPE_EXIT({
             kvs.stopReadIndexWorkers();
