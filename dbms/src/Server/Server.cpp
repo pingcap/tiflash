@@ -325,7 +325,7 @@ struct TiFlashProxyConfig
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
             if (config.has("blacklist_file"))
-                args_map["blacklist_file"] = config.getString("blacklist_file");
+                args_map["blacklist-file"] = config.getString("blacklist_file");
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
