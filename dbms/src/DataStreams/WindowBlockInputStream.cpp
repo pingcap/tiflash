@@ -730,8 +730,16 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameBoundaryImpl(RowNumber cu
         const ColumnPtr & cursor_column = inputAt(cursor)[order_column_indices[0]];
         ActualOrderByColType cursor_value = getValue<OrderByColType>(cursor_column, cursor.row);
 
-        if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, is_begin, is_desc>(current_row_aux_value, cursor_value))
-            return cursor;
+        if constexpr (is_begin)
+        {
+            if (isInRange<AuxColType, ActualOrderByColType, CmpDataType, is_begin, is_desc>(current_row_aux_value, cursor_value))
+                return cursor;
+        }
+        else
+        {
+            if (!isInRange<AuxColType, ActualOrderByColType, CmpDataType, is_begin, is_desc>(current_row_aux_value, cursor_value))
+                return cursor;
+        }
 
         advanceRowNumber(cursor);
     }
@@ -855,14 +863,6 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
 
 void WindowTransformAction::advanceFrameEnd()
 {
-    // frame_end must be greater or equal than frame_start, so if the
-    // frame_start is already past the current frame_end, we can start
-    // from it to save us some work.
-    if (frame_end < frame_start)
-    {
-        frame_end = frame_start;
-    }
-
     // No reason for this function to be called again after it succeeded.
     assert(!frame_ended);
 
@@ -1095,6 +1095,7 @@ void WindowTransformAction::tryCalculate()
         frame_start = partition_start;
         frame_end = partition_start;
         prev_frame_start = partition_start;
+        prev_frame_end = partition_end;
         assert(current_row == partition_start);
         current_row_number = 1;
         peer_group_last = partition_start;

@@ -23,7 +23,6 @@
 
 namespace DB::tests
 {
-// TODO Tests with frame should be added
 class LastValue : public DB::tests::WindowTest
 {
 public:
@@ -82,6 +81,182 @@ public:
              toNullableVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
              toNullableVec<FloatType>(/*value*/ {{}, 2, 3, 4, {}, 6, 7, 8, 9, {}, 11, 12, {}})},
             unbounded_type_frame);
+    }
+
+    void testIntOrderByColForRangeFrame()
+    {
+        MockWindowFrame mock_frame;
+        mock_frame.type = tipb::WindowFrameType::Ranges;
+        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
+        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+
+        {
+            // Int type const column
+            std::vector<Int64> frame_end_range{0, 1, 3, 10};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 4, 4, 4, 8, 3, 3, 13, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 8, 8, 8, 8, 10, 13, 15, 15, 15, 9, 9, 15, 15, 20, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_end_range.size(); ++i)
+            {
+                std::cout << "iiii: " << i << std::endl;
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, frame_end_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+
+        {
+            // Float type const column
+            std::vector<Float64> frame_start_range{0, 1.1, 2.9, 9.9};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 4, 4, 8, 0, 3, 10, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 8, 8, 8, 8, 3, 10, 15, 15, 15, 9, 9, 9, 15, 20, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+
+        {
+            // Decimal type const column
+            std::vector<DecimalField<Decimal32>> frame_start_range{
+                DecimalField<Decimal32>(0, 0),
+                DecimalField<Decimal32>(11, 1),
+                DecimalField<Decimal32>(29, 1),
+                DecimalField<Decimal32>(99, 1)};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 4, 4, 8, 0, 3, 10, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 8, 8, 8, 8, 3, 10, 15, 15, 15, 9, 9, 9, 15, 20, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Decimal, ORDER_COL_NAME, true, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+    }
+
+    void testFloatOrderByColForRangeFrame()
+    {
+        MockWindowFrame mock_frame;
+        mock_frame.type = tipb::WindowFrameType::Ranges;
+        mock_frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
+        mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 0);
+
+        {
+            // Int type const column
+            std::vector<Int64> frame_start_range{0, 1, 3, 10};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 4, 4, 4, 8, 0, 3, 10, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 8, 8, 8, 8, 10, 13, 15, 15, 15, 9, 9, 15, 15, 20, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.2, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+
+        {
+            // Float type const column
+            std::vector<Float64> frame_start_range{0, 1.1, 2.3, 3.8};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 4, 4, 8, 0, 3, 10, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 4, 4, 4, 8, 3, 3, 13, 15, 15, 3, 5, 5, 9, 15, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.2, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+
+        {
+            // Decimal type const column
+            std::vector<DecimalField<Decimal32>> frame_start_range{
+                DecimalField<Decimal32>(0, 0),
+                DecimalField<Decimal32>(11, 1),
+                DecimalField<Decimal32>(23, 1),
+                DecimalField<Decimal32>(38, 1)};
+            std::vector<std::vector<Int64>> res{
+                {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31},
+                {0, 2, 4, 4, 8, 0, 3, 10, 15, 15, 3, 5, 5, 9, 15, 20, 31},
+                {0, 4, 4, 4, 8, 3, 3, 13, 15, 15, 3, 5, 5, 9, 15, 20, 31}};
+
+            auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3});
+            auto order_col = toVec<Float64>(/*order*/ {0.1, 1.2, 2.1, 4.1, 8.1, 0.0, 3.1, 10.0, 13.1, 15.1, 1.1, 2.9, 5.1, 9.1, 15.0, 20.1, 31.1});
+            auto val_col = toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31});
+
+            for (size_t i = 0; i < frame_start_range.size(); ++i)
+            {
+                mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Float, ORDER_COL_NAME, true, frame_start_range[i]);
+                executeFunctionAndAssert(
+                    toVec<Int64>(res[i]),
+                    LastValue(value_col),
+                    {partition_col, order_col, val_col},
+                    mock_frame);
+            }
+        }
+    }
+
+    void testDecimalOrderByColForRangeFrame()
+    {
+        // TODO we can not assign decimal field's flen now
+        // in MockStorage.cpp::mockColumnInfosToTiDBColumnInfos().
+        // However, we will test this data type in fullstack tests.
     }
 };
 
@@ -154,6 +329,15 @@ try
 
     testFloat<Float32>();
     testFloat<Float64>();
+}
+CATCH
+
+TEST_F(LastValue, lastValueWithRangeFrameType)
+try
+{
+    testIntOrderByColForRangeFrame();
+    testFloatOrderByColForRangeFrame();
+    // TODO Implement testDecimalOrderByColForRangeFrame()
 }
 CATCH
 
