@@ -42,6 +42,17 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
+<<<<<<< HEAD
+=======
+        // If keyspace id is `NullspaceID` it need to use safe point v1.
+        if (enable_safepoint_v2 && keyspace_id != NullspaceID)
+        {
+            auto gc_safe_point = getGCSafePointV2WithRetry(pd_client, keyspace_id, ignore_cache, safe_point_update_interval_seconds);
+            LOG_DEBUG(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
+            return gc_safe_point;
+        }
+
+>>>>>>> 787ab970fd (Reduce UniPS snapshot stat overhead (#7706))
         if (!ignore_cache)
         {
             // In case we cost too much to update safe point from PD.
