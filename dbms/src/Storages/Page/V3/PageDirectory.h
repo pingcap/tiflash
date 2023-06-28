@@ -153,7 +153,7 @@ public:
                 versioned_ref_counts = nullptr;
                 return;
             }
-            RUNTIME_CHECK(ref_count_delta_in_snap > 0);
+            RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
             new_versioned_ref_counts->emplace_back(PageVersion(snap_seq, 0), ref_count_delta_in_snap);
             versioned_ref_counts.swap(new_versioned_ref_counts);
         }
