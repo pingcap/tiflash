@@ -610,17 +610,12 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
     // Next use blocking locks to insert the remaining segments to avoid unnecessary cpu consumption.
     for (auto segment_index : insert_indexes)
     {
+        // When segment_index is segment_size, it must be processed in first step.
+        assert(segment_index < segment_size);
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
-        if (segment_index == segment_size)
-        {
-            INSERT_TO_NOT_INSERTED_MAP
-        }
-        else
-        {
-            auto & join_partition = join_partitions[segment_index];
-            auto lock = join_partition->lockPartition();
-            INSERT_TO_MAP(join_partition, segment_index_info[segment_index]);
-        }
+        auto & join_partition = join_partitions[segment_index];
+        auto lock = join_partition->lockPartition();
+        INSERT_TO_MAP(join_partition, segment_index_info[segment_index]);
     }
 
 #undef INSERT_TO_MAP
