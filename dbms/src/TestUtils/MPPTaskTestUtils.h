@@ -20,11 +20,7 @@
 
 namespace DB::tests
 {
-<<<<<<< HEAD
 DAGProperties getDAGPropertiesForTest(int server_num);
-=======
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1, int query_ts = -1);
->>>>>>> 2bd982de1b (fix active_set bug in min tso scheduler (#7693))
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:

@@ -102,19 +102,19 @@ mysql> split table test.t between (0) and (30000) regions 20;
 +--------------------+----------------------+
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 func> wait_table test t
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
 |         NULL |   NULL |        0 |
 +--------------+--------+----------+
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
 |         NULL |   NULL |        0 |
 +--------------+--------+----------+
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
@@ -127,19 +127,19 @@ mysql> set tidb_enforce_mpp=1; select any_value(a), sum(b), count(*) from test.t
 |         NULL |   NULL |        0 |
 +--------------+--------+----------+
 mysql> insert into test.t values(2,1)
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
 |            2 |      1 |        1 |
 +--------------+--------+----------+
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
 |            2 |      1 |        1 |
 +--------------+--------+----------+
-mysql> set tidb_allow_mpp=0; set tidb_allow_tiflash_cop = ON; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
 +--------------+--------+----------+
 | any_value(a) | sum(b) | count(*) |
 +--------------+--------+----------+
