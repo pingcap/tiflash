@@ -139,6 +139,13 @@ struct WindowDescription
     // each time we update the start/end frame position.
     Window::ColumnType order_by_col_type = Window::ColumnType::UnInitialized;
 
+    // Sometimes, we may cast order by column or const column to the target type.
+    // When the casted column is nullable, we need to check if there is null in
+    // the casted column as range frame type forbids the occurrence of null value.
+    // Tip: only used for range frame type
+    bool is_casted_begin_col_nullable = false;
+    bool is_casted_end_col_nullable = false;
+
     Window::ColumnType begin_aux_col_type = Window::ColumnType::UnInitialized;
     Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;
 

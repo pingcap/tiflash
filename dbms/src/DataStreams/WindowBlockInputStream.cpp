@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
@@ -35,6 +36,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
+extern const int CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN;
 } // namespace ErrorCodes
 
 namespace
@@ -156,6 +158,19 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
 
         return isInRangeNotIntImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
     }
+}
+
+ColumnPtr checkAndGetNestedColumn(const ColumnPtr & col)
+{
+    const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
+    const auto & null_map = nullable_col.getNullMapData();
+
+    if (!mem_utils::memoryIsZero(null_map.data(), null_map.size()))
+        throw Exception{
+            "Null value should not occur when frame type is range",
+            ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
+
+    return nullable_col.getNestedColumnPtr();
 }
 } // namespace
 
@@ -956,9 +971,7 @@ void WindowTransformAction::appendBlock(Block & current_block)
     assert(current_block);
 
     if (current_block.rows() == 0)
-    {
         return;
-    }
 
     window_blocks.push_back({});
     auto & window_block = window_blocks.back();
@@ -973,6 +986,20 @@ void WindowTransformAction::appendBlock(Block & current_block)
     }
 
     window_block.input_columns = current_block.getColumns();
+
+    // When frame type is range and the aux col in nullable, we need to ensure that all row are not null
+    // and get the nested column. They are auxiliary columns and will not be used any more, so it's ok to strip the nullable column
+    if (window_description.is_casted_begin_col_nullable)
+    {
+        auto aux_col_idx = window_description.frame.begin_range_auxiliary_column_index;
+        window_block.input_columns[aux_col_idx] = checkAndGetNestedColumn(window_block.input_columns[aux_col_idx]);
+    }
+
+    if (window_description.is_casted_end_col_nullable)
+    {
+        auto aux_col_idx = window_description.frame.end_range_auxiliary_column_index;
+        window_block.input_columns[aux_col_idx] = checkAndGetNestedColumn(window_block.input_columns[aux_col_idx]);
+    }
 }
 
 void WindowTransformAction::tryCalculate()

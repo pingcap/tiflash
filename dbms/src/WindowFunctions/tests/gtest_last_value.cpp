@@ -105,7 +105,6 @@ public:
 
             for (size_t i = 0; i < frame_end_range.size(); ++i)
             {
-                std::cout << "iiii: " << i << std::endl;
                 mock_frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, frame_end_range[i]);
                 executeFunctionAndAssert(
                     toVec<Int64>(res[i]),

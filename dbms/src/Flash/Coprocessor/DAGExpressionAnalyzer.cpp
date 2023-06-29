@@ -232,6 +232,40 @@ Window::ColumnType getColumnType(const ColumnPtr & col_ptr)
     throw Exception("Unexpected column type!");
 }
 
+void setAuxiliaryColumnInfoImpl(
+    WindowDescription & window_desc,
+    const String & aux_col_name,
+    const Block & tmp_block,
+    bool is_begin)
+{
+    if (!aux_col_name.empty())
+    {
+        // Prepare something
+        Int32 & range_auxiliary_column_index = is_begin ? window_desc.frame.begin_range_auxiliary_column_index : window_desc.frame.end_range_auxiliary_column_index;
+        Window::ColumnType & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
+        bool & is_casted_col_nullable = is_begin ? window_desc.is_casted_begin_col_nullable : window_desc.is_casted_end_col_nullable;
+
+        // Set auxiliary columns' indexes
+        size_t aux_col_idx = tmp_block.getPositionByName(aux_col_name);
+        range_auxiliary_column_index = aux_col_idx; // Set here
+
+        // Set auxiliary columns' types
+        const auto & col_and_name = tmp_block.getByName(aux_col_name);
+        auto data_type = col_and_name.type;
+        bool is_nullable = data_type->isNullable();
+        if (is_nullable)
+        {
+            if (const auto * const data_type_nullable = typeid_cast<const DataTypeNullable *>(data_type.get()))
+                aux_col_type = getColumnType(data_type_nullable->getNestedType()->createColumn()); // Set here
+            else
+                throw Exception("Invalid data type");
+            is_casted_col_nullable = true; // Set here
+        }
+        else
+            aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set here
+    }
+}
+
 // We need auxiliary columns' info when finding the start or end boundary of the frame
 void setAuxiliaryColumnInfo(
     ExpressionActionsPtr & actions,
@@ -248,21 +282,8 @@ void setAuxiliaryColumnInfo(
         return;
 
     const Block & tmp_block = actions->getSampleBlock();
-    if (!begin_aux_col_name.empty())
-    {
-        size_t begin_aux_col_idx = tmp_block.getPositionByName(begin_aux_col_name);
-        window_desc.frame.begin_range_auxiliary_column_index = begin_aux_col_idx; // Set auxiliary columns' indexes
-        const auto & col_and_name = tmp_block.getByName(begin_aux_col_name);
-        window_desc.begin_aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set auxiliary columns' types
-    }
-
-    if (!end_aux_col_name.empty())
-    {
-        size_t end_aux_col_idx = tmp_block.getPositionByName(end_aux_col_name);
-        window_desc.frame.end_range_auxiliary_column_index = end_aux_col_idx; // Set auxiliary columns' indexes
-        const auto & col_and_name = tmp_block.getByName(end_aux_col_name);
-        window_desc.end_aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set auxiliary columns' types
-    }
+    setAuxiliaryColumnInfoImpl(window_desc, begin_aux_col_name, tmp_block, true);
+    setAuxiliaryColumnInfoImpl(window_desc, end_aux_col_name, tmp_block, false);
 }
 
 void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)

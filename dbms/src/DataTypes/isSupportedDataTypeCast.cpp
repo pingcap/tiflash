@@ -41,7 +41,7 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
     {
         bool has_nullable = false;
         DataTypePtr from_not_null;
-        if (const DataTypeNullable * type_nullable = typeid_cast<const DataTypeNullable *>(from.get()))
+        if (const auto * type_nullable = typeid_cast<const DataTypeNullable *>(from.get()))
         {
             has_nullable = true;
             from_not_null = type_nullable->getNestedType();
@@ -52,7 +52,7 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
         }
 
         DataTypePtr to_not_null;
-        if (const DataTypeNullable * type_nullable = typeid_cast<const DataTypeNullable *>(to.get()))
+        if (const auto * type_nullable = typeid_cast<const DataTypeNullable *>(to.get()))
         {
             has_nullable = true;
             to_not_null = type_nullable->getNestedType();
@@ -96,10 +96,10 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
     if (from->isStringOrFixedString() && to->isStringOrFixedString())
     {
         size_t from_sz = std::numeric_limits<size_t>::max();
-        if (const DataTypeFixedString * type_fixed_str = typeid_cast<const DataTypeFixedString *>(from.get()))
+        if (const auto * type_fixed_str = typeid_cast<const DataTypeFixedString *>(from.get()))
             from_sz = type_fixed_str->getN();
         size_t to_sz = std::numeric_limits<size_t>::max();
-        if (const DataTypeFixedString * type_fixed_str = typeid_cast<const DataTypeFixedString *>(to.get()))
+        if (const auto * type_fixed_str = typeid_cast<const DataTypeFixedString *>(to.get()))
             to_sz = type_fixed_str->getN();
         return from_sz <= to_sz;
     }
