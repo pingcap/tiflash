@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/GRPCQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -28,16 +28,14 @@ class TestGRPCSendQueue : public testing::Test
 protected:
     TestGRPCSendQueue()
         : tag(nullptr)
-        , queue(
-              10,
-              [](const int &) { return 0; },
-              [this](KickSendTag * t) -> grpc_call_error {
-                  bool no_use;
-                  t->FinalizeResult(&tag, &no_use);
-                  return grpc_call_error::GRPC_CALL_OK;
-              })
+        , queue([this](GRPCKickTag * t) -> grpc_call_error {
+            tag = t;
+            return grpc_call_error::GRPC_CALL_OK;
+        },
+                10)
     {}
-    void * tag;
+    GRPCKickTag * tag;
+
     GRPCSendQueue<int> queue;
 
 public:
@@ -56,7 +54,7 @@ public:
 TEST_F(TestGRPCSendQueue, Sequential)
 try
 {
-    int p1, p2, p3;
+    GRPCKickTag p1(nullptr), p2(nullptr), p3(nullptr);
     int data;
     GTEST_ASSERT_EQ(queue.push(1), true);
     checkTagInQueue(nullptr);
@@ -65,18 +63,18 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 1);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 2);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, &p2), GRPCSendQueueRes::EMPTY);
+    GTEST_ASSERT_EQ(queue.pop(data, &p2), MPMCQueueResult::EMPTY);
     checkTagInQueue(&p2);
     checkTag(nullptr);
 
@@ -85,13 +83,13 @@ try
     checkTagInQueue(nullptr);
     checkTag(&p2);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 3);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::EMPTY);
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), MPMCQueueResult::EMPTY);
     checkTagInQueue(&p3);
     checkTag(nullptr);
 
@@ -106,7 +104,7 @@ try
     checkTag(nullptr);
 
     // `queue` is finished and empty.
-    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::FINISHED);
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), MPMCQueueResult::FINISHED);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 }
@@ -115,10 +113,10 @@ CATCH
 TEST_F(TestGRPCSendQueue, SequentialPopAfterFinish)
 try
 {
-    int p1;
+    GRPCKickTag p1(nullptr);
     int data;
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::EMPTY);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::EMPTY);
     checkTagInQueue(&p1);
     checkTag(nullptr);
 
@@ -130,7 +128,7 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 1);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
@@ -140,13 +138,13 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 2);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
     // `queue` is finished and empty.
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::FINISHED);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::FINISHED);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 }
@@ -155,7 +153,7 @@ CATCH
 TEST_F(TestGRPCSendQueue, SequentialPopAfterCancel)
 try
 {
-    int p1;
+    GRPCKickTag p1(nullptr);
     int data;
 
     GTEST_ASSERT_EQ(queue.push(1), true);
@@ -170,7 +168,7 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::OK);
     GTEST_ASSERT_EQ(data, 1);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
@@ -178,7 +176,7 @@ try
     // Cancel the queue
     GTEST_ASSERT_EQ(queue.cancelWith("cancel test"), true);
 
-    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::CANCELLED);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::CANCELLED);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 

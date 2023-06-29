@@ -34,7 +34,7 @@ public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
     using PushCallback = std::function<void(const T & element)>;
 
-    LooseBoundedMPMCQueue(
+    explicit LooseBoundedMPMCQueue(
         const CapacityLimits & capacity_limits_,
         ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; },
         PushCallback && push_callback_ = {})

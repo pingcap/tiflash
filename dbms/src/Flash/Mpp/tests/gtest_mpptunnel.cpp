@@ -23,6 +23,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -66,9 +67,12 @@ class MockFailedWriter : public PacketWriter
 };
 
 class MockAsyncCallData : public IAsyncCallData
+    , public GRPCKickTag
 {
 public:
-    MockAsyncCallData() = default;
+    MockAsyncCallData()
+        : GRPCKickTag(this)
+    {}
 
     void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
     {
@@ -80,13 +84,10 @@ public:
         return nullptr;
     }
 
-    std::optional<GRPCSendKickFunc> getGRPCSendKickFuncForTest() override
+    std::optional<GRPCKickFunc> getGRPCKickFuncForTest() override
     {
-        return [&](KickSendTag * tag) {
+        return [&](GRPCKickTag *) {
             {
-                void * t;
-                bool s;
-                tag->FinalizeResult(&t, &s);
                 std::unique_lock<std::mutex> lock(mu);
                 has_msg = true;
             }
@@ -99,21 +100,22 @@ public:
     {
         while (true)
         {
-            TrackedMppDataPacketPtr res;
-            switch (async_tunnel_sender->pop(res, this))
+            TrackedMppDataPacketPtr packet;
+            auto res = async_tunnel_sender->pop(packet, this);
+            switch (res)
             {
-            case GRPCSendQueueRes::OK:
+            case MPMCQueueResult::OK:
                 if (write_failed)
                 {
                     async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
                     return;
                 }
-                write_packet_vec.push_back(res->packet.data());
+                write_packet_vec.push_back(packet->packet.data());
                 break;
-            case GRPCSendQueueRes::FINISHED:
+            case MPMCQueueResult::FINISHED:
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::CANCELLED:
+            case MPMCQueueResult::CANCELLED:
                 assert(!async_tunnel_sender->getCancelReason().empty());
                 if (write_failed)
                 {
@@ -123,13 +125,17 @@ public:
                 write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::EMPTY:
+            case MPMCQueueResult::EMPTY:
+            {
                 std::unique_lock<std::mutex> lock(mu);
                 cv.wait(lock, [&] {
                     return has_msg;
                 });
                 has_msg = false;
                 break;
+            }
+            default:
+                __builtin_unreachable();
             }
         }
     }

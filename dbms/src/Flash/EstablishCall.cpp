@@ -17,7 +17,7 @@
 #include <Common/VariantOp.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/GRPCQueue.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
@@ -32,7 +32,8 @@ extern const char random_tunnel_init_rpc_failure_failpoint[];
 } // namespace FailPoints
 
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
-    : service(service)
+    : GRPCKickTag(this)
+    , service(service)
     , cq(cq)
     , notify_cq(notify_cq)
     , is_shutdown(is_shutdown)
@@ -254,28 +255,31 @@ void EstablishCallData::unexpectedWriteDone()
 
 void EstablishCallData::trySendOneMsg()
 {
-    TrackedMppDataPacketPtr res;
-    switch (async_tunnel_sender->pop(res, this))
+    TrackedMppDataPacketPtr packet;
+    auto res = async_tunnel_sender->pop(packet, this);
+    switch (res)
     {
-    case GRPCSendQueueRes::OK:
-        async_tunnel_sender->subDataSizeMetric(res->getPacket().ByteSizeLong());
+    case MPMCQueueResult::OK:
+        async_tunnel_sender->subDataSizeMetric(packet->getPacket().ByteSizeLong());
         /// Note: has to switch the memory tracker before `write`
         /// because after `write`, `async_tunnel_sender` can be destroyed at any time
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
-        res->switchMemTracker(nullptr);
-        write(res->packet);
+        packet->switchMemTracker(nullptr);
+        write(packet->packet);
         return;
-    case GRPCSendQueueRes::FINISHED:
+    case MPMCQueueResult::FINISHED:
         writeDone("", grpc::Status::OK);
         return;
-    case GRPCSendQueueRes::CANCELLED:
+    case MPMCQueueResult::CANCELLED:
         RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
-    case GRPCSendQueueRes::EMPTY:
+    case MPMCQueueResult::EMPTY:
         // No new message.
         return;
+    default:
+        RUNTIME_ASSERT(false, getLogger(), "Result {} is invalid", magic_enum::enum_name(res));
     }
 }
 

@@ -22,7 +22,7 @@
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/GRPCQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
@@ -224,19 +224,19 @@ public:
     AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
         , queue(
-              queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
               call_,
-              log_)
+              log_,
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCSendKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc && func, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(
+              std::move(func),
               queue_limits,
-              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); },
-              func)
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
     {}
 
     bool push(TrackedMppDataPacketPtr && data) override
@@ -269,7 +269,7 @@ public:
         return queue.getCancelReason();
     }
 
-    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
+    MPMCQueueResult pop(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
     {
         return queue.pop(data, new_tag);
     }
