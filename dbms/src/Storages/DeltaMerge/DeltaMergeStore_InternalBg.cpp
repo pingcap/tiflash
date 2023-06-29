@@ -344,6 +344,7 @@ bool DeltaMergeStore::updateGCSafePoint()
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(
             pd_client,
+            keyspace_id,
             /* ignore_cache= */ false,
             global_context.getSettingsRef().safe_point_update_interval_seconds);
         latest_gc_safe_point.store(safe_point, std::memory_order_release);

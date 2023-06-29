@@ -142,6 +142,15 @@ tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
     return response;
 }
 
+tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo()
+{
+    tipb::SelectResponse response = genExecutionSummaryResponse();
+    tipb::TiFlashExecutionInfo execution_info;
+    auto * execution_summaries = execution_info.mutable_execution_summaries();
+    execution_summaries->CopyFrom(response.execution_summaries());
+    return execution_info;
+}
+
 void ExecutorStatisticsCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,

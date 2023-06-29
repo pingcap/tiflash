@@ -25,8 +25,9 @@ extern const char random_receiver_async_msg_push_failure_failpoint[];
 
 namespace
 {
-void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
+void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode [[maybe_unused]])
 {
+#ifndef NDEBUG
     switch (mode)
     {
     case ReceiverMode::Local:
@@ -41,16 +42,16 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
     default:
         RUNTIME_ASSERT(false, "Illegal ReceiverMode");
     }
+#endif
 }
 } // namespace
 
 template <bool need_wait>
-std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t stream_id)
+MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
-    MPMCQueueResult res;
-    ReceivedMessagePtr recv_msg;
     if (fine_grained_channel_size > 0)
     {
+        MPMCQueueResult res;
         if constexpr (need_wait)
         {
             res = msg_channels_for_fine_grained_shuffle[stream_id]->pop(recv_msg);
@@ -59,32 +60,37 @@ std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop(size_t 
         {
             res = msg_channels_for_fine_grained_shuffle[stream_id]->tryPop(recv_msg);
         }
-        if (recv_msg != nullptr)
+        if (res == MPMCQueueResult::OK)
         {
+            assert(recv_msg != nullptr);
             if (recv_msg->getRemainingConsumers()->fetch_sub(1) == 1)
             {
+#ifndef NDEBUG
                 ReceivedMessagePtr original_msg;
-                auto pop_result [[maybe_unused]] = grpc_recv_queue->tryPop(original_msg);
+                auto pop_result = grpc_recv_queue->tryPop(original_msg);
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
                 /// so even use tryPop, the result must not be empty
-                assert(pop_result != MPMCQueueResult::EMPTY);
+                RUNTIME_CHECK_MSG(pop_result != MPMCQueueResult::EMPTY, "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
                 if likely (original_msg != nullptr)
                     RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
+#else
+                grpc_recv_queue->dequeue();
+#endif
             }
         }
+        return res;
     }
     else
     {
         if constexpr (need_wait)
         {
-            res = grpc_recv_queue->pop(recv_msg);
+            return grpc_recv_queue->pop(recv_msg);
         }
         else
         {
-            res = grpc_recv_queue->tryPop(recv_msg);
+            return grpc_recv_queue->tryPop(recv_msg);
         }
     }
-    return {res, recv_msg};
 }
 
 template <bool is_force>
@@ -143,8 +149,8 @@ ReceivedMessageQueue::ReceivedMessageQueue(
     grpc_recv_queue = std::make_shared<GRPCReceiveQueue<ReceivedMessagePtr>>(msg_channel, conn_wait_queue, log_);
 }
 
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<true>(size_t stream_id);
-template std::pair<MPMCQueueResult, ReceivedMessagePtr> ReceivedMessageQueue::pop<false>(size_t stream_id);
+template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
+template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template bool ReceivedMessageQueue::pushToMessageChannel<true>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 template bool ReceivedMessageQueue::pushToMessageChannel<false>(ReceivedMessagePtr & received_message, ReceiverMode mode);
 
