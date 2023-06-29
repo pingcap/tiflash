@@ -102,7 +102,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         task_queue->updateStatistics(task, inc_time_spent);
         total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (Impl::isTargetStatus(status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
     metrics.addExecuteTime(task, total_time_spent);
