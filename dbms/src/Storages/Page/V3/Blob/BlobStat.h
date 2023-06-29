@@ -135,7 +135,11 @@ public:
             return file_id >= FIRST_RAFT_FILE_ID;
         }
 
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#else
+    public:
+#endif
         constexpr static BlobFileId FIRST_RAFT_FILE_ID = 4611686018427387904ULL; // 2^62
 
 #ifndef DBMS_PUBLIC_GTEST

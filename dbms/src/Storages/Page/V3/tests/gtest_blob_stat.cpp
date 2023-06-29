@@ -80,11 +80,15 @@ try
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
+    BlobFileId file_id3 = BlobStats::BlobFileIdManager::FIRST_RAFT_FILE_ID;
+    BlobFileId file_id4 = BlobStats::BlobFileIdManager::FIRST_RAFT_FILE_ID + 1;
 
     {
         const auto & lock = stats.lock();
         stats.createStatNotChecking(file_id1, config.file_limit_size, lock);
         stats.createStatNotChecking(file_id2, config.file_limit_size, lock);
+        stats.createStatNotChecking(file_id3, config.file_limit_size, lock);
+        stats.createStatNotChecking(file_id4, config.file_limit_size, lock);
     }
 
     {
@@ -112,14 +116,31 @@ try
             .offset = 2048,
             .checksum = 0x4567,
         });
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id3,
+            .size = 512,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id4,
+            .size = 512,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
         stats.restore();
     }
 
     auto stats_copy = stats.getStats();
 
     ASSERT_EQ(stats_copy.size(), std::min(getTotalStatsNum(stats_copy), path_num));
-    ASSERT_EQ(getTotalStatsNum(stats_copy), 2);
+    ASSERT_EQ(getTotalStatsNum(stats_copy), 4);
     EXPECT_EQ(stats.blob_file_id_manager.next_normal_id, 13);
+    EXPECT_EQ(stats.blob_file_id_manager.next_raft_id, BlobStats::BlobFileIdManager::FIRST_RAFT_FILE_ID + 2);
 
     auto stat1 = stats.blobIdToStat(file_id1);
     EXPECT_EQ(stat1->sm_total_size, 2048 + 512);
@@ -127,9 +148,17 @@ try
     auto stat2 = stats.blobIdToStat(file_id2);
     EXPECT_EQ(stat2->sm_total_size, 2048 + 512);
     EXPECT_EQ(stat2->sm_valid_size, 512);
+    auto stat3 = stats.blobIdToStat(file_id3);
+    EXPECT_EQ(stat2->sm_total_size, 2048 + 512);
+    EXPECT_EQ(stat2->sm_valid_size, 512);
+    auto stat4 = stats.blobIdToStat(file_id4);
+    EXPECT_EQ(stat2->sm_total_size, 2048 + 512);
+    EXPECT_EQ(stat2->sm_valid_size, 512);
 
     EXPECT_ANY_THROW({ stats.createStat(file_id1, config.file_limit_size, stats.lock()); });
     EXPECT_ANY_THROW({ stats.createStat(file_id2, config.file_limit_size, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(file_id3, config.file_limit_size, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(file_id4, config.file_limit_size, stats.lock()); });
 }
 CATCH
 
@@ -180,6 +209,13 @@ TEST_F(BlobStoreStatsTest, testStat)
     std::tie(stat, blob_file_id) = stats.chooseStat(10, PageType::Normal, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
+
+    // PageType::RaftData should not use the same stat with PageType::Normal
+    BlobStats::BlobStatPtr raft_stat;
+    std::tie(raft_stat, blob_file_id) = stats.chooseStat(10, PageType::RaftData, stats.lock());
+    ASSERT_EQ(blob_file_id, BlobStats::BlobFileIdManager::FIRST_RAFT_FILE_ID);
+    ASSERT_FALSE(raft_stat);
+
 
     auto offset = stat->getPosFromStat(10, stat->lock());
     ASSERT_EQ(offset, 0);

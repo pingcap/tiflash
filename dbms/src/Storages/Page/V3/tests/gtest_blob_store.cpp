@@ -980,6 +980,62 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     ASSERT_EQ(*gc_stats.begin(), 1);
 }
 
+TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+    size_t buff_size = 1024;
+    size_t buff_nums = 10;
+    PageIdU64 page_id = 50;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
+
+    WriteBatch wb;
+    char c_buff[buff_size * buff_nums];
+    {
+        for (size_t i = 0; i < buff_nums; ++i)
+        {
+            for (size_t j = 0; j < buff_size; ++j)
+            {
+                c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+            }
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            wb.putPage(page_id, /* tag */ 0, buff, buff_size);
+        }
+    }
+
+    auto edit = blob_store.write(std::move(wb), nullptr, PageType::RaftData);
+
+    size_t idx = 0;
+    PageEntriesV3 entries_del;
+    for (const auto & record : edit.getRecords())
+    {
+        for (size_t index : remove_entries_idx)
+        {
+            if (idx == index)
+            {
+                entries_del.emplace_back(record.entry);
+                break;
+            }
+        }
+
+        idx++;
+    }
+
+    // After remove `entries_del`.
+    // Remain entries index [8, 9].
+    blob_store.remove(entries_del);
+
+    auto stat = blob_store.blob_stats.blobIdToStat(BlobStats::BlobFileIdManager::FIRST_RAFT_FILE_ID);
+    ASSERT_NE(stat, nullptr);
+    const auto & gc_stats = blob_store.getGCStats();
+    // No full gc for raft data
+    ASSERT_TRUE(gc_stats.empty());
+
+    ASSERT_EQ(stat->sm_valid_rate, 0.2);
+    ASSERT_EQ(stat->sm_total_size, buff_size * buff_nums);
+    ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
+}
+
 
 TEST_F(BlobStoreTest, GC)
 {
