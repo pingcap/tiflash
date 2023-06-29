@@ -53,6 +53,8 @@ public:
 
     virtual ~Task();
 
+    ExecTaskStatus getStatus() const { return task_status; }
+
     ExecTaskStatus execute();
 
     ExecTaskStatus executeIO();

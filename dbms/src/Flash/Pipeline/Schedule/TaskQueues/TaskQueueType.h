@@ -22,5 +22,6 @@ enum class TaskQueueType
     DEFAULT, // Determined internally by the task thread pool.
     FIFO, // fifo queue
     MLFQ, // multi-level feedback queue
+    IO_PRIORITY, // io priority queue
 };
 } // namespace DB
