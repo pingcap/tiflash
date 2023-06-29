@@ -143,8 +143,8 @@ struct WindowDescription
     // When the casted column is nullable, we need to check if there is null in
     // the casted column as range frame type forbids the occurrence of null value.
     // Tip: only used for range frame type
-    bool is_casted_begin_col_nullable = false;
-    bool is_casted_end_col_nullable = false;
+    bool is_aux_begin_col_nullable = false;
+    bool is_aux_end_col_nullable = false;
 
     Window::ColumnType begin_aux_col_type = Window::ColumnType::UnInitialized;
     Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;

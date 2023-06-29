@@ -243,7 +243,7 @@ void setAuxiliaryColumnInfoImpl(
         // Prepare something
         Int32 & range_auxiliary_column_index = is_begin ? window_desc.frame.begin_range_auxiliary_column_index : window_desc.frame.end_range_auxiliary_column_index;
         Window::ColumnType & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
-        bool & is_casted_col_nullable = is_begin ? window_desc.is_casted_begin_col_nullable : window_desc.is_casted_end_col_nullable;
+        bool & is_aux_col_nullable = is_begin ? window_desc.is_aux_begin_col_nullable : window_desc.is_aux_end_col_nullable;
 
         // Set auxiliary columns' indexes
         size_t aux_col_idx = tmp_block.getPositionByName(aux_col_name);
@@ -259,7 +259,7 @@ void setAuxiliaryColumnInfoImpl(
                 aux_col_type = getColumnType(data_type_nullable->getNestedType()->createColumn()); // Set here
             else
                 throw Exception("Invalid data type");
-            is_casted_col_nullable = true; // Set here
+            is_aux_col_nullable = true; // Set here
         }
         else
             aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set here

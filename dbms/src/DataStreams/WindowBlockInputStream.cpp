@@ -160,7 +160,7 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     }
 }
 
-ColumnPtr checkAndGetNestedColumn(const ColumnPtr & col)
+void checkColumn(const ColumnPtr & col)
 {
     const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
     const auto & null_map = nullable_col.getNullMapData();
@@ -169,8 +169,6 @@ ColumnPtr checkAndGetNestedColumn(const ColumnPtr & col)
         throw Exception{
             "Null value should not occur when frame type is range",
             ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
-
-    return nullable_col.getNestedColumnPtr();
 }
 } // namespace
 
@@ -652,8 +650,21 @@ RowNumber WindowTransformAction::stepToFrameForRangeImpl()
     else
         cur_row_aux_col_idx = window_description.frame.end_range_auxiliary_column_index;
 
-    const ColumnPtr & cur_row_order_column = inputAt(current_row)[cur_row_aux_col_idx];
-    typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_order_column, current_row.row);
+    bool is_aux_col_nullable;
+    if constexpr (is_begin)
+        is_aux_col_nullable = window_description.is_aux_begin_col_nullable;
+    else
+        is_aux_col_nullable = window_description.is_aux_end_col_nullable;
+
+    ColumnPtr cur_row_aux_column;
+    if (is_aux_col_nullable)
+    {
+        const auto & nullable_col = static_cast<const ColumnNullable &>(*(inputAt(current_row)[cur_row_aux_col_idx]));
+        cur_row_aux_column = nullable_col.getNestedColumnPtr();
+    }
+    else
+        cur_row_aux_column = inputAt(current_row)[cur_row_aux_col_idx];
+    typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_aux_column, current_row.row);
     return moveCursorAndFindFrameBoundary<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
 }
 
@@ -987,19 +998,12 @@ void WindowTransformAction::appendBlock(Block & current_block)
 
     window_block.input_columns = current_block.getColumns();
 
-    // When frame type is range and the aux col in nullable, we need to ensure that all row are not null
-    // and get the nested column. They are auxiliary columns and will not be used any more, so it's ok to strip the nullable column
-    if (window_description.is_casted_begin_col_nullable)
-    {
-        auto aux_col_idx = window_description.frame.begin_range_auxiliary_column_index;
-        window_block.input_columns[aux_col_idx] = checkAndGetNestedColumn(window_block.input_columns[aux_col_idx]);
-    }
+    // When frame type is range and the aux col in nullable, we need to ensure that all rows are not null.
+    if (window_description.is_aux_begin_col_nullable)
+        checkColumn(window_block.input_columns[window_description.frame.begin_range_auxiliary_column_index]);
 
-    if (window_description.is_casted_end_col_nullable)
-    {
-        auto aux_col_idx = window_description.frame.end_range_auxiliary_column_index;
-        window_block.input_columns[aux_col_idx] = checkAndGetNestedColumn(window_block.input_columns[aux_col_idx]);
-    }
+    if (window_description.is_aux_end_col_nullable)
+        checkColumn(window_block.input_columns[window_description.frame.end_range_auxiliary_column_index]);
 }
 
 void WindowTransformAction::tryCalculate()
