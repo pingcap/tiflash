@@ -16,8 +16,6 @@
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/OperatorHelper.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 namespace FailPoints

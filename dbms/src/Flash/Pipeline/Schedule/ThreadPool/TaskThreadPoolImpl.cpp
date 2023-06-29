@@ -41,14 +41,14 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
 {
     switch (type)
     {
-    // the default queue is fifo queue.
+    // the default queue is io priority queue.
     case TaskQueueType::DEFAULT:
+    case TaskQueueType::IO_PRIORITY:
+        return std::make_unique<IOPriorityQueue>();
     case TaskQueueType::FIFO:
         return std::make_unique<FIFOTaskQueue>();
     case TaskQueueType::MLFQ:
         return std::make_unique<IOMultiLevelFeedbackQueue>();
-    case TaskQueueType::IO_PRIORITY:
-        return std::make_unique<IOPriorityQueue>();
     default:
         throw Exception(fmt::format("Unsupported queue type: {}", magic_enum::enum_name(type)));
     }

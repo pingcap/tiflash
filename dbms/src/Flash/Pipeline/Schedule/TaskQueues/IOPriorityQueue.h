@@ -21,7 +21,11 @@
 
 namespace DB
 {
-/// 
+/// The queue only used by io thread pool.
+/// IOPriorityQueue pops IO_OUT tasks first, and then pops IO_IN tasks.
+/// Because the IO_OUT task usually writes the data in the memory to the external storage and releases the occupied memory,
+/// while the IO_IN task usually reads the data from the external storage into the memory and occupies the memory.
+/// Prioritizing the execution of IO_OUT tasks can effectively reduce the memory usage.
 class IOPriorityQueue : public TaskQueue
 {
 public:
