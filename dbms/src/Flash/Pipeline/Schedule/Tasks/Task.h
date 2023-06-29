@@ -25,19 +25,20 @@ namespace DB
  *           CANCELLED/ERROR/FINISHED
  *                      ▲
  *                      │
- *         ┌────────────────────────┐
- *         │     ┌──►RUNNING◄──┐    │
- * INIT───►│     │             │    │
- *         │     ▼             ▼    │
- *         │ WATITING◄────────►IO   │
- *         └────────────────────────┘
+ *         ┌───────────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐           │
+ * INIT───►│     │             │           │
+ *         │     ▼             ▼           │
+ *         │ WATITING◄────────►IO_IN/OUT   │
+ *         └───────────────────────────────┘
  */
 enum class ExecTaskStatus
 {
     INIT,
     WAITING,
     RUNNING,
-    IO,
+    IO_IN,
+    IO_OUT,
     FINISHED,
     ERROR,
     CANCELLED,
