@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-#ifdef ENABLE_QPL_COMPRESSION
+#ifdef USE_QPL
 
 #include <array>
 #include <atomic>
@@ -40,6 +40,7 @@ extern const int QPL_DECOMPRESS_DATA_FAILED;
 } // namespace ErrorCodes
 namespace QPL
 {
+//Init QPL instance and offload data compression/decompression to QPL instance
 class CodecDeflateQpl
 {
 public:
@@ -79,4 +80,4 @@ Int32 QPL_decompress(const char * source, int inputSize, char * dest, int maxOut
 } //namespace QPL
 } //namespace DB
 
-#endif /* ENABLE_QPL_COMPRESSION */
+#endif /* USE_QPL */

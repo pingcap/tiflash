@@ -23,7 +23,7 @@
 
 #include <memory>
 
-#ifdef ENABLE_QPL_COMPRESSION
+#ifdef USE_QPL
 #include "CodecDeflateQpl.h"
 #endif
 
@@ -114,7 +114,7 @@ size_t CompressionEncode(
 
         break;
     }
-#ifdef ENABLE_QPL_COMPRESSION
+#ifdef USE_QPL
     case CompressionMethod::QPL:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);

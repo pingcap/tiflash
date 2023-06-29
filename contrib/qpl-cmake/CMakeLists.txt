@@ -1,5 +1,5 @@
 ## The Intel® QPL provides high performance implementations of data processing functions for existing hardware accelerator, and/or software path in case if hardware accelerator is not available.
-if (NOT ENABLE_QPL)
+if (NOT USE_QPL)
     message(STATUS "Not using QPL")
     return()
  endif()
@@ -310,8 +310,7 @@ if (NOT ENABLE_QPL)
  
  target_compile_definitions(qpl
          PRIVATE -DQPL_LIB
-         PRIVATE -DQPL_BADARG_CHECK
-         PUBLIC -DENABLE_QPL_COMPRESSION)
+         PRIVATE -DQPL_BADARG_CHECK)
  
  target_link_libraries(qpl
          PRIVATE ${CMAKE_DL_LIBS})

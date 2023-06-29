@@ -14,21 +14,20 @@
 
 option (USE_INTERNAL_QPL_LIBRARY "Set to FALSE to use system qpl library instead of bundled" ${NOT_UNBUNDLED})
 
-if (USE_INTERNAL_QPL_LIBRARY AND NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/qpl/include/qpl/qpl.h")
-   message (WARNING "submodule contrib/qpl is missing.to fix try run: \n git submodule update --init --recursive")
-   set (USE_INTERNAL_QPL_LIBRARY 0)
-endif ()
-
-if (NOT USE_INTERNAL_QPL_LIBRARY)
+if (USE_INTERNAL_QPL_LIBRARY)
+    if (EXISTS "${TiFlash_SOURCE_DIR}/contrib/qpl/include/qpl/qpl.h")
+        set (QPL_INCLUDE_DIR ${TiFlash_SOURCE_DIR}/contrib/qpl/)
+        set (QPL_LIBRARY qpl)
+    else ()
+        message (FATAL_ERROR "Submodule contrib/qpl is missing. Try run: \n git submodule update --init --recursive \n to fix it or set -DUSE_INTERNAL_QPL_LIBRARY=OFF to use system qpl library.")
+    endif ()
+else ()
     find_library (QPL_LIBRARY qpl)
     find_path (QPL_INCLUDE_DIR NAMES qpl.h PATHS ${QPL_INCLUDE_PATHS})
-endif ()
-
-if (QPL_LIBRARY AND QPL_INCLUDE_DIR)
-else ()
-    set (USE_INTERNAL_QPL_LIBRARY 1)
-    set (QPL_INCLUDE_DIR ${TiFlash_SOURCE_DIR}/contrib/qpl/)
-    set (QPL_LIBRARY qpl)
+    if (QPL_LIBRARY AND QPL_INCLUDE_DIR)
+    else ()
+        message (FATAL_ERROR "System qpl library not found. Try to install system qpl library or set -DUSE_INTERNAL_QPL_LIBRARY=ON to use bundled qpl library.")
+    endif ()
 endif ()
 
 message (STATUS "Using QPL: ${QPL_INCLUDE_DIR} : ${QPL_LIBRARY}")
