@@ -1,0 +1,215 @@
+// Copyright 2023 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <Operators/Operator.h>
+#include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <memory>
+
+namespace DB
+{
+class ExecBuilderPool
+{
+public:
+    explicit ExecBuilderPool(size_t expect_size)
+    {
+        RUNTIME_CHECK(expect_size > 0);
+        pool.resize(expect_size);
+    }
+
+    void add(SourceOps && sources)
+    {
+        for (auto & source : sources)
+        {
+            pool[pre_index++].push_back(std::move(source));
+            if (pre_index == pool.size())
+                pre_index = 0;
+        }
+        sources.clear();
+    }
+
+    std::vector<PipelineExecBuilder> gen()
+    {
+        while (!pool.empty())
+        {
+            auto ret = std::move(pool.back());
+            pool.pop_back();
+            if (!ret.empty())
+                return ret;
+        }
+        return {};
+    }
+
+private:
+    std::vector<PipelineExecBuilder> pool;
+    size_t pre_index = 0;
+};
+
+class SetBlockSinkOp : public SinkOp
+{
+public:
+    SetBlockSinkOp(
+        PipelineExecutorStatus & exec_status_,
+        const String & req_id,
+        Block & res_)
+        : SinkOp(exec_status_, req_id)
+        , res(res_)
+    {
+    }
+
+    String getName() const override
+    {
+        return "SetBlockSinkOp";
+    }
+
+protected:
+    OperatorStatus writeImpl(Block && block) override
+    {
+        if unlikely (!block)
+            return OperatorStatus::FINISHED;
+
+        assert(!res);
+        res = std::move(block);
+        return OperatorStatus::NEED_INPUT;
+    }
+
+private:
+    Block & res;
+};
+
+class ConcatSourceOp : public SourceOp
+{
+public:
+    ConcatSourceOp(
+        PipelineExecutorStatus & exec_status_,
+        const String & req_id,
+        std::vector<PipelineExecBuilder> exec_builder_pool)
+        : SourceOp(exec_status_, req_id)
+    {
+        for (auto & exec_builder : exec_builder_pool)
+        {
+            exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_status_, req_id, &res));
+            exec_pool.push_back(exec_builder.build());
+        }
+    }
+
+    String getName() const override
+    {
+        return "ConcatSourceOp";
+    }
+
+    // When the storage layer data is empty, a NullSource will be filled, so override `getIOProfileInfo` is needed here.
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+
+protected:
+    void operatePrefixImpl() override
+    {
+        if (!popExec())
+            done = true;
+    }
+
+    void operateSuffixImpl() override
+    {
+        if (cur_exec)
+        {
+            cur_exec->executeSuffix();
+            cur_exec.reset();
+        }
+        exec_pool.clear();
+    }
+
+    OperatorStatus readImpl(Block & block) override
+    {
+        if unlikely (done)
+            return OperatorStatus::HAS_OUTPUT;
+        
+        if unlikely (res)
+        {
+            std::swap(block, res);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+
+        while (true)
+        {
+            assert(cur_exec);
+            auto status = cur_exec->execute();
+            switch (status)
+            {
+            case OperatorStatus::NEED_INPUT:
+                assert(res);
+                std::swap(block, res);
+                return OperatorStatus::HAS_OUTPUT;
+            case OperatorStatus::FINISHED:
+                cur_exec->executeSuffix();
+                cur_exec.reset();
+                if (!popExec())
+                {
+                    done = true;
+                    return OperatorStatus::HAS_OUTPUT;
+                }
+                break;
+            case OperatorStatus::CANCELLED:
+                done = true;
+                return OperatorStatus::CANCELLED;
+            default:
+                return status;
+            }
+        }
+    }
+
+    OperatorStatus executeIOImpl() override
+    {
+        if unlikely (done || res)
+            return OperatorStatus::HAS_OUTPUT;
+        
+        assert(cur_exec);
+        return cur_exec->executeIO();
+    }
+
+    OperatorStatus awaitImpl() override 
+    {
+        if unlikely (done || res)
+            return OperatorStatus::HAS_OUTPUT;
+
+        assert(cur_exec);
+        return cur_exec->await();
+    }
+
+private:
+    bool popExec()
+    {
+        assert(!cur_exec);
+        if (exec_pool.empty())
+        {
+            return false;
+        }
+        else
+        {
+            cur_exec = std::move(exec_pool.front());
+            exec_pool.pop_front();
+            cur_exec->executePrefix();
+            return true;
+        }
+    }
+
+private:
+    std::deque<PipelineExecPtr> exec_pool;
+    PipelineExecPtr cur_exec;
+
+    Block res;
+    bool done = false;
+};
+} // namespace DB
