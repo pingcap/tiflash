@@ -86,6 +86,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
@@ -968,6 +969,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
+    // Set whether to use safe point v2.
+    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
+
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
     EngineStoreServerWrap tiflash_instance_wrap{};
@@ -1240,6 +1244,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     // adjust the thread pool size according to settings and logical cores num
     adjustThreadPoolSize(settings, server_info.cpu_info.logical_cores);
+    initStorageMemoryTracker(settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity), settings.bytes_that_rss_larger_than_limit);
 
     /// PageStorage run mode has been determined above
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
