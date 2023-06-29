@@ -108,11 +108,6 @@ BlockIO InterpreterRenameQuery::execute()
 
         unique_tables_from.emplace(from);
 
-        if (!table_guards.count(from))
-            table_guards.emplace(from,
-                                 context.getDDLGuard(from.table_name,
-                                                     fmt::format("Table {}.{} is being renamed right now", from.database_name, from.table_name)));
-
         if (!table_guards.count(to))
             table_guards.emplace(to,
                                  context.getDDLGuard(to.table_name,
