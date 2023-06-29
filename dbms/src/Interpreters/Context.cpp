@@ -199,14 +199,12 @@ struct ContextShared
     bool shutdown_called = false;
 
     /// Do not allow simultaneous execution of DDL requests on the same table.
-    /// database -> table -> exception_message
+    /// table -> exception_message(because table_id is global unique)
     /// For the duration of the operation, an element is placed here, and an object is returned, which deletes the element in the destructor.
     /// In case the element already exists, an exception is thrown. See class DDLGuard below.
-    // TODO: now each table is global unique, so we can use only table name as key, without the database level.
-    using DDLGuards = std::unordered_map<String, DDLGuard::Map>;
-    DDLGuards ddl_guards;
+    DDLGuard::Map ddl_guard_map;
     /// If you capture mutex and ddl_guards_mutex, then you need to grab them strictly in this order.
-    mutable std::mutex ddl_guards_mutex;
+    mutable std::mutex ddl_guard_map_mutex;
 
     Stopwatch uptime_watch;
 
@@ -1000,10 +998,10 @@ DDLGuard::~DDLGuard()
     map.erase(it);
 }
 
-std::unique_ptr<DDLGuard> Context::getDDLGuard(const String & database, const String & table, const String & message) const
+std::unique_ptr<DDLGuard> Context::getDDLGuard(const String & table, const String & message) const
 {
-    std::unique_lock lock(shared->ddl_guards_mutex);
-    return std::make_unique<DDLGuard>(shared->ddl_guards[database], shared->ddl_guards_mutex, std::move(lock), table, message);
+    std::unique_lock lock(shared->ddl_guard_map_mutex);
+    return std::make_unique<DDLGuard>(shared->ddl_guard_map, shared->ddl_guard_map_mutex, std::move(lock), table, message);
 }
 
 
@@ -1015,7 +1013,7 @@ std::unique_ptr<DDLGuard> Context::getDDLGuardIfTableDoesntExist(const String & 
     if (shared->databases.end() != it && it->second->isTableExist(*this, table))
         return {};
 
-    return getDDLGuard(database, table, message);
+    return getDDLGuard(table, message);
 }
 
 
