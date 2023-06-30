@@ -790,7 +790,7 @@ grpc::Status FlashService::FetchDisaggPages(
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids, context->getSettingsRef().dt_fetch_pages_max_packet_size);
+        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids, context->getSettingsRef().dt_fetch_pages_packet_limit_size);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 

@@ -307,8 +307,8 @@ void RNWorkerFetchPages::doFetchPages(
 
             auto page_id = RNLocalPageCache::buildCacheId(oid);
             write_page_task->wb.putPage(page_id, 0, std::move(read_buffer), remote_page.data().size(), std::move(field_sizes));
-            auto write_batch_max_size = seg_task->meta.dm_context->db_context.getSettingsRef().dt_write_page_cache_max_size;
-            if (write_page_task->wb.getTotalDataSize() >= write_batch_max_size)
+            auto write_batch_limit_size = seg_task->meta.dm_context->db_context.getSettingsRef().dt_write_page_cache_limit_size;
+            if (write_page_task->wb.getTotalDataSize() >= write_batch_limit_size)
             {
                 write_page_results.push_back(schedule_task(std::move(write_page_task))); // write_page_task is moved and reset.
             }

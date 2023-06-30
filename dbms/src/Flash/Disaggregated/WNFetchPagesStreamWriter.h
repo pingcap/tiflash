@@ -47,7 +47,7 @@ public:
     static WNFetchPagesStreamWriterPtr build(
         const DM::Remote::SegmentPagesFetchTask & task,
         const PageIdU64s & read_page_ids,
-        UInt64 max_packet_size);
+        UInt64 packet_limit_size);
 
     void pipeTo(SyncPagePacketWriter * sync_writer);
 
@@ -57,12 +57,12 @@ private:
         DM::ColumnDefinesPtr column_defines_,
         std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
         PageIdU64s read_page_ids,
-        UInt64 max_packet_size_)
+        UInt64 packet_limit_size_)
         : seg_task(std::move(seg_task_))
         , column_defines(column_defines_)
         , result_field_types(std::move(result_field_types_))
         , read_page_ids(std::move(read_page_ids))
-        , max_packet_size(max_packet_size_)
+        , packet_limit_size(packet_limit_size_)
         , log(Logger::get())
     {}
 
@@ -77,7 +77,7 @@ private:
     DM::ColumnDefinesPtr column_defines;
     std::shared_ptr<std::vector<tipb::FieldType>> result_field_types;
     PageIdU64s read_page_ids;
-    UInt64 max_packet_size;
+    UInt64 packet_limit_size;
 
     LoggerPtr log;
 };
