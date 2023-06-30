@@ -34,11 +34,11 @@ public:
 };
 } // namespace
 
-class IOPriorityTestRunner : public ::testing::Test
+class TestIOPriorityTaskQueue : public ::testing::Test
 {
 };
 
-TEST_F(IOPriorityTestRunner, base)
+TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
     IOPriorityQueue queue;
@@ -80,7 +80,7 @@ try
 }
 CATCH
 
-TEST_F(IOPriorityTestRunner, priority)
+TEST_F(TestIOPriorityTaskQueue, priority)
 try
 {
     // in 0 : out 0
