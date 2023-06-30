@@ -446,10 +446,13 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     if (options.override_sequence)
         sequence = options.override_sequence.value();
 
+
+    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
+    // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
+    // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
+    // But if we just upload manifest without reading page data, we can skip this step.
+    if (!options.only_upload_manifest)
     {
-        // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
-        // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
-        // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
         PS::V3::universal::PageDirectoryFactory factory;
         auto temp_page_directory = factory.dangerouslyCreateFromEditWithoutWAL(fmt::format("{}_{}", storage_name, sequence), edit_from_mem);
         edit_from_mem = temp_page_directory->dumpSnapshotToEdit();
@@ -491,7 +494,8 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     // get the remote file ids that need to be compacted
     const auto checkpoint_dump_stats = writer->writeEditsAndApplyCheckpointInfo(
         edit_from_mem,
-        compact_opts);
+        compact_opts,
+        options.only_upload_manifest);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
     auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
