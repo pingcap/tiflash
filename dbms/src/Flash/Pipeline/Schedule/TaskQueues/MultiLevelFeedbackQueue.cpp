@@ -17,6 +17,8 @@
 #include <assert.h>
 #include <common/likely.h>
 
+#include <cmath>
+
 namespace DB
 {
 void UnitQueue::take(TaskPtr & task)
@@ -39,9 +41,9 @@ void UnitQueue::submit(TaskPtr && task)
     task_queue.push_back(std::move(task));
 }
 
-double UnitQueue::normalizedTime()
+double UnitQueue::normalizedTimeMs()
 {
-    return accu_consume_time / info.factor_for_normal;
+    return accu_consume_time_ms / info.factor_for_normal;
 }
 
 template <typename TimeGetter>
@@ -142,7 +144,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
     {
         // -1 means no candidates; else has candidate.
         int queue_idx = -1;
-        double target_accu_time = 0;
+        double target_accu_time_ms = 0;
         std::unique_lock lock(mu);
         while (true)
         {
@@ -153,10 +155,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 const auto & cur_queue = level_queues[i];
                 if (!cur_queue->empty())
                 {
-                    double local_target_time = cur_queue->normalizedTime();
-                    if (queue_idx < 0 || local_target_time < target_accu_time)
+                    double local_target_time_ms = cur_queue->normalizedTimeMs();
+                    if (queue_idx < 0 || local_target_time_ms < target_accu_time_ms)
                     {
-                        target_accu_time = local_target_time;
+                        target_accu_time_ms = local_target_time_ms;
                         queue_idx = i;
                     }
                 }
@@ -176,10 +178,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
+void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns)
 {
     assert(task);
-    level_queues[task->mlfq_level]->accu_consume_time += inc_value;
+    level_queues[task->mlfq_level]->accu_consume_time_ms += ceil(inc_ns / 1'000'000);
 }
 
 template <typename TimeGetter>

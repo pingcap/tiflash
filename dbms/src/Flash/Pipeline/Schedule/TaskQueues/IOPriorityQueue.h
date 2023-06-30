@@ -22,15 +22,15 @@
 namespace DB
 {
 /// The queue only used by io thread pool.
-/// IOPriorityQueue pops IO_OUT tasks first, and then pops IO_IN tasks.
+/// In IOPriorityQueue, the priority of io_out is higher than io_in, which means the ratio of the total execution time of io_out to io_in is `ratio_of_in_to_out`:1.
 /// Because the IO_OUT task usually writes the data in the memory to the external storage and releases the occupied memory,
 /// while the IO_IN task usually reads the data from the external storage into the memory and occupies the memory.
 /// Prioritizing the execution of IO_OUT tasks can effectively reduce the memory usage.
 class IOPriorityQueue : public TaskQueue
 {
 public:
-    // // The ratio of total execution time between io_in and io_out is 1:3.
-    static constexpr size_t ratio_of_in_to_out = 3;
+    // // The ratio of total execution time between io_in and io_out is 3:1.
+    static constexpr size_t ratio_of_out_to_in = 3;
 
     ~IOPriorityQueue() override;
 
@@ -40,7 +40,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, size_t inc_value) override;
+    void updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns) override;
 
     bool empty() const override;
 
@@ -55,9 +55,9 @@ private:
     std::atomic_bool is_finished = false;
 
     std::deque<TaskPtr> io_in_task_queue;
-    size_t total_io_in_time{0};
+    std::atomic_uint64_t total_io_in_time_ms{0};
 
     std::deque<TaskPtr> io_out_task_queue;
-    size_t total_io_out_time{0};
+    std::atomic_uint64_t total_io_out_time_ms{0};
 };
 } // namespace DB

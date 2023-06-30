@@ -29,7 +29,7 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
-        bool io_out_first = ratio_of_in_to_out * total_io_in_time >= total_io_out_time;
+        bool io_out_first = ratio_of_out_to_in * total_io_in_time_ms >= total_io_out_time_ms;
         auto & first_queue = io_out_first ? io_out_task_queue : io_in_task_queue;
         auto & next_queue = io_out_first ? io_in_task_queue : io_out_task_queue;
         if (!first_queue.empty())
@@ -50,16 +50,15 @@ bool IOPriorityQueue::take(TaskPtr & task)
     }
 }
 
-void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, size_t inc_value)
+void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns)
 {
-    std::lock_guard lock(mu);
     switch (exec_task_status)
     {
     case ExecTaskStatus::IO_IN:
-        total_io_in_time += inc_value;
+        total_io_in_time_ms += (inc_ns / 1'000'000);
         break;
     case ExecTaskStatus::IO_OUT:
-        total_io_out_time += inc_value;
+        total_io_out_time_ms += (inc_ns / 1'000'000);
         break;
     default:; // ignore not io status.
     }

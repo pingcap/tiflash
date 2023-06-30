@@ -36,7 +36,7 @@ public:
 
     // Update the execution metrics of the task taken from the queue.
     // Used to adjust the priority of tasks within a queue.
-    virtual void updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, size_t inc_value) = 0;
+    virtual void updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_ns) = 0;
 
     virtual bool empty() const = 0;
 

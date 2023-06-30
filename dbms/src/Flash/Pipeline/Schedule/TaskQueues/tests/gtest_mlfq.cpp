@@ -18,10 +18,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
-#include <thread>
-
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
-
 namespace DB::tests
 {
 namespace

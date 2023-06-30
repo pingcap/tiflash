@@ -36,6 +36,8 @@ public:
 
 class TestIOPriorityTaskQueue : public ::testing::Test
 {
+public:
+    static constexpr UInt64 time_unit_ns = 100'000'000; // 100ms
 };
 
 TEST_F(TestIOPriorityTaskQueue, base)
@@ -102,8 +104,8 @@ try
     // in 1 : out ratio_of_in_to_out
     {
         IOPriorityQueue queue;
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * IOPriorityQueue::ratio_of_in_to_out);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_in_to_out);
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
@@ -120,8 +122,8 @@ try
     // in 1 : out ratio_of_in_to_out+1
     {
         IOPriorityQueue queue;
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * (1 + IOPriorityQueue::ratio_of_in_to_out));
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_in_to_out));
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
@@ -138,8 +140,8 @@ try
     // in 1 : out ratio_of_in_to_out-1
     {
         IOPriorityQueue queue;
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * (IOPriorityQueue::ratio_of_in_to_out - 1));
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_in_to_out - 1));
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
