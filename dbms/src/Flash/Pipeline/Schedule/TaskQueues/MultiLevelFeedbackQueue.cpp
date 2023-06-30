@@ -17,8 +17,6 @@
 #include <assert.h>
 #include <common/likely.h>
 
-#include <cmath>
-
 namespace DB
 {
 void UnitQueue::take(TaskPtr & task)

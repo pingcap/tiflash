@@ -55,10 +55,10 @@ void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task
     switch (exec_task_status)
     {
     case ExecTaskStatus::IO_IN:
-        total_io_in_time_ms += (inc_ns / 1'000'000);
+        total_io_in_time_ms += ceil(inc_ns / 1'000'000);
         break;
     case ExecTaskStatus::IO_OUT:
-        total_io_out_time_ms += (inc_ns / 1'000'000);
+        total_io_out_time_ms += ceil(inc_ns / 1'000'000);
         break;
     default:; // ignore not io status.
     }
