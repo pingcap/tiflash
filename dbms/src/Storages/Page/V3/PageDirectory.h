@@ -99,6 +99,10 @@ public:
                 versioned_ref_counts->emplace_back(ver, ref_count);
             }
         }
+        else
+        {
+            versioned_ref_counts = nullptr;
+        }
     }
 
     void restoreFrom(const PageVersion & ver, Int64 ref_count)
