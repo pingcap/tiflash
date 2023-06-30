@@ -29,21 +29,39 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
-        if (!io_out_task_queue.empty())
+        bool io_out_first = ratio_of_in_to_out * total_io_in_time >= total_io_out_time;
+        auto & first_queue = io_out_first ? io_out_task_queue : io_in_task_queue;
+        auto & next_queue = io_out_first ? io_in_task_queue : io_out_task_queue;
+        if (!first_queue.empty())
         {
-            task = std::move(io_out_task_queue.front());
-            io_out_task_queue.pop_front();
+            task = std::move(first_queue.front());
+            first_queue.pop_front();
             return true;
         }
-        if (!io_in_task_queue.empty())
+        if (!next_queue.empty())
         {
-            task = std::move(io_in_task_queue.front());
-            io_in_task_queue.pop_front();
+            task = std::move(next_queue.front());
+            next_queue.pop_front();
             return true;
         }
         if (unlikely(is_finished))
             return false;
         cv.wait(lock);
+    }
+}
+
+void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, size_t inc_value)
+{
+    std::lock_guard lock(mu);
+    switch (exec_task_status)
+    {
+    case ExecTaskStatus::IO_IN:
+        total_io_in_time += inc_value;
+        break;
+    case ExecTaskStatus::IO_OUT:
+        total_io_out_time += inc_value;
+        break;
+    default:; // ignore not io status.
     }
 }
 

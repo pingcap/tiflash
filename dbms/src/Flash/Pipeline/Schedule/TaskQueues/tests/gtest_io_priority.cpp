@@ -18,8 +18,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
-#include <thread>
-
 namespace DB::tests
 {
 namespace
@@ -45,38 +43,115 @@ try
 {
     IOPriorityQueue queue;
 
+    auto thread_manager = newThreadManager();
     size_t task_num_per_status = 1000;
 
-    for (size_t i = 0; i < task_num_per_status; ++i)
-    {
-        queue.submit(std::make_unique<MockIOTask>(true));
-    }
-    for (size_t i = 0; i < task_num_per_status; ++i)
-    {
-        queue.submit(std::make_unique<MockIOTask>(false));
-    }
-    queue.finish();
+    // take valid task
+    thread_manager->schedule(false, "take", [&]() {
+        TaskPtr task;
+        size_t taken_take_num = 0;
+        while (queue.take(task))
+        {
+            ASSERT_TRUE(task);
+            ++taken_take_num;
+            FINALIZE_TASK(task);
+        }
+        ASSERT_EQ(taken_take_num, 2 * task_num_per_status);
+    });
+    // submit valid task
+    thread_manager->schedule(false, "submit", [&]() {
+        for (size_t i = 0; i < task_num_per_status; ++i)
+        {
+            queue.submit(std::make_unique<MockIOTask>(true));
+        }
+        for (size_t i = 0; i < task_num_per_status; ++i)
+        {
+            queue.submit(std::make_unique<MockIOTask>(false));
+        }
+        queue.finish();
+    });
+    // wait
+    thread_manager->wait();
 
+    // No tasks can be submitted after the queue is finished.
+    queue.submit(std::make_unique<MockIOTask>(false));
     TaskPtr task;
-    for (size_t i = 0; i < task_num_per_status; ++i)
+    ASSERT_FALSE(queue.take(task));
+}
+CATCH
+
+TEST_F(IOPriorityTestRunner, priority)
+try
+{
+    // in 0 : out 0
     {
-        ASSERT_TRUE(queue.take(task));
+        IOPriorityQueue queue;
+        queue.submit(std::make_unique<MockIOTask>(true));
+        queue.submit(std::make_unique<MockIOTask>(false));
+        TaskPtr task;
+        queue.take(task);
         ASSERT_TRUE(task);
         ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_OUT);
         FINALIZE_TASK(task);
-    }
-    for (size_t i = 0; i < task_num_per_status; ++i)
-    {
-        ASSERT_TRUE(queue.take(task));
+        queue.take(task);
         ASSERT_TRUE(task);
         ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
         FINALIZE_TASK(task);
     }
-    ASSERT_FALSE(queue.take(task));
 
-    // No tasks can be submitted after the queue is finished.
-    queue.submit(std::make_unique<MockIOTask>(true));
-    ASSERT_FALSE(queue.take(task));
+    // in 1 : out ratio_of_in_to_out
+    {
+        IOPriorityQueue queue;
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * IOPriorityQueue::ratio_of_in_to_out);
+        queue.submit(std::make_unique<MockIOTask>(true));
+        queue.submit(std::make_unique<MockIOTask>(false));
+        TaskPtr task;
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_OUT);
+        FINALIZE_TASK(task);
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
+        FINALIZE_TASK(task);
+    }
+
+    // in 1 : out ratio_of_in_to_out+1
+    {
+        IOPriorityQueue queue;
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * (1 + IOPriorityQueue::ratio_of_in_to_out));
+        queue.submit(std::make_unique<MockIOTask>(true));
+        queue.submit(std::make_unique<MockIOTask>(false));
+        TaskPtr task;
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
+        FINALIZE_TASK(task);
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_OUT);
+        FINALIZE_TASK(task);
+    }
+
+    // in 1 : out ratio_of_in_to_out-1
+    {
+        IOPriorityQueue queue;
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, 1000);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, 1000 * (IOPriorityQueue::ratio_of_in_to_out - 1));
+        queue.submit(std::make_unique<MockIOTask>(true));
+        queue.submit(std::make_unique<MockIOTask>(false));
+        TaskPtr task;
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_OUT);
+        FINALIZE_TASK(task);
+        queue.take(task);
+        ASSERT_TRUE(task);
+        ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
+        FINALIZE_TASK(task);
+    }
 }
 CATCH
 

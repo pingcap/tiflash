@@ -93,21 +93,22 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
 
-    ExecTaskStatus status;
+    ExecTaskStatus cur_status = task->getStatus();
     UInt64 total_time_spent = 0;
     while (true)
     {
-        status = Impl::exec(task);
+        auto after_status = Impl::exec(task);
         auto inc_time_spent = task->profile_info.elapsedFromPrev();
-        task_queue->updateStatistics(task, inc_time_spent);
+        task_queue->updateStatistics(task, cur_status, inc_time_spent);
+        cur_status = after_status;
         total_time_spent += inc_time_spent;
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(cur_status) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
     metrics.addExecuteTime(task, total_time_spent);
     metrics.decExecutingTask();
-    switch (status)
+    switch (cur_status)
     {
     case ExecTaskStatus::RUNNING:
         task->endTraceMemory();
@@ -128,7 +129,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
         task.reset();
         break;
     default:
-        UNEXPECTED_STATUS(task->log, status);
+        UNEXPECTED_STATUS(task->log, cur_status);
     }
 }
 

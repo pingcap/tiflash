@@ -29,6 +29,9 @@ namespace DB
 class IOPriorityQueue : public TaskQueue
 {
 public:
+    // // The ratio of total execution time between io_in and io_out is 1:3.
+    static constexpr size_t ratio_of_in_to_out = 3;
+
     ~IOPriorityQueue() override;
 
     void submit(TaskPtr && task) override;
@@ -37,7 +40,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr &, size_t) override {}
+    void updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, size_t inc_value) override;
 
     bool empty() const override;
 
@@ -50,7 +53,11 @@ private:
     mutable std::mutex mu;
     std::condition_variable cv;
     std::atomic_bool is_finished = false;
+
     std::deque<TaskPtr> io_in_task_queue;
+    size_t total_io_in_time{0};
+
     std::deque<TaskPtr> io_out_task_queue;
+    size_t total_io_out_time{0};
 };
 } // namespace DB
