@@ -883,7 +883,6 @@ template <typename Trait>
 typename BlobStore<Trait>::PageMap
 BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_limiter)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (entries.empty())
     {
         return {};
@@ -986,7 +985,6 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
 template <typename Trait>
 Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
@@ -1046,7 +1044,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
 template <typename Trait>
 BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
+    GET_METRIC(tiflash_storage_page_command_count, type_read_blob).Increment();
     assert(buffers != nullptr);
     BlobFilePtr blob_file = getBlobFile(blob_id);
     try
