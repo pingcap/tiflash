@@ -12,43 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char hang_in_execution[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
-} // namespace FailPoints
-
-void ExchangeSenderSinkOp::operatePrefix()
+void ExchangeSenderSinkOp::operatePrefixImpl()
 {
     writer->prepare(getHeader());
 }
 
-void ExchangeSenderSinkOp::operateSuffix()
+void ExchangeSenderSinkOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish write with {} rows", total_rows);
 }
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
-#ifndef NDEBUG
-    FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-    if (writer->dagContext().isRootMPPTask())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-    }
-    else
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-    }
-#endif
-
     if (!block)
     {
         writer->flush();
@@ -62,12 +41,12 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    return writer->isReadyForWrite() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
+    return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
-    return writer->isReadyForWrite() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
+    return writer->isWritable() ? OperatorStatus::NEED_INPUT : OperatorStatus::WAITING;
 }
 
 } // namespace DB

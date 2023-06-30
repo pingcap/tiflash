@@ -18,37 +18,40 @@ namespace DB
 {
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
 {
+    if unlikely (done)
+        return OperatorStatus::HAS_OUTPUT;
+
     auto await_status = awaitImpl();
     if (await_status == OperatorStatus::HAS_OUTPUT)
-    {
-        if (t_block.has_value())
-        {
-            std::swap(block, t_block.value());
-            t_block.reset();
-            action.transform(block);
-        }
-    }
+        std::swap(block, t_block);
     return await_status;
 }
 
 OperatorStatus UnorderedSourceOp::awaitImpl()
 {
-    if (t_block.has_value())
+    if unlikely (done)
         return OperatorStatus::HAS_OUTPUT;
+    if unlikely (t_block)
+        return OperatorStatus::HAS_OUTPUT;
+
     while (true)
     {
-        Block res;
-        if (!task_pool->tryPopBlock(res))
+        if (!task_pool->tryPopBlock(t_block))
             return OperatorStatus::WAITING;
-        if (res)
+        if (t_block)
         {
-            if (unlikely(res.rows() == 0))
+            if unlikely (t_block.rows() == 0)
+            {
+                t_block.clear();
                 continue;
-            t_block.emplace(std::move(res));
+            }
             return OperatorStatus::HAS_OUTPUT;
         }
         else
+        {
+            done = true;
             return OperatorStatus::HAS_OUTPUT;
+        }
     }
 }
 } // namespace DB

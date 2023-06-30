@@ -20,10 +20,6 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
 
-namespace Poco
-{
-class Logger;
-}
 namespace DB
 {
 class ReadBuffer;

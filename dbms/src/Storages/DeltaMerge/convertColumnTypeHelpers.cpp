@@ -358,7 +358,7 @@ void convertColumnByColumnDefine(const DataTypePtr & disk_type,
         // not null -> nullable, set null map to all not null
         auto & memory_nullable_col = typeid_cast<ColumnNullable &>(*memory_col);
         auto & nullmap_data = memory_nullable_col.getNullMapData();
-        nullmap_data.resize_fill(rows_offset + rows_limit, 0);
+        nullmap_data.resize_fill(rows_offset + rows_limit);
 
         disk_col_not_null = disk_col;
         memory_col_not_null = memory_nullable_col.getNestedColumn().getPtr();
@@ -461,9 +461,11 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
     auto [compatible, need_data_cast] = checkColumnTypeCompatibility(from_type, to_column_define.type);
     if (unlikely(!compatible))
     {
-        throw Exception("Reading mismatch data type pack. Cast from " + from_type->getName() + " to " + to_column_define.type->getName()
-                            + " is NOT supported!",
-                        ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "Reading mismatch data type pack. Cast from {} to {} is NOT supported, column_id={}",
+                        from_type->getName(),
+                        to_column_define.type->getName(),
+                        to_column_define.id);
     }
     if (unlikely(!need_data_cast))
     {

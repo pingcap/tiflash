@@ -41,7 +41,7 @@ extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
     return (num & (num - 1)) == 0;
 }
 
-using ResultType = UInt8;
+using ResultType = UInt64;
 
 class FunctionGrouping : public IFunctionBase
     , public IExecutableFunction
@@ -62,22 +62,34 @@ public:
             throw Exception("Grouping function decodes meta data fail");
 
         mode = static_cast<tipb::GroupingMode>(meta.mode());
-        size_t num = meta.grouping_marks_size();
+        size_t num_grouping_mark = meta.grouping_marks_size();
 
-        if (num <= 0)
+        if (num_grouping_mark <= 0)
             throw Exception("number of grouping_ids should be greater than 0");
 
         if (mode == tipb::GroupingMode::ModeBitAnd || mode == tipb::GroupingMode::ModeNumericCmp)
         {
-            assert(meta.grouping_marks_size() == 1);
-            if (mode == tipb::GroupingMode::ModeBitAnd)
-                assert(isPowerOf2(meta.grouping_marks()[0]));
-            meta_grouping_id = meta.grouping_marks()[0];
+            for (const auto & one_grouping_mark : meta.grouping_marks())
+            {
+                assert(one_grouping_mark.grouping_nums_size() == 1);
+                if (mode == tipb::GroupingMode::ModeBitAnd)
+                    assert(isPowerOf2(one_grouping_mark.grouping_nums()[0]));
+                // should store the meta_grouping_id.
+                meta_grouping_ids.emplace_back(one_grouping_mark.grouping_nums()[0]);
+            }
         }
         else
         {
-            for (size_t i = 0; i < num; ++i)
-                meta_grouping_marks.insert(meta.grouping_marks()[i]);
+            for (const auto & one_grouping_mark : meta.grouping_marks())
+            {
+                // for every dimension, construct a set.
+                std::set<UInt64> grouping_ids;
+                for (auto id : one_grouping_mark.grouping_nums())
+                {
+                    grouping_ids.insert(id);
+                }
+                meta_grouping_marks.emplace_back(grouping_ids);
+            }
         }
     }
 
@@ -128,7 +140,7 @@ private:
         // get result's data container
         auto col_vec_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.resize_fill(row_num, static_cast<ResultType>(0));
+        vec_res.resize_fill(row_num);
 
         for (size_t i = 0; i < row_num; ++i)
         {
@@ -146,18 +158,43 @@ private:
 
     ResultType groupingImplModeAndBit(UInt64 grouping_id) const
     {
-        return (grouping_id & meta_grouping_id) != 0;
+        UInt64 res = 0;
+        for (auto one_grouping_id : meta_grouping_ids)
+        {
+            res <<= 1;
+            if ((grouping_id & one_grouping_id) <= 0)
+                // col is not need, meaning be filled with null and grouped. = 1
+                res += 1;
+        }
+        return res;
     }
 
     ResultType groupingImplModeNumericCmp(UInt64 grouping_id) const
     {
-        return grouping_id > meta_grouping_id;
+        UInt64 res = 0;
+        for (auto one_grouping_id : meta_grouping_ids)
+        {
+            res <<= 1;
+            if (grouping_id <= one_grouping_id)
+                // col is not needed, meaning being filled null and grouped. = 1
+                res += 1;
+        }
+        return res;
     }
 
     ResultType groupingImplModeNumericSet(UInt64 grouping_id) const
     {
-        auto iter = meta_grouping_marks.find(grouping_id);
-        return iter == meta_grouping_marks.end();
+        UInt64 res = 0;
+        for (auto one_grouping_mark : meta_grouping_marks)
+        {
+            res <<= 1;
+            auto iter = one_grouping_mark.find(grouping_id);
+            if (iter == one_grouping_mark.end())
+                // In num-set mode, grouping marks stores those needed-col's grouping set (GIDs).
+                // When we can't find the grouping id in set, it means this col is not needed, being filled with null and grouped. = 1
+                res += 1;
+        }
+        return res;
     }
 
 private:
@@ -165,12 +202,14 @@ private:
     DataTypePtr return_type;
 
     tipb::GroupingMode mode;
-    UInt64 meta_grouping_id = 0;
+    // one more dimension for multi grouping function args like: grouping(x,y,z...)
+    std::vector<UInt64> meta_grouping_ids;
 
     // In grouping function, the number of rolled up columns usually very small,
     // so it's appropriate to use std::set as it is faster than unordered_set in
     // small amount of elements.
-    std::set<UInt64> meta_grouping_marks = {};
+    // one more dimension for multi grouping function args like: grouping(x,y,z...)
+    std::vector<std::set<UInt64>> meta_grouping_marks = {};
 };
 
 class FunctionBuilderGrouping : public IFunctionBuilder
@@ -191,6 +230,8 @@ public:
 
     String getName() const override { return name; }
     bool useDefaultImplementationForNulls() const override { return true; }
+    // at frontend, grouping function can receive maximum number of parameters as 64.
+    // at backend, grouping function has been rewritten as receive only gid with meta.
     size_t getNumberOfArguments() const override { return 1; }
     void setExpr(const tipb::Expr & expr_)
     {

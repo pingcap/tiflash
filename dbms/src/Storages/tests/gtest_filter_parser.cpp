@@ -103,6 +103,8 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         conditions,
         pushed_down_filters,
         table_info.columns,
+        std::vector<int>(), // don't care runtime filter
+        0,
         timezone_info);
     auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(

@@ -20,20 +20,32 @@ namespace DB
 class CollectProcInfoBackgroundTask
 {
 public:
-    CollectProcInfoBackgroundTask() = default;
+    CollectProcInfoBackgroundTask()
+    {
+        begin();
+    }
     ~CollectProcInfoBackgroundTask()
     {
         end();
     }
+
+private:
     void begin();
 
-    void end();
+    void end() noexcept;
+
+    void finish();
 
 private:
     void memCheckJob();
 
     std::mutex mu;
-    bool is_already_begin = false;
-    std::atomic<bool> end_syn{false}, end_fin{false};
+    std::condition_variable cv;
+    bool end_fin = false;
+    std::atomic_bool end_syn{false};
+
+    /// In unit test, multiple FlashGrpcServerHolder may be started, leading to the startup of multiple memCheckJob threads.
+    /// To ensure that only one memCheckJob thread is running, here we use a static variable.
+    static std::atomic_bool is_already_begin;
 };
 } // namespace DB

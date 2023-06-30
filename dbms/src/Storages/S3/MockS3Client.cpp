@@ -18,6 +18,7 @@
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
+#include <aws/core/NoResult.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/core/utils/stream/ResponseStream.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
@@ -101,6 +102,8 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
 
 Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & request) const
 {
+    if (put_object_status == S3Status::FAILED)
+        return Aws::S3::S3ErrorMapper::GetErrorForName("");
     std::lock_guard lock(mtx);
     auto itr = storage.find(request.GetBucket());
     if (itr == storage.end())
@@ -309,5 +312,18 @@ Model::DeleteBucketOutcome MockS3Client::DeleteBucket(const Model::DeleteBucketR
     return Model::DeleteBucketOutcome{};
 }
 
+Model::GetBucketLifecycleConfigurationOutcome MockS3Client::GetBucketLifecycleConfiguration(const Model::GetBucketLifecycleConfigurationRequest & request) const
+{
+    // just mock a stub
+    UNUSED(request);
+    return Model::GetBucketLifecycleConfigurationResult();
+}
+
+Model::PutBucketLifecycleConfigurationOutcome MockS3Client::PutBucketLifecycleConfiguration(const Model::PutBucketLifecycleConfigurationRequest & request) const
+{
+    // just mock a stub
+    UNUSED(request);
+    return Aws::NoResult();
+}
 
 } // namespace DB::S3::tests

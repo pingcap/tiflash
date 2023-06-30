@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #pragma once
+
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <fiu-control.h>
 #include <fiu-local.h>
@@ -37,12 +39,17 @@ namespace ErrorCodes
 extern const int FAIL_POINT_ERROR;
 };
 
+#ifndef NDEBUG
 /// Macros to set failpoints.
 // When `fail_point` is enabled, throw an exception
 #define FAIL_POINT_TRIGGER_EXCEPTION(fail_point) \
     fiu_do_on(fail_point, throw Exception("Fail point " #fail_point " is triggered.", ErrorCodes::FAIL_POINT_ERROR);)
 // When `fail_point` is enabled, wait till it is disabled
 #define FAIL_POINT_PAUSE(fail_point) fiu_do_on(fail_point, FailPointHelper::wait(fail_point);)
+#else
+#define FAIL_POINT_TRIGGER_EXCEPTION(fail_point) ;
+#define FAIL_POINT_PAUSE(fail_point) ;
+#endif
 
 class FailPointChannel;
 class FailPointHelper
@@ -65,6 +72,14 @@ public:
      * 3. Call enableRandomFailPoint method with parsed FailPointName and Rate
      */
     static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+
+    /*
+     * For Server RandomFailPoint test usage. When FIU_ENABLE is defined, this function does the following work:
+     * 1. Return if TiFlash config has empty flash.random_fail_points cfg
+     * 2. Parse flash.random_fail_points, which expect to has "FailPointA-RatioA,FailPointB-RatioB,..." format
+     * 3. Call disableFailPoint method with parsed FailPointName and ignore Rate.
+     */
+    static void disableRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
 

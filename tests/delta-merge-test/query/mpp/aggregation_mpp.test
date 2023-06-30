@@ -22,7 +22,7 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __put_region(5, 100, 200, default, test)
 => DBGInvoke __put_region(6, 200, 300, default, test)

@@ -26,6 +26,8 @@
 #include <Interpreters/Settings.h>
 #include <tipb/select.pb.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace
@@ -196,6 +198,15 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
+EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
+{
+    assert(!isFineGrainedMode());
+    if unlikely (exec_status.isCancelled())
+        return nullptr;
+    assert(!plan_nodes.empty());
+    return plan_nodes.back()->sinkComplete(exec_status);
+}
+
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;
@@ -242,6 +253,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             switch (executor.tp())
             {
             case tipb::ExecType::TypeTableScan:
+            case tipb::ExecType::TypePartitionTableScan:
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
@@ -250,21 +262,26 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, const Settings 
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
-                return true;
+            case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
-                // TODO support non fine grained shuffle.
-                is_supported = FineGrainedShuffle(&executor).enable();
-                return is_supported;
+                return true;
             case tipb::ExecType::TypeJoin:
                 // TODO support spill.
-                is_supported = (settings.max_bytes_before_external_join == 0);
+                // If enforce_enable_pipeline is true, it will return true, even if the join does not actually support spill.
+                is_supported = (settings.max_bytes_before_external_join == 0 || settings.enforce_enable_pipeline);
                 return is_supported;
             default:
+                if (settings.enforce_enable_pipeline)
+                    throw Exception(fmt::format(
+                        "Pipeline mode does not support {}, and an error is reported because the setting enforce_enable_pipeline is true.",
+                        magic_enum::enum_name(executor.tp())));
                 is_supported = false;
                 return false;
             }
         });
+    if (settings.enforce_enable_pipeline && !is_supported)
+        throw Exception("There is an unsupported operator in pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
     return is_supported;
 }
 } // namespace DB

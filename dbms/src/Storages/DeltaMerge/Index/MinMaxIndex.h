@@ -73,6 +73,8 @@ public:
 
     std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
 
+    std::pair<std::string, std::string> getIntMinMaxOrNull(size_t pack_index);
+
     std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index);
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);

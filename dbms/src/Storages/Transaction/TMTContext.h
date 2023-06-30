@@ -30,8 +30,7 @@ class PathPool;
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
-class SchemaSyncer;
-using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
+class TiDBSchemaSyncerManager;
 
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
@@ -80,6 +79,10 @@ public:
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
+    void debugSetKVStore(const KVStorePtr & new_kvstore)
+    {
+        kvstore = new_kvstore;
+    }
 
     const ManagedStorages & getStorages() const;
     ManagedStorages & getStorages();
@@ -101,7 +104,7 @@ public:
                         const pingcap::ClusterConfig & cluster_config_);
     ~TMTContext();
 
-    SchemaSyncerPtr getSchemaSyncer() const;
+    std::shared_ptr<TiDBSchemaSyncerManager> getSchemaSyncerManager() const;
 
     void updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config);
 
@@ -137,6 +140,7 @@ public:
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
+    void debugSetWaitIndexTimeout(UInt64 timeout);
     Int64 waitRegionReadyTimeout() const;
     uint64_t readIndexWorkerTick() const;
 
@@ -160,7 +164,7 @@ private:
     std::atomic<StoreStatus> store_status{StoreStatus::Idle};
 
     const std::unordered_set<std::string> ignore_databases;
-    SchemaSyncerPtr schema_syncer;
+    std::shared_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
     MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;

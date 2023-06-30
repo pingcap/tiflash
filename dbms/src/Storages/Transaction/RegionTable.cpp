@@ -46,7 +46,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     {
         // Load persisted info.
         it = tables.emplace(ks_tb_id, table_id).first;
-        LOG_INFO(log, "get new table {}", table_id);
+        LOG_INFO(log, "get new table {} of keyspace {}", table_id, keyspace_id);
     }
     return it->second;
 }
@@ -120,7 +120,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
 
@@ -140,7 +140,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
             if (try_persist)
             {
                 KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
-                tmt.getKVStore()->tryPersist(region->id());
+                tmt.getKVStore()->tryPersistRegion(region->id());
             }
         }
 
@@ -302,7 +302,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist)
 {
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
@@ -311,10 +311,10 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
         return {};
     }
 
-    return tryFlushRegion(region, try_persist);
+    return tryWriteBlockByRegionAndFlush(region, try_persist);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
 
@@ -349,7 +349,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = flushRegion(region, try_persist);
+        data_list_to_remove = writeBlockByRegionAndFlush(region, try_persist);
     }
     catch (const Exception & e)
     {
@@ -414,7 +414,7 @@ bool RegionTable::tryFlushRegions()
 {
     if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {
-        tryFlushRegion(region_to_flush, true);
+        tryWriteBlockByRegionAndFlush(region_to_flush, true);
         return true;
     }
 
@@ -426,7 +426,9 @@ void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, con
     std::lock_guard lock(mutex);
 
     if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
+    {
         callback(it->second.regions);
+    }
 }
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id) const
@@ -463,7 +465,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         RUNTIME_CHECK_MSG(
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
-            ", region_id={} keyspace_id={} table_id={}, old_keyspace_id={} old_table_id={}",
+            ", region_id={} keyspace={} table_id={}, old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
             region_id,
             keyspace_id,
@@ -519,7 +521,7 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
         *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
         *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
     }
-    LOG_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
+    LOG_TRACE(log, "region_id={}, table_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
     return (*leader_safe_ts > *self_safe_ts) && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 

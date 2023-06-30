@@ -51,7 +51,8 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
 
     key_gen = KeyGenerator::create(opts_);
     ts_gen = std::make_unique<TimestampGenerator>();
-
+    // max page id is only updated at restart, so we need recreate page v3 before recreate table
+    context->initializeGlobalStoragePoolIfNeed(context->getPathPool());
     Stopwatch sw;
     store = std::make_unique<DeltaMergeStore>(
         *context,
@@ -177,7 +178,7 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
     uint64_t read_ts = ts_gen->get();
-    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, "DTWorkload", false, opts->is_fast_scan, excepted_block_size);
+    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, std::vector<RuntimeFilterPtr>(), 0, "DTWorkload", false, opts->is_fast_scan, excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());
     for (auto & stream : streams)

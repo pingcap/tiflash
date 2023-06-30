@@ -16,7 +16,9 @@
 
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/RuntimeFilter.h>
 #include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -164,7 +166,7 @@ struct TiFlashJoin
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
 
-    /// return a name that is unique in header1 and header2 for right semi/anti joins that has_other_condition,
+    /// return a name that is unique in header1 and header2 for right semi/anti/outer joins that has_other_condition,
     /// return "" for everything else.
     String genFlagMappedEntryHelperName(const Block & header1, const Block & header2, bool has_other_condition) const;
 
@@ -197,6 +199,10 @@ struct TiFlashJoin
         const Block & left_input_header,
         const Block & right_input_header,
         const ExpressionActionsPtr & probe_prepare_join_actions) const;
+
+    std::vector<RuntimeFilterPtr> genRuntimeFilterList(const Context & context,
+                                                       const Block & input_header,
+                                                       const LoggerPtr & log);
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column

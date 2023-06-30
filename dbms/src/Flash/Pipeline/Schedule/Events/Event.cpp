@@ -40,8 +40,8 @@ extern const char random_pipeline_model_event_finish_failpoint[];
 
 void Event::addInput(const EventPtr & input)
 {
-    RUNTIME_CHECK(status == EventStatus::INIT);
-    RUNTIME_CHECK(input.get() != this);
+    assertStatus(EventStatus::INIT);
+    RUNTIME_ASSERT(input.get() != this, log, "Cannot create circular dependency");
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
     is_source = false;
@@ -49,39 +49,40 @@ void Event::addInput(const EventPtr & input)
 
 void Event::addOutput(const EventPtr & output)
 {
-    /// Output will also be added in the Finished state, as can be seen in the `insertEvent`.
-    RUNTIME_CHECK(status == EventStatus::INIT || status == EventStatus::FINISHED);
-    RUNTIME_CHECK(output.get() != this);
+    assertStatus(EventStatus::INIT);
+    RUNTIME_ASSERT(output.get() != this, log, "Cannot create circular dependency");
     outputs.push_back(output);
 }
 
-void Event::insertEvent(const EventPtr & insert_event) noexcept
+void Event::insertEvent(const EventPtr & insert_event)
 {
-    assert(insert_event);
-    assert(status == EventStatus::FINISHED);
-    /// eventA───────►eventB ===> eventA─────────────►eventB
-    ///                             │                    ▲
-    ///                             └────►insert_event───┘
-    for (const auto & output : outputs)
-    {
-        assert(output);
-        output->addInput(insert_event);
-    }
-    insert_event->addInput(shared_from_this());
-    RUNTIME_ASSERT(!insert_event->prepare());
+    assertStatus(EventStatus::FINISHED);
+    RUNTIME_ASSERT(insert_event, log, "The insert event cannot be nullptr");
+    /// eventA───────►eventB ===> eventA───►insert_event───►eventB
+    assert(insert_event->outputs.empty());
+    insert_event->outputs = std::move(outputs);
+    outputs = {insert_event};
+    assert(insert_event->unfinished_inputs == 0);
+    insert_event->unfinished_inputs = 1;
+    insert_event->is_source = false;
+    RUNTIME_ASSERT(!insert_event->prepare(), log, "The insert event cannot be source event");
 }
 
-void Event::onInputFinish() noexcept
+void Event::onInputFinish()
 {
-    auto cur_value = unfinished_inputs.fetch_sub(1);
-    assert(cur_value >= 1);
-    if (1 == cur_value)
+    auto cur_value = unfinished_inputs.fetch_sub(1) - 1;
+    RUNTIME_ASSERT(
+        cur_value >= 0,
+        log,
+        "unfinished_inputs cannot < 0, but actual value is {}",
+        cur_value);
+    if (0 == cur_value)
         schedule();
 }
 
 bool Event::prepare()
 {
-    RUNTIME_CHECK(status == EventStatus::INIT);
+    assertStatus(EventStatus::INIT);
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
@@ -99,30 +100,54 @@ bool Event::prepare()
     }
 }
 
-void Event::schedule() noexcept
+void Event::addTask(TaskPtr && task)
 {
-    assert(0 == unfinished_inputs);
+    assertStatus(EventStatus::SCHEDULED);
+    ++unfinished_tasks;
+    tasks.push_back(std::move(task));
+}
+
+void Event::schedule()
+{
+    RUNTIME_ASSERT(
+        0 == unfinished_inputs,
+        log,
+        "unfinished_inputs must be 0 in `schedule`, but actual value is {}",
+        unfinished_inputs);
     if (is_source)
     {
-        RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+        assertStatus(EventStatus::SCHEDULED);
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepareForSource`.
+        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
         exec_status.onEventSchedule();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    std::vector<TaskPtr> tasks;
     try
     {
-        tasks = scheduleImpl();
+        scheduleImpl();
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    schedule_duration = stopwatch.elapsed();
+    scheduleTasks();
+}
+
+void Event::scheduleTasks()
+{
+    assertStatus(EventStatus::SCHEDULED);
+    RUNTIME_ASSERT(
+        tasks.size() == static_cast<size_t>(unfinished_tasks),
+        log,
+        "{} does not equal to {}",
+        tasks.size(),
+        unfinished_tasks);
     if (!tasks.empty())
     {
-        scheduleTasks(tasks);
+        TaskScheduler::instance->submit(tasks);
+        tasks.clear();
     }
     else
     {
@@ -131,9 +156,27 @@ void Event::schedule() noexcept
     }
 }
 
-void Event::finish() noexcept
+void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
+{
+    assertStatus(EventStatus::SCHEDULED);
+    exec_status.update(task_profile_info);
+    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+    RUNTIME_ASSERT(
+        remaining_tasks >= 0,
+        log,
+        "remaining_tasks must >= 0, but actual value is {}",
+        remaining_tasks);
+#ifndef NDEBUG
+    LOG_TRACE(log, "one task finished, {} tasks remaining", remaining_tasks);
+#endif // !NDEBUG
+    if (0 == remaining_tasks)
+        finish();
+}
+
+void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
+    finish_duration = stopwatch.elapsed();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
     {
@@ -147,7 +190,7 @@ void Event::finish() noexcept
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
         {
-            assert(output);
+            RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
             output->onInputFinish();
             output.reset();
         }
@@ -162,35 +205,40 @@ void Event::finish() noexcept
     exec_status.onEventFinish();
 }
 
-void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
+UInt64 Event::getScheduleDuration() const
 {
-    assert(!tasks.empty());
-    assert(0 == unfinished_tasks);
-    unfinished_tasks = tasks.size();
-    assert(status != EventStatus::FINISHED);
-    // If query has already been cancelled, we can skip scheduling tasks.
-    // And then tasks will be destroyed and call `onTaskFinish`.
-    if (likely(!exec_status.isCancelled()))
-    {
-        LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-        TaskScheduler::instance->submit(tasks);
-    }
+    assertStatus(EventStatus::SCHEDULED);
+    return schedule_duration;
 }
 
-void Event::onTaskFinish() noexcept
+UInt64 Event::getFinishDuration() const
 {
-    assert(status != EventStatus::FINISHED);
-    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
-    assert(remaining_tasks >= 0);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
-    if (0 == remaining_tasks)
-        finish();
+    assertStatus(EventStatus::FINISHED);
+    return finish_duration;
 }
 
-void Event::switchStatus(EventStatus from, EventStatus to) noexcept
+void Event::switchStatus(EventStatus from, EventStatus to)
 {
-    RUNTIME_ASSERT(status.compare_exchange_strong(from, to));
+    RUNTIME_ASSERT(
+        status.compare_exchange_strong(from, to),
+        log,
+        "switch from {} to {} fail, because the current status is {}",
+        magic_enum::enum_name(from),
+        magic_enum::enum_name(to),
+        magic_enum::enum_name(status.load()));
+
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
+}
+
+void Event::assertStatus(EventStatus expect) const
+{
+    auto cur_status = status.load();
+    RUNTIME_ASSERT(
+        cur_status == expect,
+        log,
+        "actual status is {}, but expect status is {}",
+        magic_enum::enum_name(cur_status),
+        magic_enum::enum_name(expect));
 }
 
 #undef CATCH

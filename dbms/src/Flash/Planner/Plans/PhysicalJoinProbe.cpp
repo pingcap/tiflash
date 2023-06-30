@@ -20,7 +20,7 @@
 
 namespace DB
 {
-void PhysicalJoinProbe::buildPipelineExecGroup(
+void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
@@ -29,7 +29,7 @@ void PhysicalJoinProbe::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, prepare_actions, log);
 
     auto input_header = group_builder.getCurrentHeader();
-    join_ptr->initProbe(input_header, group_builder.concurrency);
+    join_ptr->initProbe(input_header, group_builder.concurrency());
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
     group_builder.transform([&](auto & builder) {
@@ -41,18 +41,5 @@ void PhysicalJoinProbe::buildPipelineExecGroup(
             max_block_size,
             input_header));
     });
-
-    /// add a project to remove all the useless column
-    ExpressionActionsPtr schema_project = std::make_shared<ExpressionActions>(group_builder.getCurrentHeader().getColumnsWithTypeAndName());
-    NamesWithAliases schema_project_cols;
-    for (auto & c : schema)
-    {
-        /// do not need to care about duplicated column names because
-        /// it is guaranteed by its children physical plan nodes
-        schema_project_cols.emplace_back(c.name, c.name);
-    }
-    assert(!schema_project_cols.empty());
-    schema_project->add(ExpressionAction::project(schema_project_cols));
-    executeExpression(exec_status, group_builder, schema_project, log);
 }
 } // namespace DB

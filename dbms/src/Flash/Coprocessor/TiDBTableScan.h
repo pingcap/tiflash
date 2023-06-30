@@ -70,6 +70,14 @@ public:
     {
         return table_scan;
     }
+    const std::vector<Int32> & getRuntimeFilterIDs() const
+    {
+        return runtime_filter_ids;
+    }
+    int getMaxWaitTimeMs() const
+    {
+        return max_wait_time_ms;
+    }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const
     {
@@ -98,6 +106,8 @@ private:
 
     bool keep_order;
     bool is_fast_scan;
+    std::vector<Int32> runtime_filter_ids;
+    int max_wait_time_ms;
 };
 
 } // namespace DB

@@ -77,8 +77,8 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTa
         return true;
     }
     const auto & id = schedule_entry.getMPPTaskId();
-    auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.query_id);
-    if (nullptr == query_task_set || !query_task_set->isInNormalState())
+    auto [query_task_set, aborted_reason] = task_manager.getQueryTaskSetWithoutLock(id.query_id);
+    if (nullptr == query_task_set || !aborted_reason.empty())
     {
         LOG_WARNING(log, "{} is scheduled with miss or abort.", id.toString());
         return true;
@@ -104,14 +104,14 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
 
     if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
     {
-        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id);
+        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id).first;
         if (query_task_set) /// release all waiting tasks
         {
             while (!query_task_set->waiting_tasks.empty())
             {
-                auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
-                if (task_it != query_task_set->task_map.end() && task_it->second != nullptr)
-                    task_it->second->scheduleThisTask(ScheduleState::FAILED);
+                auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
+                if (task != nullptr)
+                    task->scheduleThisTask(ScheduleState::FAILED);
                 query_task_set->waiting_tasks.pop();
                 GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
             }
@@ -149,7 +149,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
     while (!waiting_set.empty())
     {
         auto current_query_id = *waiting_set.begin();
-        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id);
+        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id).first;
         if (nullptr == query_task_set) /// silently solve this rare case
         {
             LOG_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id.toString());
@@ -165,9 +165,9 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
         {
-            auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
+            auto * task = query_task_set->findMPPTask(query_task_set->waiting_tasks.front());
             bool has_error = false;
-            if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second->getScheduleEntry(), true, has_error))
+            if (task != nullptr && !scheduleImp(current_query_id, query_task_set, task->getScheduleEntry(), true, has_error))
             {
                 if (has_error)
                 {
@@ -190,7 +190,7 @@ bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPQueryTas
 {
     auto needed_threads = schedule_entry.getNeededThreads();
     auto check_for_new_min_tso = query_id <= min_query_id && estimated_thread_usage + needed_threads <= thread_hard_limit;
-    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || query_id <= *active_set.rbegin()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
+    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || active_set.find(query_id) != active_set.end()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
         updateMinQueryId(query_id, false, isWaiting ? "from the waiting set" : "when directly schedule it");

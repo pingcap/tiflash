@@ -14,6 +14,8 @@
 
 #include <Interpreters/SettingsCommon.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 template <typename IntType>
@@ -109,6 +111,17 @@ template struct SettingInt<UInt64>;
 template struct SettingInt<Int64>;
 template struct SettingInt<bool>;
 
+TaskQueueType SettingTaskQueueType::getTaskQueueType(const String & s)
+{
+    auto value = magic_enum::enum_cast<TaskQueueType>(Poco::toUpper(s));
+    RUNTIME_CHECK_MSG(value, "Unknown task queue type: '{}'", s);
+    return *value;
+}
+
+String SettingTaskQueueType::toString() const
+{
+    return String(magic_enum::enum_name(value));
+}
 
 struct SettingMemoryLimit::ToStringVisitor
 {

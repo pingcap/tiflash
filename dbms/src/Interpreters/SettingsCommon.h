@@ -19,6 +19,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <IO/CompressedStream.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -832,6 +833,63 @@ public:
 
 private:
     CompressionMethod value;
+};
+
+struct SettingTaskQueueType
+{
+public:
+    bool changed = false;
+
+    SettingTaskQueueType(TaskQueueType x = TaskQueueType::FIFO)
+        : value(x)
+    {}
+
+    operator TaskQueueType() const { return value; }
+    SettingTaskQueueType & operator=(TaskQueueType x)
+    {
+        set(x);
+        return *this;
+    }
+
+    static TaskQueueType getTaskQueueType(const String & s);
+
+    String toString() const;
+
+    void set(TaskQueueType x)
+    {
+        value = x;
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        set(safeGet<const String &>(x));
+    }
+
+    void set(const String & x)
+    {
+        set(getTaskQueueType(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    TaskQueueType get() const
+    {
+        return value;
+    }
+
+private:
+    TaskQueueType value;
 };
 
 /// The setting for executing distributed subqueries inside IN or JOIN sections.

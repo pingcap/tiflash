@@ -74,9 +74,24 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for local aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
-    status = AggStatus::restore;
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
+    status = AggStatus::restore;
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
+}
+
+std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorStatus & exec_status)
+{
+    assert(status.load() == AggStatus::build);
+    aggregator->finishSpill();
+    LOG_INFO(log, "Begin restore data from disk for shared aggregation.");
+    auto input_streams = aggregator->restoreSpilledData();
+    RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
+    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
+    std::vector<SharedAggregateRestorerPtr> ret;
+    for (size_t i = 0; i < max_threads; ++i)
+        ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));
+    status = AggStatus::restore;
+    return ret;
 }
 
 void AggregateContext::initConvergentPrefix()
@@ -111,11 +126,18 @@ void AggregateContext::initConvergentPrefix()
         total_src_bytes / elapsed_seconds / 1048576.0);
 
     if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
+    {
         aggregator->executeOnBlock(
             this->getHeader(),
             *many_data[0],
             threads_data[0]->key_columns,
             threads_data[0]->aggregate_columns);
+        /// Since this won't consume a lot of memory,
+        /// even if it triggers marking need spill due to a low threshold setting,
+        /// it's still reasonable not to spill disk.
+        many_data[0]->need_spill = false;
+        RUNTIME_CHECK(!aggregator->hasSpilledData());
+    }
 }
 
 void AggregateContext::initConvergent()

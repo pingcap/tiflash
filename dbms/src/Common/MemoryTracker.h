@@ -58,8 +58,11 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     /// You could specify custom metric to track memory usage.
     CurrentMetrics::Metric metric = CurrentMetrics::MemoryTracking;
 
+    /// Report the amount of this MemoryTracker.
+    std::optional<CurrentMetrics::Metric> amount_metric;
+
     /// This description will be used as prefix into log messages (if isn't nullptr)
-    const char * description = nullptr;
+    std::atomic<const char *> description = nullptr;
 
     /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
     MemoryTracker() = default;
@@ -71,6 +74,8 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
         : limit(limit_)
         , is_global_root(is_global_root)
     {}
+
+    void reportAmount();
 
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
@@ -134,6 +139,8 @@ public:
     /// The memory consumption could be shown in realtime via CurrentMetrics counter
     void setMetric(CurrentMetrics::Metric metric_) { metric = metric_; }
 
+    void setAmountMetric(CurrentMetrics::Metric amount_metric_) { amount_metric = amount_metric_; }
+
     void setDescription(const char * description_) { description = description_; }
 
     /// Reset the accumulated data.
@@ -156,6 +163,16 @@ extern thread_local MemoryTracker * current_memory_tracker;
 
 extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
 extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
+
+// Initialize in `initStorageMemoryTracker`.
+// If a memory tracker of storage tasks is driven by query, it should inherit `sub_root_of_query_storage_task_mem_trackers`.
+// Since it is difficult to maintain synchronization with the root_of_query_mem_trackers, it is not inherited from root_of_query_mem_trackers.
+// sub_root_of_query_storage_task_mem_trackers
+//                  |-- fetch_pages_mem_tracker
+extern std::shared_ptr<MemoryTracker> sub_root_of_query_storage_task_mem_trackers;
+extern std::shared_ptr<MemoryTracker> fetch_pages_mem_tracker;
+
+void initStorageMemoryTracker(Int64 limit, Int64 larger_than_limit);
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

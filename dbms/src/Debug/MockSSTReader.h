@@ -114,19 +114,4 @@ private:
 };
 
 SSTReaderInterfaces make_mock_sst_reader_interface();
-
-class RegionMockTest final
-{
-public:
-    RegionMockTest(KVStore * kvstore_, RegionPtr region_);
-    ~RegionMockTest();
-
-    DISALLOW_COPY_AND_MOVE(RegionMockTest);
-
-private:
-    TiFlashRaftProxyHelper mock_proxy_helper{};
-    const TiFlashRaftProxyHelper * ori_proxy_helper{};
-    KVStore * kvstore;
-    RegionPtr region;
-};
 } // namespace DB

@@ -33,10 +33,10 @@ public:
     {}
 
     void write(TrackedMppDataPacketPtr && data, size_t index);
-    void nonBlockingWrite(TrackedMppDataPacketPtr && data, size_t index);
+    void forceWrite(TrackedMppDataPacketPtr && data, size_t index);
 
     void write(tipb::SelectResponse & response, size_t index);
-    void nonBlockingWrite(tipb::SelectResponse & response, size_t index);
+    void forceWrite(tipb::SelectResponse & response, size_t index);
 
     /// this is a execution summary writing.
     /// only return meaningful execution summary for the first tunnel,
@@ -67,7 +67,7 @@ public:
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
-    bool isReadyForWrite() const;
+    bool isWritable() const;
 
     bool isLocal(size_t index) const;
 

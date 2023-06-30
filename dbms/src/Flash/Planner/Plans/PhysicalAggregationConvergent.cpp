@@ -14,11 +14,12 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Operators/AggregateConvergentSourceOp.h>
+#include <Operators/AggregateRestoreSourceOp.h>
 #include <Operators/NullSourceOp.h>
 
 namespace DB
 {
-void PhysicalAggregationConvergent::buildPipelineExecGroup(
+void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
@@ -28,16 +29,32 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     // So only non fine grained shuffle is considered here.
     RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
-    aggregate_context->initConvergent();
-    group_builder.init(aggregate_context->getConvergentConcurrency());
-    size_t index = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-            exec_status,
-            aggregate_context,
-            index++,
-            log->identifier()));
-    });
+    if (aggregate_context->hasSpilledData())
+    {
+        auto restorers = aggregate_context->buildSharedRestorer(exec_status);
+        for (auto & restorer : restorers)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<AggregateRestoreSourceOp>(
+                    exec_status,
+                    aggregate_context,
+                    std::move(restorer),
+                    log->identifier()));
+        }
+    }
+    else
+    {
+        aggregate_context->initConvergent();
+        for (size_t index = 0; index < aggregate_context->getConvergentConcurrency(); ++index)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<AggregateConvergentSourceOp>(
+                    exec_status,
+                    aggregate_context,
+                    index,
+                    log->identifier()));
+        }
+    }
 
     executeExpression(exec_status, group_builder, expr_after_agg, log);
 }

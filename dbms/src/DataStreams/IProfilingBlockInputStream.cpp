@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 
-
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_during_query_run[];
+} // namespace FailPoints
 
 namespace ErrorCodes
 {
@@ -45,6 +49,8 @@ Block IProfilingBlockInputStream::read()
 
 Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);
+
     if (total_rows_approx)
     {
         progressImpl(Progress(0, 0, total_rows_approx));

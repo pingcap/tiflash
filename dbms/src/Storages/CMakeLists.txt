@@ -15,9 +15,3 @@
 add_subdirectory (System)
 add_subdirectory (Page)
 add_subdirectory (DeltaMerge)
-
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-    add_subdirectory (Transaction/tests EXCLUDE_FROM_ALL)
-endif ()
-

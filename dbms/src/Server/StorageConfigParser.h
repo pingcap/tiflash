@@ -20,14 +20,10 @@
 #include <tuple>
 #include <vector>
 
-namespace Poco
-{
-class Logger;
-namespace Util
+namespace Poco::Util
 {
 class LayeredConfiguration;
-}
-} // namespace Poco
+} // namespace Poco::Util
 
 namespace DB
 {
@@ -99,6 +95,9 @@ struct StorageS3Config
 
     // verbose logging for http requests. Use for debugging
     bool verbose = false;
+
+    bool enable_http_pool = false; // will be removed after testing
+    bool enable_poco_client = true; // will be removed after testing
 
     String endpoint;
     String bucket;

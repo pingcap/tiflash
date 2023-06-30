@@ -51,7 +51,7 @@ try
         }
     }
     Block block(columns);
-    ASSERT_TRUE(block.bytes() == block.estimateBytesForSpill());
+    ASSERT_TRUE(block.allocatedBytes() == block.estimateBytesForSpill());
 }
 CATCH
 
@@ -81,7 +81,7 @@ try
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
         Block block(columns);
-        ASSERT_NE(block.estimateBytesForSpill(), block.bytes());
+        ASSERT_NE(block.estimateBytesForSpill(), block.allocatedBytes());
         ASSERT_EQ(block.estimateBytesForSpill(), data_size[i] * 10);
     }
     /// case 2, agg function allocate memory in arena
@@ -102,7 +102,50 @@ try
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
         Block block(columns);
-        ASSERT_EQ(block.estimateBytesForSpill(), block.bytes());
+        ASSERT_EQ(block.estimateBytesForSpill(), block.allocatedBytes());
+    }
+}
+CATCH
+
+TEST_F(BlockTest, TestReserveInVstackBlocks)
+try
+{
+    size_t block_size = 50;
+    size_t rows_per_block = 100;
+    /// for both big and small string, the reserve in vstackBlock is expected to reserve enough memory before actually insert
+    /// for small string, the reserve in vstackBlock is expected to not reserve too much memory
+    String long_str(ColumnString::APPROX_STRING_SIZE * 5, 'a');
+    String short_str(std::max(1, ColumnString::APPROX_STRING_SIZE / 10), 'a');
+    std::vector<String> string_values{short_str, long_str};
+    std::vector<String> types{"String", "Nullable(String)"};
+    for (const auto & string_value : string_values)
+    {
+        for (const auto & type_string : types)
+        {
+            auto data_type = DataTypeFactory::instance().get(type_string);
+            Blocks blocks;
+            for (size_t i = 0; i < block_size; i++)
+            {
+                auto column = data_type->createColumn();
+                for (size_t j = 0; j < rows_per_block; j++)
+                {
+                    if (data_type->isNullable() && j % 2 == 0)
+                        column->insert(Field());
+                    else
+                        column->insert(string_value);
+                }
+                ColumnsWithTypeAndName columns;
+                columns.emplace_back(std::move(column), data_type);
+                blocks.emplace_back(std::move(columns));
+            }
+            auto result_block = vstackBlocks<true>(std::move(blocks));
+            ASSERT_EQ(result_block.columns(), 1);
+            if (string_value.size() < ColumnString::APPROX_STRING_SIZE)
+            {
+                size_t allocated_bytes = result_block.getByPosition(0).column->allocatedBytes();
+                ASSERT_TRUE(result_block.rows() * ColumnString::APPROX_STRING_SIZE > allocated_bytes);
+            }
+        }
     }
 }
 CATCH

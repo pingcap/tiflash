@@ -31,11 +31,14 @@ class DAGContext;
 
 class PipelineExecutorStatus;
 
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
 class PipelineBuilder;
+
+class Event;
+using EventPtr = std::shared_ptr<Event>;
 
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
@@ -62,18 +65,20 @@ public:
 
     virtual size_t childrenSize() const = 0;
 
-    virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
+    void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void buildPipelineExecGroup(
-        PipelineExecutorStatus & /*exec_status*/,
-        PipelineExecGroupBuilder & /*group_builder*/,
-        Context & /*context*/,
-        size_t /*concurrency*/);
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t concurrency);
 
     virtual void buildPipeline(
         PipelineBuilder & /*builder*/,
         Context & /*context*/,
         PipelineExecutorStatus & /*exec_status*/);
+
+    EventPtr sinkComplete(PipelineExecutorStatus & exec_status);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -94,7 +99,19 @@ public:
     String toSimpleString();
 
 protected:
+    /// Used for non-fine grained shuffle sink plan node to trigger two-stage execution logic.
+    virtual EventPtr doSinkComplete(PipelineExecutorStatus & /*exec_status*/);
+
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
+
+    virtual void buildPipelineExecGroupImpl(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        Context & /*context*/,
+        size_t /*concurrency*/)
+    {
+        throw Exception("Unsupported");
+    }
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

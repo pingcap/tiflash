@@ -579,6 +579,10 @@ try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("Count", count);
+    if (available)
+    {
+        json->set("Available", *available);
+    }
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
@@ -599,6 +603,10 @@ void TiFlashReplicaInfo::deserialize(Poco::JSON::Object::Ptr & json)
 try
 {
     count = json->getValue<UInt64>("Count");
+    if (json->has("Available"))
+    {
+        available = json->getValue<bool>("Available");
+    }
 }
 catch (const Poco::Exception & e)
 {
@@ -1070,6 +1078,11 @@ ColumnID TableInfo::getColumnID(const String & name) const
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
+KeyspaceID TableInfo::getKeyspaceID() const
+{
+    return keyspace_id;
+}
+
 String TableInfo::getColumnName(const ColumnID id) const
 {
     for (const auto & col : columns)
@@ -1140,6 +1153,8 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
     new_table->id = table_or_partition_id;
 
     new_table->name = name_mapper.mapPartitionName(*new_table);
+
+    new_table->replica_info = replica_info;
 
     return new_table;
 }

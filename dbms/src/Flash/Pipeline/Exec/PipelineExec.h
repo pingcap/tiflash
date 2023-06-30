@@ -29,11 +29,7 @@ public:
     PipelineExec(
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
-        SinkOpPtr && sink_op_)
-        : source_op(std::move(source_op_))
-        , transform_ops(std::move(transform_ops_))
-        , sink_op(std::move(sink_op_))
-    {}
+        SinkOpPtr && sink_op_);
 
     void executePrefix();
     void executeSuffix();
@@ -44,24 +40,41 @@ public:
 
     OperatorStatus await();
 
+    void finalizeProfileInfo(UInt64 extra_time);
+
 private:
-    OperatorStatus executeImpl();
+    inline OperatorStatus executeImpl();
 
-    OperatorStatus executeIOImpl();
+    inline OperatorStatus executeIOImpl();
 
-    OperatorStatus awaitImpl();
+    inline OperatorStatus awaitImpl();
 
-    OperatorStatus fetchBlock(
-        Block & block,
-        size_t & start_transform_op_index);
+    inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
+
+    ALWAYS_INLINE void fillAwaitable(Operator * op)
+    {
+        assert(!awaitable);
+        assert(op);
+        awaitable = op;
+    }
+
+    ALWAYS_INLINE void fillIOOp(Operator * op)
+    {
+        assert(!io_op);
+        assert(op);
+        io_op = op;
+    }
 
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
 
+    // hold the operator which is ready for executing await.
+    Operator * awaitable = nullptr;
+
     // hold the operator which is ready for executing io.
-    std::optional<Operator *> io_op;
+    Operator * io_op = nullptr;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.

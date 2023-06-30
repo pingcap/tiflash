@@ -17,6 +17,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/WindowBinder.h>
+#include <Debug/MockRuntimeFilter.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context_fwd.h>
@@ -55,7 +56,7 @@ enum class DAGRequestType
 };
 
 /** Responsible for Hand write tipb::DAGRequest
-  * Use this class to mock DAGRequest, then feed the DAGRequest into 
+  * Use this class to mock DAGRequest, then feed the DAGRequest into
   * the Interpreter for test purpose.
   * The mockTable() method must called first in order to generate the table schema.
   * After construct all necessary operators in DAGRequest, call build() to generate DAGRequest。
@@ -152,6 +153,10 @@ public:
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
     }
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, mock::MockRuntimeFilter & rf, uint64_t fine_grained_shuffle_stream_count = 0)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count).appendRuntimeFilter(rf);
+    }
 
 
     // aggregation
@@ -167,6 +172,9 @@ public:
 
     // expand
     DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
+
+    // runtime filter
+    DAGRequestBuilder & appendRuntimeFilter(mock::MockRuntimeFilter & rf);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }
@@ -211,10 +219,13 @@ public:
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint);
     void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
 
     void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+
+    void addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
     /// mock column exchange receiver
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
@@ -224,6 +235,9 @@ public:
         const String & db_name,
         const String & table_name,
         bool keep_order = false);
+
+    DAGRequestBuilder scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids);
+
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
@@ -277,6 +291,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
+#define in(expr1, ...) makeASTFunction("in", (expr1), __VA_ARGS__)
+
 
 // Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
@@ -295,5 +311,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Lag1(expr) makeASTFunction("Lag", (expr))
 #define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
 #define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
+#define FirstValue(expr) makeASTFunction("FirstValue", (expr))
+#define LastValue(expr) makeASTFunction("LastValue", (expr))
 } // namespace tests
 } // namespace DB

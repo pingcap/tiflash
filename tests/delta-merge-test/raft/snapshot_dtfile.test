@@ -15,20 +15,20 @@
 # Disable background schema sync to test schema sync triggled by applying snapshot
 => DBGInvoke __enable_schema_sync_service('false')
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
 => DBGInvoke __clean_up_region()
+=> DBGInvoke __refresh_schemas()
 
 #####
 ## Pre-handle region to dt files then apply
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 6, 'col_1 Int64', '')
 ┌─region_snapshot_pre_handle_file(default, test, 4, 3, 6)────────┐
 │ Generate 1 files for [region_id=4]                             │
 └────────────────────────────────────────────────────────────────┘
 => DBGInvoke __region_snapshot_apply_file(4)
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
@@ -47,7 +47,7 @@
 │ Generate 1 files for [region_id=4]                             │
 └────────────────────────────────────────────────────────────────┘
 => DBGInvoke __region_snapshot_apply_file(4)
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
@@ -67,18 +67,18 @@
 ┌─__region_snapshot_apply_file(4)──────┐
 │ success apply region 4 with dt files │
 └──────────────────────────────────────┘
-=> select * from default.test
-┌─col_1─┬─_tidb_rowid─┬─col_2─┬─col_3─┐
-│    -3 │           3 │       │     0 │
-│    -4 │           4 │       │     0 │
-│    -5 │           5 │       │     0 │
-│    -6 │           6 │ _6    │     0 │
-│    -7 │           7 │ _7    │     0 │
-│    -8 │           8 │ _8    │     0 │
-│    -9 │           9 │ _9    │     4 │
-│   -10 │          10 │ _10   │     5 │
-│   -11 │          11 │ _11   │     5 │
-└───────┴─────────────┴───────┴───────┘
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
+┌─col_1─┬─col_2─┬─col_3─┬─_tidb_rowid─┐
+│    -3 │       │     0 │           3 │
+│    -4 │       │     0 │           4 │
+│    -5 │       │     0 │           5 │
+│    -6 │ _6    │     0 │           6 │
+│    -7 │ _7    │     0 │           7 │
+│    -8 │ _8    │     0 │           8 │
+│    -9 │ _9    │     4 │           9 │
+│   -10 │ _10   │     5 │          10 │
+│   -11 │ _11   │     5 │          11 │
+└───────┴───────┴───────┴─────────────┘
 
 #####
 ## Recreate test table
@@ -102,18 +102,18 @@
 ┌─region_snapshot_apply_file(4)────────┐
 │ success apply region 4 with dt files │
 └──────────────────────────────────────┘
-=> select * from default.test
-┌─col_1─┬─_tidb_rowid─┬─col_2─┬─col_3─┬─col_4─┬─col_5─┐
-│    -3 │           3 │       │     0 │    \N │ \N    │
-│    -4 │           4 │       │     0 │    \N │ \N    │
-│    -5 │           5 │       │     0 │    \N │ \N    │
-│    -6 │           6 │ _6    │     0 │    \N │ \N    │
-│    -7 │           7 │ _7    │     0 │    \N │ \N    │
-│    -8 │           8 │ _8    │     0 │    \N │ \N    │
-│    -9 │           9 │ _9    │     4 │    \N │ \N    │
-│   -10 │          10 │ _10   │     5 │    \N │ \N    │
-│   -11 │          11 │ _11   │     5 │    \N │ \N    │
-└───────┴─────────────┴───────┴───────┴───────┴───────┘
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
+┌─col_1─┬─col_2─┬─col_3─┬─col_4─┬─col_5─┬─_tidb_rowid─┐
+│    -3 │       │     0 │    \N │ \N    │           3 │
+│    -4 │       │     0 │    \N │ \N    │           4 │
+│    -5 │       │     0 │    \N │ \N    │           5 │
+│    -6 │ _6    │     0 │    \N │ \N    │           6 │
+│    -7 │ _7    │     0 │    \N │ \N    │           7 │
+│    -8 │ _8    │     0 │    \N │ \N    │           8 │
+│    -9 │ _9    │     4 │    \N │ \N    │           9 │
+│   -10 │ _10   │     5 │    \N │ \N    │          10 │
+│   -11 │ _11   │     5 │    \N │ \N    │          11 │
+└───────┴───────┴───────┴───────┴───────┴─────────────┘
 
 #####
 ## Recreate test table
@@ -136,18 +136,18 @@
 ┌─region_snapshot_apply_file(4)────────┐
 │ success apply region 4 with dt files │
 └──────────────────────────────────────┘
-=> select * from default.test
-┌─col_1─┬─_tidb_rowid─┬─col_3─┐
-│    -3 │           3 │     0 │
-│    -4 │           4 │     0 │
-│    -5 │           5 │     0 │
-│    -6 │           6 │     0 │
-│    -7 │           7 │     0 │
-│    -8 │           8 │     0 │
-│    -9 │           9 │     4 │
-│   -10 │          10 │     5 │
-│   -11 │          11 │     5 │
-└───────┴─────────────┴───────┘
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
+┌─col_1─┬─col_3─┬─_tidb_rowid─┐
+│    -3 │     0 │           3 │
+│    -4 │     0 │           4 │
+│    -5 │     0 │           5 │
+│    -6 │     0 │           6 │
+│    -7 │     0 │           7 │
+│    -8 │     0 │           8 │
+│    -9 │     4 │           9 │
+│   -10 │     5 │          10 │
+│   -11 │     5 │          11 │
+└───────┴───────┴─────────────┘
 
 #####
 ## Test that BR/lightning may only ingest sst files of write cf into tikv without default cf
@@ -160,12 +160,12 @@
 => DBGInvoke __region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64', '', 1, 'write')
 => DBGInvoke __region_snapshot_apply_file(4)
 # There should be no committed rows ingested
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 
 # Apply a snapshot with write & default cfs
 => DBGInvoke __region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64', '', 1, 'write,default')
 => DBGInvoke __region_snapshot_apply_file(4)
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
@@ -189,7 +189,8 @@
 => DBGInvoke __region_snapshot_pre_handle_file_pks(default, test, 4, 'col_1 Int64', '', 3,4,5, 5,5,5, 5,6,7, 8,9)
 => DBGInvoke __region_snapshot_apply_file(4)
 # In DeltaTree, we store data by rowkey asc, tso asc
-=> selraw *, _INTERNAL_VERSION from default.test
+
+=> DBGInvoke query_mapped('selraw *, _INTERNAL_VERSION from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
 │    -3 │           3 │            100111 │
 │    -4 │           4 │            100110 │
@@ -204,7 +205,7 @@
 │    -9 │           9 │            100101 │
 └───────┴─────────────┴───────────────────┘
 # Filtered by MVCC
-=> select *, _INTERNAL_VERSION from default.test
+=> DBGInvoke query_mapped('select *, _INTERNAL_VERSION from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
 │    -3 │           3 │            100111 │
 │    -4 │           4 │            100110 │
@@ -216,5 +217,5 @@
 └───────┴─────────────┴───────────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 => DBGInvoke __enable_schema_sync_service('true')

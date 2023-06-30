@@ -16,7 +16,9 @@
 
 #include <Common/Logger.h>
 #include <Flash/Executor/ExecutionResult.h>
+#include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 
 #include <atomic>
 #include <exception>
@@ -37,19 +39,19 @@ public:
         : log(Logger::get(req_id))
     {}
 
-    ExecutionResult toExecutionResult() noexcept;
+    ExecutionResult toExecutionResult();
 
-    std::exception_ptr getExceptionPtr() noexcept;
-    String getExceptionMsg() noexcept;
+    std::exception_ptr getExceptionPtr();
+    String getExceptionMsg();
 
-    void onEventSchedule() noexcept;
+    void onEventSchedule();
 
-    void onEventFinish() noexcept;
+    void onEventFinish();
 
-    void onErrorOccurred(const String & err_msg) noexcept;
-    void onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept;
+    void onErrorOccurred(const String & err_msg);
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_);
 
-    void wait() noexcept;
+    void wait();
 
     template <typename Duration>
     void waitFor(const Duration & timeout_duration)
@@ -57,6 +59,7 @@ public:
         bool is_timeout = false;
         {
             std::unique_lock lock(mu);
+            RUNTIME_ASSERT(isWaitMode());
             is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_event_count; });
         }
         if (is_timeout)
@@ -68,17 +71,82 @@ public:
         LOG_DEBUG(log, "query finished and wait done");
     }
 
-    void cancel() noexcept;
+    void consume(ResultHandler & result_handler);
 
-    ALWAYS_INLINE bool isCancelled() noexcept
+    template <typename Duration>
+    void consumeFor(ResultHandler & result_handler, const Duration & timeout_duration)
+    {
+        RUNTIME_ASSERT(result_handler);
+        auto consumed_result_queue = getConsumedResultQueue();
+        bool is_timeout = false;
+        try
+        {
+            Block ret;
+            while (true)
+            {
+                auto res = consumed_result_queue->popTimeout(ret, timeout_duration);
+                if (res == MPMCQueueResult::TIMEOUT)
+                {
+                    is_timeout = true;
+                    break;
+                }
+                else if (res == MPMCQueueResult::OK)
+                {
+                    result_handler(ret);
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        catch (...)
+        {
+            // If result_handler throws an error, here should notify the query to terminate, and wait for the end of the query.
+            onErrorOccurred(std::current_exception());
+        }
+        if (is_timeout)
+        {
+            LOG_WARNING(log, "wait timeout");
+            onErrorOccurred(timeout_err_msg);
+            throw Exception(timeout_err_msg);
+        }
+        else
+        {
+            // In order to ensure that `onEventFinish` has finished calling at this point
+            // and avoid referencing the already destructed `mu` in `onEventFinish`.
+            std::unique_lock lock(mu);
+            cv.wait(lock, [&] { return 0 == active_event_count; });
+        }
+        LOG_DEBUG(log, "query finished and consume done");
+    }
+
+    void cancel();
+
+    ALWAYS_INLINE bool isCancelled()
     {
         return is_cancelled.load(std::memory_order_acquire);
     }
 
-    ResultQueuePtr registerResultQueue(size_t queue_size) noexcept;
+    ResultQueuePtr toConsumeMode(size_t queue_size);
+
+    void update(const TaskProfileInfo & task_profile_info)
+    {
+        query_profile_info.merge(task_profile_info);
+    }
+
+    const QueryProfileInfo & getQueryProfileInfo() const
+    {
+        return query_profile_info;
+    }
 
 private:
-    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
+
+    // Need to be called under lock.
+    bool isWaitMode();
+
+    ResultQueuePtr getConsumedResultQueue();
 
 private:
     LoggerPtr log;
@@ -93,8 +161,8 @@ private:
     bool is_finished{false};
 
     // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
-    // `registerResultQueue` is called before event scheduled, so is safe to use result_queue without lock.
-    // If `registerResultQueue` is called, `result_queue` must be safely visible in `onEventFinish`.
     std::optional<ResultQueuePtr> result_queue;
+
+    QueryProfileInfo query_profile_info;
 };
 } // namespace DB

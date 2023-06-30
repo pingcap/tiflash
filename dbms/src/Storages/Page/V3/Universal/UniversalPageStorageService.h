@@ -51,11 +51,18 @@ public:
 
     bool uploadCheckpoint();
 
+    // Set a flag for sync all data to remote store at next checkpoint
+    void setSyncAllData();
+
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
     void shutdown();
 
-    bool uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store);
+    bool uploadCheckpointImpl(
+        const metapb::Store & store_info,
+        const S3::S3LockClientPtr & s3lock_client,
+        const DM::Remote::IDataStorePtr & remote_store,
+        bool force_sync_data);
 
     static UniversalPageStorageServicePtr
     createForTest(
@@ -64,8 +71,16 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     explicit UniversalPageStorageService(Context & global_context_);
+    // If the TiFlash process restart unexpectedly, some local checkpoint files can be left,
+    // remove these files when the process restarting.
+    void removeAllLocalCheckpointFiles();
+    Poco::Path getCheckpointLocalDir(UInt64 seq) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -73,6 +88,10 @@ private:
 public:
 #endif
     std::atomic_bool is_checkpoint_uploading{false};
+
+    // Once this flag is set, all data will be synced to remote store at next time
+    // `uploadCheckpoint` is called.
+    std::atomic_bool sync_all_at_next_upload{false};
 
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
@@ -86,5 +105,7 @@ public:
     // other background tasks unexpectly.
     std::unique_ptr<BackgroundProcessingPool> checkpoint_pool;
     BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
+
+    inline static const String checkpoint_dirname_prefix = "checkpoint_upload_";
 };
 } // namespace DB

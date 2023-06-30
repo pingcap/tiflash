@@ -67,11 +67,21 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 {#REGEXP}.*Fail point FailPoints::exception_before_mpp_register_non_root_mpp_task is triggered.*
 => DBGInvoke __disable_fail_point(exception_before_mpp_register_non_root_mpp_task)
 
+=> DBGInvoke __enable_fail_point(exception_before_mpp_make_non_root_mpp_task_active)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; select count(value), id from t group by id;
+{#REGEXP}.*Fail point FailPoints::exception_before_mpp_make_non_root_mpp_task_active is triggered.*
+=> DBGInvoke __disable_fail_point(exception_before_mpp_make_non_root_mpp_task_active)
+
 ## exception before mpp register root mpp task
 => DBGInvoke __enable_fail_point(exception_before_mpp_register_root_mpp_task)
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; select count(value), id from t group by id;
 {#REGEXP}.*Fail point FailPoints::exception_before_mpp_register_root_mpp_task is triggered.*
 => DBGInvoke __disable_fail_point(exception_before_mpp_register_root_mpp_task)
+
+=> DBGInvoke __enable_fail_point(exception_before_mpp_make_root_mpp_task_active)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; select count(value), id from t group by id;
+{#REGEXP}.*Fail point FailPoints::exception_before_mpp_make_root_mpp_task_active is triggered.*
+=> DBGInvoke __disable_fail_point(exception_before_mpp_make_root_mpp_task_active)
 
 ## exception before mpp register tunnel for non root mpp task
 => DBGInvoke __enable_fail_point(exception_before_mpp_register_tunnel_for_non_root_mpp_task)
@@ -115,6 +125,12 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 {#REGEXP}.*Fail point FailPoints::exception_during_mpp_root_task_run is triggered.*
 => DBGInvoke __disable_fail_point(exception_during_mpp_root_task_run)
 
+## exception during query run
+=> DBGInvoke __enable_fail_point(exception_during_query_run)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; select count(value), id from t group by id;
+{#REGEXP}.*Fail point FailPoints::exception_during_query_run is triggered.*
+=> DBGInvoke __disable_fail_point(exception_during_query_run)
+
 ## exception during mpp hash build
 ## desc format='brief' select t1.id from test.t t1 join test.t t2 on t1.id = t2.id and t1.id <2 join (select id from test.t group by id) t3 on t2.id=t3.id;
 ## +-----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------+
@@ -148,5 +164,5 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 => DBGInvoke __disable_fail_point(exception_mpp_hash_build)
 
 # Clean up.
-# mysql> drop table if exists test.t
-# mysql> drop table if exists test.t1
+mysql> drop table if exists test.t
+mysql> drop table if exists test.t1

@@ -45,6 +45,32 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
+OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getProfileInfo();
+    }
+}
+
+IOProfileInfoPtr PipelineExecBuilder::getCurIOProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getIOProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getIOProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getIOProfileInfo();
+    }
+}
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -58,25 +84,61 @@ Block PipelineExecBuilder::getCurrentHeader() const
     }
 }
 
-void PipelineExecGroupBuilder::init(size_t init_concurrency)
+void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    RUNTIME_CHECK(concurrency == 0 && init_concurrency > 0);
-    concurrency = init_concurrency;
-    group.resize(concurrency);
+    auto & cur_group = getCurGroup();
+    cur_group.emplace_back();
+    cur_group.back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::reset()
+{
+    groups.clear();
+    // Re-add an empty group to ensure that the group builder after reset is available.
+    groups.emplace_back();
+}
+
+void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
+{
+    RUNTIME_CHECK(groups.size() == other.groups.size());
+    size_t group_num = groups.size();
+    for (size_t i = 0; i < group_num; ++i)
+        groups[i].insert(groups[i].end(), std::make_move_iterator(other.groups[i].begin()), std::make_move_iterator(other.groups[i].end()));
 }
 
 PipelineExecGroup PipelineExecGroupBuilder::build()
 {
-    RUNTIME_CHECK(concurrency > 0);
+    RUNTIME_CHECK(!groups.empty());
     PipelineExecGroup pipeline_exec_group;
-    for (auto & builder : group)
-        pipeline_exec_group.push_back(builder.build());
+    for (auto & group : groups)
+    {
+        RUNTIME_CHECK(!group.empty());
+        for (auto & builder : group)
+            pipeline_exec_group.push_back(builder.build());
+    }
     return pipeline_exec_group;
 }
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    RUNTIME_CHECK(!group.empty());
-    return group.back().getCurrentHeader();
+    auto & cur_group = getCurGroup();
+    RUNTIME_CHECK(!cur_group.empty());
+    return cur_group.back().getCurrentHeader();
+}
+
+OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const
+{
+    OperatorProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurProfileInfo());
+    return ret;
+}
+
+IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
+{
+    IOProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurIOProfileInfo());
+    return ret;
 }
 } // namespace DB

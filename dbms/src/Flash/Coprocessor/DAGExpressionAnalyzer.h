@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -33,13 +34,6 @@ namespace DB
 class Set;
 using DAGSetPtr = std::shared_ptr<DAGSet>;
 using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;
-
-enum class ExtraCastAfterTSMode
-{
-    None,
-    AppendTimeZoneCast,
-    AppendDurationCast
-};
 
 struct JoinKeyType;
 using JoinKeyTypes = std::vector<JoinKeyType>;
@@ -146,9 +140,10 @@ public:
     // 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
     // TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
     // Int64 to duration.
+    // may_need_add_cast_column is used to avoid adding extra cast to columns which don't need it, like virtual columns.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const std::vector<UInt8> & may_need_add_cast_column,
         const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
@@ -168,6 +163,8 @@ public:
         const Names & probe_key_names,
         const Names & build_key_names,
         const TiDB::TiDBCollators & collators);
+
+    void appendRuntimeFilterProperties(RuntimeFilterPtr & runtime_filter);
 
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
@@ -206,7 +203,7 @@ public:
 
     std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const std::vector<UInt8> & may_need_add_cast_column,
         const ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST

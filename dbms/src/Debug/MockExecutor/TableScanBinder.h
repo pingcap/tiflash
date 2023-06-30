@@ -33,6 +33,8 @@ public:
         , keep_order(keep_order_)
     {}
 
+    void setRuntimeFilterIds(const std::vector<int> & rf_ids_);
+
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
 
@@ -46,6 +48,7 @@ public:
 private:
     TableInfo table_info; /// used by column pruner
     bool keep_order;
+    std::vector<int> rf_ids;
 
 private:
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const;

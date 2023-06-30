@@ -187,31 +187,47 @@ StableValueSpacePtr createNewStable( //
     auto store_path = delegator.choosePath();
 
     PageIdU64 dtfile_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
-
-    auto stable = std::make_shared<StableValueSpace>(stable_id);
-    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
-    stable->saveMeta(wbs.meta);
-    if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+    DMFilePtr dtfile;
+    try
     {
-        wbs.data.putExternal(dtfile_id, 0);
-        delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
-    }
-    else
-    {
-        auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
-        Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = context.keyspace_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
-        data_store->putDMFile(dtfile, oid, /*remove_local*/ true);
-        PS::V3::CheckpointLocation loc{
-            .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
-            .offset_in_file = 0,
-            .size_in_file = 0,
-        };
-        delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
-        wbs.data.putRemoteExternal(dtfile_id, loc);
-    }
+        dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
 
-    return stable;
+        auto stable = std::make_shared<StableValueSpace>(stable_id);
+        stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+        stable->saveMeta(wbs.meta);
+        if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+        {
+            wbs.data.putExternal(dtfile_id, 0);
+            delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
+        }
+        else
+        {
+            auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
+            Remote::DMFileOID oid{
+                .store_id = store_id,
+                .keyspace_id = context.keyspace_id,
+                .table_id = context.physical_table_id,
+                .file_id = dtfile_id,
+            };
+            data_store->putDMFile(dtfile, oid, /*switch_to_remote*/ true);
+            PS::V3::CheckpointLocation loc{
+                .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
+                .offset_in_file = 0,
+                .size_in_file = 0,
+            };
+            delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
+            wbs.data.putRemoteExternal(dtfile_id, loc);
+        }
+        return stable;
+    }
+    catch (...)
+    {
+        if (dtfile)
+        {
+            dtfile->remove(context.db_context.getFileProvider());
+        }
+        throw;
+    }
 }
 
 //==========================================================================================
@@ -546,7 +562,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
             streams.push_back(stream);
         }
 
-        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams);
+        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context);
         stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
@@ -679,8 +695,9 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(););
+    SCOPE_EXIT({
+        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed();
+    });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -2505,7 +2522,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log->getChild(dm_context.tracing_id), "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2673,7 +2690,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "buildBitmapFilterStableOnly total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={}ms", some_packs_sets.size(), segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -2736,7 +2753,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     const auto & filter_columns = filter->filter_columns;
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
-        filter_columns,
+        *filter_columns,
         data_ranges,
         filter->rs_operator,
         max_version,
@@ -2744,16 +2761,36 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
-
-    auto filter_columns_to_read_ptr = std::make_shared<ColumnDefines>(filter_columns);
     SkippableBlockInputStreamPtr filter_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
-        filter_columns_to_read_ptr,
+        filter_columns,
         this->rowkey_range);
 
+    if (unlikely(filter_columns->size() == columns_to_read.size()))
+    {
+        LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
+        BlockInputStreamPtr stream = std::make_shared<BitmapFilterBlockInputStream>(
+            *filter_columns,
+            filter_column_stable_stream,
+            filter_column_delta_stream,
+            segment_snap->stable->getDMFilesRows(),
+            bitmap_filter,
+            dm_context.tracing_id);
+        if (filter->extra_cast)
+        {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->extra_cast, dm_context.tracing_id);
+            stream->setExtraInfo("cast after tableScan");
+        }
+        stream = std::make_shared<FilterBlockInputStream>(stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
+        stream->setExtraInfo("push down filter");
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, filter->project_after_where, dm_context.tracing_id);
+        stream->setExtraInfo("project after where");
+        return stream;
+    }
+
     BlockInputStreamPtr filter_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
-        filter_columns,
+        *filter_columns,
         filter_column_stable_stream,
         filter_column_delta_stream,
         segment_snap->stable->getDMFilesRows(),
@@ -2769,24 +2806,19 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
-    if (filter_columns.size() == columns_to_read.size())
-    {
-        LOG_ERROR(log, "Late materialization filter columns size equal to read columns size, which is not expected.");
-        // no need to read columns again
-        return filter_column_stream;
-    }
 
-    ColumnDefines rest_columns_to_read{columns_to_read};
+    auto rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
     // remove columns of pushed down filter
-    for (const auto & col : filter_columns)
+    for (const auto & col : *filter_columns)
     {
-        rest_columns_to_read.erase(std::remove_if(rest_columns_to_read.begin(), rest_columns_to_read.end(), [&](const ColumnDefine & c) { return c.id == col.id; }), rest_columns_to_read.end());
+        rest_columns_to_read->erase(std::remove_if(rest_columns_to_read->begin(), rest_columns_to_read->end(), [&](const ColumnDefine & c) { return c.id == col.id; }),
+                                    rest_columns_to_read->end());
     }
 
     // construct rest column stream
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
-        rest_columns_to_read,
+        *rest_columns_to_read,
         data_ranges,
         filter->rs_operator,
         max_version,
@@ -2794,16 +2826,13 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
-
-    auto rest_columns_to_read_ptr = std::make_shared<ColumnDefines>(rest_columns_to_read);
     SkippableBlockInputStreamPtr rest_column_delta_stream = std::make_shared<DeltaValueInputStream>(
         dm_context,
         segment_snap->delta,
-        rest_columns_to_read_ptr,
-        this->rowkey_range);
-
-    SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
         rest_columns_to_read,
+        this->rowkey_range);
+    SkippableBlockInputStreamPtr rest_column_stream = std::make_shared<RowKeyOrderedBlockInputStream>(
+        *rest_columns_to_read,
         rest_column_stable_stream,
         rest_column_delta_stream,
         segment_snap->stable->getDMFilesRows(),

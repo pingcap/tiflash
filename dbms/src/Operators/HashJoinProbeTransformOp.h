@@ -44,7 +44,7 @@ protected:
 
     void transformHeaderImpl(Block & header_) override;
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
 private:
     void probeOnTransform(Block & block);

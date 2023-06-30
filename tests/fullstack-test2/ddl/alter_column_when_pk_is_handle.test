@@ -36,30 +36,3 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t
 | 0 | hello | 0.00 |    2 | NULL |
 | 1 | world | 0.00 |    2 | NULL |
 +---+-------+------+------+------+
-
-=> DBGInvoke __enable_schema_sync_service('false')
-
->> DBGInvoke __enable_fail_point(exception_between_schema_change_in_the_same_diff)
-
-# stop decoding data
->> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-
-# Need to apply a lossy type change to reorganize data. issue#3714
-mysql> alter table test.t modify c decimal(6,3)
-
-# refresh schema and hit the `exception_between_schema_change_in_the_same_diff` failpoint
->> DBGInvoke __refresh_schemas()
-
->> DBGInvoke __disable_fail_point(exception_between_schema_change_in_the_same_diff)
-
->> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
-
-=> DBGInvoke __enable_schema_sync_service('true')
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t
-+---+-------+-------+------+------+
-| a | b     | c     | d    | e    |
-+---+-------+-------+------+------+
-| 0 | hello | 0.000 |    2 | NULL |
-| 1 | world | 0.000 |    2 | NULL |
-+---+-------+-------+------+------+

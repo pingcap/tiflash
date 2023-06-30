@@ -28,12 +28,12 @@ BlockInputStreamSourceOp::BlockInputStreamSourceOp(
     setHeader(impl->getHeader());
 }
 
-void BlockInputStreamSourceOp::operatePrefix()
+void BlockInputStreamSourceOp::operatePrefixImpl()
 {
     impl->readPrefix();
 }
 
-void BlockInputStreamSourceOp::operateSuffix()
+void BlockInputStreamSourceOp::operateSuffixImpl()
 {
     impl->readSuffix();
 }

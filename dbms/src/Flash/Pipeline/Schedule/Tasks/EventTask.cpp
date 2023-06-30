@@ -13,14 +13,36 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
 namespace FailPoints
 {
 extern const char random_pipeline_model_task_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
+extern const char exception_during_query_run[];
 } // namespace FailPoints
+
+#define EXECUTE(function)                                                                   \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel());    \
+    if unlikely (exec_status.isCancelled())                                                 \
+        return ExecTaskStatus::CANCELLED;                                                   \
+    try                                                                                     \
+    {                                                                                       \
+        auto status = (function());                                                         \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint); \
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_query_run);               \
+        return status;                                                                      \
+    }                                                                                       \
+    catch (...)                                                                             \
+    {                                                                                       \
+        LOG_WARNING(log, "error occurred and cancel the query");                            \
+        exec_status.onErrorOccurred(std::current_exception());                              \
+        return ExecTaskStatus::ERROR;                                                       \
+    }
 
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
@@ -43,69 +65,40 @@ EventTask::EventTask(
     RUNTIME_CHECK(event);
 }
 
-EventTask::~EventTask()
+void EventTask::finalizeImpl()
 {
-    assert(event);
-    event->onTaskFinish();
+    try
+    {
+        doFinalizeImpl();
+    }
+    catch (...)
+    {
+        exec_status.onErrorOccurred(std::current_exception());
+    }
+    event->onTaskFinish(profile_info);
     event.reset();
 }
 
-void EventTask::finalize() noexcept
+ExecTaskStatus EventTask::executeImpl()
 {
-    try
-    {
-        RUNTIME_CHECK(!finalized);
-        finalized = true;
-        finalizeImpl();
-    }
-    catch (...)
-    {
-        exec_status.onErrorOccurred(std::current_exception());
-    }
+    EXECUTE(doExecuteImpl);
 }
 
-ExecTaskStatus EventTask::executeImpl() noexcept
+ExecTaskStatus EventTask::executeIOImpl()
 {
-    return doTaskAction([&] { return doExecuteImpl(); });
+    EXECUTE(doExecuteIOImpl);
 }
 
-ExecTaskStatus EventTask::executeIOImpl() noexcept
+ExecTaskStatus EventTask::awaitImpl()
 {
-    return doTaskAction([&] { return doExecuteIOImpl(); });
+    EXECUTE(doAwaitImpl);
 }
 
-ExecTaskStatus EventTask::awaitImpl() noexcept
+UInt64 EventTask::getScheduleDuration() const
 {
-    return doTaskAction([&] { return doAwaitImpl(); });
+    return event->getScheduleDuration();
 }
 
-ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action)
-{
-    if (unlikely(exec_status.isCancelled()))
-    {
-        finalize();
-        return ExecTaskStatus::CANCELLED;
-    }
-    try
-    {
-        auto status = action();
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint);
-        switch (status)
-        {
-        case FINISH_STATUS:
-            finalize();
-        default:
-            return status;
-        }
-    }
-    catch (...)
-    {
-        finalize();
-        assert(event);
-        LOG_WARNING(log, "error occurred and cancel the query");
-        exec_status.onErrorOccurred(std::current_exception());
-        return ExecTaskStatus::ERROR;
-    }
-}
+#undef EXECUTE
 
 } // namespace DB
