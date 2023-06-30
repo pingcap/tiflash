@@ -105,7 +105,7 @@ try
     {
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_in_to_out);
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_out_to_in);
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
@@ -123,7 +123,7 @@ try
     {
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_in_to_out));
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
