@@ -179,7 +179,7 @@ template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns)
 {
     assert(task);
-    level_queues[task->mlfq_level]->accu_consume_time_ms += ceil(inc_ns / 1'000'000);
+    level_queues[task->mlfq_level]->accu_consume_time_ms += ceil(inc_ns / 1'000'000.0);
 }
 
 template <typename TimeGetter>
