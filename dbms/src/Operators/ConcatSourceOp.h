@@ -64,6 +64,8 @@ public:
         std::vector<PipelineExecBuilder> & exec_builder_pool)
         : SourceOp(exec_status_, req_id)
     {
+        RUNTIME_CHECK(!exec_builder_pool.empty());
+        setHeader(exec_builder_pool.back().getCurrentHeader());
         for (auto & exec_builder : exec_builder_pool)
         {
             exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_status_, req_id, res));
