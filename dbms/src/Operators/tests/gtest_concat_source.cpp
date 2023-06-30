@@ -16,10 +16,11 @@
 #include <Operators/ConcatSourceOp.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
+
 #include <memory>
 #include <type_traits>
+
 #include "Flash/Pipeline/Exec/PipelineExecBuilder.h"
-#include "Operators/Operator.h"
 
 namespace DB::tests
 {
@@ -52,7 +53,7 @@ protected:
 private:
     Block output;
 };
-}
+} // namespace
 
 class TestConcatSource : public ::testing::Test
 {

@@ -14,8 +14,6 @@
 
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 
-#include "Common/Exception.h"
-
 namespace DB
 {
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
