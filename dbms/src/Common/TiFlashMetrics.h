@@ -28,8 +28,6 @@
 
 #include <ext/scope_guard.h>
 #include <mutex>
-#include <shared_mutex>
-
 
 // to make GCC 11 happy
 #include <cassert>
@@ -53,13 +51,15 @@ namespace DB
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
-        F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}))               \
+        F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}),               \
+        F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
     M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}),                                \
         F(type_cop_executing, {"type", "cop_executing"}), F(type_batch, {"type", "batch"}),                                                         \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
-        F(type_remote_read_executing, {"type", "remote_read_executing"}))                                                                           \
+        F(type_remote_read_executing, {"type", "remote_read_executing"}),                                                                           \
+        F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                             \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                                  \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),                     \
@@ -74,7 +74,9 @@ namespace DB
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                               \
+        F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                                \
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
@@ -93,7 +95,8 @@ namespace DB
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                                                                 \
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                           \
-        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                                     \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                                     \
+        F(type_disagg_establish_task, {{"type", "type_disagg_establish_task"}}))                                                                    \
     M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                               \
         F(type_hash_original, {"type", "hash_original"}),                                                                                           \
         F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}),                                                             \
@@ -110,7 +113,6 @@ namespace DB
         F(type_passthrough_none_compression_remote, {"type", "passthrough_none_compression_remote"}),                                               \
         F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
         F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
-    M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
     M(tiflash_sync_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                  \
     M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter,                                                   \
         F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}),                     \
@@ -478,7 +480,6 @@ struct EqualWidthBuckets
     }
 };
 
-const String keyspace_name = "keyspace";
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -489,12 +490,6 @@ struct MetricFamilyTrait<prometheus::Counter>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
     static auto & add(prometheus::Family<prometheus::Counter> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
-    static auto & add(prometheus::Family<prometheus::Counter> & family, uint32_t keyspace_id, ArgType && arg)
-    {
-        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
-        map[keyspace_name] = std::to_string(keyspace_id);
-        return family.Add(map);
-    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -502,12 +497,6 @@ struct MetricFamilyTrait<prometheus::Gauge>
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
     static auto & add(prometheus::Family<prometheus::Gauge> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
-    static auto & add(prometheus::Family<prometheus::Gauge> & family, uint32_t keyspace_id, ArgType && arg)
-    {
-        std::map<std::string, std::string> map = {std::forward<ArgType>(arg)};
-        map[keyspace_name] = std::to_string(keyspace_id);
-        return family.Add(map);
-    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -517,13 +506,6 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
-    }
-
-    static auto & add(prometheus::Family<prometheus::Histogram> & family, uint32_t keyspace_id, ArgType && arg)
-    {
-        std::map<std::string, std::string> map = std::get<0>(arg);
-        map[keyspace_name] = std::to_string(keyspace_id);
-        return family.Add(map, std::move(std::get<1>(arg)));
     }
 };
 
@@ -539,10 +521,7 @@ struct MetricFamily
         const std::string & help,
         std::initializer_list<MetricArgType> args)
     {
-        store_args = args;
-
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
-        store_family = &family;
 
         metrics.reserve(args.size() ? args.size() : 1);
         for (auto arg : args)
@@ -557,45 +536,10 @@ struct MetricFamily
         }
     }
 
-    void addMetricsForKeyspace(uint32_t keyspace_id)
-    {
-        std::vector<T *> metrics_temp;
-
-        for (auto arg : store_args)
-        {
-            auto & metric = MetricTrait::add(*store_family, keyspace_id, std::forward<MetricArgType>(arg));
-            metrics_temp.emplace_back(&metric);
-        }
-
-        if (store_args.size() == 0)
-        {
-            auto & metric = MetricTrait::add(*store_family, keyspace_id, MetricArgType{});
-            metrics_temp.emplace_back(&metric);
-        }
-        metrics_map[keyspace_id] = metrics_temp;
-    }
-
     T & get(size_t idx = 0) { return *(metrics[idx]); }
-    T & get(size_t idx, uint32_t keyspace_id)
-    {
-        {
-            std::unique_lock<std::shared_mutex> lock(shared_mutex);
-            if (metrics_map.find(keyspace_id) == metrics_map.end())
-            {
-                addMetricsForKeyspace(keyspace_id);
-            }
-        }
-        std::shared_lock<std::shared_mutex> lock(shared_mutex);
-        return *(metrics_map[keyspace_id][idx]);
-    }
 
 private:
-    std::shared_mutex shared_mutex;
     std::vector<T *> metrics;
-    prometheus::Family<T> * store_family;
-    std::vector<MetricArgType> store_args;
-
-    std::unordered_map<uint32_t, std::vector<T *>> metrics_map; // keyspace_id --> metrics
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -667,33 +611,19 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
-// NOLINTNEXTLINE(bugprone-reserved-identifier)
-#define __GET_KEYSPACE_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #ifndef GTEST_TIFLASH_METRICS
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
-// NOLINTNEXTLINE(bugprone-reserved-identifier)
-#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TiFlashMetrics::instance().family.get(0, keyspace_id)
-// NOLINTNEXTLINE(bugprone-reserved-identifier)
-#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TiFlashMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #else
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
-// NOLINTNEXTLINE(bugprone-reserved-identifier)
-#define __GET_KEYSPACE_METRIC_0(family, keyspace_id) TestMetrics::instance().family.get(0, keyspace_id)
-// NOLINTNEXTLINE(bugprone-reserved-identifier)
-#define __GET_KEYSPACE_METRIC_1(family, metric, keyspace_id) TestMetrics::instance().family.get(family##_metrics::metric, keyspace_id)
 #endif
 #define GET_METRIC(...)                                             \
     __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
-    (__VA_ARGS__)
-
-#define GET_KEYSPACE_METRIC(...)                                                                               \
-    __GET_KEYSPACE_METRIC_MACRO(__VA_ARGS__, __GET_KEYSPACE_METRIC_1, __GET_KEYSPACE_METRIC_0, __GET_METRIC_0) \
     (__VA_ARGS__)
 
 #define UPDATE_CUR_AND_MAX_METRIC(family, metric, metric_max)                                                                 \
