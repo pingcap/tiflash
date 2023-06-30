@@ -141,7 +141,7 @@ try
     {
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
-        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_in_to_out - 1));
+        queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
         queue.submit(std::make_unique<MockIOTask>(true));
         queue.submit(std::make_unique<MockIOTask>(false));
         TaskPtr task;
