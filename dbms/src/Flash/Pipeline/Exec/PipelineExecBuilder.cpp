@@ -14,6 +14,8 @@
 
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
@@ -89,6 +91,13 @@ void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
     auto & cur_group = getCurGroup();
     cur_group.emplace_back();
     cur_group.back().setSourceOp(std::move(source));
+}
+
+void PipelineExecGroupBuilder::addConcurrency(PipelineExecBuilder && exec_builder)
+{
+    RUNTIME_CHECK(exec_builder.source_op);
+    auto & cur_group = getCurGroup();
+    cur_group.push_back(std::move(exec_builder));
 }
 
 void PipelineExecGroupBuilder::reset()

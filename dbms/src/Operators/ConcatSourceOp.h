@@ -14,50 +14,15 @@
 
 #pragma once
 
-#include <Operators/Operator.h>
+#include <Common/Exception.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Operators/Operator.h>
+
 #include <memory>
 
 namespace DB
 {
-class ExecBuilderPool
-{
-public:
-    explicit ExecBuilderPool(size_t expect_size)
-    {
-        RUNTIME_CHECK(expect_size > 0);
-        pool.resize(expect_size);
-    }
-
-    void add(SourceOps && sources)
-    {
-        for (auto & source : sources)
-        {
-            pool[pre_index++].push_back(std::move(source));
-            if (pre_index == pool.size())
-                pre_index = 0;
-        }
-        sources.clear();
-    }
-
-    std::vector<PipelineExecBuilder> gen()
-    {
-        while (!pool.empty())
-        {
-            auto ret = std::move(pool.back());
-            pool.pop_back();
-            if (!ret.empty())
-                return ret;
-        }
-        return {};
-    }
-
-private:
-    std::vector<PipelineExecBuilder> pool;
-    size_t pre_index = 0;
-};
-
 class SetBlockSinkOp : public SinkOp
 {
 public:
@@ -96,12 +61,12 @@ public:
     ConcatSourceOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
-        std::vector<PipelineExecBuilder> exec_builder_pool)
+        std::vector<PipelineExecBuilder> & exec_builder_pool)
         : SourceOp(exec_status_, req_id)
     {
         for (auto & exec_builder : exec_builder_pool)
         {
-            exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_status_, req_id, &res));
+            exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_status_, req_id, res));
             exec_pool.push_back(exec_builder.build());
         }
     }
@@ -111,7 +76,7 @@ public:
         return "ConcatSourceOp";
     }
 
-    // When the storage layer data is empty, a NullSource will be filled, so override `getIOProfileInfo` is needed here.
+    // ConcatSourceOp is used to merge multiple partitioned tables in the storage layer, so override `getIOProfileInfo` is needed here.
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
@@ -135,7 +100,7 @@ protected:
     {
         if unlikely (done)
             return OperatorStatus::HAS_OUTPUT;
-        
+
         if unlikely (res)
         {
             std::swap(block, res);
@@ -174,12 +139,12 @@ protected:
     {
         if unlikely (done || res)
             return OperatorStatus::HAS_OUTPUT;
-        
+
         assert(cur_exec);
         return cur_exec->executeIO();
     }
 
-    OperatorStatus awaitImpl() override 
+    OperatorStatus awaitImpl() override
     {
         if unlikely (done || res)
             return OperatorStatus::HAS_OUTPUT;
@@ -211,5 +176,50 @@ private:
 
     Block res;
     bool done = false;
+};
+
+class ConcatBuilderPool
+{
+public:
+    explicit ConcatBuilderPool(size_t expect_size)
+    {
+        RUNTIME_CHECK(expect_size > 0);
+        pool.resize(expect_size);
+    }
+
+    void add(PipelineExecGroupBuilder & group_builder)
+    {
+        RUNTIME_CHECK(group_builder.groupCnt() == 1);
+        for (size_t i = 0; i < group_builder.concurrency(); ++i)
+        {
+            pool[pre_index++].push_back(std::move(group_builder.getCurBuilder(i)));
+            if (pre_index == pool.size())
+                pre_index = 0;
+        }
+    }
+
+    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorStatus & exec_status, const String & req_id)
+    {
+        RUNTIME_CHECK(result_builder.empty());
+        for (auto & builders : pool)
+        {
+            if (builders.empty())
+            {
+                continue;
+            }
+            else if (builders.size() == 1)
+            {
+                result_builder.addConcurrency(std::move(builders.back()));
+            }
+            else
+            {
+                result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_status, req_id, builders));
+            }
+        }
+    }
+
+private:
+    std::vector<std::vector<PipelineExecBuilder>> pool;
+    size_t pre_index = 0;
 };
 } // namespace DB
