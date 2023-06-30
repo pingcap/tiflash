@@ -40,7 +40,6 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , responder(&ctx)
     , state(NEW_REQUEST)
 {
-    setCall(ctx.c_call());
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
@@ -115,13 +114,13 @@ void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncT
     assert(stopwatch != nullptr);
     async_tunnel_sender = async_tunnel_sender_;
     waiting_task_time_ms = stopwatch->elapsedMilliseconds();
+    setCall(ctx.c_call());
 }
 
 void EstablishCallData::startEstablishConnection()
 {
     stopwatch = std::make_unique<Stopwatch>();
 }
-
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
 {
