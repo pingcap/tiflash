@@ -17,9 +17,8 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <Flash/Mpp/MppVersion.h>
-#include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/defines.h>
 #include <grpcpp/alarm.h>
@@ -40,10 +39,10 @@ enum class AsyncRequestStage
 {
     NEED_INIT,
     WAIT_MAKE_READER,
-    WAIT_BATCH_READ,
+    WAIT_READ,
+    WAIT_PUSH_TO_QUEUE,
     WAIT_FINISH,
     WAIT_RETRY,
-    WAIT_REWRITE,
     FINISHED,
 };
 
@@ -51,7 +50,6 @@ using SystemClock = std::chrono::system_clock;
 
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
-constexpr Int32 batch_packet_count = 16;
 
 class AsyncRequestHandlerBase : public UnaryCallback<bool>
 {
@@ -60,7 +58,7 @@ public:
 };
 
 template <typename RPCContext>
-class AsyncRequestHandler : public AsyncRequestHandlerBase
+class AsyncRequestHandler : public AsyncRequestHandlerBase, public GRPCKickTag
 {
 public:
     using Status = typename RPCContext::Status;
@@ -70,33 +68,26 @@ public:
 
     AsyncRequestHandler(
         ReceivedMessageQueue * received_message_queue_,
-        AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue_,
         const std::shared_ptr<RPCContext> & context,
         Request && req,
         const String & req_id,
-        std::atomic<Int64> * data_size_in_queue,
+        std::atomic<Int64> * /*data_size_in_queue*/,
         std::function<void(bool, const String &, const LoggerPtr &)> && close_conn_)
-        : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
+        : GRPCKickTag(this)
+        , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , rpc_context(context)
         , request(std::move(req))
         , req_info(fmt::format("async tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , has_data(false)
         , retry_times(0)
         , stage(AsyncRequestStage::NEED_INIT)
-        , read_packet_index(0)
-        , received_packet_index(0)
         , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
-        , channel_try_writer(received_message_queue_, req_info, log, data_size_in_queue, ReceiverMode::Async)
-        , async_wait_rewrite_queue(std::move(async_wait_rewrite_queue_))
-        , kick_recv_tag(thisAsUnaryCallback())
+        , message_queue(received_message_queue_)
         , close_conn(std::move(close_conn_))
         , is_close_conn_called(false)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_exception_when_construct_async_request_handler);
-        packets.resize(batch_packet_count);
-        for (auto & p : packets)
-            p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         start();
     }
 
@@ -114,11 +105,11 @@ public:
             case AsyncRequestStage::WAIT_MAKE_READER:
                 processWaitMakeReader(ok);
                 break;
-            case AsyncRequestStage::WAIT_BATCH_READ:
-                processWaitBatchRead(ok);
+            case AsyncRequestStage::WAIT_READ:
+                processWaitRead(ok);
                 break;
-            case AsyncRequestStage::WAIT_REWRITE:
-                processWaitReWrite();
+            case AsyncRequestStage::WAIT_PUSH_TO_QUEUE:
+                processWaitPushToQueue(ok);
                 break;
             case AsyncRequestStage::WAIT_FINISH:
                 processWaitFinish();
@@ -154,19 +145,63 @@ private:
         }
         else
         {
+            setCall(reader->getClientContext()->c_call());
             startAsyncRead();
         }
     }
 
-    void processWaitBatchRead(bool ok)
+    void processWaitRead(bool ok)
     {
-        if (ok)
-            ++read_packet_index;
+        if (!ok)
+        {
+            stage = AsyncRequestStage::WAIT_FINISH;
+            reader->finish(finish_status, thisAsUnaryCallback());
+            return;
+        }
 
-        if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
-            processReceivedData();
-        else
-            reader->read(packets[read_packet_index], thisAsUnaryCallback());
+        has_data = true;
+        // Check memory overflow error
+        packet->recomputeTrackedMem();
+        if unlikely (packet->hasError())
+        {
+            closeConnection(fmt::format("Exchange receiver meet error : {}", packet->error()));
+            return;
+        }
+
+        try
+        {
+            auto received_message = toReceivedMessage(packet, request.source_index, req_info, message_queue->getFineGrainedStreamSize() > 0, message_queue->getFineGrainedStreamSize());
+            stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
+            auto res = message_queue->pushFromRemote(std::move(received_message), this);
+            switch (res)
+            {
+            case MPMCQueueResult::OK:
+                break;
+            case MPMCQueueResult::FULL:
+                return;
+            default:
+                closeConnection("Exchange receiver meet error : push packet fail");
+                return;
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RUNTIME_ASSERT(false, "Exception is thrown when sending packet in AsyncRequestHandler");
+        }
+
+        startAsyncRead();
+    }
+
+    void processWaitPushToQueue(bool ok)
+    {
+        if (!ok)
+        {
+            closeConnection("Exchange receiver meet error : push packet fail");
+            return;
+        }
+
+        startAsyncRead();
     }
 
     void processWaitFinish()
@@ -183,84 +218,9 @@ private:
 
     void startAsyncRead()
     {
-        stage = AsyncRequestStage::WAIT_BATCH_READ;
-        read_packet_index = 0;
-        received_packet_index = 0;
-        reader->read(packets[read_packet_index], thisAsUnaryCallback());
-    }
-
-    void processReceivedData()
-    {
-        LOG_TRACE(log, "Received {} packets.", read_packet_index);
-
-        String err_info;
-        if (read_packet_index > 0)
-            has_data = true;
-
-        if (auto error_message = getErrorFromPackets(); unlikely(!error_message.empty()))
-        {
-            closeConnection(fmt::format("Exchange receiver meet error : {}", error_message));
-            return;
-        }
-
-        GRPCReceiveQueueRes res = sendPackets();
-
-        if (!checkResultAfterSendingPackets(res))
-            return;
-
-        startAsyncRead();
-    }
-
-    void processWaitReWrite()
-    {
-        GRPCReceiveQueueRes res = reSendPackets();
-
-        if (!checkResultAfterSendingPackets(res))
-            return;
-
-        stage = AsyncRequestStage::WAIT_BATCH_READ;
-        startAsyncRead();
-    }
-
-    // return true if we still need to receive data from server.
-    bool checkResultAfterSendingPackets(GRPCReceiveQueueRes res)
-    {
-        if (unlikely(sendPacketHasError(res)))
-        {
-            closeConnection("Exchange receiver meet error : push packets fail");
-            return false;
-        }
-
-        if (unlikely(isChannelFull(res)))
-        {
-            asyncWaitForRewrite();
-            return false;
-        }
-
-        if (read_packet_index < batch_packet_count)
-        {
-            stage = AsyncRequestStage::WAIT_FINISH;
-            reader->finish(finish_status, thisAsUnaryCallback());
-            return false;
-        }
-
-        return true;
-    }
-
-    String getErrorFromPackets()
-    {
-        // step 1: check if there is error packet
-        // only the last packet may has error, see execute().
-        if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
-            return packets[read_packet_index - 1]->error();
-        // step 2: check memory overflow error
-        for (Int32 i = 0; i < read_packet_index; ++i)
-        {
-            packets[i]->recomputeTrackedMem();
-            if (packets[i]->hasError())
-                return packets[i]->error();
-        }
-        return "";
+        stage = AsyncRequestStage::WAIT_READ;
+        packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+        reader->read(packet, thisAsUnaryCallback());
     }
 
     bool retriable() const
@@ -275,7 +235,7 @@ private:
         {
             stage = AsyncRequestStage::FINISHED;
             close_conn(!msg.empty(), msg, log);
-            closeGrpcConnection();
+            reader.reset();
             is_close_conn_called = true;
         }
         condition_cv.notify_all();
@@ -308,73 +268,10 @@ private:
         }
     }
 
-    GRPCReceiveQueueRes sendPackets()
-    {
-        try
-        {
-            // note: no exception should be thrown rudely, since it's called by a GRPC poller.
-            while (received_packet_index < read_packet_index)
-            {
-                auto & p = packets[received_packet_index++];
-                auto res = channel_try_writer.tryWrite(request.source_index, p);
-                if (res == GRPCReceiveQueueRes::FULL)
-                {
-                    p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-                    return res;
-                }
-                if (res != GRPCReceiveQueueRes::OK)
-                    return res;
-
-                // can't reuse packet since it is sent to readers.
-                p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-            }
-            return GRPCReceiveQueueRes::OK;
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RUNTIME_ASSERT(false, "Exception is thrown when sending packets in AsyncRequestHandler");
-        }
-    }
-
-    GRPCReceiveQueueRes reSendPackets()
-    {
-        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite();
-        if (res != GRPCReceiveQueueRes::OK)
-            return res;
-        return sendPackets();
-    }
-
-    bool sendPacketHasError(GRPCReceiveQueueRes res)
-    {
-        return (res == GRPCReceiveQueueRes::CANCELLED || res == GRPCReceiveQueueRes::FINISHED);
-    }
-
-    bool isChannelFull(GRPCReceiveQueueRes res)
-    {
-        return res == GRPCReceiveQueueRes::FULL;
-    }
-
     // in case of potential multiple inheritances.
     UnaryCallback<bool> * thisAsUnaryCallback()
     {
         return static_cast<UnaryCallback<bool> *>(this);
-    }
-
-    // Do not do anything after this function
-    void asyncWaitForRewrite()
-    {
-        // Do not change the order of these two clauses.
-        // We must ensure that status is set before pushing async handler into queue
-        stage = AsyncRequestStage::WAIT_REWRITE;
-        bool res = async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
-        if (!res)
-            closeConnection("AsyncRequestHandlerWaitQueue has been closed");
-    }
-
-    void closeGrpcConnection()
-    {
-        reader.reset();
     }
 
     // won't be null and do not delete this pointer
@@ -389,18 +286,12 @@ private:
     int retry_times;
     AsyncRequestStage stage;
 
-    Int32 read_packet_index;
-    Int32 received_packet_index;
-    TrackedMppDataPacketPtrs packets;
-
     std::unique_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
     Status finish_status;
     LoggerPtr log;
 
-    ReceiverChannelTryWriter channel_try_writer;
-    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
-    KickReceiveTag kick_recv_tag;
+    ReceivedMessageQueue * message_queue;
 
     std::mutex make_reader_mu;
 

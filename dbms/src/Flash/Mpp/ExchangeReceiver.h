@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <future>
@@ -187,7 +186,7 @@ private:
         const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(std::pair<MPMCQueueResult, ReceivedMessagePtr> && pop_result);
+    inline ReceiveResult toReceiveResult(MPMCQueueResult res, ReceivedMessagePtr && msg);
 
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);

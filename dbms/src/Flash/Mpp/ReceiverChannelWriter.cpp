@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 
 namespace DB
@@ -28,7 +27,7 @@ bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacke
         return true;
     }
 
-    auto success = received_message_queue->pushToMessageChannel<is_force>(received_message, mode);
+    auto success = received_message_queue->pushFromLocal<is_force>(std::move(received_message), mode);
 
     if (likely(success))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());

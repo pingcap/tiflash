@@ -37,7 +37,8 @@ class GRPCKickTag : public grpc::internal::CompletionQueueTag
 {
 public:
     explicit GRPCKickTag(void * tag_)
-        : tag(tag_)
+        : call(nullptr)
+        , tag(tag_)
         , status(true)
     {}
 
@@ -48,12 +49,23 @@ public:
         return true;
     }
 
+    void setCall(grpc_call * call_)
+    {
+        call = call_;
+    }
+
+    grpc_call * getCall()
+    {
+        return call;
+    }
+
     void setStatus(bool status_)
     {
         status = status_;
     }
 
 private:
+    grpc_call * call;
     void * tag;
     bool status;
 };
@@ -77,16 +89,15 @@ class GRPCSendQueue
 {
 public:
     template <typename... Args>
-    GRPCSendQueue(grpc_call * call, const LoggerPtr & l, Args &&... args)
+    GRPCSendQueue(const LoggerPtr & l, Args &&... args)
         : log(l)
         , send_queue(std::forward<Args>(args)...)
     {
-        RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
         // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
         // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [call](void * t) {
-            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
+        kick_func = [](GRPCKickTag * t) {
+            return grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
         };
     }
 
@@ -125,7 +136,7 @@ public:
         return ret;
     }
 
-    /// Pop the data from queue.
+    /// Pop the data from queue in grpc thread.
     ///
     /// Return OK if pop is done.
     /// Return FINISHED if the queue is finished and empty.
@@ -139,6 +150,7 @@ public:
     MPMCQueueResult pop(T & data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
+        RUNTIME_ASSERT(new_tag->getCall() != nullptr, log, "call is null");
 
         auto res = send_queue.tryPop(data);
         if (res == MPMCQueueResult::EMPTY)
@@ -234,16 +246,15 @@ class GRPCRecvQueue
 {
 public:
     template <typename... Args>
-    GRPCRecvQueue(grpc_call * call, const LoggerPtr & log_, Args &&... args)
+    GRPCRecvQueue(const LoggerPtr & log_, Args &&... args)
         : log(log_)
         , recv_queue(std::forward<Args>(args)...)
     {
-        RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
         // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
         // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [call](void * t) {
-            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
+        kick_func = [](GRPCKickTag * t) {
+            return grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
         };
     }
 
@@ -262,7 +273,7 @@ public:
 
     MPMCQueueResult pop(T & data)
     {
-        auto ret = recv_queue->pop(data);
+        auto ret = recv_queue.pop(data);
         if (ret == MPMCQueueResult::OK)
             kickOneTagWithSuccess();
         return ret;
@@ -270,16 +281,17 @@ public:
 
     MPMCQueueResult tryPop(T & data)
     {
-        auto ret = recv_queue->tryPop(data);
+        auto ret = recv_queue.tryPop(data);
         if (ret == MPMCQueueResult::OK)
             kickOneTagWithSuccess();
         return ret;
     }
 
-    /// Push the data from the remote node.
+    /// Push the data from the remote node in grpc thread.
     MPMCQueueResult push(T && data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
+        RUNTIME_ASSERT(new_tag->getCall() != nullptr, log, "call is null");
 
         auto res = recv_queue.tryPush(std::move(data));
         if (res == MPMCQueueResult::FULL)
@@ -296,16 +308,22 @@ public:
     /// Push the data from the local node.
     MPMCQueueResult push(T && data)
     {
-        return recv_queue->push(std::move(data));
+        return recv_queue.push(std::move(data));
     }
 
     /// Force push the data from the local node.
     MPMCQueueResult forcePush(T && data)
     {
-        return recv_queue->forcePush(std::move(data));
+        return recv_queue.forcePush(std::move(data));
+    }
+
+    bool cancel()
+    {
+        return cancelWith("");
     }
 
     /// Cancel the recv queue, and set the cancel reason.
+    /// Then kick all tags with false status.
     bool cancelWith(const String & reason)
     {
         std::unique_lock lock(mu);

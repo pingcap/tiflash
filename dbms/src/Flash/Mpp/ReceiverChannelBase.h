@@ -17,7 +17,6 @@
 #include <Common/FailPoint.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 

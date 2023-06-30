@@ -32,9 +32,6 @@ class IAsyncCallData
 public:
     virtual ~IAsyncCallData() = default;
 
-    /// Should return a non-null `grpc_call`.
-    virtual grpc_call * grpcCall() = 0;
-
     /// Attach async sender in order to notify consumer finish msg directly.
     virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
 
@@ -62,8 +59,6 @@ public:
     ~EstablishCallData() override;
 
     void proceed(bool ok);
-
-    grpc_call * grpcCall() override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();

@@ -79,11 +79,6 @@ public:
         async_tunnel_sender = async_tunnel_sender_;
     }
 
-    grpc_call * grpcCall() override
-    {
-        return nullptr;
-    }
-
     std::optional<GRPCKickFunc> getGRPCKickFuncForTest() override
     {
         return [&](GRPCKickTag *) {
@@ -156,7 +151,7 @@ public:
         : live_connections(conn_num)
         , live_local_connections(0)
         , mock_async_request_handler_wait_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
-        , received_message_queue(mock_async_request_handler_wait_queue, Logger::get(), 10, false, 0)
+        , received_message_queue(Logger::get(), 10, false, 0)
         , data_size_in_queue(0)
         , log(Logger::get())
     {
@@ -213,11 +208,12 @@ public:
     {
         while (true)
         {
-            auto pop_result = received_message_queue.pop<true>(0);
-            switch (pop_result.first)
+            ReceivedMessagePtr data;
+            auto pop_result = received_message_queue.pop<true>(data, 0);
+            switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:
-                received_msgs.push_back(pop_result.second);
+                received_msgs.push_back(data);
                 break;
             default:
                 return;
@@ -657,7 +653,7 @@ try
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
     AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue received_message_queue(mock_ptr, Logger::get(), 1, false, 0);
+    ReceivedMessageQueue received_message_queue(Logger::get(), 1, false, 0);
 
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
@@ -678,7 +674,7 @@ try
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
     AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue queue(mock_ptr, Logger::get(), 1, false, 0);
+    ReceivedMessageQueue queue(Logger::get(), 1, false, 0);
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
         []() {},

@@ -23,7 +23,6 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Interpreters/Settings.h>
 #include <common/logger_useful.h>
@@ -333,7 +332,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(getMaxBufferSize(source_num, settings.recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
-    , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
     , live_local_connections(0)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
@@ -346,7 +344,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        received_message_queue = std::make_unique<ReceivedMessageQueue>(async_wait_rewrite_queue, exc_log, max_buffer_size, enable_fine_grained_shuffle_flag, output_stream_count);
+        received_message_queue = std::make_unique<ReceivedMessageQueue>(exc_log, max_buffer_size, enable_fine_grained_shuffle_flag, output_stream_count);
         if (isReceiverForTiFlashStorage())
             rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
 
@@ -535,7 +533,6 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     async_handler_ptrs.push_back(
         std::make_unique<AsyncRequestHandler<RPCContext>>(
             received_message_queue.get(),
-            async_wait_rewrite_queue,
             rpc_context,
             std::move(request),
             exc_log->identifier(),
@@ -800,13 +797,13 @@ void ExchangeReceiverBase<RPCContext>::verifyStreamId(size_t stream_id) const
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(std::pair<MPMCQueueResult, ReceivedMessagePtr> && pop_result)
+ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(MPMCQueueResult res, ReceivedMessagePtr && msg)
 {
-    switch (pop_result.first)
+    switch (res)
     {
     case MPMCQueueResult::OK:
-        assert(pop_result.second);
-        return {ReceiveStatus::ok, std::move(pop_result.second)};
+        assert(msg);
+        return {ReceiveStatus::ok, std::move(msg)};
     case MPMCQueueResult::EMPTY:
         return {ReceiveStatus::empty, nullptr};
     default:
@@ -819,7 +816,8 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
 {
     assert(received_message_queue != nullptr);
     verifyStreamId(stream_id);
-    return toReceiveResult(received_message_queue->pop<true>(stream_id));
+    ReceivedMessagePtr msg;
+    return toReceiveResult(received_message_queue->pop<true>(msg, stream_id), std::move(msg));
 }
 
 template <typename RPCContext>
@@ -827,7 +825,8 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
 {
     assert(received_message_queue != nullptr);
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
-    return toReceiveResult(received_message_queue->pop<false>(stream_id));
+    ReceivedMessagePtr msg;
+    return toReceiveResult(received_message_queue->pop<false>(msg, stream_id), std::move(msg));
 }
 
 template <typename RPCContext>

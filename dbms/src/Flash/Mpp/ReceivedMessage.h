@@ -16,7 +16,6 @@
 
 #include <Common/FailPoint.h>
 #include <Common/LooseBoundedMPMCQueue.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>

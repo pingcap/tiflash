@@ -269,7 +269,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         }
         else
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_limit, mem_tracker, log, tunnel_id, call_data->grpcCall(), &data_size_in_queue);
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_limit, mem_tracker, log, tunnel_id, &data_size_in_queue);
         }
         call_data->attachAsyncTunnelSender(async_tunnel_sender);
         tunnel_sender = async_tunnel_sender;
