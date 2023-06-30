@@ -20,8 +20,6 @@
 #include <memory>
 #include <type_traits>
 
-#include "Flash/Pipeline/Exec/PipelineExecBuilder.h"
-
 namespace DB::tests
 {
 namespace
