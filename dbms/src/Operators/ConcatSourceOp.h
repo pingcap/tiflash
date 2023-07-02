@@ -55,6 +55,7 @@ private:
     Block & res;
 };
 
+/// Used to merge multiple partitioned tables of storage layer.
 class ConcatSourceOp : public SourceOp
 {
 public:
@@ -78,7 +79,7 @@ public:
         return "ConcatSourceOp";
     }
 
-    // ConcatSourceOp is used to merge multiple partitioned tables in the storage layer, so override `getIOProfileInfo` is needed here.
+    // ConcatSourceOp is used to merge multiple partitioned tables of storage layer, so override `getIOProfileInfo` is needed here.
     IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
@@ -128,9 +129,6 @@ protected:
                     return OperatorStatus::HAS_OUTPUT;
                 }
                 break;
-            case OperatorStatus::CANCELLED:
-                done = true;
-                return OperatorStatus::CANCELLED;
             default:
                 return status;
             }
@@ -143,7 +141,9 @@ protected:
             return OperatorStatus::HAS_OUTPUT;
 
         assert(cur_exec);
-        return cur_exec->executeIO();
+        auto status = cur_exec->executeIO();
+        assert(status != OperatorStatus::FINISHED);
+        return status;
     }
 
     OperatorStatus awaitImpl() override
@@ -152,7 +152,9 @@ protected:
             return OperatorStatus::HAS_OUTPUT;
 
         assert(cur_exec);
-        return cur_exec->await();
+        auto status = cur_exec->await();
+        assert(status != OperatorStatus::FINISHED);
+        return status;
     }
 
 private:
