@@ -58,7 +58,7 @@ static constexpr char MIGRATE_HELP[] =
     "  --version     Target dtfile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
-#ifdef USE_QPL
+#if USE_QPL
     "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, qpl, none]\n"
 #else
     "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, none]\n"
