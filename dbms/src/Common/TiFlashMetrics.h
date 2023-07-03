@@ -51,13 +51,15 @@ namespace DB
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
-        F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}))               \
+        F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}),               \
+        F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
     M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}),                                \
         F(type_cop_executing, {"type", "cop_executing"}), F(type_batch, {"type", "batch"}),                                                         \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
-        F(type_remote_read_executing, {"type", "remote_read_executing"}))                                                                           \
+        F(type_remote_read_executing, {"type", "remote_read_executing"}),                                                                           \
+        F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                             \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                                  \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),                     \
@@ -72,7 +74,9 @@ namespace DB
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                               \
+        F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                                \
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
@@ -91,7 +95,8 @@ namespace DB
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                                                                 \
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                           \
-        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                                     \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                                     \
+        F(type_disagg_establish_task, {{"type", "type_disagg_establish_task"}}))                                                                    \
     M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                               \
         F(type_hash_original, {"type", "hash_original"}),                                                                                           \
         F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}),                                                             \
@@ -193,8 +198,8 @@ namespace DB
         F(type_clean_external, {{"type", "clean_external"}},       ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                                    \
     M(tiflash_storage_page_command_count, "Total number of PageStorage's command, such as write / read / scan / snapshot", Counter,                 \
-        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),                                                                           \
-        F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                                                                     \
+        F(type_write, {"type", "write"}), F(type_read, {"type", "read"}),  F(type_read_page_dir, {"type", "read_page_dir"}),                        \
+        F(type_read_blob, {"type", "read_blob"}), F(type_scan, {"type", "scan"}), F(type_snapshot, {"type", "snapshot"}))                           \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                                    \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                                  \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                                   \
