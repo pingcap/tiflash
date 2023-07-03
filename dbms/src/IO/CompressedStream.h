@@ -65,7 +65,7 @@ enum class CompressionMethodByte : uint8_t
     NONE = 0x02,
     LZ4 = 0x82,
     ZSTD = 0x90,
-#ifdef USE_QPL
+#if USE_QPL
     QPL = 0x88,
 #endif
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
