@@ -39,12 +39,14 @@ namespace DB
     M(exception_before_dmfile_remove_from_disk)                   \
     M(force_triggle_background_merge_delta)                       \
     M(force_triggle_foreground_flush)                             \
+    M(exception_before_mpp_make_non_root_mpp_task_active)         \
     M(exception_before_mpp_register_non_root_mpp_task)            \
     M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
     M(exception_before_mpp_non_root_task_run)                     \
     M(exception_during_mpp_non_root_task_run)                     \
     M(exception_during_query_run)                                 \
+    M(exception_before_mpp_make_root_mpp_task_active)             \
     M(exception_before_mpp_register_root_mpp_task)                \
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
@@ -109,7 +111,8 @@ namespace DB
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)  \
-    M(pause_before_register_non_root_mpp_task)
+    M(pause_before_register_non_root_mpp_task) \
+    M(pause_before_make_non_root_mpp_task_active)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \

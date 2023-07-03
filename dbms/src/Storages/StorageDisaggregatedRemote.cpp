@@ -39,6 +39,7 @@
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -72,8 +73,62 @@ extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 
 BlockInputStreams StorageDisaggregated::readThroughS3(
     const Context & db_context,
-    const SelectQueryInfo & query_info,
     unsigned num_streams)
+{
+    auto read_task = buildReadTaskWithBackoff(db_context);
+    // Build InputStream according to the remote segment read tasks
+    DAGPipeline pipeline;
+    buildRemoteSegmentInputStreams(
+        db_context,
+        read_task,
+        num_streams,
+        pipeline);
+
+    NamesAndTypes source_columns;
+    source_columns.reserve(table_scan.getColumnSize());
+    const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
+    for (const auto & col : remote_segment_stream_header)
+    {
+        source_columns.emplace_back(col.name, col.type);
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // Handle duration type column
+    extraCast(*analyzer, pipeline);
+    // Handle filter
+    filterConditions(*analyzer, pipeline);
+    return pipeline.streams;
+}
+
+void StorageDisaggregated::readThroughS3(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const Context & db_context,
+    unsigned num_streams)
+{
+    auto read_task = buildReadTaskWithBackoff(db_context);
+
+    buildRemoteSegmentSourceOps(
+        exec_status,
+        group_builder,
+        db_context,
+        read_task,
+        num_streams);
+
+    NamesAndTypes source_columns;
+    auto header = group_builder.getCurrentHeader();
+    source_columns.reserve(header.columns());
+    for (const auto & col : header)
+        source_columns.emplace_back(col.name, col.type);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // Handle duration type column
+    extraCast(exec_status, group_builder, *analyzer);
+    // Handle filter
+    filterConditions(exec_status, group_builder, *analyzer);
+}
+
+DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
 {
     using namespace pingcap;
 
@@ -114,29 +169,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
         }
     }
 
-    // Build InputStream according to the remote segment read tasks
-    DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(
-        db_context,
-        read_task,
-        query_info,
-        num_streams,
-        pipeline);
-
-    NamesAndTypes source_columns;
-    source_columns.reserve(table_scan.getColumnSize());
-    const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
-    for (const auto & col : remote_segment_stream_header)
-    {
-        source_columns.emplace_back(col.name, col.type);
-    }
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
-    // Handle duration type column
-    extraCast(*analyzer, pipeline);
-    // Handle filter
-    filterConditions(*analyzer, pipeline);
-    return pipeline.streams;
+    return read_task;
 }
 
 DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
@@ -457,17 +490,13 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     return rs_operator;
 }
 
-void StorageDisaggregated::buildRemoteSegmentInputStreams(
+DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
     const Context & db_context,
     const DM::Remote::RNReadTaskPtr & read_task,
-    const SelectQueryInfo &,
-    size_t num_streams,
-    DAGPipeline & pipeline)
+    const DM::ColumnDefinesPtr & column_defines)
 {
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
-    // Build the input streams to read blocks from remote segments
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto rs_operator = buildRSOperator(db_context, column_defines);
     auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
         rs_operator,
@@ -480,7 +509,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
     LOG_DEBUG(log, "Building segment input streams, read_mode={} is_fast_scan={} keep_order={}", magic_enum::enum_name(read_mode), table_scan.isFastScan(), table_scan.keepOrder());
 
-    auto workers = DM::Remote::RNWorkers::create({
+    return DM::Remote::RNWorkers::create({
         .log = log->getChild(executor_id),
         .read_task = read_task,
         .columns_to_read = column_defines,
@@ -489,6 +518,19 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         .read_mode = read_mode,
         .cluster = db_context.getTMTContext().getKVCluster(),
     });
+}
+
+void StorageDisaggregated::buildRemoteSegmentInputStreams(
+    const Context & db_context,
+    const DM::Remote::RNReadTaskPtr & read_task,
+    size_t num_streams,
+    DAGPipeline & pipeline)
+{
+    const auto & executor_id = table_scan.getTableScanExecutorID();
+
+    // Build the input streams to read blocks from remote segments
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto workers = buildRNWorkers(db_context, read_task, column_defines);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
@@ -513,6 +555,35 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
     });
+}
+
+void StorageDisaggregated::buildRemoteSegmentSourceOps(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const Context & db_context,
+    const DM::Remote::RNReadTaskPtr & read_task,
+    size_t num_streams)
+{
+    // Build the input streams to read blocks from remote segments
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto workers = buildRNWorkers(db_context, read_task, column_defines);
+
+    RUNTIME_CHECK(num_streams > 0, num_streams);
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        group_builder.addConcurrency(DM::Remote::RNSegmentSourceOp::create({
+            .debug_tag = log->identifier(),
+            .exec_status = exec_status,
+            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
+            // because we want to extend the lifetime of the WorkerPtr until read is finished.
+            // Also, we want to start the Worker after the read.
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        }));
+    }
+    db_context.getDAGContext()->addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+    db_context.getDAGContext()->addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 }
 
 } // namespace DB

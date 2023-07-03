@@ -525,7 +525,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
         {
             gc_safe_point
-                = PDClientHelper::getGCSafePointWithRetry(pd_client, false, context.getSettingsRef().safe_point_update_interval_seconds);
+                = PDClientHelper::getGCSafePointWithRetry(pd_client, keyspace_id, false, context.getSettingsRef().safe_point_update_interval_seconds);
         }
         /**
          * In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.

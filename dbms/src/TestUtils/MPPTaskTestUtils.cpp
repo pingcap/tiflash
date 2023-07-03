@@ -23,13 +23,15 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id)
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id, int tidb_server_id, int query_ts)
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
+    if (query_ts > 0)
+        properties.query_ts = query_ts;
     if (local_query_id >= 0)
         properties.local_query_id = local_query_id;
     else
