@@ -360,8 +360,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
@@ -398,8 +398,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
@@ -430,8 +430,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
 
@@ -463,8 +463,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
     entries.createDelete(PageVersion(5));
