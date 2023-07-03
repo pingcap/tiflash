@@ -773,7 +773,7 @@ public:
             return CompressionMethod::LZ4HC;
         if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
-#ifdef USE_QPL
+#if USE_QPL
         if (lower_str == "qpl")
             return CompressionMethod::QPL;
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
