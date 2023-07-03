@@ -128,7 +128,7 @@ void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_d
         if (ZSTD_isError(res))
             throw Exception("Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)), ErrorCodes::CANNOT_DECOMPRESS);
     }
-#ifdef USE_QPL
+#if USE_QPL
     else if (method == static_cast<UInt8>(CompressionMethodByte::QPL))
     {
         if (unlikely(QPL::QPL_decompress(compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE, to, size_decompressed) < 0))
