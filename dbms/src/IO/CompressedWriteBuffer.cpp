@@ -23,7 +23,7 @@
 
 #include <memory>
 
-#ifdef USE_QPL
+#if USE_QPL
 #include "CodecDeflateQpl.h"
 #endif
 
