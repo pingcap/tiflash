@@ -171,10 +171,8 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
-        /// For non-fixed size type, reserve function might cause too much memory usage, i.e. string type column reserves 64 bytes
-        /// size for each element.
         const auto & type_removed_nullable = removeNullable(column.type);
-        if (type_removed_nullable->isValueRepresentedByNumber() || type_removed_nullable->isFixedString())
+        if (type_removed_nullable->haveMaximumSizeOfValue())
         {
             if (reserve_size > 0)
                 read_column->reserve(std::max(rows, reserve_size));
