@@ -1020,7 +1020,7 @@ public:
     };
 
 
-    Aggregator(const Params & params_, const String & req_id);
+    Aggregator(const Params & params_, const String & req_id, size_t concurrency);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result);

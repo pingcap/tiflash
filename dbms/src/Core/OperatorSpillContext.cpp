@@ -30,10 +30,10 @@ HashJoinSpillContext::HashJoinSpillContext(size_t concurrency, UInt64 operator_s
 
 AggSpillContext::AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_)
     : OperatorSpillContext(operator_spill_threshold_)
-    , revocable_memories(concurrency)
+    , per_thread_revocable_memories(concurrency)
     , spill_config(spill_config_)
 {
-    for (auto & memory : revocable_memories)
+    for (auto & memory : per_thread_revocable_memories)
         memory = 0;
 }
 

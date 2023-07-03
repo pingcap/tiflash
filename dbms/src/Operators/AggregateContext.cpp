@@ -31,7 +31,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
 
-    aggregator = std::make_unique<Aggregator>(params, log->identifier());
+    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads);
     aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     status = AggStatus::build;

@@ -235,7 +235,7 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const String & req_id)
+Aggregator::Aggregator(const Params & params_, const String & req_id, size_t concurrency)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
@@ -280,7 +280,8 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
 
     method_chosen = chooseAggregationMethod();
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
-    if (params.getMaxBytesBeforeExternalGroupBy() > 0)
+    agg_spill_context = std::make_shared<AggSpillContext>(concurrency, params.spill_config, params.getMaxBytesBeforeExternalGroupBy());
+    if (agg_spill_context->isSpillEnabled())
     {
         /// init spiller if needed
         auto header = getHeader(false);
@@ -294,6 +295,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
         else
         {
             params.setMaxBytesBeforeExternalGroupBy(0);
+            agg_spill_context->disableSpill();
             LOG_WARNING(log, "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }

@@ -33,10 +33,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t temporary_data_merge_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , params(params_)
-    , aggregator(params, req_id)
-    , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
+    , params(params_)
+    , aggregator(params, req_id, max_threads)
+    , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , keys_size(params.keys_size)
