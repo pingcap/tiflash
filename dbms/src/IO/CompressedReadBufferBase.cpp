@@ -67,7 +67,7 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
 
     size_t & size_compressed = size_compressed_without_checksum;
 
-#ifdef USE_QPL
+#if USE_QPL
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4) || method == static_cast<UInt8>(CompressionMethodByte::QPL) || method == static_cast<UInt8>(CompressionMethodByte::ZSTD)
         || method == static_cast<UInt8>(CompressionMethodByte::NONE))
 #else
