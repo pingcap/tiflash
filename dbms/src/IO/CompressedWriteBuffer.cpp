@@ -114,7 +114,7 @@ size_t CompressionEncode(
 
         break;
     }
-#ifdef USE_QPL
+#if USE_QPL
     case CompressionMethod::QPL:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
