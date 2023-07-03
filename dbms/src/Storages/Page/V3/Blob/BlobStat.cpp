@@ -204,7 +204,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
-            if (!BlobFileIdManager::checkBlobFileType(page_type, stat->id))
+            if (BlobFileIdManager::getBlobFileType(stat->id) != page_type)
                 continue;
 
             auto defer_lock = stat->defer_lock();
@@ -357,9 +357,8 @@ BlobFileId BlobStats::BlobFileIdManager::nextFileId(PageType page_type, const st
     return page_type == PageType::RaftData ? next_raft_id++ : next_normal_id++;
 }
 
-bool BlobStats::BlobFileIdManager::checkBlobFileType(PageType page_type, BlobFileId file_id)
+PageType BlobStats::BlobFileIdManager::getBlobFileType(BlobFileId file_id)
 {
-    return page_type == PageType::RaftData ? isRaftFileId(file_id) : !isRaftFileId(file_id);
+    return isRaftFileId(file_id) ? PageType::RaftData : PageType::Normal;
 }
-
 } // namespace DB::PS::V3

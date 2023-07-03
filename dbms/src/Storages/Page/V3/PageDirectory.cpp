@@ -1813,6 +1813,22 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 }
 
 template <typename Trait>
+typename PageDirectory<Trait>::PageTypeAndGcInfo
+PageDirectory<Trait>::getEntriesByBlobIdsForDifferentPageTypes(const typename PageDirectory<Trait>::PageTypeAndBlobIds & page_type_and_blob_ids) const
+{
+    PageDirectory<Trait>::PageTypeAndGcInfo page_type_and_gc_info;
+    // Because raft related data should do full gc less frequently, so we get the gc info for different page types separately.
+    // TODO: get entries in a single traverse of PageDirectory
+    for (const auto & [page_type, blob_ids] : page_type_and_blob_ids)
+    {
+        auto [blob_versioned_entries, total_page_size] = getEntriesByBlobIds(blob_ids);
+        page_type_and_gc_info.emplace_back(page_type, std::move(blob_versioned_entries), total_page_size);
+    }
+
+    return page_type_and_gc_info;
+}
+
+template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
     // Only apply compact logs when files snapshot is valid

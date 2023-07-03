@@ -198,5 +198,6 @@ enum PageType
 {
     RaftData, // store raft related data
     Normal, // store all data other than raft related data
+    Unknown,
 };
 } // namespace DB

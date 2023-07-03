@@ -1062,11 +1062,11 @@ BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & pag
 
 
 template <typename Trait>
-std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
+typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
 {
     // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();
-    std::vector<BlobFileId> blob_need_gc;
+    PageTypeAndBlobIds blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
 
     fiu_do_on(FailPoints::force_change_all_blobs_to_read_only,
@@ -1132,11 +1132,21 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
             }
 
             // Check if GC is required
-            if ((BlobStats::BlobFileIdManager::checkBlobFileType(PageType::Normal, stat->id) && stat->sm_valid_rate <= config.heavy_gc_valid_rate)
-                || stat->sm_valid_rate <= config.heavy_gc_valid_rate / 10)
+            // Raft related data will be deleted in a more quick way, so we set a smaller full gc threshold for it.
+            // And we cannot remove full gc for raft related data,
+            // because there is some raft related meta data that will be rewritten is a slower pace and will not completely deleted even if the region is removed.
+            PageType page_type = BlobStats::BlobFileIdManager::getBlobFileType(stat->id);
+            bool do_full_gc = (page_type == PageType::Normal)
+                ? stat->sm_valid_rate <= config.heavy_gc_valid_rate
+                : stat->sm_valid_rate <= config.heavy_gc_valid_rate / 10;
+            if (do_full_gc)
             {
                 LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
-                blob_need_gc.emplace_back(stat->id);
+                if (blob_need_gc.find(page_type) == blob_need_gc.end())
+                {
+                    blob_need_gc.emplace(page_type, std::vector<BlobFileId>());
+                }
+                blob_need_gc[page_type].emplace_back(stat->id);
 
                 // Change current stat to read only
                 stat->changeToReadOnly();
@@ -1168,152 +1178,157 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::gc(GcEntriesMap & entries_need_gc,
-                     const PageSize & total_page_size,
+BlobStore<Trait>::gc(const PageTypeAndGcInfo & page_type_and_gc_info,
                      const WriteLimiterPtr & write_limiter,
                      const ReadLimiterPtr & read_limiter)
 {
-    std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
     PageEntriesEdit edit;
-
-    if (total_page_size == 0)
+    for (const auto & page_type_and_gc_info : page_type_and_gc_info)
     {
-        throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
-    }
-    LOG_INFO(log, "BlobStore gc will migrate {} into new blob files", formatReadableSizeWithBinarySuffix(total_page_size));
+        auto page_type = std::get<0>(page_type_and_gc_info);
+        auto entries_need_gc = std::get<1>(page_type_and_gc_info);
+        auto total_page_size = std::get<2>(page_type_and_gc_info);
+        std::vector<std::tuple<BlobFileId, BlobFileOffset, PageSize>> written_blobs;
 
-    auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
-                                                                              char * data_begin,
-                                                                              const BlobFileOffset & file_offset,
-                                                                              const PageSize & data_size) {
-        try
+        if (total_page_size == 0)
         {
-            auto blob_file = getBlobFile(file_id);
-            // Should append before calling BlobStore::write, so that we can rollback the
-            // first allocated span from stats.
-            written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_INFO(
-                log,
-                "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
-                file_id,
-                file_offset,
-                data_size,
-                total_page_size);
-            blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true);
+            throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
         }
-        catch (DB::Exception & e)
-        {
-            LOG_ERROR(
-                log,
-                "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
-                file_id,
-                file_offset,
-                data_size,
-                total_page_size);
-            for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
+        LOG_INFO(log, "BlobStore gc will migrate {} into new blob files", formatReadableSizeWithBinarySuffix(total_page_size));
+
+        auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
+                                                                                  char * data_begin,
+                                                                                  const BlobFileOffset & file_offset,
+                                                                                  const PageSize & data_size) {
+            try
             {
-                removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
+                auto blob_file = getBlobFile(file_id);
+                // Should append before calling BlobStore::write, so that we can rollback the
+                // first allocated span from stats.
+                written_blobs.emplace_back(file_id, file_offset, data_size);
+                LOG_INFO(
+                    log,
+                    "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
+                    file_id,
+                    file_offset,
+                    data_size,
+                    total_page_size);
+                blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true);
             }
-            throw e;
-        }
-    };
+            catch (DB::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
+                    file_id,
+                    file_offset,
+                    data_size,
+                    total_page_size);
+                for (const auto & [blobfile_id_revert, file_offset_beg_revert, page_size_revert] : written_blobs)
+                {
+                    removePosFromStats(blobfile_id_revert, file_offset_beg_revert, page_size_revert);
+                }
+                throw e;
+            }
+        };
 
-    auto alloc_size = config.file_limit_size.get();
-    // If `total_page_size` is greater than `config_file_limit`, we will try to write the page data into multiple `BlobFile`s to
-    // make the memory consumption smooth during GC.
-    if (total_page_size > alloc_size)
-    {
-        size_t biggest_page_size = 0;
+        auto alloc_size = config.file_limit_size.get();
+        // If `total_page_size` is greater than `config_file_limit`, we will try to write the page data into multiple `BlobFile`s to
+        // make the memory consumption smooth during GC.
+        if (total_page_size > alloc_size)
+        {
+            size_t biggest_page_size = 0;
+            for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
+            {
+                (void)file_id;
+                for (const auto & [page_id, version, entry] : versioned_pageid_entry_list)
+                {
+                    (void)page_id;
+                    (void)version;
+                    biggest_page_size = std::max(biggest_page_size, entry.size);
+                }
+            }
+            alloc_size = std::max(alloc_size, biggest_page_size);
+        }
+        else
+        {
+            alloc_size = total_page_size;
+        }
+
+        BlobFileOffset remaining_page_size = total_page_size - alloc_size;
+
+        char * data_buf = static_cast<char *>(alloc(alloc_size));
+        SCOPE_EXIT({
+            free(data_buf, alloc_size);
+        });
+
+        char * data_pos = data_buf;
+        BlobFileOffset offset_in_data = 0;
+        BlobFileId blobfile_id;
+        BlobFileOffset file_offset_begin;
+        std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size, page_type);
+
+        // blob_file_0, [<page_id_0, ver0, entry0>,
+        //               <page_id_0, ver1, entry1>,
+        //               <page_id_1, ver1, entry1>, ... ]
+        // blob_file_1, [...]
+        // ...
         for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
         {
-            (void)file_id;
             for (const auto & [page_id, version, entry] : versioned_pageid_entry_list)
             {
-                (void)page_id;
-                (void)version;
-                biggest_page_size = std::max(biggest_page_size, entry.size);
-            }
-        }
-        alloc_size = std::max(alloc_size, biggest_page_size);
-    }
-    else
-    {
-        alloc_size = total_page_size;
-    }
-
-    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
-
-    char * data_buf = static_cast<char *>(alloc(alloc_size));
-    SCOPE_EXIT({
-        free(data_buf, alloc_size);
-    });
-
-    char * data_pos = data_buf;
-    BlobFileOffset offset_in_data = 0;
-    BlobFileId blobfile_id;
-    BlobFileOffset file_offset_begin;
-    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size, PageType::Normal); // only normal page can do full gc
-
-    // blob_file_0, [<page_id_0, ver0, entry0>,
-    //               <page_id_0, ver1, entry1>,
-    //               <page_id_1, ver1, entry1>, ... ]
-    // blob_file_1, [...]
-    // ...
-    for (const auto & [file_id, versioned_pageid_entry_list] : entries_need_gc)
-    {
-        for (const auto & [page_id, version, entry] : versioned_pageid_entry_list)
-        {
-            /// If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s.
-            /// So there may be some page entry that cannot be fit into the current blob file, and we need to write it into the next one.
-            /// And we need perform the following steps before writing data into the current blob file:
-            ///   1. reclaim unneeded space allocated from current blob stat if `offset_in_data` < `alloc_size`;
-            ///   2. update `remaining_page_size`;
-            /// After writing data into the current blob file, we reuse the original buffer for future write.
-            if (offset_in_data + entry.size > alloc_size)
-            {
-                assert(file_offset_begin == 0);
-                // Remove the span that is not actually used
-                if (offset_in_data != alloc_size)
+                /// If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s.
+                /// So there may be some page entry that cannot be fit into the current blob file, and we need to write it into the next one.
+                /// And we need perform the following steps before writing data into the current blob file:
+                ///   1. reclaim unneeded space allocated from current blob stat if `offset_in_data` < `alloc_size`;
+                ///   2. update `remaining_page_size`;
+                /// After writing data into the current blob file, we reuse the original buffer for future write.
+                if (offset_in_data + entry.size > alloc_size)
                 {
-                    removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
+                    assert(file_offset_begin == 0);
+                    // Remove the span that is not actually used
+                    if (offset_in_data != alloc_size)
+                    {
+                        removePosFromStats(blobfile_id, offset_in_data, alloc_size - offset_in_data);
+                    }
+                    remaining_page_size += alloc_size - offset_in_data;
+
+                    // Write data into Blob.
+                    write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
+
+                    // Reset the position to reuse the buffer allocated
+                    data_pos = data_buf;
+                    offset_in_data = 0;
+
+                    // Acquire a span from stats for remaining data
+                    auto next_alloc_size = (remaining_page_size > alloc_size ? alloc_size : remaining_page_size);
+                    remaining_page_size -= next_alloc_size;
+                    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size, page_type);
                 }
-                remaining_page_size += alloc_size - offset_in_data;
+                assert(offset_in_data + entry.size <= alloc_size);
 
-                // Write data into Blob.
-                write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
+                // Read the data into buffer by old entry
+                read(page_id, file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
 
-                // Reset the position to reuse the buffer allocated
-                data_pos = data_buf;
-                offset_in_data = 0;
+                // Most vars of the entry is not changed, but the file id and offset
+                // need to be updated.
+                PageEntryV3 new_entry = entry;
+                new_entry.file_id = blobfile_id;
+                new_entry.offset = file_offset_begin + offset_in_data;
+                new_entry.padded_size = 0; // reset padded size to be zero
 
-                // Acquire a span from stats for remaining data
-                auto next_alloc_size = (remaining_page_size > alloc_size ? alloc_size : remaining_page_size);
-                remaining_page_size -= next_alloc_size;
-                std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size, PageType::Normal); // only normal page can do full gc
+                offset_in_data += new_entry.size;
+                data_pos += new_entry.size;
+
+                edit.upsertPage(page_id, version, new_entry);
             }
-            assert(offset_in_data + entry.size <= alloc_size);
-
-            // Read the data into buffer by old entry
-            read(page_id, file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
-
-            // Most vars of the entry is not changed, but the file id and offset
-            // need to be updated.
-            PageEntryV3 new_entry = entry;
-            new_entry.file_id = blobfile_id;
-            new_entry.offset = file_offset_begin + offset_in_data;
-            new_entry.padded_size = 0; // reset padded size to be zero
-
-            offset_in_data += new_entry.size;
-            data_pos += new_entry.size;
-
-            edit.upsertPage(page_id, version, new_entry);
         }
-    }
 
-    // write remaining data in `data_buf` into BlobFile
-    if (offset_in_data != 0)
-    {
-        write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
+        // write remaining data in `data_buf` into BlobFile
+        if (offset_in_data != 0)
+        {
+            write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
+        }
     }
 
     return edit;

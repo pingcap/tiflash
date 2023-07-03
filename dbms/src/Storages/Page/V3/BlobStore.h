@@ -64,10 +64,11 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-    std::vector<BlobFileId> getGCStats();
+    using PageTypeAndBlobIds = std::map<PageType, std::vector<BlobFileId>>;
+    PageTypeAndBlobIds getGCStats();
 
-    PageEntriesEdit gc(GcEntriesMap & entries_need_gc,
-                       const PageSize & total_page_size,
+    using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
+    PageEntriesEdit gc(const PageTypeAndGcInfo & page_type_and_gc_info,
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 

@@ -977,7 +977,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 2);
 
     // Then we must do heavy GC
-    ASSERT_EQ(*gc_stats.begin(), 1);
+    ASSERT_EQ(*(gc_stats.begin()->second.begin()), 1);
 }
 
 TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
@@ -1076,7 +1076,10 @@ TEST_F(BlobStoreTest, GC)
     auto stat = blob_store.blob_stats.blobIdToStat(1);
     stat->changeToReadOnly();
 
-    const auto & gc_edit = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    using PageTypeAndGcInfo = typename u128::PageDirectoryType::PageTypeAndGcInfo;
+    PageTypeAndGcInfo page_type_and_gc_info;
+    page_type_and_gc_info.emplace_back(PageType::Normal, gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    const auto & gc_edit = blob_store.gc(page_type_and_gc_info);
 
     // Check copy_list which will apply for Mvcc
     ASSERT_EQ(gc_edit.size(), buff_nums);
@@ -1147,7 +1150,10 @@ try
         wb.clear();
     }
 
-    const auto & edit = blob_store.gc(gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    using PageTypeAndGcInfo = typename u128::PageDirectoryType::PageTypeAndGcInfo;
+    PageTypeAndGcInfo page_type_and_gc_info;
+    page_type_and_gc_info.emplace_back(PageType::Normal, gc_context, static_cast<PageSize>(buff_size * buff_nums));
+    const auto & edit = blob_store.gc(page_type_and_gc_info);
     ASSERT_EQ(edit.size(), buff_nums);
 }
 CATCH
@@ -1768,7 +1774,10 @@ try
         PageDirectory<u128::PageDirectoryTrait>::GcEntries versioned_pageid_entries;
         versioned_pageid_entries.emplace_back(page_id2, 1, entry_from_write2);
         gc_context[1] = versioned_pageid_entries;
-        PageEntriesEdit gc_edit = blob_store.gc(gc_context, 500);
+        using PageTypeAndGcInfo = typename u128::PageDirectoryType::PageTypeAndGcInfo;
+        PageTypeAndGcInfo page_type_and_gc_info;
+        page_type_and_gc_info.emplace_back(PageType::Normal, gc_context, 500);
+        PageEntriesEdit gc_edit = blob_store.gc(page_type_and_gc_info);
         const auto & records = gc_edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 2);

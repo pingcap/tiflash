@@ -127,7 +127,7 @@ public:
 
         BlobFileId nextFileId(PageType page_type, const std::lock_guard<std::mutex> &);
 
-        static bool checkBlobFileType(PageType page_type, BlobFileId file_id);
+        static PageType getBlobFileType(BlobFileId file_id);
 
     private:
         static inline bool isRaftFileId(BlobFileId file_id)
