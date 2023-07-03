@@ -1132,7 +1132,8 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
             }
 
             // Check if GC is required
-            if (BlobStats::BlobFileIdManager::checkBlobFileType(PageType::Normal, stat->id) && stat->sm_valid_rate <= config.heavy_gc_valid_rate)
+            if ((BlobStats::BlobFileIdManager::checkBlobFileType(PageType::Normal, stat->id) && stat->sm_valid_rate <= config.heavy_gc_valid_rate)
+                || stat->sm_valid_rate <= config.heavy_gc_valid_rate / 10)
             {
                 LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
                 blob_need_gc.emplace_back(stat->id);
