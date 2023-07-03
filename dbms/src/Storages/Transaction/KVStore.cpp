@@ -47,6 +47,8 @@ namespace FailPoints
 extern const char force_fail_in_flush_region_data[];
 extern const char proactive_flush_before_persist_region[];
 extern const char passive_flush_before_persist_region[];
+extern const char proactive_flush_between_persist_cache_and_region[];
+extern const char proactive_flush_between_persist_regions[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -447,15 +449,20 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
-    auto gap = region_compact_log_gap.load();
-    if(index > truncated_index + gap && flush_if_possible) {
-        // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
-        LOG_INFO(log, "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} log gap {}", curr_region.toString(false), index, term, truncated_index, truncated_term, gap);
-        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
+    auto current_gap = index - truncated_index;
+    GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
+    auto gap_threshold = region_compact_log_gap.load();
+    if (flush_if_possible)
+    {
+        if (index > truncated_index + gap_threshold)
+        {
+            // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
+            LOG_INFO(log, "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap {}/{}", curr_region.toString(false), index, term, truncated_index, truncated_term, current_gap, gap_threshold);
+            return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
+        }
+
+        LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
     }
-
-    LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
-
     return false;
 }
 
@@ -936,10 +943,6 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
     return region_persister->getFileUsageStatistics();
 }
 
-// We need to get applied index before flushing cache, and can't hold region task lock when flush cache to avoid hang write cmd apply.
-// 1. store applied index and applied term,
-// 2. flush cache,
-// 3. notify regions to compact log and store fushed state with applied index/term before flushing cache.
 void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
     if (is_background)
@@ -1034,6 +1037,14 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
         {
             LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
             // Both flushCache and persistRegion should be protected by region task lock.
+            // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache.
+            // Merely store applied_index is not enough, considering some cmds leads to modification of other meta data.
+            // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
+            // However, this solution still involves region task lock in this function.
+            // Meanwhile, other write/admin cmds may be executed, they requires we acquire lock here:
+            // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
+            // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
+
             auto region_task_lock = region_manager.genRegionTaskLock(region_id);
             storage->flushCache(tmt.getContext(), std::get<2>(region.second));
             persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");

@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <port/unistd.h>
-#include <iostream>
+#include <Common/Exception.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
-#include <Common/Exception.h>
+#include <port/unistd.h>
+
+#include <iostream>
 
 
 int main(int, char **)

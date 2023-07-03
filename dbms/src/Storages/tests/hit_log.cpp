@@ -12,28 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <map>
-#include <list>
-#include <iostream>
-
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeDateTime.h>
-
-#include <DataStreams/TabSeparatedRowInputStream.h>
-#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/BlockInputStreamFromRowInputStream.h>
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
+#include <DataStreams/TabSeparatedRowInputStream.h>
+#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/copyData.h>
-
-#include <Storages/StorageLog.h>
-#include <Storages/RegionQueryInfo.h>
-
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <Interpreters/Context.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/StorageLog.h>
+
+#include <iostream>
+#include <list>
+#include <map>
 
 
 using namespace DB;
@@ -42,8 +38,7 @@ using namespace DB;
 int main(int argc, char ** argv)
 try
 {
-    NamesAndTypesList names_and_types_list
-    {
+    NamesAndTypesList names_and_types_list{
         {"WatchID", std::make_shared<DataTypeUInt64>()},
         {"JavaEnable", std::make_shared<DataTypeUInt8>()},
         {"Title", std::make_shared<DataTypeString>()},
@@ -114,7 +109,10 @@ try
     /// create a hit log table
 
     StoragePtr table = StorageLog::create(
-        "./", "HitLog", ColumnsDescription{names_and_types_list}, DEFAULT_MAX_COMPRESS_BLOCK_SIZE);
+        "./",
+        "HitLog",
+        ColumnsDescription{names_and_types_list},
+        DEFAULT_MAX_COMPRESS_BLOCK_SIZE);
     table->startup();
 
     /// create a description of how to read data from the tab separated dump

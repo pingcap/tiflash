@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
-#include <Common/Stopwatch.h>
 #include <Poco/File.h>
-#include <iostream>
-#include <iomanip>
-#include <vector>
+
 #include <algorithm>
+#include <iomanip>
+#include <iostream>
+#include <vector>
 
 /** We test the hypothesis that skipping unnecessary parts of seek-forward never degrades overall read speed.
   * Before the measurements, it is desirable to discard disk cache: `echo 3 > /proc/sys/vm/drop_caches`.
@@ -35,7 +36,7 @@ int main(int argc, const char ** argv)
     if (argc < 5 || argc > 6)
     {
         std::cerr << "Usage:\n"
-            << argv[0] << " file bytes_in_block min_skip_bytes max_skip_bytes [buffer_size]" << std::endl;
+                  << argv[0] << " file bytes_in_block min_skip_bytes max_skip_bytes [buffer_size]" << std::endl;
         return 0;
     }
 
@@ -72,11 +73,11 @@ int main(int argc, const char ** argv)
     }
     watch.stop();
 
-    std::cout << checksum << std::endl;    /// don't optimize
+    std::cout << checksum << std::endl; /// don't optimize
 
     std::cout << "Read " << bytes_read << " out of " << size << " bytes in "
-        << std::setprecision(4) << watch.elapsedSeconds() << " seconds ("
-        << bytes_read / watch.elapsedSeconds() / 1000000 << " MB/sec.)" << std::endl;
+              << std::setprecision(4) << watch.elapsedSeconds() << " seconds ("
+              << bytes_read / watch.elapsedSeconds() / 1000000 << " MB/sec.)" << std::endl;
 
     return 0;
 }

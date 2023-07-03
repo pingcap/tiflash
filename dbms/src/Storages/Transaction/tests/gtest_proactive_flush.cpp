@@ -18,10 +18,11 @@ namespace DB
 {
 namespace tests
 {
-TEST_F(RegionKVStoreTest, ProactiveFlushLiveness)
-try
+
+std::tuple<uint64_t, uint64_t, uint64_t> RegionKVStoreTest::prepareForProactiveFlushTest()
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
+    // Allow enough large segment size.
     ctx.getSettingsRef().dt_segment_limit_rows = 1000000;
     ctx.getSettingsRef().dt_segment_limit_size = 1000000;
     ctx.getSettingsRef().dt_segment_delta_cache_limit_rows = 0;
@@ -30,8 +31,6 @@ try
     UInt64 region_id2 = 7;
     TableID table_id;
     KVStore & kvs = getKVS();
-    ASSERT_EQ(&ctx.getTMTContext().getContext(), &ctx);
-    ASSERT_EQ(ctx.getTMTContext().getContext().getSettingsRef().dt_segment_limit_size, 1000000);
     MockRaftStoreProxy::FailCond cond;
     {
         initStorages();
@@ -57,6 +56,20 @@ try
         ctx.getTMTContext().getRegionTable().updateRegion(*kvr1);
         ctx.getTMTContext().getRegionTable().updateRegion(*kvr2);
     }
+    return std::make_tuple(table_id, region_id, region_id2);
+}
+
+TEST_F(RegionKVStoreTest, ProactiveFlushLiveness)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto tp = prepareForProactiveFlushTest();
+    auto table_id = std::get<0>(tp);
+    auto region_id = std::get<1>(tp);
+    auto region_id2 = std::get<2>(tp);
+    MockRaftStoreProxy::FailCond cond;
+    KVStore & kvs = getKVS();
+
     std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
     {
         // A fg flush and a bg flush will not deadlock.
@@ -171,10 +184,10 @@ CATCH
 TEST_F(RegionKVStoreTest, ProactiveFlushRecover)
 try
 {
+    auto ctx = TiFlashTestEnv::getGlobalContext();
     {
         // Safe to abort between flushing regions.
-    }
-    {
+    } {
         // Safe to abort between flushCache and persistRegion.
     }
 }

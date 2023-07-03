@@ -755,9 +755,12 @@ void MockRaftStoreProxy::doApply(
             auto res = kvs.tryFlushRegionData(region_id, false, true, tmt, index, term, region->getApply().truncated_state().index(), region->getApply().truncated_state().term());
             auto compact_index = cmd.admin().request.compact_log().compact_index();
             auto compact_term = cmd.admin().request.compact_log().compact_term();
-            if (!res) {
+            if (!res)
+            {
                 LOG_DEBUG(log, "mock pre exec reject");
-            } else {
+            }
+            else
+            {
                 region->updateTruncatedState(compact_index, compact_term);
                 LOG_DEBUG(log, "mock pre exec success, update to {},{}", compact_index, compact_term);
             }

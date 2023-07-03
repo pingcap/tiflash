@@ -141,6 +141,7 @@ protected:
     }
 
 protected:
+    std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);

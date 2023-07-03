@@ -101,7 +101,9 @@ namespace DB
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
-    M(proactive_flush_force_set_type)
+    M(proactive_flush_force_set_type)                        \
+    M(proactive_flush_between_persist_cache_and_region)      \
+    M(proactive_flush_between_persist_regions)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -114,13 +116,13 @@ namespace DB
     M(pause_after_copr_streams_acquired_once)  \
     M(pause_before_register_non_root_mpp_task)
 
-#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
-    M(pause_when_reading_from_dt_stream)  \
-    M(pause_when_writing_to_dt_store)     \
-    M(pause_when_ingesting_to_dt_store)   \
-    M(pause_when_altering_dt_store)       \
-    M(pause_after_copr_streams_acquired)  \
-    M(pause_query_init)                   \
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M)    \
+    M(pause_when_reading_from_dt_stream)     \
+    M(pause_when_writing_to_dt_store)        \
+    M(pause_when_ingesting_to_dt_store)      \
+    M(pause_when_altering_dt_store)          \
+    M(pause_after_copr_streams_acquired)     \
+    M(pause_query_init)                      \
     M(proactive_flush_before_persist_region) \
     M(passive_flush_before_persist_region)
 
