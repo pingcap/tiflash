@@ -55,9 +55,9 @@ private:
     std::atomic_bool is_finished = false;
 
     std::deque<TaskPtr> io_in_task_queue;
-    std::atomic_uint64_t total_io_in_time_ms{0};
+    std::atomic_uint64_t total_io_in_time_microsecond{0};
 
     std::deque<TaskPtr> io_out_task_queue;
-    std::atomic_uint64_t total_io_out_time_ms{0};
+    std::atomic_uint64_t total_io_out_time_microsecond{0};
 };
 } // namespace DB

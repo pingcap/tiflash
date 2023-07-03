@@ -39,9 +39,9 @@ void UnitQueue::submit(TaskPtr && task)
     task_queue.push_back(std::move(task));
 }
 
-double UnitQueue::normalizedTimeMs()
+double UnitQueue::normalizedTimeMicrosecond()
 {
-    return accu_consume_time_ms / info.factor_for_normal;
+    return accu_consume_time_microsecond / info.factor_for_normal;
 }
 
 template <typename TimeGetter>
@@ -142,7 +142,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
     {
         // -1 means no candidates; else has candidate.
         int queue_idx = -1;
-        double target_accu_time_ms = 0;
+        double target_accu_time_microsecond = 0;
         std::unique_lock lock(mu);
         while (true)
         {
@@ -153,10 +153,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 const auto & cur_queue = level_queues[i];
                 if (!cur_queue->empty())
                 {
-                    double local_target_time_ms = cur_queue->normalizedTimeMs();
-                    if (queue_idx < 0 || local_target_time_ms < target_accu_time_ms)
+                    double local_target_time_microsecond = cur_queue->normalizedTimeMicrosecond();
+                    if (queue_idx < 0 || local_target_time_microsecond < target_accu_time_microsecond)
                     {
-                        target_accu_time_ms = local_target_time_ms;
+                        target_accu_time_microsecond = local_target_time_microsecond;
                         queue_idx = i;
                     }
                 }
@@ -179,7 +179,7 @@ template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns)
 {
     assert(task);
-    level_queues[task->mlfq_level]->accu_consume_time_ms += ceil(inc_ns / 1'000'000.0);
+    level_queues[task->mlfq_level]->accu_consume_time_microsecond += (inc_ns / 1000);
 }
 
 template <typename TimeGetter>
