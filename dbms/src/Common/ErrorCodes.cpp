@@ -394,7 +394,7 @@ extern const int UNSUPPORTED_URI_SCHEME = 450;
 extern const int UNACCEPTABLE_URL = 450;
 extern const int TOO_MANY_REDIRECTS = 450;
 
-#ifdef USE_QPL
+#if USE_QPL
 extern const int QPL_INIT_JOB_FAILED = 453;
 extern const int QPL_ACQUIRE_JOB_FAILED = 454;
 extern const int QPL_COMPRESS_DATA_FAILED = 455;
