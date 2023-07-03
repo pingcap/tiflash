@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTracker.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -112,6 +114,7 @@ std::shared_ptr<disaggregated::FetchDisaggPagesRequest> buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
         // This metric is per-segment.
@@ -201,6 +204,8 @@ void RNWorkerFetchPages::doFetchPages(
         if (bool more = stream_resp->Read(packet.get()); !more)
             break;
 
+        MemTrackerWrapper packet_mem_tracker_wrapper(packet->SpaceUsedLong(), fetch_pages_mem_tracker.get());
+
         if (!rpc_is_observed)
         {
             // Count RPC time as sending request + receive first response packet.
@@ -225,6 +230,7 @@ void RNWorkerFetchPages::doFetchPages(
             DM::RemotePb::RemotePage remote_page;
             bool parsed = remote_page.ParseFromString(page);
             RUNTIME_CHECK_MSG(parsed, "Failed to parse page data (from {})", seg_task->info());
+            MemTrackerWrapper remote_page_mem_tracker_wrapper(remote_page.SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
             RUNTIME_CHECK(
                 remaining_pages_to_fetch.contains(remote_page.page_id()),

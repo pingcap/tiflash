@@ -44,7 +44,8 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
         task_ptr->profile_info.elapsedAwaitTime();
         cpu_tasks.push_back(std::move(task.first));
         return true;
-    case ExecTaskStatus::IO:
+    case ExecTaskStatus::IO_IN:
+    case ExecTaskStatus::IO_OUT:
         task_ptr->profile_info.elapsedAwaitTime();
         io_tasks.push_back(std::move(task.first));
         return true;
