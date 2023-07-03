@@ -28,7 +28,7 @@
 
 #include <vector>
 
-#ifdef USE_QPL
+#if USE_QPL
 #include <IO/CodecDeflateQpl.h>
 #endif
 
