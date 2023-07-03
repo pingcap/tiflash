@@ -28,6 +28,7 @@
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
+#include <Core/OperatorSpillContext.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
@@ -1125,7 +1126,8 @@ protected:
     size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
-    std::unique_ptr<Spiller> spiller;
+    std::shared_ptr<AggSpillContext> agg_spill_context;
+    //std::unique_ptr<Spiller> spiller;
     std::atomic<bool> spill_triggered{false};
 
     /** Select the aggregation method based on the number and types of keys. */

@@ -289,7 +289,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
         {
             /// for aggregation, the input block is sorted by bucket number
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-            spiller = std::make_unique<Spiller>(params.spill_config, true, 1, header, log);
+            agg_spill_context->buildSpiller(1, header, log);
         }
         else
         {
@@ -853,14 +853,14 @@ bool Aggregator::executeOnBlock(
 
 void Aggregator::finishSpill()
 {
-    assert(spiller != nullptr);
-    spiller->finishSpill();
+    assert(agg_spill_context->getSpiller() != nullptr);
+    agg_spill_context->getSpiller()->finishSpill();
 }
 
 BlockInputStreams Aggregator::restoreSpilledData()
 {
-    assert(spiller != nullptr);
-    return spiller->restoreBlocks(0);
+    assert(agg_spill_context->getSpiller() != nullptr);
+    return agg_spill_context->getSpiller()->restoreBlocks(0);
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
@@ -946,7 +946,7 @@ void Aggregator::spillImpl(
     AggregatedDataVariants & data_variants,
     Method & method)
 {
-    RUNTIME_ASSERT(spiller != nullptr, "spiller must not be nullptr in Aggregator when spilling");
+    RUNTIME_ASSERT(agg_spill_context->getSpiller() != nullptr, "spiller must not be nullptr in Aggregator when spilling");
     size_t max_temporary_block_size_rows = 0;
     size_t max_temporary_block_size_bytes = 0;
 
@@ -969,7 +969,7 @@ void Aggregator::spillImpl(
         blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
         update_max_sizes(blocks.back());
     }
-    spiller->spillBlocks(std::move(blocks), 0);
+    agg_spill_context->getSpiller()->spillBlocks(std::move(blocks), 0);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
@@ -2316,9 +2316,9 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index)
             return {};
 
         doLevelMerge(local_current_bucket_num, concurrency_index);
-        Block out_block = popBlocksListFront(two_level_merge_data);
-        if (likely(out_block))
-            return out_block;
+        Block block = popBlocksListFront(two_level_merge_data);
+        if (likely(block))
+            return block;
     }
 }
 
