@@ -175,6 +175,10 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
     std::rethrow_exception(last_exception);
 }
 
+// In order to make network and disk run parallelly,
+// `doFetchPages` will receive data pages from WN,
+// package these data pages into several `WritePageTask` objects
+// and send them to `RNWritePageCachePool` to write into local page cache.
 struct WritePageTask
 {
     explicit WritePageTask(RNLocalPageCache * page_cache_)
