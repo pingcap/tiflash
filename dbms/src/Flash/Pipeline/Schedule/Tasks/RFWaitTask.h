@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <DataStreams/RuntimeFilter.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -100,8 +100,8 @@ private:
         }
         catch (...)
         {
-            // If an exception occurs, ignore the error and stop waiting.
-            return ExecTaskStatus::FINISHED;
+            exec_status.onErrorOccurred(std::current_exception());
+            return ExecTaskStatus::ERROR;
         }
     }
 
