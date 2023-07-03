@@ -784,7 +784,7 @@ public:
 
     String toString() const
     {
-#ifdef USE_QPL
+#if USE_QPL
         const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
         auto compression_method_last = CompressionMethod::QPL;
 #else
