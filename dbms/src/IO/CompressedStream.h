@@ -31,7 +31,7 @@ enum class CompressionMethod
     LZ4 = 1,
     LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
     ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
-#ifdef USE_QPL
+#if USE_QPL
     QPL = 4, /// The Intel Query Processing Library (QPL) is an open-source library to provide high-performance query processing operations
     NONE = 5, /// No compression
 #else
