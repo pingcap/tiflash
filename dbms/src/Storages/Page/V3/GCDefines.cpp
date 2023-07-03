@@ -236,14 +236,6 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    statistics.compact_wal_happen = page_directory.tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact);
-    if (statistics.compact_wal_happen)
-    {
-        GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
-    }
-    statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
-
     typename Trait::PageDirectory::InMemGCOption options;
     if constexpr (std::is_same_v<Trait, universal::ExternalPageCallbacksManagerTrait>)
     {
@@ -253,6 +245,15 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     const auto & del_entries = page_directory.gcInMemEntries(options);
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
+
+    // Compact WAL after in-memory GC in PageDirectory in order to reduce the overhead of dumping useless entries
+    statistics.compact_wal_happen = page_directory.tryDumpSnapshot(write_limiter, force_wal_compact);
+    if (statistics.compact_wal_happen)
+    {
+        GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
+    }
+    statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
     SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 

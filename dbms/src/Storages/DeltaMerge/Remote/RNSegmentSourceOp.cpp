@@ -67,7 +67,7 @@ OperatorStatus RNSegmentSourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    return current_seg_task ? OperatorStatus::IO : startGettingNextReadyTask();
+    return current_seg_task ? OperatorStatus::IO_IN : startGettingNextReadyTask();
 }
 
 OperatorStatus RNSegmentSourceOp::awaitImpl()
@@ -81,7 +81,7 @@ OperatorStatus RNSegmentSourceOp::awaitImpl()
     if unlikely (current_seg_task)
     {
         duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
 
     auto pop_result = workers->getReadyChannel()->tryPop(current_seg_task);
@@ -91,7 +91,7 @@ OperatorStatus RNSegmentSourceOp::awaitImpl()
         processed_seg_tasks += 1;
         RUNTIME_CHECK(current_seg_task != nullptr);
         duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     case MPMCQueueResult::EMPTY:
         return OperatorStatus::WAITING;
     case MPMCQueueResult::FINISHED:
