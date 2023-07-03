@@ -62,7 +62,7 @@ struct UnitQueueInfo
     UInt64 time_slice;
 
     // factor for normalization.
-    // The priority value is equal to `accu_consume_time / factor_for_normal`.
+    // The priority value is equal to `accu_consume_time_microsecond / factor_for_normal`.
     // The smaller the value, the higher the priority.
     // Therefore, the higher the priority of the queue, the larger the value of factor_for_normal.
     double factor_for_normal;
@@ -81,11 +81,11 @@ public:
 
     bool empty() const;
 
-    double normalizedTime();
+    double normalizedTimeMicrosecond();
 
 public:
     const UnitQueueInfo info;
-    std::atomic_uint64_t accu_consume_time{0};
+    std::atomic_uint64_t accu_consume_time_microsecond{0};
 
 private:
     std::deque<TaskPtr> task_queue;
@@ -106,7 +106,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr & task, size_t inc_value) override;
+    void updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns) override;
 
     bool empty() const override;
 

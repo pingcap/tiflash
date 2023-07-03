@@ -38,7 +38,8 @@ enum class OperatorStatus
     /// waiting status
     WAITING,
     /// io status
-    IO,
+    IO_IN,
+    IO_OUT,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     NEED_INPUT,

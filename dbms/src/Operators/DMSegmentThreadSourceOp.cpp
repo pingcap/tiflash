@@ -71,7 +71,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
         total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     }
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_IN;
 }
 
 OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
@@ -108,7 +108,7 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
         LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
         cur_segment = {};
         cur_stream = {};
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
 }
 
