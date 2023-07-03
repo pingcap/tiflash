@@ -9619,7 +9619,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(increase(tiflash_storage_page_command_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
+              "expr": "sum(rate(tiflash_storage_page_command_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
               "format": "time_series",
               "hide": false,
               "interval": "",
