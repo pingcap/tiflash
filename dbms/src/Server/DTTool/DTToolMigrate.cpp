@@ -339,7 +339,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
             {
                 args.compression_method = DB::CompressionMethod::ZSTD;
             }
-#ifdef USE_QPL
+#if USE_QPL
             else if (compression_method == "qpl")
             {
                 args.compression_method = DB::CompressionMethod::QPL;
