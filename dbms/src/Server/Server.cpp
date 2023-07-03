@@ -290,16 +290,14 @@ struct TiFlashProxyConfig
         auto disaggregated_mode = getDisaggregatedMode(config);
 
         // tiflash_compute doesn't need proxy.
-        // todo: remove after AutoScaler is stable.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            LOG_INFO(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
-
         if (!config.has("raft.pd_addr"))
         {
             LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
@@ -339,11 +337,11 @@ struct TiFlashProxyConfig
     }
 };
 
-pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const int api_version, const LoggerPtr & log)
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const int api_version, const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
-    config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
+    config.tiflash_engine_key = "engine";
+    config.tiflash_engine_value = DEF_PROXY_LABEL;
     auto [ca_path, cert_path, key_path] = security_config->getPaths();
     config.ca_path = ca_path;
     config.cert_path = cert_path;
@@ -1328,7 +1326,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
                     global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
@@ -1401,7 +1399,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         if (store_ident)
         {
