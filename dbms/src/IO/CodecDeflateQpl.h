@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-#ifdef USE_QPL
+#if USE_QPL
 
 #include <array>
 #include <atomic>
