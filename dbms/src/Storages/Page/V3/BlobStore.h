@@ -67,6 +67,14 @@ public:
     using PageTypeAndBlobIds = std::map<PageType, std::vector<BlobFileId>>;
     PageTypeAndBlobIds getGCStats();
 
+    void gc(
+        PageType page_type,
+        const GcEntriesMap & entries_need_gc,
+        const PageSize & total_page_size,
+        PageEntriesEdit & edit,
+        const WriteLimiterPtr & write_limiter = nullptr,
+        const ReadLimiterPtr & read_limiter = nullptr);
+
     using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
     PageEntriesEdit gc(const PageTypeAndGcInfo & page_type_and_gc_info,
                        const WriteLimiterPtr & write_limiter = nullptr,
