@@ -191,7 +191,7 @@ public:
 protected:
     ExecTaskStatus executeImpl() noexcept override
     {
-        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
         return ExecTaskStatus::IO;
     }
 
@@ -203,7 +203,7 @@ protected:
 
     ExecTaskStatus awaitImpl() override
     {
-        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
+        // await wouldn't call MemoryTracker.
         return ExecTaskStatus::FINISHED;
     }
 
