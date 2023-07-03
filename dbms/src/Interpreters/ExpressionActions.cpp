@@ -265,6 +265,8 @@ void ExpressionAction::prepare(Block & sample_block)
     }
     case CONVERT_TO_NULLABLE:
     {
+        if (ColumnPtr converted = sample_block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst())
+            sample_block.getByName(col_need_to_nullable).column = converted;
         if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
             convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
         break;
@@ -364,7 +366,8 @@ void ExpressionAction::execute(Block & block) const
     case CONVERT_TO_NULLABLE:
     {
         // for expand usage, when original col is const non-null value, the inserted null value will break its const attribute in global scope.
-        block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst();
+        if (ColumnPtr converted = block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst())
+            block.getByName(col_need_to_nullable).column = converted;
         if (!block.getByName(col_need_to_nullable).column->isColumnNullable())
             convertColumnToNullable(block.getByName(col_need_to_nullable));
         break;

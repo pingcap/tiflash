@@ -48,7 +48,7 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,
     const ColumnNumbers & column_literal_numbers,
-    const std::vector<Field> val_fields,
+    const std::vector<Field> & val_fields,
     const ColumnNumbers & column_ref_numbers)
 {
     NamesAndTypes source_columns;
@@ -87,7 +87,7 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
 std::pair<ExpressionActionsPtr, std::vector<String>> buildLiteralProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,
-    const std::vector<Field> val_fields)
+    const std::vector<Field> & val_fields)
 {
     NamesAndTypes source_columns;
     // this function will use reversed column_info's field-type which inferred from bare column to fill the result.

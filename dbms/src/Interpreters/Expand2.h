@@ -30,7 +30,7 @@ public:
     /// all of them resort to grouping-sets way to replicate the data to feed different groups,
     /// underlying which it's mainly supported by expand operator.
     ///
-    /// eg: select count(a) from t group by a,b,c rollup
+    /// eg: select count(a) from t group by a,b,c with rollup
     ///
     ///  expand: [a#1, a'#2, b#3, 0], [a#1, a'#2, null, 1], [a#1, null, null, 2]
     ///    +--projection: a#1, a'#2, b#3

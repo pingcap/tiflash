@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,13 +40,13 @@ std::pair<ExpressionActionsPtr, std::vector<String>> buildProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,
     const ColumnNumbers & column_literal_numbers,
-    std::vector<Field> val_fields,
+    const std::vector<Field> & val_fields,
     const ColumnNumbers & column_ref_numbers);
 
 std::pair<ExpressionActionsPtr, std::vector<String>> buildLiteralProjection(
     Context & context,
     const ColumnsWithTypeAndName & columns,
-    std::vector<Field> val_fields);
+    const std::vector<Field> & val_fields);
 
 class ProjectionTest : public ::testing::Test
 {
