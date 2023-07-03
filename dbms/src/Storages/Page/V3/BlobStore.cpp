@@ -1335,7 +1335,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::gc(const PageTypeAn
                                                                 const ReadLimiterPtr & read_limiter)
 {
     PageEntriesEdit edit;
-    for (const auto [page_type, entries_need_gc, total_page_size] : page_type_and_gc_info)
+    for (const auto & [page_type, entries_need_gc, total_page_size] : page_type_and_gc_info)
     {
         gc(page_type, entries_need_gc, total_page_size, edit, write_limiter, read_limiter);
     }
