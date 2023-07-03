@@ -1127,7 +1127,6 @@ protected:
 
     /// For external aggregation.
     std::shared_ptr<AggSpillContext> agg_spill_context;
-    //std::unique_ptr<Spiller> spiller;
     std::atomic<bool> spill_triggered{false};
 
     /** Select the aggregation method based on the number and types of keys. */
