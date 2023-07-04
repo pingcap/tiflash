@@ -274,9 +274,6 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
-
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
 
@@ -333,6 +330,9 @@ private:
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
+
     BlockInputStreams restore_build_streams;
     BlockInputStreams restore_probe_streams;
     BlockInputStreams restore_scan_hash_map_streams;
@@ -355,7 +355,6 @@ private:
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
     size_t shallow_copy_cross_probe_threshold;
 
-private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
@@ -387,6 +386,7 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
