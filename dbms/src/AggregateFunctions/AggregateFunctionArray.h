@@ -92,7 +92,7 @@ public:
         for (size_t i = 0; i < num_arguments; ++i)
             nested[i] = &static_cast<const ColumnArray &>(*columns[i]).getData();
 
-        const ColumnArray & first_array_column = static_cast<const ColumnArray &>(*columns[0]);
+        const auto & first_array_column = static_cast<const ColumnArray &>(*columns[0]);
         const IColumn::Offsets & offsets = first_array_column.getOffsets();
 
         size_t begin = row_num == 0 ? 0 : offsets[row_num - 1];
@@ -101,7 +101,7 @@ public:
         /// Sanity check. NOTE We can implement specialization for a case with single argument, if the check will hurt performance.
         for (size_t i = 1; i < num_arguments; ++i)
         {
-            const ColumnArray & ith_column = static_cast<const ColumnArray &>(*columns[i]);
+            const auto & ith_column = static_cast<const ColumnArray &>(*columns[i]);
             const IColumn::Offsets & ith_offsets = ith_column.getOffsets();
 
             if (ith_offsets[row_num] != end || (row_num != 0 && ith_offsets[row_num - 1] != begin))
@@ -130,6 +130,11 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
         nested_func->insertResultInto(place, to, arena);
+    }
+
+    void insertMergeResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    {
+        nested_func->insertMergeResultInto(place, to, arena);
     }
 
     bool allocatesMemoryInArena() const override

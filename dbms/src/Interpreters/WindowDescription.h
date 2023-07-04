@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/Field.h>
 #include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
@@ -30,6 +31,7 @@ namespace DB
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
+    AggregateFunctionPtr aggregate_function;
     Array parameters;
     ColumnNumbers arguments;
     Names argument_names;
