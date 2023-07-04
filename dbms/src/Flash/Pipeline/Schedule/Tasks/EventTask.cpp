@@ -46,8 +46,10 @@ extern const char exception_during_query_run[];
 
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
-    const EventPtr & event_)
-    : exec_status(exec_status_)
+    const EventPtr & event_,
+    ExecTaskStatus init_status)
+    : Task(init_status)
+    , exec_status(exec_status_)
     , event(event_)
 {
     RUNTIME_CHECK(event);
@@ -57,8 +59,9 @@ EventTask::EventTask(
     MemoryTrackerPtr mem_tracker_,
     const String & req_id,
     PipelineExecutorStatus & exec_status_,
-    const EventPtr & event_)
-    : Task(std::move(mem_tracker_), req_id)
+    const EventPtr & event_,
+    ExecTaskStatus init_status)
+    : Task(std::move(mem_tracker_), req_id, init_status)
     , exec_status(exec_status_)
     , event(event_)
 {

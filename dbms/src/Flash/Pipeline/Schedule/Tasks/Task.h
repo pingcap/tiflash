@@ -34,7 +34,6 @@ namespace DB
  */
 enum class ExecTaskStatus
 {
-    INIT,
     WAITING,
     RUNNING,
     IO_IN,
@@ -47,9 +46,9 @@ enum class ExecTaskStatus
 class Task
 {
 public:
-    Task();
+    explicit Task(ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     virtual ~Task();
 
@@ -104,7 +103,7 @@ protected:
     // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
 
-    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status;
 
     bool is_finalized = false;
 };

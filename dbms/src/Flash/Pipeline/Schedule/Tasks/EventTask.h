@@ -27,12 +27,14 @@ class EventTask : public Task
 public:
     EventTask(
         PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_);
+        const EventPtr & event_,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
     EventTask(
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_);
+        const EventPtr & event_,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
 protected:
     ExecTaskStatus executeImpl() override;
