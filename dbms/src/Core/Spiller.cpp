@@ -260,7 +260,8 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     }
     if (all_constant_block_rows[partition_id] > 0)
     {
-        ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, all_constant_block_rows[partition_id]));
+        // TODO use settings.max_block_size instead of DEFAULT_BLOCK_SIZE.
+        ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, all_constant_block_rows[partition_id], DEFAULT_BLOCK_SIZE));
         all_constant_block_rows[partition_id] = 0;
     }
     if (ret.empty())

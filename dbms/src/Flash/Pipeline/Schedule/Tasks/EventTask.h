@@ -25,10 +25,10 @@ class PipelineExecutorStatus;
 class EventTask : public Task
 {
 public:
+    // Only used for unit test.
     EventTask(
         PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_,
-        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+        const EventPtr & event_);
     EventTask(
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,

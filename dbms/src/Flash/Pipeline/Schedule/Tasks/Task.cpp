@@ -65,11 +65,11 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task(ExecTaskStatus init_status)
+Task::Task()
     : log(Logger::get())
     , mem_tracker_holder(nullptr)
     , mem_tracker_ptr(nullptr)
-    , task_status(init_status)
+    , task_status(ExecTaskStatus::RUNNING)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     addToStatusMetrics(task_status);

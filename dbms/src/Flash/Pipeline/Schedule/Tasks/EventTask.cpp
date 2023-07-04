@@ -46,10 +46,8 @@ extern const char exception_during_query_run[];
 
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
-    const EventPtr & event_,
-    ExecTaskStatus init_status)
-    : Task(init_status)
-    , exec_status(exec_status_)
+    const EventPtr & event_)
+    : exec_status(exec_status_)
     , event(event_)
 {
     RUNTIME_CHECK(event);

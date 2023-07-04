@@ -46,7 +46,8 @@ enum class ExecTaskStatus
 class Task
 {
 public:
-    explicit Task(ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    // Only used for unit test.
+    Task();
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 

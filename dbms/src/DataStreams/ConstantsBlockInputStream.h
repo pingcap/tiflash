@@ -22,28 +22,30 @@ namespace DB
 class ConstantsBlockInputStream : public IBlockInputStream
 {
 public:
-    ConstantsBlockInputStream(const Block & header, size_t rows_)
+    ConstantsBlockInputStream(const Block & header, UInt64 rows_, UInt64 max_block_size_)
         : header(header)
-        , rows(rows_)
+        , remaining_rows(rows_)
+        , max_block_size(std::max(1, max_block_size_))
     {
         for (const auto & col : header)
         {
             RUNTIME_CHECK(col.column != nullptr && col.column->isColumnConst());
         }
-        if unlikely (rows == 0 || header.columns() == 0)
-            done = true;
+        if unlikely (header.columns() == 0)
+            remaining_rows = 0;
     }
 
     Block read() override
     {
-        if unlikely (done)
+        if unlikely (remaining_rows == 0)
             return {};
 
-        done = true;
+        size_t cur_rows = std::min(max_block_size, remaining_rows);
+        remaining_rows -= cur_rows;
         Block block = header;
         for (auto & col : block)
         {
-            col.column = col.column->cloneResized(rows);
+            col.column = col.column->cloneResized(cur_rows);
         }
         return block;
     }
@@ -51,9 +53,8 @@ public:
     String getName() const override { return "Constants"; }
 
 private:
-    Block header;
-    size_t rows;
-
-    bool done = false;
+    const Block header;
+    UInt64 remaining_rows;
+    const UInt64 max_block_size;
 };
 } // namespace DB
