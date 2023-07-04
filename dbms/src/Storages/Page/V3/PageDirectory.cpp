@@ -1316,7 +1316,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 ready->success = success;
                 if (exception != nullptr)
                 {
-                    ready->exception = std::move(std::unique_ptr<DB::Exception>(exception->clone()));
+                    ready->exception = std::unique_ptr<DB::Exception>(exception->clone());
                 }
                 ready->cv.notify_one();
             }
