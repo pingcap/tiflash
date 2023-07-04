@@ -759,7 +759,6 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
 PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (entries.empty())
     {
         return {};
@@ -861,7 +860,6 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
@@ -920,7 +918,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 
 BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
-    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
+    GET_METRIC(tiflash_storage_page_command_count, type_read_blob).Increment();
     assert(buffers != nullptr);
     BlobFilePtr blob_file = getBlobFile(blob_id);
     try
