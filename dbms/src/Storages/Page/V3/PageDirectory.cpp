@@ -1245,11 +1245,7 @@ void PageDirectory::applyRefEditRecord(
     SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
 }
 
-<<<<<<< HEAD
-void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
-=======
-template <typename Trait>
-typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/)
+PageDirectory::Writer * PageDirectory::buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/)
 {
     RUNTIME_CHECK(!writers.empty());
     RUNTIME_CHECK(first == writers.front());
@@ -1265,9 +1261,7 @@ typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(Wr
     return last_writer;
 }
 
-template <typename Trait>
-std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
->>>>>>> ea748e8c4b (Decrease ps write latency (#7154))
+void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
@@ -1299,9 +1293,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 throw Exception("Unknown exception");
             }
         }
-        // the `applied_data_files` will be returned by the write
-        // group owner, others just return an empty set.
-        return {};
     }
 
     auto * last_writer = buildWriteGroup(&w, apply_lock);
@@ -1412,12 +1403,8 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
-<<<<<<< HEAD
-=======
 
     success = true;
-    return applied_data_files;
->>>>>>> ea748e8c4b (Decrease ps write latency (#7154))
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
