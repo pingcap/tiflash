@@ -39,9 +39,9 @@ void UnitQueue::submit(TaskPtr && task)
     task_queue.push_back(std::move(task));
 }
 
-double UnitQueue::normalizedTime()
+double UnitQueue::normalizedTimeMicrosecond()
 {
-    return accu_consume_time / info.factor_for_normal;
+    return accu_consume_time_microsecond / info.factor_for_normal;
 }
 
 template <typename TimeGetter>
@@ -142,7 +142,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
     {
         // -1 means no candidates; else has candidate.
         int queue_idx = -1;
-        double target_accu_time = 0;
+        double target_accu_time_microsecond = 0;
         std::unique_lock lock(mu);
         while (true)
         {
@@ -153,10 +153,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 const auto & cur_queue = level_queues[i];
                 if (!cur_queue->empty())
                 {
-                    double local_target_time = cur_queue->normalizedTime();
-                    if (queue_idx < 0 || local_target_time < target_accu_time)
+                    double local_target_time_microsecond = cur_queue->normalizedTimeMicrosecond();
+                    if (queue_idx < 0 || local_target_time_microsecond < target_accu_time_microsecond)
                     {
-                        target_accu_time = local_target_time;
+                        target_accu_time_microsecond = local_target_time_microsecond;
                         queue_idx = i;
                     }
                 }
@@ -176,10 +176,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 }
 
 template <typename TimeGetter>
-void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, size_t inc_value)
+void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns)
 {
     assert(task);
-    level_queues[task->mlfq_level]->accu_consume_time += inc_value;
+    level_queues[task->mlfq_level]->accu_consume_time_microsecond += (inc_ns / 1000);
 }
 
 template <typename TimeGetter>
