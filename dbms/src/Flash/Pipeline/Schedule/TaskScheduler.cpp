@@ -40,6 +40,26 @@ TaskScheduler::~TaskScheduler()
     wait_reactor.waitForStop();
 }
 
+void TaskScheduler::submit(TaskPtr && task)
+{
+    auto task_status = task->getStatus();
+    switch (task_status)
+    {
+    case ExecTaskStatus::RUNNING:
+        submitToCPUTaskThreadPool(std::move(task));
+        break;
+    case ExecTaskStatus::IO_IN:
+    case ExecTaskStatus::IO_OUT:
+        submitToIOTaskThreadPool(std::move(task));
+        break;
+    case ExecTaskStatus::WAITING:
+        submitToWaitReactor(std::move(task));
+        break;
+    default:
+        throw Exception(fmt::format("Unexpected task status: {}", magic_enum::enum_name(task_status)));
+    }
+}
+
 void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 {
     if (unlikely(tasks.empty()))
@@ -68,9 +88,9 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
         }
     }
     if (!cpu_tasks.empty())
-        cpu_task_thread_pool.submit(cpu_tasks);
+        submitToCPUTaskThreadPool(cpu_tasks);
     if (!io_tasks.empty())
-        io_task_thread_pool.submit(io_tasks);
+        submitToIOTaskThreadPool(io_tasks);
     if (!await_tasks.empty())
         wait_reactor.submit(await_tasks);
 }
