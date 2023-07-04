@@ -20,7 +20,7 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1);
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1, int query_ts = -1);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:

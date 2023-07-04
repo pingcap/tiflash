@@ -419,6 +419,7 @@ public:
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
+    /// This function is only used for test.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -445,11 +446,8 @@ public:
      */
     std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
 
-    /// Apply DDL `commands` on `table_columns`
-    void applyAlters(const AlterCommands & commands, //
-                     OptionTableInfoConstRef table_info,
-                     ColumnID & max_column_id_used,
-                     const Context & context);
+    /// Apply schema change on `table_columns`
+    void applySchemaChanges(TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {
@@ -688,15 +686,17 @@ private:
                                           const SegmentIdSet & read_segments = {},
                                           bool try_split_task = true);
 
-private:
-    void dropAllSegments(bool keep_first_segment);
-    String getLogTracingId(const DMContext & dm_ctx);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
+    void dropAllSegments(bool keep_first_segment);
+    String getLogTracingId(const DMContext & dm_ctx);
+    // Returns segment that contains start_key and whether 'segments' is empty.
+    std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
+    std::pair<SegmentPtr, bool> getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound);
+    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

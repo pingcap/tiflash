@@ -15,7 +15,7 @@
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 
 => DBGInvoke __set_flush_threshold(100000, 0)
 
@@ -29,7 +29,7 @@
 
 => DBGInvoke __try_flush_region(4)
 
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │ 11.1  │          50 │
 │ 21.2  │          51 │
@@ -44,11 +44,13 @@
 => DBGInvoke __raft_insert_row(default, test, 5, 50, 1111111111111111.1000)
 => DBGInvoke __raft_insert_row(default, test, 5, 51, -2222222222222222.2345)
 => DBGInvoke __try_flush_region(5)
-=> select * from default.test
+
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1──────────────────┬─_tidb_rowid─┐
 │ 1111111111111111.1000  │          50 │
 │ -2222222222222222.2345 │          51 │
 └────────────────────────┴─────────────┘
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
 

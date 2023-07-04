@@ -26,7 +26,7 @@ AggregateFinalSpillTask::AggregateFinalSpillTask(
     size_t index_,
     const String & resource_group_name_,
     const KeyspaceID & keyspace_id_)
-    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_, resource_group_name_, keyspace_id_)
+    : OutputIOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {

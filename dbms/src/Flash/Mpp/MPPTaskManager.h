@@ -40,7 +40,7 @@ struct MPPQueryTaskSet
     /// task can only be registered state is Normal
     State state = Normal;
     String error_message;
-    MPPTaskMap task_map;
+    std::shared_ptr<ProcessListEntry> process_list_entry;
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -52,6 +52,36 @@ struct MPPQueryTaskSet
     {
         return state == Normal || state == Aborted;
     }
+    ~MPPQueryTaskSet();
+    MPPTask * findMPPTask(const MPPTaskId & task_id) const;
+    bool isTaskRegistered(const MPPTaskId & task_id) const
+    {
+        return task_map.find(task_id) != task_map.end();
+    }
+    void registerTask(const MPPTaskId & task_id)
+    {
+        assert(task_map.find(task_id) == task_map.end());
+        task_map[task_id] = nullptr;
+    }
+    void makeTaskActive(const MPPTaskPtr & task)
+    {
+        assert(task_map.find(task->getId()) != task_map.end());
+        task_map[task->getId()] = task;
+    }
+    bool hasMPPTask() const { return !task_map.empty(); }
+    template <typename F>
+    void forEachMPPTask(F && f) const
+    {
+        for (const auto & it : task_map)
+            f(it);
+    }
+    void removeMPPTask(const MPPTaskId & task_id)
+    {
+        task_map.erase(task_id);
+    }
+
+private:
+    MPPTaskMap task_map;
 };
 
 /// A simple thread unsafe FIFO cache used to fix the "lost cancel" issues
@@ -192,7 +222,11 @@ public:
 
     std::pair<MPPQueryTaskSetPtr, String> getQueryTaskSet(const MPPQueryId & query_id);
 
-    std::pair<bool, String> registerTask(MPPTaskPtr task);
+    /// registerTask make the task info stored in MPPTaskManager, but it is still not visible to other mpp tasks before makeTaskActive.
+    /// After registerTask, the related query_task_set can't be cleaned before unregisterTask is called
+    std::pair<bool, String> registerTask(MPPTask * task);
+
+    std::pair<bool, String> makeTaskActive(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 

@@ -30,8 +30,7 @@
 namespace DB
 {
 class Context;
-class SchemaSyncer;
-using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
+class TiDBSchemaSyncerManager;
 
 /// NaturalDag accepts a dag request json file produced from TiDB, and provide following functionalities:
 /// 1. Parse json file to load tables, regions, dag request, dag response information
@@ -98,7 +97,7 @@ private:
     void loadTables(const JSONObjectPtr & obj);
     LoadedRegionInfo loadRegion(const Poco::Dynamic::Var & region_json) const;
     void loadReqAndRsp(const JSONObjectPtr & obj);
-    static void buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name);
+    static void buildDatabase(Context & context, std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer, const String & db_name);
     void buildTables(Context & context);
     static const String & getDatabaseName();
 

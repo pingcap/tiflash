@@ -163,7 +163,7 @@ public:
     // This function is only for debug.
     bool tryFlushRegions();
 
-    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the smae time.
+    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
     RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);

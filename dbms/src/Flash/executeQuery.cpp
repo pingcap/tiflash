@@ -60,7 +60,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
 {
     if (dag_context.is_mpp_task)
     {
-        /// for MPPTask, process list entry is created in MPPTask::prepare()
+        /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
         RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
         return dag_context.getProcessListEntry();
     }
@@ -70,7 +70,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
         auto process_list_entry = setProcessListElement(
             context,
             dag_context.dummy_query_string,
-            dag_context.dummy_ast.get());
+            dag_context.dummy_ast.get(),
+            true);
         dag_context.setProcessListEntry(process_list_entry);
         return process_list_entry;
     }
@@ -174,16 +175,12 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
         RUNTIME_CHECK_MSG(
             TaskScheduler::instance,
             "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
-        RUNTIME_CHECK_MSG(
-            context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled(),
-            "The pipeline model does not support storage-computing separation with S3 mode, and an error is reported because the setting enforce_enable_pipeline is true.");
         auto res = executeAsPipeline(context, internal);
         RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
         return std::move(*res);
     }
     if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline
-        && (context.getSharedContextDisagg()->notDisaggregatedMode() || !S3::ClientFactory::instance().isEnabled()))
+        && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

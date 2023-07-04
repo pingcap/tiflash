@@ -53,9 +53,13 @@ void PipelineTask::doFinalizeImpl()
     {                                     \
         return ExecTaskStatus::CANCELLED; \
     }                                     \
-    case OperatorStatus::IO:              \
+    case OperatorStatus::IO_IN:           \
     {                                     \
-        return ExecTaskStatus::IO;        \
+        return ExecTaskStatus::IO_IN;     \
+    }                                     \
+    case OperatorStatus::IO_OUT:          \
+    {                                     \
+        return ExecTaskStatus::IO_OUT;    \
     }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \

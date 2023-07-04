@@ -20,7 +20,7 @@ namespace DB
 {
 class SpilledBucketInput;
 
-class LoadBucketTask : public IOEventTask
+class LoadBucketTask : public InputIOEventTask
 {
 public:
     LoadBucketTask(

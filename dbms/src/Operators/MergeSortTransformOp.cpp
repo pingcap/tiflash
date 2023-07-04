@@ -106,7 +106,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     /// merge the spilled data and memory data.
     merge_impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, order_desc, max_block_size, limit);
     merge_impl->readPrefix();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_IN;
 }
 
 OperatorStatus MergeSortTransformOp::fromPartialToSpill()
@@ -124,7 +124,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // fallback to partial phase.
     if (!cached_handler->batchRead())
         return fromSpillToPartial();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_OUT;
 }
 
 OperatorStatus MergeSortTransformOp::fromSpillToPartial()
@@ -176,7 +176,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     {
         assert(cached_handler);
         return cached_handler->batchRead()
-            ? OperatorStatus::IO
+            ? OperatorStatus::IO_OUT
             : fromSpillToPartial();
     }
     case MergeSortStatus::MERGE:
@@ -192,7 +192,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
             block = restored_result.output();
             return OperatorStatus::HAS_OUTPUT;
         }
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
     default:
         throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));

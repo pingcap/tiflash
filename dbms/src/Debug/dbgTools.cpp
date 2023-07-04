@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <random>
 
@@ -36,6 +37,7 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
+extern const int UNKNOWN_DATABASE;
 } // namespace ErrorCodes
 
 namespace RegionBench
@@ -331,17 +333,11 @@ void insert( //
     {
         std::vector<Field> keys;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
-        {
-            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-        }
-
         for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
         {
-            const auto & col_idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            const auto & column_info = table_info.columns[col_idx];
-            auto start_field = RegionBench::convertField(column_info, fields[col_idx]);
+            const auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
+            const auto & column_info = table_info.columns[idx_col.offset];
+            auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             keys.emplace_back(start_datum.field());
         }
@@ -603,7 +599,9 @@ TableID getTableID(Context & context, const std::string & database_name, const s
             throw;
     }
 
-    auto storage = context.getTable(database_name, table_name);
+    auto mapped_table_name = mappedTable(context, database_name, table_name).second;
+    auto mapped_database_name = mappedDatabase(context, database_name);
+    auto storage = context.getTable(mapped_database_name, mapped_table_name);
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     auto table_info = managed_storage->getTableInfo();
     return table_info.id;
@@ -624,12 +622,62 @@ const TiDB::TableInfo & getTableInfo(Context & context, const String & database_
             throw;
     }
 
-    auto storage = context.getTable(database_name, table_name);
+    auto mapped_table_name = mappedTable(context, database_name, table_name).second;
+    auto mapped_database_name = mappedDatabase(context, database_name);
+    auto storage = context.getTable(mapped_database_name, mapped_table_name);
     auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
     return managed_storage->getTableInfo();
 }
-
-
 } // namespace RegionBench
+} // namespace DB
+namespace DB
+{
 
+String mappedDatabase(Context & context, const String & database_name)
+{
+    TMTContext & tmt = context.getTMTContext();
+    auto syncer = tmt.getSchemaSyncerManager();
+    auto db_info = syncer->getDBInfoByName(NullspaceID, database_name);
+    if (db_info == nullptr)
+        throw Exception("in mappedDatabase, Database " + database_name + " not found", ErrorCodes::UNKNOWN_DATABASE);
+    return SchemaNameMapper().mapDatabaseName(*db_info);
+}
+
+std::optional<String> mappedDatabaseWithOptional(Context & context, const String & database_name)
+{
+    TMTContext & tmt = context.getTMTContext();
+    auto syncer = tmt.getSchemaSyncerManager();
+    auto db_info = syncer->getDBInfoByName(NullspaceID, database_name);
+    if (db_info == nullptr)
+        return std::nullopt;
+    return SchemaNameMapper().mapDatabaseName(*db_info);
+}
+
+std::optional<QualifiedName> mappedTableWithOptional(Context & context, const String & database_name, const String & table_name)
+{
+    auto mapped_db = mappedDatabase(context, database_name);
+
+    TMTContext & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().getByName(mapped_db, table_name, false);
+    if (storage == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    return std::make_pair(storage->getDatabaseName(), storage->getTableName());
+}
+
+QualifiedName mappedTable(Context & context, const String & database_name, const String & table_name, bool include_tombstone)
+{
+    auto mapped_db = mappedDatabase(context, database_name);
+
+    TMTContext & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().getByName(mapped_db, table_name, include_tombstone);
+    if (storage == nullptr)
+    {
+        throw Exception("Table " + table_name + " not found", ErrorCodes::UNKNOWN_TABLE);
+    }
+
+    return std::make_pair(storage->getDatabaseName(), storage->getTableName());
+}
 } // namespace DB

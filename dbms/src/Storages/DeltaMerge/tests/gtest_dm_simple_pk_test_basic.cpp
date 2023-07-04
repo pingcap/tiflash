@@ -64,10 +64,8 @@ void SimplePKTestBasic::reload()
 SegmentPtr SimplePKTestBasic::getSegmentAt(Int64 key) const
 {
     auto row_key = buildRowKey(key);
+    auto [segment, is_empty] = store->getSegmentByStartKey(row_key.toRowKeyValueRef(), true, true);
     std::shared_lock lock(store->read_write_mutex);
-    auto segment_it = store->segments.upper_bound(row_key.toRowKeyValueRef());
-    RUNTIME_CHECK(segment_it != store->segments.end());
-    auto segment = segment_it->second;
     RUNTIME_CHECK(store->isSegmentValid(lock, segment));
     return segment;
 }
@@ -86,14 +84,7 @@ void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & brea
 
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(store->read_write_mutex);
-
-                auto segment_it = store->segments.upper_bound(bp_key.toRowKeyValueRef());
-                RUNTIME_CHECK(segment_it != store->segments.end());
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = store->getSegmentByStartKey(bp_key.toRowKeyValueRef(), true, true);
             // The segment is already break at the boundary
             if (compare(segment->getRowKeyRange().getStart(), bp_key.toRowKeyValueRef()) == 0)
                 break;
@@ -109,6 +100,10 @@ std::vector<Int64> SimplePKTestBasic::getSegmentBreakpoints() const
 {
     std::vector<Int64> breakpoints;
     std::unique_lock lock(store->read_write_mutex);
+    if (store->segments.empty())
+    {
+        return breakpoints;
+    }
     for (auto it = std::next(store->segments.cbegin()); it != store->segments.cend(); it++)
     {
         auto [start, end] = parseRange(it->second->getRowKeyRange());
@@ -278,9 +273,7 @@ bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
         std::shared_lock lock(store->read_write_mutex);
         while (!range.none())
         {
-            auto segment_it = store->segments.upper_bound(range.getStart());
-            RUNTIME_CHECK(segment_it != store->segments.end());
-            const auto & segment = segment_it->second;
+            auto [segment, is_empty] = store->getSegmentByStartKey(range.getStart(), true, true);
             to_merge.emplace_back(segment);
             range.setStart(segment->getRowKeyRange().end);
         }
@@ -438,7 +431,7 @@ try
         reload();
 
         {
-            ASSERT_EQ(store->segments.size(), 1);
+            ASSERT_EQ(store->segments.size(), 0);
             auto bps = getSegmentBreakpoints();
             ASSERT_EQ(bps.size(), 0);
         }

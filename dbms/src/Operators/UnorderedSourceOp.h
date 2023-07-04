@@ -67,7 +67,9 @@ protected:
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
-    std::optional<Block> t_block;
     int64_t ref_no;
+
+    bool done = false;
+    Block t_block;
 };
 } // namespace DB
