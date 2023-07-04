@@ -194,7 +194,7 @@ public:
 using PageIdU64AndEntry = std::pair<PageIdU64, PageEntry>;
 using PageIdU64AndEntries = std::vector<PageIdU64AndEntry>;
 
-enum PageType
+enum class PageType
 {
     RaftData, // store raft related data
     Normal, // store all data other than raft related data

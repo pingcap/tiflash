@@ -142,11 +142,6 @@ public:
 #endif
         constexpr static BlobFileId FIRST_RAFT_FILE_ID = 4611686018427387904ULL; // 2^62
 
-#ifndef DBMS_PUBLIC_GTEST
-    private:
-#else
-    public:
-#endif
         BlobFileId next_raft_id = FIRST_RAFT_FILE_ID;
 
         BlobFileId next_normal_id = 1;
