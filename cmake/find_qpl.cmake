@@ -30,4 +30,8 @@ else ()
     endif ()
 endif ()
 
+if (QPL_LIBRARY AND QPL_INCLUDE_DIR)
+    SET (USE_QPL 1)
+endif ()
+    
 message (STATUS "Using QPL: ${QPL_INCLUDE_DIR} : ${QPL_LIBRARY}")
