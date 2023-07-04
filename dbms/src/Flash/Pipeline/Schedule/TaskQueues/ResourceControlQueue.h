@@ -59,12 +59,22 @@ private:
     // ResourceGroupInfoQueue compator.
     static bool compareResourceInfo(const ResourceGroupInfo & info1, const ResourceGroupInfo & info2)
     {
-        return std::get<InfoIndexPriority>(info1) > std::get<InfoIndexPriority>(info2);
+        auto priority1 = std::get<InfoIndexPriority>(info1);
+        auto priority2 = std::get<InfoIndexPriority>(info2);
+
+        // Return true means lower priority.
+        // Here we want make negative priority to be lower priority than positive priority.
+        // Because negative priority means corresponding resource group has no more token.
+        if (priority1 <= 0)
+            return true;
+        if (priority2 <= 0)
+            return false;
+        return priority1 > priority2;
     }
 
     // 1. Update cpu time of resource group.
     // 2. Reorder resource_group_infos.
-    void updateResourceGroupStatics(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
+    void updateResourceGroupStatistic(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time);
 
     // Update resource_group_infos, will reorder resource group by priority.
     void updateResourceGroupInfosWithoutLock();
@@ -78,7 +88,7 @@ private:
     bool is_finished = false;
 
     CompatorType compator = compareResourceInfo;
-    ResourceGroupInfoQueue resource_group_infos;
+    ResourceGroupInfoQueue resource_group_infos{compator};
     PipelineTasks pipeline_tasks;
 
     // <resource_group_name, acculumated_cpu_time>

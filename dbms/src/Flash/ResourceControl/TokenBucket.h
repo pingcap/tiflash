@@ -43,9 +43,7 @@ public:
     // Put n tokens into bucket.
     void put(double n);
 
-    // Consume tokens in bucket:
-    // 1. If has enough tokens, return true then update bucket.
-    // 2. Otherwise, return false and will not touch bucket.
+    // Consume n tokens from bucket, return false if tokens is less than zero.
     bool consume(double n);
 
     // Return current tokens count.

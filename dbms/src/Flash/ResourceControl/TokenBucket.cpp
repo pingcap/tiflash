@@ -30,11 +30,8 @@ bool TokenBucket::consume(double n)
     auto now = std::chrono::steady_clock::now();
     compact(now);
 
-    if (tokens < n)
-        return false;
-
     tokens -= n;
-    return true;
+    return tokens >= 0.0;
 }
 
 double TokenBucket::peek(const TokenBucket::TimePoint & timepoint) const

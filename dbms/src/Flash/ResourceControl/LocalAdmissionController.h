@@ -64,11 +64,11 @@ private:
         return bucket_mode == TokenBucketMode::normal_mode && bucket->lowToken();
     }
 
-    bool consumeResource(double ru, uint64_t cpu_time_)
+    void consumeResource(double ru, uint64_t cpu_time_)
     {
         cpu_time += cpu_time_;
         std::lock_guard lock(mu);
-        return bucket->consume(ru);
+        bucket->consume(ru);
     }
 
     // Get remaining RU of this resource group.
@@ -94,7 +94,7 @@ private:
     }
 
     // Positive: Less number means higher priority.
-    // Negative means has no RU left, will not schedule this resource group.
+    // Negative means has no RU left, will not schedule this resource group at all.
     double getPriority() const
     {
         RUNTIME_ASSERT(user_priority == 1 || user_priority == 8 || user_priority == 16);
@@ -103,7 +103,7 @@ private:
             if (bucket->peek() <= 0.0)
                 return -1.0;
         }
-        return ((user_priority - 1) << 60) | cpu_time;
+        return ((user_priority - 1) << 60) | cpu_time.load();
     }
 
     // New tokens fetched from GAC, update remaining tokens.
@@ -229,13 +229,12 @@ public:
         thread_manager->wait();
     }
 
-    bool consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time)
+    void consumeResource(const std::string & name, const KeyspaceID & keyspace_id, double ru, uint64_t cpu_time)
     {
         ResourceGroupPtr group = getOrCreateResourceGroup(name, keyspace_id);
-        bool consumed = group->consumeResource(ru, cpu_time);
+        group->consumeResource(ru, cpu_time);
         if (group->lowToken())
             cv.notify_one();
-        return consumed;
     }
 
     double getPriority(const std::string & name, const KeyspaceID & keyspace_id)

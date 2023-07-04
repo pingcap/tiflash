@@ -106,7 +106,7 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         UInt64 accumulated_cpu_time = inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(accumulated_cpu_time))
         {
-            updateResourceGroupStatics(name, keyspace_id, accumulated_cpu_time);
+            updateResourceGroupStatistic(name, keyspace_id, accumulated_cpu_time);
             accumulated_cpu_time = 0;
         }
         resource_group_statistic.insert({name, accumulated_cpu_time});
@@ -116,14 +116,14 @@ void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & tas
         iter->second += inc_value;
         if (pipelineTaskTimeExceedYieldThreshold(iter->second))
         {
-            updateResourceGroupStatics(name, keyspace_id, iter->second);
+            updateResourceGroupStatistic(name, keyspace_id, iter->second);
             iter->second = 0;
         }
     }
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatics(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
+void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatistic(const std::string & name, const KeyspaceID & keyspace_id, UInt64 consumed_cpu_time)
 {
     LocalAdmissionController::global_instance->consumeResource(name, keyspace_id, toRU(consumed_cpu_time), consumed_cpu_time);
     {
@@ -135,7 +135,7 @@ void ResourceControlQueue<NestedQueueType>::updateResourceGroupStatics(const std
 template <typename NestedQueueType>
 void ResourceControlQueue<NestedQueueType>::updateResourceGroupInfosWithoutLock()
 {
-    ResourceGroupInfoQueue new_resource_group_infos;
+    ResourceGroupInfoQueue new_resource_group_infos{compator};
     while (!resource_group_infos.empty())
     {
         const auto & group_info = resource_group_infos.top();
