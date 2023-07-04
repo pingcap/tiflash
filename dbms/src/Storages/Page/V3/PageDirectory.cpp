@@ -49,6 +49,7 @@
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
+extern const Metric PSPendingWriterNum;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -842,6 +843,7 @@ PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 ma
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot(const String & tracing_id) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
@@ -894,6 +896,7 @@ SnapshotsStatistics PageDirectory::getSnapshotsStat() const
 
 PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
 
     // After two write batches applied: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}, the `mvcc_table_directory` is:
@@ -985,6 +988,7 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
 
 std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
 
@@ -1125,6 +1129,7 @@ PageId PageDirectory::getMaxId() const
 
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_scan).Increment();
     std::set<PageIdV3Internal> page_ids;
 
     std::shared_lock read_lock(table_rw_mutex);
@@ -1263,7 +1268,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
-
+    GET_METRIC(tiflash_storage_page_command_count, type_write).Increment();
+    CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
     Writer w;
     w.edit = &edit;
 
@@ -1272,7 +1278,6 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
-
     writers.push_back(&w);
     SYNC_FOR("after_PageDirectory::enter_write_group");
     w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
