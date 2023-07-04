@@ -1294,6 +1294,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 throw Exception("Unknown exception");
             }
         }
+        return;
     }
 
     auto * last_writer = buildWriteGroup(&w, apply_lock);
