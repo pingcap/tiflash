@@ -14,71 +14,31 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SpillConfig.h>
-#include <Core/Spiller.h>
-#include <common/types.h>
-
 
 namespace DB
 {
 enum class SpillStatus
 {
     NOT_SPILL,
-    MARK_FOR_SPILL,
     SPILL,
 };
 
 class OperatorSpillContext
 {
+protected:
     UInt64 operator_spill_threshold;
     bool enable_spill = true;
+    LoggerPtr log;
 
 public:
-    virtual UInt64 getTotalRevocableMemory();
-    virtual UInt64 markForSpill(UInt64 expected_revoke_memory);
-    explicit OperatorSpillContext(UInt64 operator_spill_threshold_)
+    OperatorSpillContext(UInt64 operator_spill_threshold_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
+        , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
     bool isSpillEnabled() const { return enable_spill && operator_spill_threshold > 0; }
     void disableSpill() { enable_spill = false; }
 };
-
-/// used by hash join
-class HashJoinSpillContext : public OperatorSpillContext
-{
-private:
-    std::vector<std::atomic<SpillStatus>> spill_statuses;
-    std::vector<std::atomic<UInt64>> revocable_memories;
-
-public:
-    HashJoinSpillContext(size_t concurrency, UInt64 operator_spill_threshold_);
-};
-
-/// used by agg
-class AggSpillContext : public OperatorSpillContext
-{
-private:
-    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
-    std::vector<UInt64> per_thread_revocable_memories;
-    std::atomic<UInt64> revocable_memory{0};
-    SpillConfig spill_config;
-    SpillerPtr spiller;
-
-public:
-    AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_);
-    void buildSpiller(size_t partition_num, const Block & input_schema, const LoggerPtr & log);
-    SpillerPtr & getSpiller() { return spiller; }
-};
-
-/// used by non-parallel agg/sort/topn
-class OrdinarySpillContext : public OperatorSpillContext
-{
-private:
-    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
-    std::atomic<UInt64> revocable_memory{0};
-};
-
-using OperatorSpillContextPtr = std::shared_ptr<OperatorSpillContext>;
-
 } // namespace DB

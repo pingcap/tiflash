@@ -38,7 +38,7 @@ Block AggregatingBlockInputStream::readImpl()
         aggregator.setCancellationHook(hook);
         aggregator.initThresholdByAggregatedDataVariantsSize(1);
 
-        aggregator.execute(children.back(), *data_variants);
+        aggregator.execute(children.back(), *data_variants, 0);
 
         if (!aggregator.hasSpilledData())
         {

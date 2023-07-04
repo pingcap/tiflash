@@ -42,7 +42,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
 void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns);
+    aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index]->key_columns, threads_data[task_index]->aggregate_columns, task_index);
     threads_data[task_index]->src_bytes += block.bytes();
     threads_data[task_index]->src_rows += block.rows();
 }
@@ -131,7 +131,8 @@ void AggregateContext::initConvergentPrefix()
             this->getHeader(),
             *many_data[0],
             threads_data[0]->key_columns,
-            threads_data[0]->aggregate_columns);
+            threads_data[0]->aggregate_columns,
+            0);
         /// Since this won't consume a lot of memory,
         /// even if it triggers marking need spill due to a low threshold setting,
         /// it's still reasonable not to spill disk.

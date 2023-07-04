@@ -280,7 +280,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id, size_t con
 
     method_chosen = chooseAggregationMethod();
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
-    agg_spill_context = std::make_shared<AggSpillContext>(concurrency, params.spill_config, params.getMaxBytesBeforeExternalGroupBy());
+    agg_spill_context = std::make_shared<AggSpillContext>(concurrency, params.spill_config, params.getMaxBytesBeforeExternalGroupBy(), log);
     if (agg_spill_context->isSpillEnabled())
     {
         /// init spiller if needed
@@ -290,7 +290,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id, size_t con
         {
             /// for aggregation, the input block is sorted by bucket number
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-            agg_spill_context->buildSpiller(1, header, log);
+            agg_spill_context->buildSpiller(1, header);
         }
         else
         {
@@ -746,7 +746,8 @@ bool Aggregator::executeOnBlock(
     const Block & block,
     AggregatedDataVariants & result,
     ColumnRawPtrs & key_columns,
-    AggregateColumns & aggregate_columns)
+    AggregateColumns & aggregate_columns,
+    size_t thread_num)
 {
     assert(!result.need_spill);
 
@@ -843,8 +844,7 @@ bool Aggregator::executeOnBlock(
 
     /** Flush data to disk if too much RAM is consumed.
       */
-    if (max_bytes_before_external_group_by && result_size > 0
-        && result_size_bytes > max_bytes_before_external_group_by)
+    if (agg_spill_context->updatePerThreadRevocableMemory(result_size_bytes, thread_num) && result_size > 0)
     {
         result.tryMarkNeedSpill();
     }
@@ -875,11 +875,7 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 void Aggregator::spill(AggregatedDataVariants & data_variants)
 {
     assert(data_variants.need_spill);
-    bool init_value = false;
-    if (spill_triggered.compare_exchange_strong(init_value, true, std::memory_order_relaxed))
-    {
-        LOG_INFO(log, "Begin spill in aggregator");
-    }
+    agg_spill_context->markSpill();
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \
@@ -981,7 +977,7 @@ void Aggregator::spillImpl(
 }
 
 
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result)
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num)
 {
     if (is_cancelled())
         return;
@@ -1005,7 +1001,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, key_columns, aggregate_columns))
+        if (!executeOnBlock(block, result, key_columns, aggregate_columns, thread_num))
             break;
         if (result.need_spill)
             spill(result);
@@ -1015,7 +1011,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
     {
-        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns);
+        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, thread_num);
         if (result.need_spill)
             spill(result);
     }
