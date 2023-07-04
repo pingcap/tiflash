@@ -158,7 +158,7 @@ class MPPTaskManager : private boost::noncopyable
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
 
     // key: MPPQueryID, value: MPPTaskSchedulerPtr
-    // We need this because we need to find corresponding scheduler to release query info of MinTSO.
+    // This is to find corresponding scheduler by query_id so we can release query info of MinTSO.
     std::unordered_map<MPPQueryId, String, MPPQueryIdHash> resource_group_query_ids;
 
     std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
@@ -208,11 +208,11 @@ public:
 
     String toString();
 
-    // Will be called in LocalAdmissionController periodically to tag a resource group scheduler can be delete.
-    // And it will be really deleted when all mpptasks are done.
+    // Tag a resource group scheduler can be delete. It's called in LocalAdmissionController periodically.
+    // And the scheduler will be really deleted when all mpptasks are done.
     void tagResourceScheulerReadyToDelete(const String & name);
 
-    // Will be called in LocalAdmissionController periodically to remove empty scheduler.
+    // Really delete resource group scheduler whose running mpp tasks is empty.
     void cleanResourceGroupScheduler();
 
 private:
