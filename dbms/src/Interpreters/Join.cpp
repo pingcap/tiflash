@@ -136,7 +136,7 @@ Join::Join(
     const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
     bool is_test_,
-    const std::vector<RuntimeFilterPtr> runtime_filter_list_)
+    const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
     : restore_round(restore_round_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
@@ -360,11 +360,6 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
             max_bytes_before_external_join = 0;
             LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
-        if (!Spiller::supportSpill(build_sample_block))
-        {
-            max_bytes_before_external_join = 0;
-            LOG_WARNING(log, "Join does not support spill, reason: input data from build side contains only constant columns");
-        }
         if (max_bytes_before_external_join > 0)
             build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     }
@@ -377,18 +372,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
-    {
-        if (!Spiller::supportSpill(probe_sample_block))
-        {
-            max_bytes_before_external_join = 0;
-            build_spiller = nullptr;
-            LOG_WARNING(log, "Join does not support spill, reason: input data from probe side contains only constant columns");
-        }
-        else
-        {
-            probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
-        }
-    }
+        probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
 }
 
 /// the block should be valid.

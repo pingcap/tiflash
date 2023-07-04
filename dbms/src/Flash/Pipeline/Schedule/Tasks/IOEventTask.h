@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
+
 #include "Flash/Pipeline/Schedule/Tasks/Task.h"
 
 namespace DB
@@ -29,10 +30,10 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
         : EventTask(
-            std::move(mem_tracker_), 
-            req_id, 
-            exec_status_, 
-            event_, 
+            std::move(mem_tracker_),
+            req_id,
+            exec_status_,
+            event_,
             is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }

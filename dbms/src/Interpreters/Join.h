@@ -32,6 +32,7 @@
 #include <Interpreters/SettingsCommon.h>
 
 #include <shared_mutex>
+
 #include "common/types.h"
 
 namespace DB
@@ -156,7 +157,7 @@ public:
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
          bool is_test = true,
-         const std::vector<RuntimeFilterPtr> runtime_filter_list_ = dummy_runtime_filter_list);
+         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 

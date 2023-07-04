@@ -16,6 +16,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
 
 #include <magic_enum.hpp>
+
 #include "Flash/Pipeline/Schedule/Tasks/Task.h"
 
 namespace DB

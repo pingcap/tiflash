@@ -96,14 +96,18 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         {
             if (unlikely(!block || block.rows() == 0))
                 continue;
+            auto rows = block.rows();
             /// erase constant column
             spiller->removeConstantColumns(block);
-            RUNTIME_CHECK_MSG(block.columns() > 0, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+            if unlikely (0 == block.columns())
+            {
+                spiller->recordAllConstantBlockRows(partition_id, rows);
+                continue;
+            }
             if (unlikely(writer == nullptr))
             {
                 std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
             }
-            auto rows = block.rows();
             total_rows += rows;
             rows_in_file += rows;
             bytes_in_file += block.estimateBytesForSpill();

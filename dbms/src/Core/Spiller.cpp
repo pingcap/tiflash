@@ -16,6 +16,7 @@
 #include <Core/CachedSpillHandler.h>
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
+#include <DataStreams/ConstantsBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
@@ -78,16 +79,6 @@ void SpilledFiles::makeAllSpilledFilesImmutable()
     mutable_spilled_files.clear();
 }
 
-bool Spiller::supportSpill(const Block & header)
-{
-    for (const auto & column_with_type_and_name : header)
-    {
-        if (column_with_type_and_name.column == nullptr || !column_with_type_and_name.column->isColumnConst())
-            return true;
-    }
-    return false;
-}
-
 Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_, bool release_spilled_file_on_restore_)
     : config(config_)
     , is_input_sorted(is_input_sorted_)
@@ -98,7 +89,10 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     , release_spilled_file_on_restore(release_spilled_file_on_restore_)
 {
     for (UInt64 i = 0; i < partition_num; ++i)
+    {
         spilled_files.push_back(std::make_unique<SpilledFiles>());
+        all_constant_block_rows.push_back(0);
+    }
     /// if is_input_sorted is true, can not append write because it will break the sort property
     enable_append_write = !is_input_sorted && (config.max_spilled_bytes_per_file != 0 || config.max_spilled_rows_per_file != 0);
     Poco::File spill_dir(config.spill_dir);
@@ -118,6 +112,10 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     }
     header_without_constants = input_schema;
     removeConstantColumns(header_without_constants);
+    if (0 == header_without_constants.columns())
+    {
+        LOG_WARNING(logger, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+    }
 }
 
 void Spiller::removeConstantColumns(Block & block) const
@@ -260,8 +258,15 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
         partition_spilled_files.clear();
     }
+    if (all_constant_block_rows[partition_id] > 0)
+    {
+        ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, all_constant_block_rows[partition_id]));
+        all_constant_block_rows[partition_id] = 0;
+    }
     if (ret.empty())
+    {
         ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));
+    }
     if (append_dummy_read_stream)
     {
         /// if append_dummy_read_stream = true, make sure at least `max_stream_size`'s streams are returned, will be used in join
