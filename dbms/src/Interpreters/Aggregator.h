@@ -1057,10 +1057,10 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void spill(AggregatedDataVariants & data_variants);
+    void spill(AggregatedDataVariants & data_variants, size_t thread_num);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
-    bool hasSpilledData() const { return agg_spill_context->hasSpilled(); }
+    bool hasSpilledData() const { return agg_spill_context->isSpilled(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
 
@@ -1121,8 +1121,6 @@ protected:
           */
     size_t group_by_two_level_threshold = 0;
     size_t group_by_two_level_threshold_bytes = 0;
-    /// Settings to flush temporary data to the filesystem (external aggregation).
-    size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;

@@ -24,19 +24,19 @@ class AggSpillContext : public OperatorSpillContext
 {
 private:
     std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
-    std::vector<UInt64> per_thread_revocable_memories;
-    std::atomic<UInt64> total_revocable_memory{0};
+    std::vector<Int64> per_thread_revocable_memories;
+    std::atomic<Int64> total_revocable_memory{0};
     SpillConfig spill_config;
     SpillerPtr spiller;
-    size_t per_thread_spill_threshold;
+    UInt64 per_thread_spill_threshold;
 
 public:
     AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
     void buildSpiller(size_t partition_num, const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
-    bool hasSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
+    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
     void markSpill();
-    bool updatePerThreadRevocableMemory(UInt64 new_value, size_t thread_num);
+    bool updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num);
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

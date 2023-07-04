@@ -869,10 +869,9 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 {
     group_by_two_level_threshold = params.getGroupByTwoLevelThreshold();
     group_by_two_level_threshold_bytes = getAverageThreshold(params.getGroupByTwoLevelThresholdBytes(), aggregated_data_variants_size);
-    max_bytes_before_external_group_by = getAverageThreshold(params.getMaxBytesBeforeExternalGroupBy(), aggregated_data_variants_size);
 }
 
-void Aggregator::spill(AggregatedDataVariants & data_variants)
+void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num)
 {
     assert(data_variants.need_spill);
     agg_spill_context->markSpill();
@@ -900,6 +899,8 @@ void Aggregator::spill(AggregatedDataVariants & data_variants)
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
     data_variants.without_key = nullptr;
+    auto size_bytes = data_variants.bytesCount();
+    agg_spill_context->updatePerThreadRevocableMemory(size_bytes, thread_num);
 }
 
 template <typename Method>
@@ -1004,7 +1005,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         if (!executeOnBlock(block, result, key_columns, aggregate_columns, thread_num))
             break;
         if (result.need_spill)
-            spill(result);
+            spill(result, thread_num);
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
@@ -1013,7 +1014,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     {
         executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, thread_num);
         if (result.need_spill)
-            spill(result);
+            spill(result, thread_num);
     }
 
     double elapsed_seconds = watch.elapsedSeconds();

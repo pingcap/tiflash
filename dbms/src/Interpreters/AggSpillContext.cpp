@@ -43,12 +43,11 @@ void AggSpillContext::markSpill()
     }
 }
 
-bool AggSpillContext::updatePerThreadRevocableMemory(UInt64 new_value, size_t thread_num)
+bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
     Int64 diff = new_value - per_thread_revocable_memories[thread_num];
     per_thread_revocable_memories[thread_num] = new_value;
     total_revocable_memory += diff;
-    return per_thread_spill_threshold > 0 && new_value > per_thread_spill_threshold;
+    return per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold);
 }
-
 } // namespace DB

@@ -65,7 +65,7 @@ bool AggregateContext::needSpill(size_t task_index, bool try_mark_need_spill)
 void AggregateContext::spillData(size_t task_index)
 {
     assert(status.load() == AggStatus::build);
-    aggregator->spill(*many_data[task_index]);
+    aggregator->spill(*many_data[task_index], task_index);
 }
 
 LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
