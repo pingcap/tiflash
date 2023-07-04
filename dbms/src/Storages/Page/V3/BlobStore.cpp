@@ -918,6 +918,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 
 BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_blob).Increment();
     assert(buffers != nullptr);
     BlobFilePtr blob_file = getBlobFile(blob_id);
     try
