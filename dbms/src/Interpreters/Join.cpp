@@ -474,7 +474,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            build_spiller->spillBlocks(std::move(blocks_to_spill), i);
+            spillBuildSideBlocks(i, std::move(blocks_to_spill));
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
@@ -1760,6 +1760,16 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
+void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && blocks)
+{
+    build_spiller->spillBlocks(std::move(blocks), part_id);
+}
+
+void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
+{
+    probe_spiller->spillBlocks(std::move(blocks), part_id);
+}
+
 void Join::spillMostMemoryUsedPartitionIfNeed()
 {
     Int64 target_partition_index = -1;
@@ -1807,7 +1817,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
     }
-    build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
+    spillBuildSideBlocks(target_partition_index, std::move(blocks_to_spill));
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
@@ -1922,7 +1932,7 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
         }
         if (need_spill)
         {
-            probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
+            spillProbeSideBlocks(i, std::move(blocks_to_spill));
         }
         else
         {
@@ -1935,7 +1945,7 @@ void Join::spillAllBuildPartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        build_spiller->spillBlocks(partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller), i);
+        spillBuildSideBlocks(i, partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller));
     }
 }
 
@@ -1943,7 +1953,7 @@ void Join::spillAllProbePartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        probe_spiller->spillBlocks(partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller), i);
+        spillProbeSideBlocks(i, partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller));
     }
 }
 

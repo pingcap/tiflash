@@ -32,6 +32,7 @@
 #include <Interpreters/SettingsCommon.h>
 
 #include <shared_mutex>
+#include "common/types.h"
 
 namespace DB
 {
@@ -262,6 +263,9 @@ public:
 
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
+
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
