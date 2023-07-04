@@ -183,6 +183,7 @@ namespace DB
         F(type_search_pos,  {{"type", "search_pos"}},  ExpBuckets{0.00005, 1.8, 26}),                                                     \
         F(type_blob_write,  {{"type", "blob_write"}},  ExpBuckets{0.00005, 1.8, 26}),                                                     \
         F(type_latch,       {{"type", "latch"}},       ExpBuckets{0.00005, 1.8, 26}),                                                     \
+        F(type_wait_in_group, {{"type", "wait_in_group"}}, ExpBuckets{0.00005, 1.8, 26}),                                                 \
         F(type_wal,         {{"type", "wal"}},         ExpBuckets{0.00005, 1.8, 26}),                                                     \
         F(type_commit,      {{"type", "commit"}},      ExpBuckets{0.00005, 1.8, 26}))                                                     \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
@@ -261,7 +262,7 @@ namespace DB
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
-        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+        F(type_mpp_query_count, {"type", "mpp_query_count"})) \
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

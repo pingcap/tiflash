@@ -1242,21 +1242,90 @@ void PageDirectory::applyRefEditRecord(
     SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
 }
 
+PageDirectory::Writer * PageDirectory::buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/)
+{
+    RUNTIME_CHECK(!writers.empty());
+    RUNTIME_CHECK(first == writers.front());
+    auto * last_writer = first;
+    auto iter = writers.begin();
+    iter++;
+    for (; iter != writers.end(); iter++)
+    {
+        auto * w = *iter;
+        first->edit->merge(std::move(*(w->edit)));
+        last_writer = w;
+    }
+    return last_writer;
+}
+
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
-    //
-    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
-    // pipeline so that we can batch the incoming edit when doing IO.
+
+    Writer w;
+    w.edit = &edit;
 
     Stopwatch watch;
-
     std::unique_lock apply_lock(apply_mutex);
 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
+
+    writers.push_back(&w);
+    SYNC_FOR("after_PageDirectory::enter_write_group");
+    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
+    watch.restart();
+    if (w.done)
+    {
+        if (unlikely(!w.success))
+        {
+            if (w.exception)
+            {
+                w.exception->rethrow();
+            }
+            else
+            {
+                throw Exception("Unknown exception");
+            }
+        }
+        return;
+    }
+
+    auto * last_writer = buildWriteGroup(&w, apply_lock);
+    apply_lock.unlock();
+    SYNC_FOR("before_PageDirectory::leader_apply");
+
+    // `true` means the write process has completed without exception
+    bool success = false;
+    std::unique_ptr<DB::Exception> exception = nullptr;
+
+    SCOPE_EXIT({
+        apply_lock.lock();
+        while (true)
+        {
+            auto * ready = writers.front();
+            writers.pop_front();
+            if (ready != &w)
+            {
+                ready->done = true;
+                ready->success = success;
+                if (exception != nullptr)
+                {
+                    ready->exception = std::unique_ptr<DB::Exception>(exception->clone());
+                }
+                ready->cv.notify_one();
+            }
+            if (ready == last_writer)
+                break;
+        }
+        if (!writers.empty())
+        {
+            writers.front()->cv.notify_one();
+        }
+    });
 
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
@@ -1326,6 +1395,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit_size));
+                exception.reset(e.clone());
                 e.rethrow();
             }
         }
@@ -1333,6 +1403,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+
+    success = true;
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
