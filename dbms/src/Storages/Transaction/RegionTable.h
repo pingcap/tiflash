@@ -159,9 +159,15 @@ public:
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
+    // Find all regions with data, call writeBlockByRegionAndFlush with try_persist = true.
+    // This function is only for debug.
     bool tryFlushRegions();
-    RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
+
+    // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
+    // Only one thread can do this at the same time.
+    // The original name for this function is tryFlushRegion.
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(RegionID region_id, bool try_persist = false);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
 
     void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
@@ -191,7 +197,6 @@ public:
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
 
-
     void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
 
     // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
@@ -211,7 +216,10 @@ private:
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_tb_id, RegionID region_id);
 
-    RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
+    // Try write the committed kvs into cache of columnar DeltaMergeStore.
+    // Flush the cache if try_persist is set to true.
+    // The original name for this method is flushRegion.
+    RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 

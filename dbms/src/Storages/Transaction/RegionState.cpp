@@ -190,6 +190,11 @@ RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && star
         TiKVRangeKey::makeTiKVRangeKey<false>(std::move(end_key)));
 }
 
+RegionRangeKeys::RegionRange RegionRangeKeys::cloneRange(const RegionRange & from)
+{
+    return std::make_pair(from.first.copy(), from.second.copy());
+}
+
 std::string TiKVRangeKey::toDebugString() const
 {
     if (this->state == MAX)

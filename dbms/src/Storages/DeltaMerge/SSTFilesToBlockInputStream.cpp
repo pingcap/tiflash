@@ -159,6 +159,7 @@ Block SSTFilesToBlockInputStream::read()
             // else continue to decode key-value from write CF.
         }
     }
+
     // Load all key-value pairs from other CFs
     loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
     loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
@@ -261,7 +262,17 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, stop decoding.
-            LOG_WARNING(log, "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep uncommitted data in region.", e.displayText());
+            const auto & start_key = region->getMetaRegion().start_key();
+            const auto & end_key = region->getMetaRegion().end_key();
+            LOG_WARNING(log, "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep uncommitted data in region."
+                             "region_id: {}, applied_index: {}, version: {}, conf_version {}, start_key: {}, end_key: {}",
+                        e.displayText(),
+                        region->id(),
+                        region->appliedIndex(),
+                        region->version(),
+                        region->confVer(),
+                        Redact::keyToDebugString(start_key.data(), start_key.size()),
+                        Redact::keyToDebugString(end_key.data(), end_key.size()));
             // Cancel the decoding process.
             // Note that we still need to scan data from CFs and keep them in `region`
             is_decode_cancelled = true;
