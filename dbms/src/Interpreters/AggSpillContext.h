@@ -25,7 +25,6 @@ class AggSpillContext : public OperatorSpillContext
 private:
     std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
     std::vector<Int64> per_thread_revocable_memories;
-    std::atomic<Int64> total_revocable_memory{0};
     SpillConfig spill_config;
     SpillerPtr spiller;
     UInt64 per_thread_spill_threshold;
