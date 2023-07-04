@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -28,6 +32,8 @@ TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
         return std::make_unique<CPUMultiLevelFeedbackQueue>();
     case TaskQueueType::FIFO:
         return std::make_unique<FIFOTaskQueue>();
+    default:
+        throw Exception(fmt::format("Unsupported queue type: {}", magic_enum::enum_name(type)));
     }
 }
 
@@ -35,12 +41,16 @@ TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
 {
     switch (type)
     {
-    // the default queue is fifo queue.
+    // the default queue is io priority queue.
     case TaskQueueType::DEFAULT:
+    case TaskQueueType::IO_PRIORITY:
+        return std::make_unique<IOPriorityQueue>();
     case TaskQueueType::FIFO:
         return std::make_unique<FIFOTaskQueue>();
     case TaskQueueType::MLFQ:
         return std::make_unique<IOMultiLevelFeedbackQueue>();
+    default:
+        throw Exception(fmt::format("Unsupported queue type: {}", magic_enum::enum_name(type)));
     }
 }
 } // namespace DB

@@ -82,25 +82,139 @@ private:
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
+// This is not a thread safe class
+// It must be used with outer synchronization
+class MultiVersionRefCount
+{
+public:
+    MultiVersionRefCount() = default;
+
+    MultiVersionRefCount(const MultiVersionRefCount & other)
+    {
+        if (other.versioned_ref_counts)
+        {
+            versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+            for (const auto & [ver, ref_count] : *(other.versioned_ref_counts))
+            {
+                versioned_ref_counts->emplace_back(ver, ref_count);
+            }
+        }
+        else
+        {
+            versioned_ref_counts = nullptr;
+        }
+    }
+
+    void restoreFrom(const PageVersion & ver, Int64 ref_count)
+    {
+        // versioned_ref_counts being nullptr always means ref count 1
+        RUNTIME_CHECK(ref_count > 0);
+        RUNTIME_CHECK(!versioned_ref_counts);
+        if (ref_count == 1)
+        {
+            return;
+        }
+        versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+        // empty `versioned_ref_counts` means ref count 1, so the ref count delta here is ref_count - 1
+        versioned_ref_counts->emplace_back(ver, ref_count - 1);
+    }
+
+    void incrRefCount(const PageVersion & ver, Int64 ref_count_delta)
+    {
+        if (!versioned_ref_counts)
+        {
+            versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+        }
+        versioned_ref_counts->emplace_back(ver, ref_count_delta);
+    }
+
+    void decrRefCountInSnap(UInt64 snap_seq, Int64 deref_count_delta)
+    {
+        if (snap_seq == 0)
+        {
+            // When `snap_seq` is 0, it means the deref operation is caused by rewritting a ref page to a normal page.
+            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
+            // But collpase it when `snap_seq` is not zero should be enough. So we just do an append here.
+            versioned_ref_counts->emplace_back(PageVersion(0, 0), -deref_count_delta);
+        }
+        else
+        {
+            auto new_versioned_ref_counts = std::make_unique<std::vector<std::pair<PageVersion, Int64>>>();
+            Int64 ref_count_delta_in_snap = -deref_count_delta;
+            for (const auto & [ver, ref_count_delta] : *versioned_ref_counts)
+            {
+                if (ver.sequence <= snap_seq)
+                {
+                    ref_count_delta_in_snap += ref_count_delta;
+                }
+                else
+                {
+                    new_versioned_ref_counts->emplace_back(ver, ref_count_delta);
+                }
+            }
+            if (ref_count_delta_in_snap == 0 && new_versioned_ref_counts->empty())
+            {
+                versioned_ref_counts = nullptr;
+                return;
+            }
+            RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);
+            new_versioned_ref_counts->emplace_back(PageVersion(snap_seq, 0), ref_count_delta_in_snap);
+            versioned_ref_counts.swap(new_versioned_ref_counts);
+        }
+    }
+
+    Int64 getRefCountInSnap(UInt64 snap_seq) const
+    {
+        if (!versioned_ref_counts)
+        {
+            return 1;
+        }
+        return std::accumulate(
+            versioned_ref_counts->begin(),
+            versioned_ref_counts->end(),
+            1,
+            [&](Int64 acc, const auto & ver_ref_count) {
+                return acc + (ver_ref_count.first.sequence <= snap_seq ? ver_ref_count.second : 0);
+            });
+    }
+
+    Int64 getLatestRefCount() const
+    {
+        if (!versioned_ref_counts)
+        {
+            return 1;
+        }
+        return std::accumulate(
+            versioned_ref_counts->begin(),
+            versioned_ref_counts->end(),
+            1,
+            [](Int64 acc, const auto & ver_ref_count) { return acc + ver_ref_count.second; });
+    }
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    // store the ref count delta for each version, empty means ref count 1
+    std::unique_ptr<std::vector<std::pair<PageVersion, Int64>>> versioned_ref_counts;
+};
+
 struct EntryOrDelete
 {
     bool is_delete = true;
-    Int64 being_ref_count = 1;
+    MultiVersionRefCount being_ref_count;
     PageEntryV3 entry;
 
     static EntryOrDelete newDelete()
     {
         return EntryOrDelete{
             .is_delete = true,
-            .being_ref_count = 1, // meaningless
             .entry = {}, // meaningless
         };
-    }
+    };
     static EntryOrDelete newNormalEntry(const PageEntryV3 & entry)
     {
         return EntryOrDelete{
             .is_delete = false,
-            .being_ref_count = 1,
             .entry = entry,
         };
     }
@@ -113,17 +227,24 @@ struct EntryOrDelete
         };
     }
 
-    static EntryOrDelete newFromRestored(PageEntryV3 entry, Int64 being_ref_count)
+    static EntryOrDelete newFromRestored(PageEntryV3 entry, const PageVersion & ver, Int64 being_ref_count)
     {
-        return EntryOrDelete{
+        auto result = EntryOrDelete{
             .is_delete = false,
-            .being_ref_count = being_ref_count,
             .entry = entry,
         };
+        result.being_ref_count.restoreFrom(ver, being_ref_count);
+        return result;
     }
 
-    bool isDelete() const { return is_delete; }
-    bool isEntry() const { return !is_delete; }
+    bool isDelete() const
+    {
+        return is_delete;
+    }
+    bool isEntry() const
+    {
+        return !is_delete;
+    }
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -152,7 +273,6 @@ public:
         , create_ver(0)
         , delete_ver(0)
         , ori_page_id{}
-        , being_ref_count(1)
     {}
 
     bool isExternalPage() const { return type == EditRecordType::VAR_EXTERNAL; }
@@ -185,7 +305,7 @@ public:
     std::tuple<ResolveResult, PageId, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
-    Int64 incrRefCount(const PageVersion & ver);
+    Int64 incrRefCount(const PageVersion & target_ver, const PageVersion & ref_ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
@@ -257,7 +377,7 @@ public:
             is_deleted,
             delete_ver,
             ori_page_id,
-            being_ref_count,
+            being_ref_count.getLatestRefCount(),
             entries.size());
     }
     template <typename T>
@@ -284,7 +404,7 @@ private:
     // Original page id, valid when type == VAR_REF
     PageId ori_page_id;
     // Being ref counter, valid when type == VAR_EXTERNAL
-    Int64 being_ref_count;
+    MultiVersionRefCount being_ref_count;
     // A shared ptr to a holder, valid when type == VAR_EXTERNAL
     std::shared_ptr<PageId> external_holder;
 };
@@ -363,10 +483,7 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    /// When create PageDirectory for dump snapshot, we should keep the last valid var_entry when it is deleted.
-    /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
-    /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
-    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
+    bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
     size_t copyCheckpointInfoFromEdit(const PageEntriesEdit & edit);
 
@@ -551,6 +668,6 @@ struct fmt::formatter<DB::PS::V3::EntryOrDelete>
             "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
             entry.is_delete,
             entry.entry,
-            entry.being_ref_count);
+            entry.being_ref_count.getLatestRefCount());
     }
 };
