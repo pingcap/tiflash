@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Operators/SpilledBucketInput.h>
+#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <memory>
@@ -61,7 +62,9 @@ public:
         PipelineExecutorStatus & exec_status_,
         const BlockInputStreams & bucket_streams,
         const String & req_id,
-        size_t max_queue_size_);
+        size_t max_queue_size_,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_);
 
     ~SharedSpilledBucketDataLoader();
 
@@ -93,6 +96,9 @@ private:
     static constexpr Int32 NUM_BUCKETS = 256;
 
     std::atomic<SharedLoaderStatus> status{SharedLoaderStatus::idle};
+
+    const String resource_group_name;
+    const KeyspaceID keyspace_id;
 };
 using SharedSpilledBucketDataLoaderPtr = std::shared_ptr<SharedSpilledBucketDataLoader>;
 

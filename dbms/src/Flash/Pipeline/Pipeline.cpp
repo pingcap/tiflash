@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -23,6 +24,7 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <tipb/select.pb.h>
 
@@ -224,7 +226,8 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec),
+                        context.getDAGContext()->getResourceGroupName(), context.getDAGContext()->getKeyspaceID()));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else

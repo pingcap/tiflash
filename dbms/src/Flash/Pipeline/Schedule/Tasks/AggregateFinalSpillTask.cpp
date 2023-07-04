@@ -23,8 +23,10 @@ AggregateFinalSpillTask::AggregateFinalSpillTask(
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
-    size_t index_)
-    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    size_t index_,
+    const String & resource_group_name_,
+    const KeyspaceID & keyspace_id_)
+    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_, resource_group_name_, keyspace_id_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {

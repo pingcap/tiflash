@@ -49,7 +49,7 @@ class Task
 public:
     Task();
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id, const String & resource_group_name, const KeyspaceID & keyspace_id);
 
     virtual ~Task();
 

@@ -57,8 +57,10 @@ EventTask::EventTask(
     MemoryTrackerPtr mem_tracker_,
     const String & req_id,
     PipelineExecutorStatus & exec_status_,
-    const EventPtr & event_)
-    : Task(std::move(mem_tracker_), req_id)
+    const EventPtr & event_,
+    const String & resource_group_name_,
+    const KeyspaceID & keyspace_id_)
+    : Task(std::move(mem_tracker_), req_id, resource_group_name_, keyspace_id_)
     , exec_status(exec_status_)
     , event(event_)
 {

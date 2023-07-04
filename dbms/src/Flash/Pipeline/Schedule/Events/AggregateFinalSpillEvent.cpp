@@ -14,6 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/AggregateFinalSpillTask.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
@@ -21,7 +22,11 @@ void AggregateFinalSpillEvent::scheduleImpl()
 {
     assert(agg_context);
     for (auto index : indexes)
-        addTask(std::make_unique<AggregateFinalSpillTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), agg_context, index));
+    {
+        auto agg_final_spill_task = std::make_unique<AggregateFinalSpillTask>(mem_tracker,
+                log->identifier(), exec_status, shared_from_this(), agg_context, index, agg_context->getResourceGroupName(), agg_context->getKeyspaceID());
+        addTask(std::move(agg_final_spill_task));
+    }
 }
 
 void AggregateFinalSpillEvent::finishImpl()

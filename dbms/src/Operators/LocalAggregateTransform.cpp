@@ -31,10 +31,12 @@ constexpr size_t task_index = 0;
 LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorStatus & exec_status_,
     const String & req_id,
-    const Aggregator::Params & params_)
+    const Aggregator::Params & params_,
+    const String & resource_group_name_,
+    const KeyspaceID & keyspace_id_)
     : TransformOp(exec_status_, req_id)
     , params(params_)
-    , agg_context(req_id)
+    , agg_context(req_id, resource_group_name_, keyspace_id_)
 {
     agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
 }

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -24,7 +26,13 @@ void PlainPipelineEvent::scheduleImpl()
     auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     for (auto & pipeline_exec : pipeline_exec_group)
-        addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
+    {
+        auto pipeline_task = std::make_unique<PipelineTask>(mem_tracker,
+                log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec),
+                context.getDAGContext()->getResourceGroupName(), context.getDAGContext()->getKeyspaceID());
+
+        addTask(std::move(pipeline_task));
+    }
 }
 
 void PlainPipelineEvent::finishImpl()

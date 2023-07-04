@@ -28,9 +28,13 @@ public:
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        SharedSpilledBucketDataLoaderPtr loader_)
+        SharedSpilledBucketDataLoaderPtr loader_,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_)
         : Event(exec_status_, std::move(mem_tracker_), req_id)
         , loader(std::move(loader_))
+        , resource_group_name(resource_group_name_)
+        , keyspace_id(keyspace_id_)
     {
         assert(loader);
     }
@@ -42,5 +46,7 @@ protected:
 
 private:
     SharedSpilledBucketDataLoaderPtr loader;
+    const String resource_group_name;
+    const KeyspaceID keyspace_id;
 };
 } // namespace DB

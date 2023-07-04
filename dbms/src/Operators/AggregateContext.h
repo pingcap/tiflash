@@ -19,6 +19,7 @@
 #include <Interpreters/Aggregator.h>
 #include <Operators/LocalAggregateRestorer.h>
 #include <Operators/SharedAggregateRestorer.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -42,8 +43,12 @@ class AggregateContext
 {
 public:
     explicit AggregateContext(
-        const String & req_id)
+        const String & req_id,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_)
         : log(Logger::get(req_id))
+        , resource_group_name(resource_group_name_)
+        , keyspace_id(keyspace_id_)
     {
     }
 
@@ -74,6 +79,8 @@ public:
 
     Block getHeader() const;
 
+    String getResourceGroupName() const { return resource_group_name; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 private:
     std::unique_ptr<Aggregator> aggregator;
     bool keys_size = false;
@@ -107,6 +114,9 @@ private:
     const LoggerPtr log;
 
     std::optional<Stopwatch> build_watch;
+
+    const String resource_group_name;
+    const KeyspaceID keyspace_id;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

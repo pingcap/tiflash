@@ -32,7 +32,9 @@ public:
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
-        const EventPtr & event_);
+        const EventPtr & event_,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_);
 
 protected:
     ExecTaskStatus executeImpl() override;

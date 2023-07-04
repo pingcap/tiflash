@@ -28,8 +28,10 @@ public:
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
-        SpilledBucketInput & input_)
-        : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        SpilledBucketInput & input_,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_)
+        : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_, resource_group_name_, keyspace_id_)
         , input(input_)
     {
     }

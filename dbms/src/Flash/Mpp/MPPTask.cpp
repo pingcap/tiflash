@@ -107,7 +107,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta)
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
-    , schedule_entry(manager, id, meta_.resource_group_name(), context_->getSettingsRef().resource_control_mpptask_hard_limit)
+    , schedule_entry(manager, id, meta_.resource_group_name())
     , log(Logger::get(id.toString()))
     , mpp_task_statistics(id, meta.address())
 {

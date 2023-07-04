@@ -196,7 +196,9 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         is_final_agg,
         spill_config);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params));
+        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params,
+                    context.getDAGContext()->getResourceGroupName(),
+                    context.getDAGContext()->getKeyspaceID()));
     });
 
     executeExpression(exec_status, group_builder, expr_after_agg, log);
@@ -207,7 +209,9 @@ void PhysicalAggregation::buildPipeline(
     Context & context,
     PipelineExecutorStatus & exec_status)
 {
-    auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
+    auto aggregate_context = std::make_shared<AggregateContext>(log->identifier(),
+        context.getDAGContext()->getResourceGroupName(),
+        context.getDAGContext()->getKeyspaceID());
     if (fine_grained_shuffle.enable())
     {
         // For fine grained shuffle, Aggregate wouldn't be broken.

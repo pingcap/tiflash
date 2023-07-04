@@ -292,6 +292,8 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    // gjt todo
+    String getResourceGroupName() { return resource_group_name; }
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
     RU getReadRU() const;
@@ -406,6 +408,8 @@ private:
 
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
+
+    const String resource_group_name;
 
     // Used to determine the execution mode
     // - None: request has not been executed yet

@@ -24,8 +24,10 @@ PipelineTask::PipelineTask(
     const String & req_id,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
-    PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    PipelineExecPtr && pipeline_exec_,
+    const String & resource_group_name_,
+    const KeyspaceID & keyspace_id_)
+    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_, resource_group_name_, keyspace_id_)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {

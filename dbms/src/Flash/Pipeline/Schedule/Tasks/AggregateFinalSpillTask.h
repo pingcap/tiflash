@@ -30,7 +30,9 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         AggregateContextPtr agg_context_,
-        size_t index_);
+        size_t index_,
+        const String & resource_group_name_,
+        const KeyspaceID & keyspace_id_);
 
 protected:
     ExecTaskStatus doExecuteIOImpl() override;

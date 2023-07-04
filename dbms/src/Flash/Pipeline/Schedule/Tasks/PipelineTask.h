@@ -27,7 +27,9 @@ public:
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
-        PipelineExecPtr && pipeline_exec_);
+        PipelineExecPtr && pipeline_exec_,
+        const String & resource_group_name_,
+        const KeyspaceID & key_space_id_);
 
 protected:
     ExecTaskStatus doExecuteImpl() override;

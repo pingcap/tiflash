@@ -69,15 +69,19 @@ Task::Task()
     : log(Logger::get())
     , mem_tracker_holder(nullptr)
     , mem_tracker_ptr(nullptr)
+    , resource_group_name()
+    , keyspace_id(NullspaceID)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
-Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
+Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id, const String & resource_group_name_, const KeyspaceID & keyspace_id_)
     : log(Logger::get(req_id))
     , mem_tracker_holder(std::move(mem_tracker_))
     , mem_tracker_ptr(mem_tracker_holder.get())
+    , resource_group_name(resource_group_name_)
+    , keyspace_id(keyspace_id_)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);

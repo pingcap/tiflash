@@ -347,7 +347,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
             if (non_throttled_rg_active_set_size >= resource_control_mpp_task_hard_limit)
                 throw Exception(fmt::format("too many running mpp tasks(mpptask hard limit: {}, "
                                             "current total mpptask: {}, non throttled resource group mpptasks: {})",
-                                            schedule_entry.getResourceControlMPPTaskHardLimit(),
+                                            resource_control_mpp_task_hard_limit,
                                             mintso_active_set_size,
                                             non_throttled_rg_active_set_size));
         }
