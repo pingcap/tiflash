@@ -136,7 +136,7 @@ void PhysicalExpand2::expandTransform(DAGPipeline & child_pipeline)
 }
 
 // Pipeline execution transform.
-void PhysicalExpand2::buildPipelineExecGroup(
+void PhysicalExpand2::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
