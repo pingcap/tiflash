@@ -101,8 +101,7 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
     for (size_t i = 0; i < column_size; ++i)
     {
         auto && column = mutable_columns[i];
-        const auto & type_removed_nullable = removeNullable(name_and_type_list[i].type);
-        if (type_removed_nullable->haveMaximumSizeOfValue())
+        if (name_and_type_list[i].type->haveMaximumSizeOfValue())
         {
             if (reserve_size > 0)
                 column->reserve(std::max(rows_to_read, reserve_size));

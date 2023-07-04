@@ -171,8 +171,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
-        const auto & type_removed_nullable = removeNullable(column.type);
-        if (type_removed_nullable->haveMaximumSizeOfValue())
+        if (column.type->haveMaximumSizeOfValue())
         {
             if (reserve_size > 0)
                 read_column->reserve(std::max(rows, reserve_size));
