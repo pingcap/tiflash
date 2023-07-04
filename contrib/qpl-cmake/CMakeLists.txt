@@ -1,8 +1,4 @@
 ## The Intel® QPL provides high performance implementations of data processing functions for existing hardware accelerator, and/or software path in case if hardware accelerator is not available.
-if (NOT USE_QPL)
-    message(STATUS "Not using QPL")
-    return()
- endif()
  
  ## QPL build start here.
  set (QPL_PROJECT_DIR "${TiFlash_SOURCE_DIR}/contrib/qpl")
