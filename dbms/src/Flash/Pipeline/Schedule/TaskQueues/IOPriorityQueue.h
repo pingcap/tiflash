@@ -29,7 +29,7 @@ namespace DB
 class IOPriorityQueue : public TaskQueue
 {
 public:
-    // // The ratio of total execution time between io_in and io_out is 3:1.
+    // // The ratio of total execution time between io_out and io_in is 3:1.
     static constexpr size_t ratio_of_out_to_in = 3;
 
     ~IOPriorityQueue() override;
