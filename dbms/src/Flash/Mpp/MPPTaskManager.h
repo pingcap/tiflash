@@ -152,11 +152,18 @@ class MPPTaskManager : private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
+    // key: resource_group_name, value: MPPTaskSchedulerPtr
+    // If resource control is enabled, will use scheduler in resource_group_schedulers.
+    // Otherwise use the global scheduler.
     std::unordered_map<String, MPPTaskSchedulerPtr> resource_group_schedulers;
 
+    // key: MPPQueryID, value: MPPTaskSchedulerPtr
+    // We need this because we need to find corresponding scheduler to release query info of MinTSO.
     std::unordered_map<MPPQueryId, String, MPPQueryIdHash> resource_group_query_ids;
 
     std::unordered_set<MPPTaskSchedulerPtr> resource_group_schedulers_ready_to_delete;
+
+    UInt64 resource_control_mpp_task_hard_limit;
 
     std::mutex mu;
 
@@ -171,7 +178,7 @@ class MPPTaskManager : private boost::noncopyable
     std::shared_ptr<MPPTaskMonitor> monitor;
 
 public:
-    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
+    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler, UInt64 resource_control_mpp_task_hard_limit);
 
     ~MPPTaskManager();
 
@@ -201,11 +208,12 @@ public:
 
     String toString();
 
-    // Will be called in LocalAdmissionController periodically to delete related scheduler when resource group is deleted.
-    void removeResourceGroupScheduler(const String & name);
+    // Will be called in LocalAdmissionController periodically to tag a resource group scheduler can be delete.
+    // And it will be really deleted when all mpptasks are done.
+    void tagResourceScheulerReadyToDelete(const String & name);
 
-    // Will be called in LocalAdmissionController periodically to really remove empty scheduler.
-    void cleanDeletedResourceGroupScheduler();
+    // Will be called in LocalAdmissionController periodically to remove empty scheduler.
+    void cleanResourceGroupScheduler();
 
 private:
     MPPQueryTaskSetPtr addMPPQueryTaskSet(const MPPQueryId & query_id);

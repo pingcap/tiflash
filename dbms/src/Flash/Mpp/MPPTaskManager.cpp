@@ -35,8 +35,9 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 extern const char pause_before_register_non_root_mpp_task[];
 } // namespace FailPoints
 
-MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
+MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_, UInt64 resource_control_mpp_task_hard_limit_)
     : scheduler(scheduler_)
+    , resource_control_mpp_task_hard_limit(resource_control_mpp_task_hard_limit_)
     , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
     , log(Logger::get())
     , monitor(std::make_shared<MPPTaskMonitor>(log))
@@ -325,13 +326,13 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     {
         std::lock_guard lock(mu);
 
-        // Check of global MPPTask hard limit.
+        // Check global MPPTask hard limit.
         size_t mintso_active_set_size = 0;
         for (const auto & ele : resource_group_schedulers)
             mintso_active_set_size += ele.second->getActiveSetSize();
 
         // This check helps reduce the contention of lock within resource group.
-        if (mintso_active_set_size >= schedule_entry.getResourceControlMPPTaskHardLimit())
+        if (mintso_active_set_size >= resource_control_mpp_task_hard_limit)
         {
             size_t non_throttled_rg_active_set_size = 0;
             for (const auto & ele : resource_group_schedulers)
@@ -343,7 +344,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 
                 non_throttled_rg_active_set_size += ele.second->getActiveSetSize();
             }
-            if (non_throttled_rg_active_set_size >= schedule_entry.getResourceControlMPPTaskHardLimit())
+            if (non_throttled_rg_active_set_size >= resource_control_mpp_task_hard_limit)
                 throw Exception(fmt::format("too many running mpp tasks(mpptask hard limit: {}, "
                                             "current total mpptask: {}, non throttled resource group mpptasks: {})",
                                             schedule_entry.getResourceControlMPPTaskHardLimit(),
@@ -351,21 +352,24 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
                                             non_throttled_rg_active_set_size));
         }
 
-        // Check of MinTSO of a resource group.
+        // Start MinTSO scheduling.
         auto iter = resource_group_schedulers.find(resource_group_name);
+        MPPTaskSchedulerPtr resource_group_scheduler;
         if (iter == resource_group_schedulers.end())
         {
             // For now, resource group MinTSO use same config as the global MinTSO.
             auto [thread_soft_limit, thread_hard_limit, active_set_soft_limit] = scheduler->getLimitConfig();
-            MPPTaskSchedulerPtr resource_group_scheduler = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
-            scheduled = iter->second->tryToSchedule(schedule_entry, *this);
+            resource_group_scheduler = std::make_shared<MinTSOScheduler>(thread_soft_limit, thread_hard_limit, active_set_soft_limit);
             resource_group_schedulers.insert({resource_group_name, resource_group_scheduler});
-            resource_group_query_ids.insert({schedule_entry.getMPPTaskId().query_id, resource_group_name});
         }
         else
         {
-            scheduled = iter->second->tryToSchedule(schedule_entry, *this);
+            resource_group_scheduler = iter->second;
         }
+        scheduled = resource_group_scheduler->tryToSchedule(schedule_entry, *this);
+        // Should always insert succees, query_id will not be duplicate.
+        auto insert_res = resource_group_query_ids.insert({schedule_entry.getMPPTaskId().query_id, resource_group_name});
+        assert(insert_res.second);
     }
     else
     {
@@ -375,7 +379,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduled;
 }
 
-void MPPTaskManager::removeResourceGroupScheduler(const String & name)
+void MPPTaskManager::tagResourceScheulerReadyToDelete(const String & name)
 {
     std::lock_guard lock(mu);
     auto scheduler_iter = resource_group_schedulers.find(name);
@@ -397,7 +401,7 @@ void MPPTaskManager::removeResourceGroupScheduler(const String & name)
     resource_group_schedulers.erase(scheduler_iter);
 }
 
-void MPPTaskManager::cleanDeletedResourceGroupScheduler()
+void MPPTaskManager::cleanResourceGroupScheduler()
 {
     std::lock_guard lock(mu);
     for (auto iter = resource_group_schedulers_ready_to_delete.begin(); iter != resource_group_schedulers_ready_to_delete.end();)
