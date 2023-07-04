@@ -16,8 +16,6 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
-
 namespace DB
 {
 template <bool is_input>

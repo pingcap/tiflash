@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <DataStreams/IBlockInputStream.h>
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -56,4 +56,4 @@ private:
 
     bool done = false;
 };
-}
+} // namespace DB

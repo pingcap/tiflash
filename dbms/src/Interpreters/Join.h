@@ -33,8 +33,6 @@
 
 #include <shared_mutex>
 
-#include "common/types.h"
-
 namespace DB
 {
 class Join;
