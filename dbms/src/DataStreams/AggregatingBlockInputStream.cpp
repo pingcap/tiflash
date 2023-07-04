@@ -40,6 +40,9 @@ Block AggregatingBlockInputStream::readImpl()
 
         aggregator.execute(children.back(), *data_variants, 0);
 
+        /// no new spill can be triggered anymore
+        aggregator.getAggSpillContext()->clearPerThreadRevocableMemory(0);
+
         if (!aggregator.hasSpilledData())
         {
             ManyAggregatedDataVariants many_data{data_variants};

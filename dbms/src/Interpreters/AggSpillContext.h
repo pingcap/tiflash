@@ -37,6 +37,7 @@ public:
     bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
     void markSpill();
     bool updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num);
+    void clearPerThreadRevocableMemory(size_t thread_num);
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

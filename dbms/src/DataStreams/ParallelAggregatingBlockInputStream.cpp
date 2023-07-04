@@ -163,11 +163,14 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
 
 void ParallelAggregatingBlockInputStream::Handler::onFinish()
 {
+    /// no new spill can be triggered
+    for (size_t i = 0; i < parent.many_data.size(); ++i)
+        parent.aggregator.getAggSpillContext()->clearPerThreadRevocableMemory(i);
     if (!parent.isCancelled() && parent.aggregator.hasSpilledData())
     {
         /// It may happen that some data has not yet been flushed,
         ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
-        for (size_t i = 0; i < parent.many_data.size(); i++)
+        for (size_t i = 0; i < parent.many_data.size(); ++i)
         {
             if (parent.many_data[i]->tryMarkNeedSpill())
                 parent.aggregator.spill(*parent.many_data[i], i);

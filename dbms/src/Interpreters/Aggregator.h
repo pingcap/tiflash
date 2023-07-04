@@ -1063,6 +1063,7 @@ public:
     bool hasSpilledData() const { return agg_spill_context->isSpilled(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
+    AggSpillContextPtr & getAggSpillContext() { return agg_spill_context; }
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;

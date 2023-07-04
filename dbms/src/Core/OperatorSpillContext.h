@@ -33,6 +33,8 @@ protected:
     LoggerPtr log;
 
 public:
+    static const Int64 INVALID_REVOCABLE_MEMORY = -1;
+
     OperatorSpillContext(UInt64 operator_spill_threshold_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
         , log(log_)

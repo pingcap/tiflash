@@ -46,6 +46,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     case LocalAggStatus::build:
         if unlikely (!block)
         {
+            agg_context.getAggSpillContext()->clearPerThreadRevocableMemory(task_index);
             return agg_context.hasSpilledData()
                 ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvergent(block);

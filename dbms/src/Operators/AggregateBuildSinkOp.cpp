@@ -21,6 +21,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
     if (unlikely(!block))
     {
+        agg_context->getAggSpillContext()->clearPerThreadRevocableMemory(index);
         if (agg_context->hasSpilledData() && agg_context->needSpill(index, /*try_mark_need_spill=*/true))
         {
             RUNTIME_CHECK(!is_final_spill);

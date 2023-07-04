@@ -43,8 +43,18 @@ void AggSpillContext::markSpill()
     }
 }
 
+void AggSpillContext::clearPerThreadRevocableMemory(size_t thread_num)
+{
+    total_revocable_memory -= per_thread_revocable_memories[thread_num];
+    per_thread_revocable_memories[thread_num] = INVALID_REVOCABLE_MEMORY;
+}
+
 bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
+    assert(new_value > INVALID_REVOCABLE_MEMORY);
+    /// if per_thread_revocable_memories is already be set to -1, just return
+    if (per_thread_revocable_memories[thread_num] == INVALID_REVOCABLE_MEMORY)
+        return false;
     Int64 diff = new_value - per_thread_revocable_memories[thread_num];
     per_thread_revocable_memories[thread_num] = new_value;
     total_revocable_memory += diff;
