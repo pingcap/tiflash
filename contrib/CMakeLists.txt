@@ -16,7 +16,7 @@ if (USE_INTERNAL_ZSTD_LIBRARY)
     add_subdirectory (zstd-cmake)
 endif ()
 
-if (USE_INTERNAL_QPL_LIBRARY)
+if (USE_QPL AND USE_INTERNAL_QPL_LIBRARY)
     add_subdirectory (qpl-cmake)
 endif ()
 
