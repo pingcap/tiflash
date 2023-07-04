@@ -502,24 +502,52 @@ try
     for (auto & type_and_name : constant_header)
         type_and_name.column = type_and_name.type->createColumnConst(1, Field(static_cast<Int64>(1)));
 
-    Blocks blocks;
-    size_t rows = 10;
-    size_t block_num = 10;
-    for (size_t i = 0; i < block_num; ++i)
     {
-        Block block = constant_header;
-        for (auto & col : block)
-            col.column = col.column->cloneResized(rows);
-        blocks.push_back(std::move(block));
-    }
-    Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
-    spiller.spillBlocks(std::move(blocks), 0);
-    spiller.finishSpill();
+        Blocks blocks;
+        size_t rows = 10;
+        size_t block_num = 10;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(rows);
+            blocks.push_back(std::move(block));
+        }
+        Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
 
-    Block expected_block = constant_header;
-    for (auto & col : expected_block)
-        col.column = col.column->cloneResized(rows * block_num);
-    verifyRestoreBlocks(spiller, 0, 100, 1, {expected_block});
+        Block expected_block = constant_header;
+        for (auto & col : expected_block)
+            col.column = col.column->cloneResized(rows * block_num);
+        verifyRestoreBlocks(spiller, 0, 100, 1, {expected_block});
+    }
+
+    {
+        Blocks blocks;
+        size_t block_num = DEFAULT_BLOCK_SIZE + 1;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(1);
+            blocks.push_back(std::move(block));
+        }
+        Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
+
+        Blocks expected_blocks;
+        Block block1 = constant_header;
+        for (auto & col : block1)
+            col.column = col.column->cloneResized(DEFAULT_BLOCK_SIZE);
+        expected_blocks.push_back(std::move(block1));
+        Block block2 = constant_header;
+        for (auto & col : block2)
+            col.column = col.column->cloneResized(1);
+        expected_blocks.push_back(std::move(block2));
+        verifyRestoreBlocks(spiller, 0, 100, 1, expected_blocks);
+    }
 }
 CATCH
 
