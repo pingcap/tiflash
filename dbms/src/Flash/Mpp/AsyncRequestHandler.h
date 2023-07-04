@@ -17,8 +17,8 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
-#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <Flash/Mpp/MppVersion.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/defines.h>
 #include <grpcpp/alarm.h>
@@ -51,14 +51,8 @@ using SystemClock = std::chrono::system_clock;
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
 
-class AsyncRequestHandlerBase : public UnaryCallback<bool>
-{
-public:
-    virtual void wait() = 0;
-};
-
 template <typename RPCContext>
-class AsyncRequestHandler : public AsyncRequestHandlerBase, public GRPCKickTag
+class AsyncRequestHandler : public GRPCKickTag
 {
 public:
     using Status = typename RPCContext::Status;
@@ -71,10 +65,8 @@ public:
         const std::shared_ptr<RPCContext> & context,
         Request && req,
         const String & req_id,
-        std::atomic<Int64> * /*data_size_in_queue*/,
         std::function<void(bool, const String &, const LoggerPtr &)> && close_conn_)
-        : GRPCKickTag(this)
-        , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
+        : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , rpc_context(context)
         , request(std::move(req))
         , req_info(fmt::format("async tunnel{}+{}", req.send_task_id, req.recv_task_id))
@@ -125,7 +117,7 @@ public:
         }
     }
 
-    void wait() override
+    void wait()
     {
         std::unique_lock<std::mutex> ul(is_close_conn_called_mu);
         condition_cv.wait(ul, [this]() { return is_close_conn_called; });
@@ -155,7 +147,7 @@ private:
         if (!ok)
         {
             stage = AsyncRequestStage::WAIT_FINISH;
-            reader->finish(finish_status, thisAsUnaryCallback());
+            reader->finish(finish_status, this);
             return;
         }
 
@@ -168,26 +160,17 @@ private:
             return;
         }
 
-        try
+        stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
+        auto res = message_queue->pushFromRemote(request.source_index, req_info, packet, this);
+        switch (res)
         {
-            auto received_message = toReceivedMessage(packet, request.source_index, req_info, message_queue->getFineGrainedStreamSize() > 0, message_queue->getFineGrainedStreamSize());
-            stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
-            auto res = message_queue->pushFromRemote(std::move(received_message), this);
-            switch (res)
-            {
-            case MPMCQueueResult::OK:
-                break;
-            case MPMCQueueResult::FULL:
-                return;
-            default:
-                closeConnection("Exchange receiver meet error : push packet fail");
-                return;
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RUNTIME_ASSERT(false, "Exception is thrown when sending packet in AsyncRequestHandler");
+        case MPMCQueueResult::OK:
+            break;
+        case MPMCQueueResult::FULL:
+            return;
+        default:
+            closeConnection("Exchange receiver meet error : push packet fail");
+            return;
         }
 
         startAsyncRead();
@@ -220,12 +203,7 @@ private:
     {
         stage = AsyncRequestStage::WAIT_READ;
         packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-        reader->read(packet, thisAsUnaryCallback());
-    }
-
-    bool retriable() const
-    {
-        return !has_data && retry_times + 1 < max_retry_times;
+        reader->read(packet, this);
     }
 
     void closeConnection(String && msg)
@@ -247,13 +225,13 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(make_reader_mu);
-        reader = rpc_context->makeAsyncReader(request, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(request, cq, this);
     }
 
     void retryOrDone(String && done_msg, const String & log_msg)
     {
         LOG_WARNING(log, log_msg);
-        if (retriable())
+        if (!has_data && retry_times + 1 < max_retry_times)
         {
             ++retry_times;
             stage = AsyncRequestStage::WAIT_RETRY;
@@ -268,12 +246,6 @@ private:
         }
     }
 
-    // in case of potential multiple inheritances.
-    UnaryCallback<bool> * thisAsUnaryCallback()
-    {
-        return static_cast<UnaryCallback<bool> *>(this);
-    }
-
     // won't be null and do not delete this pointer
     grpc::CompletionQueue * cq;
 
@@ -283,7 +255,7 @@ private:
 
     String req_info;
     bool has_data;
-    int retry_times;
+    size_t retry_times;
     AsyncRequestStage stage;
 
     std::unique_ptr<AsyncReader> reader;

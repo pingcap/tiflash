@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/GRPCQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCQueue.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
@@ -32,8 +32,7 @@ extern const char random_tunnel_init_rpc_failure_failpoint[];
 } // namespace FailPoints
 
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
-    : GRPCKickTag(this)
-    , service(service)
+    : service(service)
     , cq(cq)
     , notify_cq(notify_cq)
     , is_shutdown(is_shutdown)
@@ -57,7 +56,7 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::proceed(bool ok)
+void EstablishCallData::execute(bool & ok)
 {
     if (state == WAITING_TUNNEL)
     {

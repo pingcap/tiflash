@@ -16,16 +16,15 @@
 
 #include <Common/CapacityLimits.h>
 #include <Common/Exception.h>
+#include <Common/GRPCQueue.h>
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
@@ -230,13 +229,15 @@ public:
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc && func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue, GRPCKickFunc && func)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
         , queue(
-              std::move(func),
+              log_,
               queue_limits,
               [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
-    {}
+    {
+        queue.setKickFuncForTest(std::move(func));
+    }
 
     bool push(TrackedMppDataPacketPtr && data) override
     {

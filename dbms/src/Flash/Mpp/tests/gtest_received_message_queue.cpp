@@ -17,7 +17,6 @@
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -65,13 +64,13 @@ try
     {
         for (size_t fine_grained_size : fine_grained_stream_count)
         {
-            ReceivedMessageQueue queue(log, 10, fine_grained, fine_grained_size);
+            ReceivedMessageQueue queue(10, log, nullptr, fine_grained, fine_grained_size);
             if (fine_grained)
                 /// 1. fine grained size should > 0 if enable fine grained
-                ASSERT_TRUE(queue.getFineGrainedStreamSize() > 0);
+                ASSERT_TRUE(queue.fine_grained_channel_size > 0);
             else
                 /// 2. fine grained size should == 0 if not enable fine grained
-                ASSERT_TRUE(queue.getFineGrainedStreamSize() == 0);
+                ASSERT_TRUE(queue.fine_grained_channel_size == 0);
         }
     }
 }
@@ -89,18 +88,17 @@ try
         {
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
-                ReceivedMessageQueue queue(log, buffer_size, fine_grained, fine_grained_stream_size);
+                std::atomic<Int64> data_size_in_queue;
+                ReceivedMessageQueue queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
                     /// is_force = false
-                    auto result = queue.pushFromLocal<false>(std::move(message), ReceiverMode::Async);
+                    auto result = queue.pushFromLocal<false>(0, "mock", newDataPacket(fmt::format("test_{}", i)), ReceiverMode::Async);
                     ASSERT_TRUE(result);
                 }
                 ASSERT_TRUE(!queue.isWritable());
-                auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
                 /// is_force = true
-                auto result = queue.pushFromLocal<true>(std::move(message), ReceiverMode::Async);
+                auto result = queue.pushFromLocal<true>(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), ReceiverMode::Async);
                 ASSERT_TRUE(result);
                 if (fine_grained)
                 {
@@ -110,7 +108,7 @@ try
                         {
                             ReceivedMessagePtr recv_msg;
                             auto pop_result = queue.pop<false>(recv_msg, k);
-                            ASSERT_TRUE(pop_result== MPMCQueueResult::OK);
+                            ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*recv_msg->getRespPtr(k) == fmt::format("test_{}", i));
                             else
@@ -141,27 +139,32 @@ try
     std::vector<size_t> queue_buffer_size{1, 10};
     std::vector<bool> enable_fine_grained{false, true};
     std::vector<size_t> fine_grained_stream_count{1, 10};
-    GRPCKickTag tag(nullptr);
+
     for (size_t buffer_size : queue_buffer_size)
     {
         for (bool fine_grained : enable_fine_grained)
         {
             for (size_t fine_grained_stream_size : fine_grained_stream_count)
             {
-                ReceivedMessageQueue queue(log, buffer_size, fine_grained, fine_grained_stream_size);
+                std::atomic<Int64> data_size_in_queue;
+                ReceivedMessageQueue queue(buffer_size, log, &data_size_in_queue, fine_grained, fine_grained_stream_size);
+                DummyGRPCKickTag tag;
+                std::vector<GRPCKickTag *> tag_vec;
+                queue.grpc_recv_queue.setKickFuncForTest([&](GRPCKickTag * t) -> grpc_call_error {
+                    tag_vec.emplace_back(t);
+                    return grpc_call_error::GRPC_CALL_OK;
+                });
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
-                    auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", i)), 0, "mock", fine_grained, fine_grained_stream_size);
-                    auto result = queue.pushFromRemote(std::move(message), &tag);
+                    auto result = queue.pushFromRemote(0, "mock", newDataPacket(fmt::format("test_{}", i)), &tag);
                     ASSERT_TRUE(result == MPMCQueueResult::OK);
                 }
                 ASSERT_TRUE(!queue.isWritable());
-                auto message = toReceivedMessage(newDataPacket(fmt::format("test_{}", buffer_size)), 0, "mock", fine_grained, fine_grained_stream_size);
-                auto result = queue.pushFromRemote(std::move(message), &tag);
+                auto result = queue.pushFromRemote(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
                 ASSERT_TRUE(result == MPMCQueueResult::FULL);
                 if (fine_grained)
                 {
-                    for (size_t i = 0; i < buffer_size; ++i)
+                    for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
@@ -177,7 +180,7 @@ try
                 }
                 else
                 {
-                    for (size_t i = 0; i < buffer_size; ++i)
+                    for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
                         auto pop_result = queue.pop<false>(recv_msg, 0);
@@ -185,6 +188,7 @@ try
                         ASSERT_TRUE(*recv_msg->getRespPtr(0) == fmt::format("test_{}", i));
                     }
                 }
+                ASSERT_EQ(tag_vec.size(), 1);
                 ASSERT_TRUE(queue.isWritable());
             }
         }

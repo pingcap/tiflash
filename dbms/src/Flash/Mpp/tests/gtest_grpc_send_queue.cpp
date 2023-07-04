@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Mpp/GRPCQueue.h>
+#include <Common/GRPCQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -23,17 +23,19 @@ namespace DB
 {
 namespace tests
 {
+
 class TestGRPCSendQueue : public testing::Test
 {
 protected:
     TestGRPCSendQueue()
         : tag(nullptr)
-        , queue([this](GRPCKickTag * t) -> grpc_call_error {
+        , queue(Logger::get(), 10)
+    {
+        queue.setKickFuncForTest([this](GRPCKickTag * t) -> grpc_call_error {
             tag = t;
             return grpc_call_error::GRPC_CALL_OK;
-        },
-                10)
-    {}
+        });
+    }
     GRPCKickTag * tag;
 
     GRPCSendQueue<int> queue;
@@ -54,7 +56,7 @@ public:
 TEST_F(TestGRPCSendQueue, Sequential)
 try
 {
-    GRPCKickTag p1(nullptr), p2(nullptr), p3(nullptr);
+    DummyGRPCKickTag p1, p2, p3;
     int data;
     GTEST_ASSERT_EQ(queue.push(1), true);
     checkTagInQueue(nullptr);
@@ -113,7 +115,7 @@ CATCH
 TEST_F(TestGRPCSendQueue, SequentialPopAfterFinish)
 try
 {
-    GRPCKickTag p1(nullptr);
+    DummyGRPCKickTag p1;
     int data;
     // `queue` is empty, `tag` should be saved.
     GTEST_ASSERT_EQ(queue.pop(data, &p1), MPMCQueueResult::EMPTY);
@@ -153,7 +155,7 @@ CATCH
 TEST_F(TestGRPCSendQueue, SequentialPopAfterCancel)
 try
 {
-    GRPCKickTag p1(nullptr);
+    DummyGRPCKickTag p1;
     int data;
 
     GTEST_ASSERT_EQ(queue.push(1), true);

@@ -43,7 +43,6 @@ public:
                     const mpp::Error * error_ptr_,
                     const String * resp_ptr_,
                     std::vector<const String *> && chunks_,
-                    bool fine_grained_shuffle,
                     size_t fine_grained_consumer_size);
 
     size_t getSourceIndex() const { return source_index; }

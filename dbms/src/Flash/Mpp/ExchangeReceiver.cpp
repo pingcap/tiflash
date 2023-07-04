@@ -23,7 +23,6 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Interpreters/Settings.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
@@ -79,8 +78,7 @@ public:
         ReceivedMessageQueue * received_message_queue_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const String & req_id,
-        std::atomic<Int64> * data_size_in_queue)
+        const String & req_id)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(&req)
@@ -88,7 +86,6 @@ public:
         , received_message_queue(received_message_queue_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
-        , channel_writer(received_message_queue, req_info, log, data_size_in_queue, ReceiverMode::Async)
     {
         packets.resize(batch_packet_count_v1);
         for (auto & packet : packets)
@@ -269,7 +266,7 @@ private:
             for (size_t i = 0; i < read_packet_index; ++i)
             {
                 auto & packet = packets[i];
-                if (!channel_writer.write<false>(request->source_index, packet))
+                if (!received_message_queue->pushFromLocal<false>(request->source_index, req_info, packet, ReceiverMode::Async))
                 {
                     return {false, "channel write fails"};
                 }
@@ -310,7 +307,6 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
-    ReceiverChannelWriter channel_writer;
     std::mutex mu;
 };
 } // namespace
@@ -344,7 +340,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        received_message_queue = std::make_unique<ReceivedMessageQueue>(exc_log, max_buffer_size, enable_fine_grained_shuffle_flag, output_stream_count);
+        received_message_queue = std::make_unique<ReceivedMessageQueue>(max_buffer_size, exc_log, &data_size_in_queue, enable_fine_grained_shuffle_flag, output_stream_count);
         if (isReceiverForTiFlashStorage())
             rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
 
@@ -536,7 +532,6 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
             rpc_context,
             std::move(request),
             exc_log->identifier(),
-            &data_size_in_queue,
             [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
                 this->connectionDone(meet_error, local_err_msg, log);
             }));
@@ -568,7 +563,8 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                 [this]() {
                     this->addLocalConnectionNum();
                 },
-                ReceiverChannelWriter(received_message_queue.get(), req_info, local_log, getDataSizeInQueue(), ReceiverMode::Local));
+                req_info,
+                received_message_queue.get());
 
             rpc_context->establishMPPConnectionLocalV2(
                 req,
@@ -610,7 +606,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, received_message_queue.get(), rpc_context, req, exc_log->identifier(), &data_size_in_queue));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, received_message_queue.get(), rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -655,7 +651,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(received_message_queue.get(), req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
@@ -676,7 +671,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!channel_writer.write<false>(req.source_index, packet))
+                if (!received_message_queue->pushFromLocal<false>(req.source_index, req_info, packet, recv_mode))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
@@ -848,9 +843,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
                 recv_result.recv_msg->getReqInfo(),
                 recv_result.recv_msg->getErrorPtr()->msg());
 
-        ExchangeReceiverMetric::subDataSizeMetric(
-            data_size_in_queue,
-            recv_result.recv_msg->getPacket().ByteSizeLong());
         return toDecodeResult(stream_id, block_queue, header, recv_result.recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:

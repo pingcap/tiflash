@@ -15,9 +15,10 @@
 #pragma once
 
 #include <Common/FailPoint.h>
+#include <Common/GRPCQueue.h>
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/PODArray.h>
-#include <Flash/Mpp/GRPCQueue.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ReceivedMessage.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
@@ -25,6 +26,27 @@
 
 namespace DB
 {
+
+namespace ExchangeReceiverMetric
+{
+inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_add(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Increment(size);
+}
+
+inline void subDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
+{
+    data_size_in_queue.fetch_sub(size);
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(size);
+}
+
+inline void clearDataSizeMetric(std::atomic<Int64> & data_size_in_queue)
+{
+    GET_METRIC(tiflash_exchange_queueing_data_bytes, type_receive).Decrement(data_size_in_queue.load());
+}
+} // namespace ExchangeReceiverMetric
+
 using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
 
 enum class ReceiverMode
@@ -36,25 +58,11 @@ enum class ReceiverMode
 
 class ReceivedMessageQueue
 {
-    LoggerPtr log;
-    size_t fine_grained_channel_size;
-    /// msg_channel is a bounded queue that saves the received messages
-    /// msg_channels_for_fine_grained_shuffle is unbounded queues that saves fine grained received messages
-    /// all the received messages in msg_channels_for_fine_grained_shuffle must be saved in msg_channel first, so the
-    /// total size of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle
-    /// is unbounded queues
-    /// for non fine grained shuffle, all the read/write to the queue is based on msg_channel/grpc_recv_queue
-    /// for fine grained shuffle
-    /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
-    /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
-    ///       remove the msg from msg_channel/grpc_recv_queue
-    PaddedPODArray<LooseBoundedMPMCQueue<ReceivedMessagePtr>> msg_channels_for_fine_grained_shuffle;
-    GRPCRecvQueue<ReceivedMessagePtr> grpc_recv_queue;
-
 public:
     ReceivedMessageQueue(
-        const LoggerPtr & log_,
         const CapacityLimits & queue_limits,
+        const LoggerPtr & log_,
+        std::atomic<Int64> * data_size_in_queue_,
         bool enable_fine_grained,
         size_t fine_grained_channel_size_);
 
@@ -62,9 +70,15 @@ public:
     MPMCQueueResult pop(ReceivedMessagePtr & message, size_t stream_id);
 
     template <bool is_force>
-    bool pushFromLocal(ReceivedMessagePtr && received_message, ReceiverMode mode);
+    bool pushFromLocal(size_t source_index,
+                       const String & req_info,
+                       const TrackedMppDataPacketPtr & tracked_packet,
+                       ReceiverMode mode);
 
-    MPMCQueueResult pushFromRemote(ReceivedMessagePtr && received_message, GRPCKickTag * new_tag);
+    MPMCQueueResult pushFromRemote(size_t source_index,
+                                   const String & req_info,
+                                   const TrackedMppDataPacketPtr & tracked_packet,
+                                   GRPCKickTag * new_tag);
 
     void finish()
     {
@@ -82,14 +96,29 @@ public:
             channel.cancel();
     }
 
-    size_t getFineGrainedStreamSize() const
-    {
-        return fine_grained_channel_size;
-    }
-
     bool isWritable() const
     {
         return !grpc_recv_queue.isFull();
     }
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    const LoggerPtr log;
+    std::atomic<Int64> * data_size_in_queue;
+    const size_t fine_grained_channel_size;
+    /// msg_channel is a bounded queue that saves the received messages
+    /// msg_channels_for_fine_grained_shuffle is unbounded queues that saves fine grained received messages
+    /// all the received messages in msg_channels_for_fine_grained_shuffle must be saved in msg_channel first, so the
+    /// total size of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle
+    /// is unbounded queues
+    /// for non fine grained shuffle, all the read/write to the queue is based on msg_channel/grpc_recv_queue
+    /// for fine grained shuffle
+    /// write: the writer first write the msg to msg_channel/grpc_recv_queue, if write success, then write msg to msg_channels_for_fine_grained_shuffle
+    /// read: the reader read msg from msg_channels_for_fine_grained_shuffle, and reduce the `remaining_consumers` in msg, if `remaining_consumers` is 0, then
+    ///       remove the msg from msg_channel/grpc_recv_queue
+    PaddedPODArray<LooseBoundedMPMCQueue<ReceivedMessagePtr>> msg_channels_for_fine_grained_shuffle;
+    GRPCRecvQueue<ReceivedMessagePtr> grpc_recv_queue;
 };
+
 } // namespace DB

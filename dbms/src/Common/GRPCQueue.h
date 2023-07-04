@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
+#include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -34,17 +35,17 @@ class TestGRPCSendQueue;
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
 class GRPCKickTag : public grpc::internal::CompletionQueueTag
+    , public UnaryCallback<bool>
 {
 public:
-    explicit GRPCKickTag(void * tag_)
+    GRPCKickTag()
         : call(nullptr)
-        , tag(tag_)
         , status(true)
     {}
 
     bool FinalizeResult(void ** tag_, bool * status_) override
     {
-        *tag_ = tag;
+        *tag_ = static_cast<UnaryCallback<bool> *>(this);
         *status_ = status;
         return true;
     }
@@ -66,8 +67,13 @@ public:
 
 private:
     grpc_call * call;
-    void * tag;
     bool status;
+};
+
+/// For test usage only.
+class DummyGRPCKickTag : public GRPCKickTag
+{
+    void execute(bool &) override {}
 };
 
 using GRPCKickFunc = std::function<grpc_call_error(GRPCKickTag *)>;
@@ -89,29 +95,20 @@ class GRPCSendQueue
 {
 public:
     template <typename... Args>
-    GRPCSendQueue(const LoggerPtr & l, Args &&... args)
+    explicit GRPCSendQueue(const LoggerPtr & l, Args &&... args)
         : log(l)
         , send_queue(std::forward<Args>(args)...)
-    {
-        // If a call to `grpc_call_start_batch` with an empty batch returns
-        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
-        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [](GRPCKickTag * t) {
-            return grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
-        };
-    }
-
-    // For gtest usage.
-    template <typename... Args>
-    GRPCSendQueue(GRPCKickFunc && func, Args &&... args)
-        : log(Logger::get())
-        , send_queue(std::forward<Args>(args)...)
-        , kick_func(std::move(func))
     {}
 
     ~GRPCSendQueue()
     {
         RUNTIME_ASSERT(tag == nullptr, log, "tag is not nullptr");
+    }
+
+    // For test usage only.
+    void setKickFuncForTest(GRPCKickFunc && func)
+    {
+        test_kick_func = std::move(func);
     }
 
     /// Push the data from the local node and kick the grpc completion queue.
@@ -140,6 +137,7 @@ public:
     ///
     /// Return OK if pop is done.
     /// Return FINISHED if the queue is finished and empty.
+    /// Return CANCELED if the queue is canceled.
     /// Return EMPTY if there is no data in queue and `new_tag` is saved.
     /// When the next push/finish is called, the `new_tag` will be pushed
     /// into grpc completion queue.
@@ -150,7 +148,7 @@ public:
     MPMCQueueResult pop(T & data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
-        RUNTIME_ASSERT(new_tag->getCall() != nullptr, log, "call is null");
+        RUNTIME_ASSERT(new_tag->getCall() != nullptr || test_kick_func, log, "call is null");
 
         auto res = send_queue.tryPop(data);
         if (res == MPMCQueueResult::EMPTY)
@@ -214,7 +212,18 @@ private:
         }
 
         t->setStatus(status);
-        grpc_call_error error = kick_func(t);
+        grpc_call_error error;
+        if unlikely (test_kick_func)
+        {
+            error = test_kick_func(t);
+        }
+        else
+        {
+            // If a call to `grpc_call_start_batch` with an empty batch returns
+            // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
+            // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+            error = grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
+        }
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
@@ -231,13 +240,13 @@ private:
     /// Imagine this case:
     /// Thread 1: want to pop the data from queue but find no data there.
     /// Thread 2: push/finish the data in queue.
-    /// Thread 2: do not kick the completion queue because tag is nullptr.
+    /// Thread 2: do not kick the completion queue because the tag is nullptr.
     /// Thread 1: set the tag.
     ///
     /// If there is no more data, this connection will get stuck forever.
     std::mutex mu;
 
-    GRPCKickFunc kick_func;
+    GRPCKickFunc test_kick_func;
     GRPCKickTag * tag = nullptr;
 };
 
@@ -246,29 +255,20 @@ class GRPCRecvQueue
 {
 public:
     template <typename... Args>
-    GRPCRecvQueue(const LoggerPtr & log_, Args &&... args)
+    explicit GRPCRecvQueue(const LoggerPtr & log_, Args &&... args)
         : log(log_)
         , recv_queue(std::forward<Args>(args)...)
-    {
-        // If a call to `grpc_call_start_batch` with an empty batch returns
-        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
-        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [](GRPCKickTag * t) {
-            return grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
-        };
-    }
-
-    // For gtest usage.
-    template <typename... Args>
-    GRPCRecvQueue(GRPCKickFunc func, Args &&... args)
-        : log(Logger::get())
-        , recv_queue(std::forward<Args>(args)...)
-        , kick_func(std::move(func))
     {}
 
     ~GRPCRecvQueue()
     {
         RUNTIME_ASSERT(data_tags.empty(), log, "data_tags is not empty");
+    }
+
+    // For test usage only.
+    void setKickFuncForTest(GRPCKickFunc && func)
+    {
+        test_kick_func = std::move(func);
     }
 
     MPMCQueueResult pop(T & data)
@@ -288,10 +288,21 @@ public:
     }
 
     /// Push the data from the remote node in grpc thread.
+    ///
+    /// Return OK if push is done.
+    /// Return FINISHED if the queue is finished and empty.
+    /// Return CANCELED if the queue is canceled.
+    /// Return FULL if the queue is full and `new_tag` is saved.
+    /// When the next pop is called, the `new_tag` will be pushed
+    /// into grpc completion queue.
+    /// Note that any data in `new_tag` mustn't be touched if this function
+    /// returns FULL because this `new_tag` may be popped out in another
+    /// grpc thread immediately. By the way, if this completion queue is only
+    /// tied to one grpc thread, this data race will not happen.
     MPMCQueueResult push(T && data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
-        RUNTIME_ASSERT(new_tag->getCall() != nullptr, log, "call is null");
+        RUNTIME_ASSERT(new_tag->getCall() != nullptr || test_kick_func, log, "call is null");
 
         auto res = recv_queue.tryPush(std::move(data));
         if (res == MPMCQueueResult::FULL)
@@ -383,7 +394,18 @@ private:
 
     void kick(GRPCKickTag * t)
     {
-        grpc_call_error error = kick_func(t);
+        grpc_call_error error;
+        if unlikely (test_kick_func)
+        {
+            error = test_kick_func(t);
+        }
+        else
+        {
+            // If a call to `grpc_call_start_batch` with an empty batch returns
+            // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
+            // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+            error = grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
+        }
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
@@ -392,9 +414,19 @@ private:
 
     LooseBoundedMPMCQueue<T> recv_queue;
 
+    /// The mutex is used to protect data_tags and avoid LOST NOTIFICATION like the one in GRPCSendQueue.
+    ///
+    /// Imagine this case:
+    /// Thread 1: want to push the data but find the queue is full.
+    /// Thread 2: pop all of the data in queue.
+    /// Thread 2: do not kick the completion queue because data_tags is empty.
+    /// Thread 2: wait for popping the new data in queue.
+    /// Thread 1: push the data and tag into data_tags.
+    ///
+    /// Thread 1 and Thread 2 get stuck forever.
     std::mutex mu;
 
-    GRPCKickFunc kick_func;
+    GRPCKickFunc test_kick_func;
     std::queue<std::pair<T, GRPCKickTag *>> data_tags;
 };
 

@@ -19,7 +19,7 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -70,9 +70,7 @@ class MockAsyncCallData : public IAsyncCallData
     , public GRPCKickTag
 {
 public:
-    MockAsyncCallData()
-        : GRPCKickTag(this)
-    {}
+    MockAsyncCallData() = default;
 
     void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
     {
@@ -90,6 +88,8 @@ public:
             return grpc_call_error::GRPC_CALL_OK;
         };
     }
+
+    void execute(bool &) override {}
 
     void run()
     {
@@ -150,9 +150,8 @@ public:
     explicit MockExchangeReceiver(Int32 conn_num)
         : live_connections(conn_num)
         , live_local_connections(0)
-        , mock_async_request_handler_wait_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
-        , received_message_queue(Logger::get(), 10, false, 0)
         , data_size_in_queue(0)
+        , received_message_queue(10, Logger::get(), &data_size_in_queue, false, 0)
         , log(Logger::get())
     {
     }
@@ -199,7 +198,8 @@ public:
                     this->connectionLocalDone();
                 },
                 []() {},
-                ReceiverChannelWriter(&received_message_queue, "", log, &data_size_in_queue, ReceiverMode::Local));
+                "",
+                &received_message_queue);
             tunnel->connectLocalV2(0, local_request_handler, true);
         }
     }
@@ -234,11 +234,10 @@ private:
     std::condition_variable cv;
     Int32 live_connections;
     Int32 live_local_connections;
-    AsyncRequestHandlerWaitQueuePtr mock_async_request_handler_wait_queue;
+    std::atomic<Int64> data_size_in_queue;
     ReceivedMessageQueue received_message_queue;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
-    std::atomic<Int64> data_size_in_queue;
     LoggerPtr log;
 };
 
@@ -652,14 +651,14 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
-    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue received_message_queue(Logger::get(), 1, false, 0);
+    ReceivedMessageQueue received_message_queue(1, Logger::get(), nullptr, false, 0);
 
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&received_message_queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &received_message_queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
@@ -673,13 +672,13 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
-    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
-    ReceivedMessageQueue queue(Logger::get(), 1, false, 0);
+    ReceivedMessageQueue queue(1, Logger::get(), nullptr, false, 0);
     LocalRequestHandler local_req_handler(
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/UnaryCallback.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
@@ -60,7 +61,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             });
             // If ok is false, it means server is shutdown.
             // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            static_cast<EstablishCallData *>(tag)->proceed(ok);
+            static_cast<UnaryCallback<bool> *>(tag)->execute(ok);
         }
         catch (Exception & e)
         {

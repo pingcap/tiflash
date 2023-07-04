@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ReceivedMessageQueue.h>
 
 namespace DB
@@ -42,14 +43,52 @@ void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], Recei
         RUNTIME_ASSERT(false, "Illegal ReceiverMode");
     }
 }
+
+const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet)
+{
+    if (unlikely(packet.has_error()))
+        return &packet.error();
+    return nullptr;
+}
+
+const String * getRespPtr(const mpp::MPPDataPacket & packet)
+{
+    if (unlikely(!packet.data().empty()))
+        return &packet.data();
+    return nullptr;
+}
+
+ReceivedMessagePtr toReceivedMessage(
+    size_t source_index,
+    const String & req_info,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    size_t fine_grained_consumer_size)
+{
+    const auto & packet = tracked_packet->packet;
+    const mpp::Error * error_ptr = getErrorPtr(packet);
+    const String * resp_ptr = getRespPtr(packet);
+    std::vector<const String *> chunks(packet.chunks_size());
+    for (int i = 0; i < packet.chunks_size(); ++i)
+        chunks[i] = &packet.chunks(i);
+    return std::make_shared<ReceivedMessage>(
+        source_index,
+        req_info,
+        tracked_packet,
+        error_ptr,
+        resp_ptr,
+        std::move(chunks),
+        fine_grained_consumer_size);
+}
 } // namespace
 
 ReceivedMessageQueue::ReceivedMessageQueue(
-    const LoggerPtr & log_,
     const CapacityLimits & queue_limits,
+    const LoggerPtr & log_,
+    std::atomic<Int64> * data_size_in_queue_,
     bool enable_fine_grained,
     size_t fine_grained_channel_size_)
     : log(log_)
+    , data_size_in_queue(data_size_in_queue_)
     , fine_grained_channel_size(enable_fine_grained ? fine_grained_channel_size_ : 0)
     , grpc_recv_queue(
           log_,
@@ -73,7 +112,6 @@ ReceivedMessageQueue::ReceivedMessageQueue(
         for (size_t i = 0; i < fine_grained_channel_size; ++i)
             /// these are unbounded queues
             msg_channels_for_fine_grained_shuffle.emplace_back(std::numeric_limits<size_t>::max());
-
     }
 }
 
@@ -88,7 +126,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(ReceivedMessagePtr & message, size_t s
         else
             res = msg_channels_for_fine_grained_shuffle[stream_id].tryPop(message);
 
-        if (message != nullptr)
+        if (res == MPMCQueueResult::OK && message != nullptr)
         {
             if (message->getRemainingConsumers()->fetch_sub(1) == 1)
             {
@@ -109,32 +147,66 @@ MPMCQueueResult ReceivedMessageQueue::pop(ReceivedMessagePtr & message, size_t s
         else
             res = grpc_recv_queue.tryPop(message);
     }
+
+    if (res == MPMCQueueResult::OK)
+    {
+        ExchangeReceiverMetric::subDataSizeMetric(
+            *data_size_in_queue,
+            message->getPacket().ByteSizeLong());
+    }
+
     return res;
 }
 
 template <bool is_force>
-bool ReceivedMessageQueue::pushFromLocal(ReceivedMessagePtr && received_message, ReceiverMode mode)
+bool ReceivedMessageQueue::pushFromLocal(size_t source_index,
+                                         const String & req_info,
+                                         const TrackedMppDataPacketPtr & tracked_packet,
+                                         ReceiverMode mode)
 {
+    auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
+    if (!received_message->containUsefulMessage())
+        return true;
+
     bool success = false;
     if constexpr (is_force)
         success = grpc_recv_queue.forcePush(std::move(received_message)) == MPMCQueueResult::OK;
     else
         success = grpc_recv_queue.push(std::move(received_message)) == MPMCQueueResult::OK;
 
+    if (success)
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+
     injectFailPointReceiverPushFail(success, mode);
     return success;
 }
 
-MPMCQueueResult ReceivedMessageQueue::pushFromRemote(ReceivedMessagePtr && received_message, GRPCKickTag * new_tag)
+MPMCQueueResult ReceivedMessageQueue::pushFromRemote(size_t source_index,
+                                                     const String & req_info,
+                                                     const TrackedMppDataPacketPtr & tracked_packet,
+                                                     GRPCKickTag * new_tag)
 {
+    auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
+    if (!received_message->containUsefulMessage())
+        return MPMCQueueResult::OK;
+
     auto res = grpc_recv_queue.push(std::move(received_message), new_tag);
+    if likely (res == MPMCQueueResult::OK || res == MPMCQueueResult::FULL)
+        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
+
     fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = MPMCQueueResult::CANCELLED);
     return res;
 }
 
 template MPMCQueueResult ReceivedMessageQueue::pop<true>(ReceivedMessagePtr & message, size_t stream_id);
 template MPMCQueueResult ReceivedMessageQueue::pop<false>(ReceivedMessagePtr & message, size_t stream_id);
-template bool ReceivedMessageQueue::pushFromLocal<true>(ReceivedMessagePtr && received_message, ReceiverMode mode);
-template bool ReceivedMessageQueue::pushFromLocal<false>(ReceivedMessagePtr && received_message, ReceiverMode mode);
+template bool ReceivedMessageQueue::pushFromLocal<true>(size_t source_index,
+                                                        const String & req_info,
+                                                        const TrackedMppDataPacketPtr & tracked_packet,
+                                                        ReceiverMode mode);
+template bool ReceivedMessageQueue::pushFromLocal<false>(size_t source_index,
+                                                         const String & req_info,
+                                                         const TrackedMppDataPacketPtr & tracked_packet,
+                                                         ReceiverMode mode);
 
 } // namespace DB

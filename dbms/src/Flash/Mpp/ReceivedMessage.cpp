@@ -30,7 +30,6 @@ ReceivedMessage::ReceivedMessage(size_t source_index_,
                                  const mpp::Error * error_ptr_,
                                  const String * resp_ptr_,
                                  std::vector<const String *> && chunks_,
-                                 bool fine_grained_shuffle,
                                  size_t fine_grained_consumer_size)
     : source_index(source_index_)
     , req_info(req_info_)
@@ -39,9 +38,8 @@ ReceivedMessage::ReceivedMessage(size_t source_index_,
     , resp_ptr(resp_ptr_)
     , chunks(chunks_)
 {
-    if (fine_grained_shuffle)
+    if (fine_grained_consumer_size > 0)
     {
-        assert(fine_grained_consumer_size > 0);
         remaining_consumers = std::make_shared<std::atomic<size_t>>(fine_grained_consumer_size);
         fine_grained_chunks.resize(fine_grained_consumer_size);
         if (packet->packet.chunks_size() > 0)

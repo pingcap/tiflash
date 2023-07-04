@@ -222,9 +222,8 @@ private:
     DAGSchema schema;
 
     std::unique_ptr<ReceivedMessageQueue> received_message_queue;
-    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
-    std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
+    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext>>> async_handler_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;
