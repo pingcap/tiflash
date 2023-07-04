@@ -53,7 +53,7 @@ private:
     // Index of ResourceGroupInfo.
     static constexpr auto InfoIndexPriority = 0;
     static constexpr auto InfoIndexPipelineTaskQueue = 1;
-    static constexpr auto InfoIndexResourceName = 2;
+    static constexpr auto InfoIndexResourceGroupName = 2;
     static constexpr auto InfoIndexResourceKeyspaceId = 3;
 
     // ResourceGroupInfoQueue compator.
@@ -84,6 +84,6 @@ private:
     // <resource_group_name, acculumated_cpu_time>
     // when acculumated_cpu_time >= YIELD_MAX_TIME_SPENT_NS, will update resource group.
     // This is to prevent the resource group from being updated too frequently.
-    std::unordered_map<std::string, UInt64> resource_group_statics;
+    std::unordered_map<std::string, UInt64> resource_group_statistic;
 };
 } // namespace DB
