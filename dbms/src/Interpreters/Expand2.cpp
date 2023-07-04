@@ -32,6 +32,7 @@ Block Expand2::next(const Block & block_cache, size_t i_th_project)
     MutableColumns res(num_columns);
     for (size_t i = 0; i < num_columns; ++i)
     {
+        // todo: we can optimize it to just clone those columns that only needed/necessary in current level-projection.
         res[i] = block_cache.getColumns()[i]->cloneResized(block_cache.rows());
     }
     auto origin_column_and_types = block_cache.getColumnsWithTypeAndName();
