@@ -73,6 +73,9 @@ void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 
 void WindowTransformAction::initialAggregateFunction(WindowFunctionWorkspace & workspace, const WindowFunctionDescription & window_function_description)
 {
+    if (window_function_description.aggregate_function == nullptr)
+        return;
+
     // Some initialization for aggregate function
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
@@ -560,8 +563,8 @@ void WindowTransformAction::writeOutCurrentRow()
             // FIXME does it also allocate the result on the arena?
             // We'll have to pass it out with blocks then...
 
-            /// We should use insertMergeResultInto to insert result into ColumnAggregateFunction
-            /// correctly if result contains AggregateFunction's states
+            // We should use insertMergeResultInto to insert result into ColumnAggregateFunction
+            // correctly if result contains AggregateFunction's states
             agg_func->insertMergeResultInto(buf, *result_column, arena.get());
         }
     }

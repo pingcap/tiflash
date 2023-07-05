@@ -49,6 +49,10 @@ public:
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
 private:
+    void buildWindowFunc();
+    void buildAggFunc();
+
+private:
     std::vector<ASTPtr> func_descs;
     std::vector<ASTPtr> partition_by_exprs;
     std::vector<ASTPtr> order_by_exprs;

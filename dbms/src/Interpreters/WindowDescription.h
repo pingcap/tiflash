@@ -35,7 +35,7 @@ struct WindowFunctionDescription
     Array parameters;
     ColumnNumbers arguments;
     Names argument_names;
-    std::string column_name;
+    String column_name;
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
