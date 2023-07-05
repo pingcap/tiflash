@@ -33,8 +33,6 @@
 #include <exception>
 #include <magic_enum.hpp>
 
-#include "DataStreams/IBlockInputStream.h"
-
 namespace DB
 {
 namespace FailPoints
