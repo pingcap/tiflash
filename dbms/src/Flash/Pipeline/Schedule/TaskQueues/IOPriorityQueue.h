@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <deque>
@@ -46,6 +47,8 @@ public:
 
     void finish() override;
 
+    void cancel(const String & query_id) override;
+
 private:
     void submitTaskWithoutLock(TaskPtr && task);
 
@@ -59,5 +62,8 @@ private:
 
     std::deque<TaskPtr> io_out_task_queue;
     std::atomic_uint64_t total_io_out_time_microsecond{0};
+
+    FIFOQueryIdCache cancel_query_id_cache;
+    std::deque<TaskPtr> cancel_task_queue;
 };
 } // namespace DB

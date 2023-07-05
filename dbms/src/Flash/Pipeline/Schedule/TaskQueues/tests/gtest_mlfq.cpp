@@ -18,6 +18,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include "Flash/Pipeline/Schedule/Tasks/Task.h"
+
 namespace DB::tests
 {
 namespace
@@ -27,7 +29,16 @@ class PlainTask : public Task
 public:
     PlainTask() = default;
 
+    explicit PlainTask(const String & query_id_)
+        : query_id(query_id_)
+    {}
+
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
+
+    const String & getQueryId() const override { return query_id; }
+
+private:
+    String query_id;
 };
 } // namespace
 
@@ -203,6 +214,41 @@ try
     }
     ASSERT_TRUE(queue.empty());
     queue.finish();
+}
+CATCH
+
+TEST_F(TestMLFQTaskQueue, cancel)
+try
+{
+    // case1 cancel task taken first.
+    {
+        CPUMultiLevelFeedbackQueue queue;
+        queue.submit(std::make_unique<PlainTask>("id1"));
+        queue.submit(std::make_unique<PlainTask>("id2"));
+        queue.cancel("id2");
+        TaskPtr task;
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id2");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
+        FINALIZE_TASK(task);
+    }
+
+    // case1 cancel task will not be submmited.
+    {
+        CPUMultiLevelFeedbackQueue queue;
+        queue.cancel("id2");
+        queue.submit(std::make_unique<PlainTask>("id1"));
+        queue.submit(std::make_unique<PlainTask>("id2"));
+        TaskPtr task;
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(queue.empty());
+    }
 }
 CATCH
 

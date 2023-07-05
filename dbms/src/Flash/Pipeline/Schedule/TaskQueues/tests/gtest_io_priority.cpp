@@ -25,12 +25,18 @@ namespace
 class MockIOTask : public Task
 {
 public:
-    explicit MockIOTask(bool is_io_in)
+    explicit MockIOTask(bool is_io_in, const String & query_id_ = "")
+        : query_id(query_id_)
     {
         task_status = is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT;
     }
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
+
+    const String & getQueryId() const override { return query_id; }
+
+private:
+    String query_id;
 };
 } // namespace
 
@@ -153,6 +159,41 @@ try
         ASSERT_TRUE(task);
         ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
         FINALIZE_TASK(task);
+    }
+}
+CATCH
+
+TEST_F(TestIOPriorityTaskQueue, cancel)
+try
+{
+    // case1 cancel task taken first.
+    {
+        IOPriorityQueue queue;
+        queue.submit(std::make_unique<MockIOTask>(false, "id1"));
+        queue.submit(std::make_unique<MockIOTask>(true, "id2"));
+        queue.cancel("id2");
+        TaskPtr task;
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id2");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
+        FINALIZE_TASK(task);
+    }
+
+    // case1 cancel task will not be submmited.
+    {
+        IOPriorityQueue queue;
+        queue.cancel("id2");
+        queue.submit(std::make_unique<MockIOTask>(false, "id1"));
+        queue.submit(std::make_unique<MockIOTask>(true, "id2"));
+        TaskPtr task;
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(queue.empty());
     }
 }
 CATCH

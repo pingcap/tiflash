@@ -18,8 +18,42 @@
 
 namespace DB
 {
+namespace
+{
+bool popTask(std::deque<TaskPtr> & queue, TaskPtr & task)
+{
+    if (!queue.empty())
+    {
+        task = std::move(queue.front());
+        queue.pop_front();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+void moveCancelledTasks(std::deque<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const FIFOQueryIdCache & cancel_query_id_cache)
+{
+    for (auto it = normal_queue.begin(); it != normal_queue.end();)
+    {
+        if (cancel_query_id_cache.contains((*it)->getQueryId()))
+        {
+            cancel_queue.push_back(std::move(*it));
+            it = normal_queue.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+} // namespace
+
 IOPriorityQueue::~IOPriorityQueue()
 {
+    RUNTIME_ASSERT(cancel_task_queue.empty(), logger, "all task should be taken before it is destructed");
     RUNTIME_ASSERT(io_in_task_queue.empty(), logger, "all task should be taken before it is destructed");
     RUNTIME_ASSERT(io_out_task_queue.empty(), logger, "all task should be taken before it is destructed");
 }
@@ -29,21 +63,16 @@ bool IOPriorityQueue::take(TaskPtr & task)
     std::unique_lock lock(mu);
     while (true)
     {
+        if (popTask(cancel_task_queue, task))
+            return true;
+
         bool io_out_first = ratio_of_out_to_in * total_io_in_time_microsecond >= total_io_out_time_microsecond;
         auto & first_queue = io_out_first ? io_out_task_queue : io_in_task_queue;
         auto & next_queue = io_out_first ? io_in_task_queue : io_out_task_queue;
-        if (!first_queue.empty())
-        {
-            task = std::move(first_queue.front());
-            first_queue.pop_front();
+        if (popTask(first_queue, task))
             return true;
-        }
-        if (!next_queue.empty())
-        {
-            task = std::move(next_queue.front());
-            next_queue.pop_front();
+        if (popTask(next_queue, task))
             return true;
-        }
         if (unlikely(is_finished))
             return false;
         cv.wait(lock);
@@ -67,7 +96,7 @@ void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task
 bool IOPriorityQueue::empty() const
 {
     std::lock_guard lock(mu);
-    return io_out_task_queue.empty() && io_in_task_queue.empty();
+    return cancel_task_queue.empty() && io_out_task_queue.empty() && io_in_task_queue.empty();
 }
 
 void IOPriorityQueue::finish()
@@ -97,7 +126,7 @@ void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
 
 void IOPriorityQueue::submit(TaskPtr && task)
 {
-    if unlikely (is_finished)
+    if unlikely (is_finished || cancel_query_id_cache.contains(task->getQueryId()))
     {
         FINALIZE_TASK(task);
         return;
@@ -112,19 +141,37 @@ void IOPriorityQueue::submit(TaskPtr && task)
 
 void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
 {
-    if unlikely (is_finished)
+    if (tasks.empty())
+        return;
+
+        // tasks should all have the same query id.
+#ifndef NDEBUG
+    for (auto & task : tasks)
+        assert(task->getQueryId() == tasks.back()->getQueryId());
+#endif
+
+    if unlikely (is_finished || cancel_query_id_cache.contains(tasks.back()->getQueryId()))
     {
         FINALIZE_TASKS(tasks);
         return;
     }
 
-    if (tasks.empty())
-        return;
     std::lock_guard lock(mu);
     for (auto & task : tasks)
     {
         submitTaskWithoutLock(std::move(task));
         cv.notify_one();
     }
+}
+
+void IOPriorityQueue::cancel(const String & query_id)
+{
+    cancel_query_id_cache.add(query_id);
+    {
+        std::lock_guard lock(mu);
+        moveCancelledTasks(io_in_task_queue, cancel_task_queue, cancel_query_id_cache);
+        moveCancelledTasks(io_out_task_queue, cancel_task_queue, cancel_query_id_cache);
+    }
+    cv.notify_all();
 }
 } // namespace DB

@@ -73,6 +73,12 @@ void TaskScheduler::submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks)
     io_task_thread_pool.submit(tasks);
 }
 
+void TaskScheduler::cancel(const String & query_id)
+{
+    cpu_task_thread_pool.cancel(query_id);
+    io_task_thread_pool.cancel(query_id);
+}
+
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;
 
 } // namespace DB

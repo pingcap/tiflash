@@ -66,6 +66,8 @@ public:
     void submitToIOTaskThreadPool(TaskPtr && task);
     void submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks);
 
+    void cancel(const String & query_id);
+
     static std::unique_ptr<TaskScheduler> instance;
 
 private:

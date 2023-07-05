@@ -16,6 +16,7 @@
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
 
@@ -103,6 +104,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 void PipelineExecutor::cancel()
 {
     status.cancel();
+    TaskScheduler::instance->cancel(status.getQueryId());
 }
 
 String PipelineExecutor::toString() const
