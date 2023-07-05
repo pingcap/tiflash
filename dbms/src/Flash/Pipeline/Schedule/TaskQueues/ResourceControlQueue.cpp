@@ -14,6 +14,7 @@
 
 #include <Flash/Executor/toRU.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOTaskQueue.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/ResourceControlQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
@@ -93,7 +94,7 @@ bool ResourceControlQueue<NestedQueueType>::take(TaskPtr & task)
 }
 
 template <typename NestedQueueType>
-void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, size_t inc_value)
+void ResourceControlQueue<NestedQueueType>::updateStatistics(const TaskPtr & task, ExecTaskStatus, size_t inc_value)
 {
     assert(task);
     const std::string & name = task->getResourceGroupName();
@@ -178,4 +179,5 @@ void ResourceControlQueue<NestedQueueType>::finish()
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;
 template class ResourceControlQueue<FIFOTaskQueue>;
+template class ResourceControlQueue<IOPriorityQueue>;
 } // namespace DB

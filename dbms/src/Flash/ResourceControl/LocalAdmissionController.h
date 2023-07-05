@@ -36,6 +36,7 @@ public:
     explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, KeyspaceID keyspace_id_)
         : name(group_pb_.name())
         , user_priority(group_pb_.priority())
+        , user_ru_per_sec(group_pb_.r_u_settings().r_u().settings().fill_rate())
         , group_pb(group_pb_)
         , cpu_time(0)
         , last_fetch_tokens_from_gac_timepoint(std::chrono::steady_clock::now())
@@ -55,6 +56,18 @@ public:
     };
 
 private:
+    static constexpr uint64_t MAX_WEIGHT = (std::numeric_limits<uint64_t>::max() >> 4);
+
+    static uint32_t getUserPriorityWeight(uint32_t user_priority)
+    {
+        if (user_priority == LowPriorityValue)
+            return 100;
+        else if (user_priority == MediumPriorityValue)
+            return 20;
+        else
+            return 0;
+    }
+
     friend class LocalAdmissionController;
     std::string getName() const { return name; }
 
@@ -66,9 +79,10 @@ private:
 
     void consumeResource(double ru, uint64_t cpu_time_)
     {
-        cpu_time += cpu_time_;
         std::lock_guard lock(mu);
+        cpu_time += cpu_time_;
         bucket->consume(ru);
+        ru_consumption_delta += ru;
     }
 
     // Get remaining RU of this resource group.
@@ -76,11 +90,6 @@ private:
     {
         std::lock_guard lock(mu);
         return bucket->peek();
-    }
-
-    double getCPUTime() const
-    {
-        return cpu_time.load();
     }
 
     double getAcquireRUNum(uint32_t avg_token_speed_duration) const
@@ -95,15 +104,19 @@ private:
 
     // Positive: Less number means higher priority.
     // Negative means has no RU left, will not schedule this resource group at all.
-    double getPriority() const
+    double getPriority(uint64_t max_ru_per_sec) const
     {
+        std::lock_guard lock(mu);
         RUNTIME_ASSERT(user_priority == 1 || user_priority == 8 || user_priority == 16);
-        {
-            std::lock_guard lock(mu);
-            if (bucket->peek() <= 0.0)
-                return -1.0;
-        }
-        return ((user_priority - 1) << 60) | cpu_time.load();
+        if (!burstable && bucket->peek() <= 0.0)
+            return -1.0;
+
+        uint64_t cpu_time_in_ms = cpu_time / 1000000;
+        uint64_t ru_weight = getUserPriorityWeight(user_priority) * 1000 * max_ru_per_sec / user_ru_per_sec;
+        uint64_t total_weight = cpu_time_in_ms + ru_weight;
+        if unlikely (total_weight > MAX_WEIGHT)
+            total_weight = MAX_WEIGHT;
+        return ((user_priority - 1) << 60) | total_weight;
     }
 
     // New tokens fetched from GAC, update remaining tokens.
@@ -158,19 +171,26 @@ private:
         return keyspace_id;
     }
 
-    double getConsumptionDelta() const
+    double getAndCleanConsumptionDelta()
     {
-        return ru_delta;
+        std::lock_guard lock(mu);
+        auto ori = ru_consumption_delta;
+        ru_consumption_delta = 0.0;
+        return ori;
     }
 
     const std::string name;
 
     // Priority of resource group set by user.
-    // This is corresponding to tidb code:
-    // 1. LowPriorityValue is 1.
-    // 2. MediumPriorityValue is 8.
-    // 3. HighPriorityValue is 16.
+    // This is specified by tidb: parser/model/model.go
+    static constexpr int32_t LowPriorityValue = 1;
+    static constexpr int32_t MediumPriorityValue = 8;
+    static constexpr int32_t HighPriorityValue = 16;
+
     uint32_t user_priority;
+    uint64_t user_ru_per_sec;
+
+    bool burstable;
 
     // Definition of the RG, e.g. RG settings, priority etc.
     resource_manager::ResourceGroup group_pb;
@@ -181,7 +201,7 @@ private:
     TokenBucketPtr bucket;
 
     // Total used cpu_time of this ResourceGroup.
-    std::atomic<uint64_t> cpu_time;
+    uint64_t cpu_time;
 
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
 
@@ -191,7 +211,7 @@ private:
 
     const KeyspaceID keyspace_id;
 
-    double ru_delta = 0.0;
+    double ru_consumption_delta = 0.0;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -240,7 +260,7 @@ public:
     double getPriority(const std::string & name, const KeyspaceID & keyspace_id)
     {
         ResourceGroupPtr group = getOrCreateResourceGroup(name, keyspace_id);
-        return group->getPriority();
+        return group->getPriority(max_ru_per_sec.load());
     }
 
     bool isResourceGroupThrottled(const std::string & name)
@@ -272,6 +292,10 @@ private:
 
     std::pair<ResourceGroupPtr, bool> addResourceGroup(const resource_manager::ResourceGroup & new_group_pb, const KeyspaceID & keyspace_id)
     {
+        uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
+        if (max_ru_per_sec.load() < user_ru_per_sec)
+            max_ru_per_sec.store(user_ru_per_sec);
+
         std::lock_guard lock(mu);
         for (const auto & group : resource_groups)
         {
@@ -334,5 +358,7 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
 
     int64_t unique_client_id = -1;
+
+    std::atomic<uint64_t> max_ru_per_sec = 0;
 };
 } // namespace DB

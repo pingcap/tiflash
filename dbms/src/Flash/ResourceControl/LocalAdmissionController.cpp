@@ -60,8 +60,7 @@ void LocalAdmissionController::startBackgroudJob()
 void LocalAdmissionController::fetchTokensFromGAC()
 {
     // Prepare req.
-    // key: ResourceGroup name
-    // val: tuple<token_num_that_will_acquire_from_gac, ru_consumption_delta, keyspace_id
+    // tuple<resource_group_name, token_num_that_will_acquire_from_gac, ru_consumption_delta, keyspace_id>.
     std::vector<std::tuple<std::string, double, KeyspaceID, double>> need_tokens;
     {
         std::lock_guard lock(mu);
@@ -71,7 +70,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
             // gjt todo maybe always <= 0.0
             if (token_need_from_gac <= 0.0)
                 return;
-            need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getConsumptionDelta()));
+            need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getAndCleanConsumptionDelta()));
         }
     }
 
@@ -213,7 +212,7 @@ void LocalAdmissionController::cleanupResourceGroups()
     }
 
     for (const auto & remove_name : remove_names)
-        mpp_task_manager->tagResourceScheulerReadyToDelete(remove_name);
+        mpp_task_manager->tagResourceGroupSchedulerReadyToDelete(remove_name);
 
     mpp_task_manager->cleanResourceGroupScheduler();
 
@@ -222,7 +221,8 @@ void LocalAdmissionController::cleanupResourceGroups()
 
 void LocalAdmissionController::handleBackgroundError(const std::string & err_msg)
 {
-    // Basically error is from GAC, cannot handle in tiflash.
+    // Basically, errors are all from GAC, cannot handle in tiflash.
+    // So only print log.
     LOG_ERROR(log, err_msg);
 }
 

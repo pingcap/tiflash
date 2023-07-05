@@ -438,7 +438,7 @@ bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
     return scheduled;
 }
 
-void MPPTaskManager::tagResourceScheulerReadyToDelete(const String & name)
+void MPPTaskManager::tagResourceGroupSchedulerReadyToDelete(const String & name)
 {
     std::lock_guard lock(mu);
     auto scheduler_iter = resource_group_schedulers.find(name);

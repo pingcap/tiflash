@@ -244,7 +244,7 @@ public:
 
     // Tag a resource group scheduler can be delete. It's called in LocalAdmissionController periodically.
     // And the scheduler will be really deleted when all mpptasks are done.
-    void tagResourceScheulerReadyToDelete(const String & name);
+    void tagResourceGroupSchedulerReadyToDelete(const String & name);
 
     // Really delete resource group scheduler whose running mpp tasks is empty.
     void cleanResourceGroupScheduler();
