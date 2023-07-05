@@ -65,7 +65,7 @@ using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
 template <typename RPCContext>
-class AsyncRequestHandlerv1 : public UnaryCallback<bool>
+class AsyncRequestHandlerv1 : public GRPCKickTag
 {
 public:
     using Status = typename RPCContext::Status;
@@ -95,7 +95,7 @@ public:
     }
 
     // execute will be called by RPC framework so it should be as light as possible.
-    void execute(bool & ok) override
+    void execute(bool ok) override
     {
         switch (stage)
         {
@@ -117,7 +117,7 @@ public:
             {
                 stage = AsyncRequestStagev1::WAIT_BATCH_READ;
                 read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
+                reader->read(packets[0], asGRPCKickTag());
             }
             break;
         }
@@ -128,7 +128,7 @@ public:
             if (!ok || read_packet_index == batch_packet_count_v1 || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
-                reader->read(packets[read_packet_index], thisAsUnaryCallback());
+                reader->read(packets[read_packet_index], asGRPCKickTag());
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
             notifyReactor();
@@ -157,12 +157,12 @@ public:
             else if (read_packet_index < batch_packet_count_v1)
             {
                 stage = AsyncRequestStagev1::WAIT_FINISH;
-                reader->finish(finish_status, thisAsUnaryCallback());
+                reader->finish(finish_status, asGRPCKickTag());
             }
             else
             {
                 read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
+                reader->read(packets[0], asGRPCKickTag());
             }
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
@@ -236,7 +236,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
-        reader = rpc_context->makeAsyncReader(*request, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(*request, cq, asGRPCKickTag());
     }
 
     bool retryOrDone(String done_msg)
@@ -248,7 +248,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), this);
+            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), asGRPCKickTag());
             return true;
         }
         else
@@ -280,12 +280,6 @@ private:
         {
             return {false, getCurrentExceptionMessage(false)};
         }
-    }
-
-    // in case of potential multiple inheritances.
-    UnaryCallback<bool> * thisAsUnaryCallback()
-    {
-        return static_cast<UnaryCallback<bool> *>(this);
     }
 
     std::shared_ptr<RPCContext> rpc_context;

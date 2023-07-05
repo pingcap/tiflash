@@ -49,9 +49,9 @@ class AsyncExchangePacketReader
 {
 public:
     virtual ~AsyncExchangePacketReader() = default;
-    virtual void init(UnaryCallback<bool> * callback) = 0;
-    virtual void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
-    virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
+    virtual void init(GRPCKickTag * tag) = 0;
+    virtual void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) = 0;
+    virtual void finish(::grpc::Status & status, GRPCKickTag * tag) = 0;
     virtual grpc::ClientContext * getClientContext() = 0;
 };
 using AsyncExchangePacketReaderPtr = std::unique_ptr<AsyncExchangePacketReader>;
@@ -94,7 +94,7 @@ public:
     AsyncExchangePacketReaderPtr makeAsyncReader(
         const ExchangeRecvRequest & request,
         grpc::CompletionQueue * cq,
-        UnaryCallback<bool> * callback) const;
+        GRPCKickTag * tag) const;
 
     static Status getStatusOK()
     {

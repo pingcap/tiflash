@@ -52,7 +52,7 @@ constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
 
 template <typename RPCContext>
-class AsyncRequestHandler : public GRPCKickTag
+class AsyncRequestHandler final : public GRPCKickTag
 {
 public:
     using Status = typename RPCContext::Status;
@@ -85,7 +85,7 @@ public:
 
     // execute will be called by RPC framework so it should be as light as possible.
     // Do not do anything after processXXX functions.
-    void execute(bool & ok) override
+    void execute(bool ok) override
     {
         try
         {
@@ -147,7 +147,7 @@ private:
         if (!ok)
         {
             stage = AsyncRequestStage::WAIT_FINISH;
-            reader->finish(finish_status, this);
+            reader->finish(finish_status, asGRPCKickTag());
             return;
         }
 
@@ -161,7 +161,7 @@ private:
         }
 
         stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
-        auto res = message_queue->pushFromRemote(request.source_index, req_info, packet, this);
+        auto res = message_queue->pushFromRemote(request.source_index, req_info, packet, asGRPCKickTag());
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -203,7 +203,7 @@ private:
     {
         stage = AsyncRequestStage::WAIT_READ;
         packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-        reader->read(packet, this);
+        reader->read(packet, asGRPCKickTag());
     }
 
     void closeConnection(String && msg)
@@ -225,7 +225,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(make_reader_mu);
-        reader = rpc_context->makeAsyncReader(request, cq, this);
+        reader = rpc_context->makeAsyncReader(request, cq, asGRPCKickTag());
     }
 
     void retryOrDone(String && done_msg, const String & log_msg)
@@ -238,7 +238,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, SystemClock::now() + std::chrono::seconds(retry_interval_time), this);
+            alarm.Set(cq, SystemClock::now() + std::chrono::seconds(retry_interval_time), asGRPCKickTag());
         }
         else
         {

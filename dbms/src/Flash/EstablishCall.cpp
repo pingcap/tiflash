@@ -41,9 +41,9 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
-    // start processing requests. In this request, "this" acts are
+    // start processing requests. In this request, "asGRPCKickTag" acts are
     // the tag uniquely identifying the request.
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, asGRPCKickTag());
 }
 
 EstablishCallData::~EstablishCallData()
@@ -56,7 +56,7 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::execute(bool & ok)
+void EstablishCallData::execute(bool ok)
 {
     if (state == WAITING_TUNNEL)
     {
@@ -189,7 +189,7 @@ void EstablishCallData::tryConnectTunnel()
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
-    responder.Write(packet, this);
+    responder.Write(packet, asGRPCKickTag());
 }
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
@@ -238,7 +238,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
                 connection_id);
     }
 
-    responder.Finish(status, this);
+    responder.Finish(status, asGRPCKickTag());
 }
 
 void EstablishCallData::unexpectedWriteDone()
@@ -250,7 +250,7 @@ void EstablishCallData::unexpectedWriteDone()
 void EstablishCallData::trySendOneMsg()
 {
     TrackedMppDataPacketPtr packet;
-    auto res = async_tunnel_sender->pop(packet, this);
+    auto res = async_tunnel_sender->pop(packet, asGRPCKickTag());
     switch (res)
     {
     case MPMCQueueResult::OK:

@@ -35,7 +35,6 @@ class TestGRPCSendQueue;
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
 class GRPCKickTag : public grpc::internal::CompletionQueueTag
-    , public UnaryCallback<bool>
 {
 public:
     GRPCKickTag()
@@ -43,9 +42,11 @@ public:
         , status(true)
     {}
 
+    virtual void execute(bool ok) = 0;
+
     bool FinalizeResult(void ** tag_, bool * status_) override
     {
-        *tag_ = static_cast<UnaryCallback<bool> *>(this);
+        *tag_ = this;
         *status_ = status;
         return true;
     }
@@ -65,6 +66,11 @@ public:
         status = status_;
     }
 
+    GRPCKickTag * asGRPCKickTag()
+    {
+        return this;
+    }
+
 private:
     grpc_call * call;
     bool status;
@@ -73,7 +79,7 @@ private:
 /// For test usage only.
 class DummyGRPCKickTag : public GRPCKickTag
 {
-    void execute(bool &) override {}
+    void execute(bool) override {}
 };
 
 using GRPCKickFunc = std::function<grpc_call_error(GRPCKickTag *)>;
@@ -222,7 +228,7 @@ private:
             // If a call to `grpc_call_start_batch` with an empty batch returns
             // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
             // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-            error = grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
+            error = grpc_call_start_batch(t->getCall(), nullptr, 0, static_cast<grpc::internal::CompletionQueueTag *>(t), nullptr);
         }
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
@@ -404,7 +410,7 @@ private:
             // If a call to `grpc_call_start_batch` with an empty batch returns
             // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
             // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-            error = grpc_call_start_batch(t->getCall(), nullptr, 0, t, nullptr);
+            error = grpc_call_start_batch(t->getCall(), nullptr, 0, static_cast<grpc::internal::CompletionQueueTag *>(t), nullptr);
         }
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);

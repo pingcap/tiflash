@@ -55,7 +55,7 @@ public:
 
     ~EstablishCallData() override;
 
-    void execute(bool & ok) override;
+    void execute(bool ok) override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
