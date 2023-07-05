@@ -235,6 +235,7 @@ try
         }
     }
     spiller.finishSpill();
+    ASSERT_TRUE(spiller.hasSpilledData());
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
@@ -271,6 +272,7 @@ try
             }
         }
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
@@ -301,6 +303,7 @@ try
         auto blocks_to_spill = blocks;
         spiller->spillBlocks(std::move(blocks_to_spill), 0);
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
         if (!spiller->releaseSpilledFileOnRestore())
             verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
@@ -331,6 +334,7 @@ try
         }
     }
     spiller.finishSpill();
+    ASSERT_TRUE(spiller.hasSpilledData());
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
@@ -367,6 +371,7 @@ try
             }
         }
         spiller->finishSpill();
+        ASSERT_TRUE(spiller->hasSpilledData());
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
@@ -395,6 +400,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
     }
     /// append_dummy_read = true
@@ -409,6 +415,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
     }
 }
@@ -431,6 +438,7 @@ try
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
     }
     /// case 2, one spill write to multiple files
@@ -441,6 +449,7 @@ try
         auto reference = all_blocks;
         spiller.spillBlocks(std::move(all_blocks), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 0, 20, reference);
     }
     /// case 3, spill empty blocks to existing spilled file
@@ -456,6 +465,7 @@ try
         auto block_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
         verifyRestoreBlocks(spiller, 0, 2, 1, reference);
     }
     /// case 4, spill empty blocks to new spilled file
