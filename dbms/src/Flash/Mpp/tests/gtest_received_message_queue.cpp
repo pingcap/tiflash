@@ -156,11 +156,11 @@ try
                 });
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
-                    auto result = queue.pushFromRemote(0, "mock", newDataPacket(fmt::format("test_{}", i)), &tag);
+                    auto result = queue.pushFromGRPC(0, "mock", newDataPacket(fmt::format("test_{}", i)), &tag);
                     ASSERT_TRUE(result == MPMCQueueResult::OK);
                 }
                 ASSERT_TRUE(!queue.isWritable());
-                auto result = queue.pushFromRemote(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
+                auto result = queue.pushFromGRPC(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
                 ASSERT_TRUE(result == MPMCQueueResult::FULL);
                 if (fine_grained)
                 {

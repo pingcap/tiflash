@@ -303,6 +303,19 @@ private:
     LoggerPtr log;
     std::mutex mu;
 };
+
+ReceiveStatus toReceiveStatus(MPMCQueueResult pop_result)
+{
+    switch (pop_result)
+    {
+    case MPMCQueueResult::OK:
+        return ReceiveStatus::ok;
+    case MPMCQueueResult::EMPTY:
+        return ReceiveStatus::empty;
+    default:
+        return ReceiveStatus::eof;
+    }
+}
 } // namespace
 
 template <typename RPCContext>
@@ -315,17 +328,18 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     uint64_t fine_grained_shuffle_stream_count_,
     const Settings & settings,
     const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
-    : rpc_context(std::move(rpc_context_))
+    : exc_log(Logger::get(req_id, executor_id))
+    , rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
     , max_buffer_size(getMaxBufferSize(source_num, settings.recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
+    , received_message_queue(max_buffer_size, exc_log, &data_size_in_queue, enable_fine_grained_shuffle_flag, output_stream_count)
     , live_local_connections(0)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
     , local_tunnel_version(settings.local_tunnel_version)
     , async_recv_version(settings.async_recv_version)
@@ -334,7 +348,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        received_message_queue = std::make_unique<ReceivedMessageQueue>(max_buffer_size, exc_log, &data_size_in_queue, enable_fine_grained_shuffle_flag, output_stream_count);
         if (isReceiverForTiFlashStorage())
             rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
 
@@ -522,7 +535,7 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
 {
     async_handler_ptrs.push_back(
         std::make_unique<AsyncRequestHandler<RPCContext>>(
-            received_message_queue.get(),
+            &received_message_queue,
             rpc_context,
             std::move(request),
             exc_log->identifier(),
@@ -558,7 +571,7 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                     this->addLocalConnectionNum();
                 },
                 req_info,
-                received_message_queue.get());
+                &received_message_queue);
 
             rpc_context->establishMPPConnectionLocalV2(
                 req,
@@ -600,7 +613,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, received_message_queue.get(), rpc_context, req, exc_log->identifier()));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &received_message_queue, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -665,7 +678,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!received_message_queue->pushFromLocal<false>(req.source_index, req_info, packet, recv_mode))
+                if (!received_message_queue.pushFromLocal<false>(req.source_index, req_info, packet, recv_mode))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
@@ -786,58 +799,40 @@ void ExchangeReceiverBase<RPCContext>::verifyStreamId(size_t stream_id) const
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::toReceiveResult(MPMCQueueResult res, ReceivedMessagePtr && msg)
+ReceiveStatus ExchangeReceiverBase<RPCContext>::receive(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
-    switch (res)
-    {
-    case MPMCQueueResult::OK:
-        assert(msg);
-        return {ReceiveStatus::ok, std::move(msg)};
-    case MPMCQueueResult::EMPTY:
-        return {ReceiveStatus::empty, nullptr};
-    default:
-        return {ReceiveStatus::eof, nullptr};
-    }
-}
-
-template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
-{
-    assert(received_message_queue != nullptr);
     verifyStreamId(stream_id);
-    ReceivedMessagePtr msg;
-    return toReceiveResult(received_message_queue->pop<true>(msg, stream_id), std::move(msg));
+    return toReceiveStatus(received_message_queue.pop<true>(stream_id, recv_msg));
 }
 
 template <typename RPCContext>
-ReceiveResult ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id)
+ReceiveStatus ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
-    assert(received_message_queue != nullptr);
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
-    ReceivedMessagePtr msg;
-    return toReceiveResult(received_message_queue->pop<false>(msg, stream_id), std::move(msg));
+    return toReceiveStatus(received_message_queue.pop<false>(stream_id, recv_msg));
 }
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
     size_t stream_id,
-    ReceiveResult & recv_result,
+    ReceiveStatus receive_status,
+    ReceivedMessagePtr & recv_msg,
     std::queue<Block> & block_queue,
     const Block & header,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    switch (recv_result.recv_status)
+    switch (receive_status)
     {
     case ReceiveStatus::ok:
     {
-        assert(recv_result.recv_msg != nullptr);
-        if (unlikely(recv_result.recv_msg->getErrorPtr() != nullptr))
+        assert(recv_msg != nullptr);
+        if (unlikely(recv_msg->getErrorPtr() != nullptr))
             return ExchangeReceiverResult::newError(
-                recv_result.recv_msg->getSourceIndex(),
-                recv_result.recv_msg->getReqInfo(),
-                recv_result.recv_msg->getErrorPtr()->msg());
+                recv_msg->getSourceIndex(),
+                recv_msg->getReqInfo(),
+                recv_msg->getErrorPtr()->msg());
 
-        return toDecodeResult(stream_id, block_queue, header, recv_result.recv_msg, decoder_ptr);
+        return toDecodeResult(stream_id, block_queue, header, recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:
         return handleUnnormalChannel(block_queue, decoder_ptr);
@@ -853,10 +848,12 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     size_t stream_id,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    auto recv_res = receive(stream_id);
+    ReceivedMessagePtr recv_msg;
+    auto recv_status = receive(stream_id, recv_msg);
     return toExchangeReceiveResult(
         stream_id,
-        recv_res,
+        recv_status,
+        recv_msg,
         block_queue,
         header,
         decoder_ptr);
@@ -1022,13 +1019,13 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::finishReceivedQueue()
 {
-    received_message_queue->finish();
+    received_message_queue.finish();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancelReceivedQueue()
 {
-    received_message_queue->cancel();
+    received_message_queue.cancel();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

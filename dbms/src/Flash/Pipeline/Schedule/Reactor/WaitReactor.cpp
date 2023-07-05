@@ -35,25 +35,23 @@ bool WaitReactor::awaitAndCollectReadyTask(WaitingTask && task)
 {
     assert(task.first);
     auto * task_ptr = task.second;
-    task_ptr->startTraceMemory();
     auto status = task_ptr->await();
     switch (status)
     {
     case ExecTaskStatus::WAITING:
-        task_ptr->endTraceMemory();
         return false;
     case ExecTaskStatus::RUNNING:
         task_ptr->profile_info.elapsedAwaitTime();
-        task_ptr->endTraceMemory();
         cpu_tasks.push_back(std::move(task.first));
         return true;
-    case ExecTaskStatus::IO:
+    case ExecTaskStatus::IO_IN:
+    case ExecTaskStatus::IO_OUT:
         task_ptr->profile_info.elapsedAwaitTime();
-        task_ptr->endTraceMemory();
         io_tasks.push_back(std::move(task.first));
         return true;
     case FINISH_STATUS:
         task_ptr->profile_info.elapsedAwaitTime();
+        task_ptr->startTraceMemory();
         task_ptr->finalize();
         task_ptr->endTraceMemory();
         task.first.reset();
@@ -84,7 +82,8 @@ void WaitReactor::tryYield()
 {
     ++spin_count;
 
-    if (spin_count != 0 && spin_count % 64 == 0)
+    // spin_count % 16 == 0
+    if ((spin_count & 0xf) == 0)
     {
 #if defined(__x86_64__)
         _mm_pause();
@@ -102,7 +101,7 @@ void WaitReactor::tryYield()
         // TODO: Maybe there's a better intrinsic like _mm_pause on non-x86_64 architecture.
         sched_yield();
 #endif
-        if (spin_count == 640)
+        if (spin_count == 160)
         {
             spin_count = 0;
             using namespace std::chrono_literals;

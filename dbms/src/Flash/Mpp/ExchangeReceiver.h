@@ -91,12 +91,6 @@ enum class ReceiveStatus
     eof,
 };
 
-struct ReceiveResult
-{
-    ReceiveStatus recv_status;
-    ReceivedMessagePtr recv_msg;
-};
-
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -120,12 +114,13 @@ public:
     void cancel();
     void close();
 
-    ReceiveResult receive(size_t stream_id);
-    ReceiveResult tryReceive(size_t stream_id);
+    ReceiveStatus receive(size_t stream_id, ReceivedMessagePtr & recv_msg);
+    ReceiveStatus tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     ExchangeReceiverResult toExchangeReceiveResult(
         size_t stream_id,
-        ReceiveResult & recv_result,
+        ReceiveStatus receive_status,
+        ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
@@ -186,8 +181,6 @@ private:
         const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(MPMCQueueResult res, ReceivedMessagePtr && msg);
-
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
 
@@ -208,6 +201,8 @@ private:
     }
 
 private:
+    LoggerPtr exc_log;
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -221,7 +216,7 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    std::unique_ptr<ReceivedMessageQueue> received_message_queue;
+    ReceivedMessageQueue received_message_queue;
 
     std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext>>> async_handler_ptrs;
 
@@ -232,8 +227,6 @@ private:
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
-
-    LoggerPtr exc_log;
 
     bool collected = false;
     int thread_count = 0;

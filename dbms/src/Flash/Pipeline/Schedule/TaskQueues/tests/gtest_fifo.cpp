@@ -37,11 +37,11 @@ public:
 };
 } // namespace
 
-class FIFOTestRunner : public ::testing::Test
+class TestFIFOTaskQueue : public ::testing::Test
 {
 };
 
-TEST_F(FIFOTestRunner, base)
+TEST_F(TestFIFOTaskQueue, base)
 try
 {
     FIFOTaskQueue queue;

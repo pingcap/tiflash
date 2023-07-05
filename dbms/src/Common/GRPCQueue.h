@@ -198,9 +198,9 @@ public:
         return ret;
     }
 
-    bool isFull() const
+    bool isWritable() const
     {
-        return send_queue.isFull();
+        return send_queue.isWritable();
     }
 
 private:
@@ -293,6 +293,14 @@ public:
         return ret;
     }
 
+    MPMCQueueResult dequeue()
+    {
+        auto ret = recv_queue.dequeue();
+        if (ret == MPMCQueueResult::OK)
+            kickOneTagWithSuccess();
+        return ret;
+    }
+
     /// Push the data from the remote node in grpc thread.
     ///
     /// Return OK if push is done.
@@ -374,9 +382,9 @@ public:
         return recv_queue.finish();
     }
 
-    bool isFull() const
+    bool isWritable() const
     {
-        return recv_queue.isFull();
+        return recv_queue.isWritable();
     }
 
 private:

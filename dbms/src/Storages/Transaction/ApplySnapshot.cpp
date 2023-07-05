@@ -355,6 +355,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                                                                       keyspace_id,
                                                                        /* ignore_cache= */ false,
                                                                        context.getSettingsRef().safe_point_update_interval_seconds);
             }
@@ -414,7 +415,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
-                GET_KEYSPACE_METRIC(tiflash_schema_trigger_count, type_raft_decode, keyspace_id).Increment();
+                GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncerManager()->syncTableSchema(context, keyspace_id, physical_table_id);
                 // Next time should force_decode
                 force_decode = true;

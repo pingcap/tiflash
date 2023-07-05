@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
+#include <Operators/ExpressionTransformOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -45,7 +46,7 @@ StorageDisaggregated::StorageDisaggregated(
 
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
-    const SelectQueryInfo & query_info,
+    const SelectQueryInfo & /*query_info*/,
     const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
@@ -54,7 +55,7 @@ BlockInputStreams StorageDisaggregated::read(
     /// S3 config is enabled on the TiFlash compute node, let's read data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readThroughS3(db_context, query_info, num_streams);
+        return readThroughS3(db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
     return readThroughExchange(num_streams);
@@ -65,12 +66,13 @@ void StorageDisaggregated::read(
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
-    const Context & /*context*/,
+    const Context & db_context,
     size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    // TODO support S3
-    RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readThroughS3(exec_status, group_builder, db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
     readThroughExchange(exec_status, group_builder, num_streams);
@@ -388,7 +390,7 @@ void StorageDisaggregated::filterConditions(
     }
 }
 
-void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(DAGExpressionAnalyzer & analyzer)
 {
     // If the column is not in the columns of pushed down filter, append a cast to the column.
     std::vector<UInt8> may_need_add_cast_column;
@@ -407,6 +409,18 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         chain.finalize();
         chain.clear();
+        return extra_cast;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+{
+    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    {
         for (auto & stream : pipeline.streams)
         {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
@@ -414,4 +428,15 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
         }
     }
 }
+
+void StorageDisaggregated::extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+{
+    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+        });
+    }
+}
+
 } // namespace DB

@@ -67,7 +67,7 @@ public:
         size_t fine_grained_channel_size_);
 
     template <bool need_wait>
-    MPMCQueueResult pop(ReceivedMessagePtr & message, size_t stream_id);
+    MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & message);
 
     template <bool is_force>
     bool pushFromLocal(size_t source_index,
@@ -75,10 +75,10 @@ public:
                        const TrackedMppDataPacketPtr & tracked_packet,
                        ReceiverMode mode);
 
-    MPMCQueueResult pushFromRemote(size_t source_index,
-                                   const String & req_info,
-                                   const TrackedMppDataPacketPtr & tracked_packet,
-                                   GRPCKickTag * new_tag);
+    MPMCQueueResult pushFromGRPC(size_t source_index,
+                                 const String & req_info,
+                                 const TrackedMppDataPacketPtr & tracked_packet,
+                                 GRPCKickTag * new_tag);
 
     void finish()
     {
@@ -98,7 +98,7 @@ public:
 
     bool isWritable() const
     {
-        return !grpc_recv_queue.isFull();
+        return !grpc_recv_queue.isWritable();
     }
 
 #ifndef DBMS_PUBLIC_GTEST

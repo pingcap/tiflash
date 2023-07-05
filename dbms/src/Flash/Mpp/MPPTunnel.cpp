@@ -148,7 +148,7 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
         case TunnelStatus::Finished:
             return;
         default:
-            RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", static_cast<Int32>(status));
+            RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", magic_enum::enum_name(status));
         }
     }
 
@@ -318,10 +318,10 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
     if (timeout.count() > 0)
     {
         LOG_TRACE(log, "start waitUntilConnectedOrFinished");
-        if (status == TunnelStatus::Unconnected)
-        {
-            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
-        }
+        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, {
+            if (status == TunnelStatus::Unconnected)
+                throw Exception(tunnel_id + " is timeout");
+        });
         auto res = cv_for_status_changed.wait_for(lk, timeout, not_unconnected);
         LOG_TRACE(log, "end waitUntilConnectedOrFinished");
         if (!res)
@@ -346,22 +346,23 @@ bool MPPTunnel::isWritable() const
     {
         if (timeout.count() > 0)
         {
-            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
+            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(fmt::format("{} is timeout", tunnel_id)););
             if (unlikely(!timeout_stopwatch))
                 timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
             if (unlikely(timeout_stopwatch->elapsed() > timeout_nanoseconds))
-                throw Exception(tunnel_id + " is timeout");
+                throw Exception(fmt::format("{} is timeout", tunnel_id));
         }
         return false;
     }
     case TunnelStatus::Connected:
+    case TunnelStatus::WaitingForSenderFinish:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isWritable();
-    default:
-        // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
-        // and then handled by `forceWrite`.
+    case TunnelStatus::Finished:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return true;
+        throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+    default:
+        RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", magic_enum::enum_name(status));
     }
 }
 

@@ -28,7 +28,8 @@ void assertOperatorStatus(
     // cancel status, waiting and io status can be returned in all method of operator.
     case OperatorStatus::CANCELLED:
     case OperatorStatus::WAITING:
-    case OperatorStatus::IO:
+    case OperatorStatus::IO_IN:
+    case OperatorStatus::IO_OUT:
         return;
     default:
     {

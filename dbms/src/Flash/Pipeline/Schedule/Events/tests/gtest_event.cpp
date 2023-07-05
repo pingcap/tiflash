@@ -338,7 +338,7 @@ protected:
             cpu_execute_time += per_execute_time;
             return ExecTaskStatus::RUNNING;
         }
-        return ExecTaskStatus::IO;
+        return ExecTaskStatus::IO_IN;
     }
 
     ExecTaskStatus doExecuteIOImpl() override
@@ -347,7 +347,7 @@ protected:
         {
             std::this_thread::sleep_for(std::chrono::nanoseconds(per_execute_time));
             io_execute_time += per_execute_time;
-            return ExecTaskStatus::IO;
+            return ExecTaskStatus::IO_IN;
         }
         return ExecTaskStatus::WAITING;
     }
