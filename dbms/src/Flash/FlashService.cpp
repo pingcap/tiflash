@@ -138,7 +138,31 @@ grpc::Status FlashService::Coprocessor(
 
     context->setMockStorage(mock_storage);
 
+    const auto & settings = context->getSettingsRef();
+    auto handle_limit = settings.cop_pool_handle_limit != 0 ? settings.cop_pool_handle_limit.get() : 10 * cop_pool->size();
+    auto max_queued_duration_seconds = std::min(settings.cop_pool_max_queued_seconds, 20);
+
+    if (handle_limit > 0)
+    {
+        // We use this atomic variable metrics from the prometheus-cpp library to mark the number of queued queries.
+        // TODO: Use grpc asynchronous server and a more fully-featured thread pool.
+        if (auto current = GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Value(); current > handle_limit)
+        {
+            response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("tiflash cop pool queued too much, current = {}, limit = {}", current, handle_limit));
+            return grpc::Status::OK;
+        }
+    }
+
+
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
+        if (max_queued_duration_seconds > 0)
+        {
+            if (auto current = watch.elapsedSeconds(); current > max_queued_duration_seconds)
+            {
+                response->mutable_region_error()->mutable_server_is_busy()->set_reason(fmt::format("this task queued in tiflash cop pool too long, current = {}, limit = {}", current, max_queued_duration_seconds));
+                return grpc::Status::OK;
+            }
+        }
         auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
