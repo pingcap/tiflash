@@ -49,6 +49,7 @@
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCSnapshotsList;
+extern const Metric PSPendingWriterNum;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -842,6 +843,7 @@ PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 ma
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot(const String & tracing_id) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
     auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
@@ -894,6 +896,7 @@ SnapshotsStatistics PageDirectory::getSnapshotsStat() const
 
 PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
 
     // After two write batches applied: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}, the `mvcc_table_directory` is:
@@ -986,6 +989,7 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
 
 std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read_page_dir).Increment();
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
 
@@ -1128,6 +1132,7 @@ PageId PageDirectory::getMaxId() const
 
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_scan).Increment();
     std::set<PageIdV3Internal> page_ids;
 
     std::shared_lock read_lock(table_rw_mutex);
@@ -1245,21 +1250,90 @@ void PageDirectory::applyRefEditRecord(
     SYNC_FOR("after_PageDirectory::applyRefEditRecord_incr_ref_count");
 }
 
+PageDirectory::Writer * PageDirectory::buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/)
+{
+    RUNTIME_CHECK(!writers.empty());
+    RUNTIME_CHECK(first == writers.front());
+    auto * last_writer = first;
+    auto iter = writers.begin();
+    iter++;
+    for (; iter != writers.end(); iter++)
+    {
+        auto * w = *iter;
+        first->edit->merge(std::move(*(w->edit)));
+        last_writer = w;
+    }
+    return last_writer;
+}
+
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
-    //
-    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
-    // pipeline so that we can batch the incoming edit when doing IO.
+    GET_METRIC(tiflash_storage_page_command_count, type_write).Increment();
+    CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
+    Writer w;
+    w.edit = &edit;
 
     Stopwatch watch;
-
     std::unique_lock apply_lock(apply_mutex);
 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
+    writers.push_back(&w);
+    SYNC_FOR("after_PageDirectory::enter_write_group");
+    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
+    watch.restart();
+    if (w.done)
+    {
+        if (unlikely(!w.success))
+        {
+            if (w.exception)
+            {
+                w.exception->rethrow();
+            }
+            else
+            {
+                throw Exception("Unknown exception");
+            }
+        }
+        return;
+    }
+
+    auto * last_writer = buildWriteGroup(&w, apply_lock);
+    apply_lock.unlock();
+    SYNC_FOR("before_PageDirectory::leader_apply");
+
+    // `true` means the write process has completed without exception
+    bool success = false;
+    std::unique_ptr<DB::Exception> exception = nullptr;
+
+    SCOPE_EXIT({
+        apply_lock.lock();
+        while (true)
+        {
+            auto * ready = writers.front();
+            writers.pop_front();
+            if (ready != &w)
+            {
+                ready->done = true;
+                ready->success = success;
+                if (exception != nullptr)
+                {
+                    ready->exception = std::unique_ptr<DB::Exception>(exception->clone());
+                }
+                ready->cv.notify_one();
+            }
+            if (ready == last_writer)
+                break;
+        }
+        if (!writers.empty())
+        {
+            writers.front()->cv.notify_one();
+        }
+    });
 
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
@@ -1329,6 +1403,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit_size));
+                exception.reset(e.clone());
                 e.rethrow();
             }
         }
@@ -1336,6 +1411,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+
+    success = true;
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
