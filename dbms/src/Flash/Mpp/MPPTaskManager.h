@@ -51,7 +51,6 @@ struct MPPGatherTaskSet
     {
         return state == Normal || state == Aborted;
     }
-    ~MPPGatherTaskSet();
     MPPTask * findMPPTask(const MPPTaskId & task_id) const;
     bool isTaskRegistered(const MPPTaskId & task_id) const
     {
