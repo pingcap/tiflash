@@ -109,7 +109,7 @@ void MPPTaskStatistics::logTracingJson()
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
         R"(,"local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{})"
         R"(,"status":"{}","error_message":"{}","cpu_ru":{},"read_ru":{},"memory_peak":{}}})",
-        id.query_id.start_ts,
+        id.gather_id.query_id.start_ts,
         id.task_id,
         is_root,
         sender_executor_id,

@@ -296,7 +296,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             std::vector<kv::LockPtr> locks{};
             for (const auto & lock_info : error.locked())
                 locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
-            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
+            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.gather_id.query_id.start_ts, locks, pushed);
 
             // TODO: Use `pushed` to bypass large txn.
             LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
@@ -411,11 +411,13 @@ StorageDisaggregated::buildEstablishDisaggTaskReq(
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
+        // todo check if gather_id is needed in disaggregated::DisaggTaskMeta
         disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
-        meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-        meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-        meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
-        meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+        meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+        meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+        meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+        meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+        meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
         meta->set_executor_id(table_scan.getTableScanExecutorID());
@@ -507,7 +509,7 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
         db_context,
         log);
     const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
-    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
+    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
         "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",

@@ -641,7 +641,7 @@ void MPPTask::reportStatus(const String & err_msg)
 void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
+    manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
     if (!is_public)
         // if the task is not public, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
