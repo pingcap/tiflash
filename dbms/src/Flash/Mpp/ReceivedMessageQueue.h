@@ -98,7 +98,7 @@ public:
 
     bool isWritable() const
     {
-        return !grpc_recv_queue.isWritable();
+        return grpc_recv_queue.isWritable();
     }
 
 #ifndef DBMS_PUBLIC_GTEST

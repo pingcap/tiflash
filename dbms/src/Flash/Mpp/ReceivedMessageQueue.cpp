@@ -134,7 +134,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
             {
 #ifndef NDEBUG
                 ReceivedMessagePtr original_msg;
-                auto pop_result [[maybe_unused]] = grpc_recv_queue.tryPop(original_msg);
+                auto pop_result = grpc_recv_queue.tryPop(original_msg);
                 /// if there is no remaining consumer, then pop it from original queue, the message must stay in the queue before the pop
                 /// so even use tryPop, the result must not be empty
                 RUNTIME_CHECK_MSG(pop_result != MPMCQueueResult::EMPTY, "The result of 'grpc_recv_queue->tryPop' is definitely not EMPTY.");
