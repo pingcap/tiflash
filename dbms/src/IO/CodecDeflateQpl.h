@@ -15,14 +15,14 @@
 #pragma once
 #if USE_QPL
 
+#include <qpl/qpl.h>
+
 #include <array>
 #include <atomic>
 #include <cstdio>
 #include <map>
 #include <memory>
 #include <random>
-
-#include <qpl/qpl.h>
 
 //qpl block size for storing compressed data,aligned with ZLIB.
 #define QPL_Compressbound(isize) ((isize) + ((isize) >> 12) + ((isize) >> 14) + ((isize) >> 25) + 13)

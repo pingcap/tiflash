@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #if USE_QPL
-#include <IO/CodecDeflateQpl.h>
-
 #include <Common/Exception.h>
+#include <IO/CodecDeflateQpl.h>
 
 #include <cassert>
 #include <memory>
@@ -51,11 +50,11 @@ CodecDeflateQpl::CodecDeflateQpl(qpl_path_t path)
                 delete[] jobs_buffer;
                 if (path == qpl_path_hardware)
                 {
-		    throw Exception(fmt::format("Initialization of IAA hardware failed: {} will attempt to use software DeflateQpl codec instead of hardware DeflateQpl codec.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
+                    throw Exception(fmt::format("Initialization of IAA hardware failed: {} will attempt to use software DeflateQpl codec instead of hardware DeflateQpl codec.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
                 }
                 else
                 {
-		    throw Exception(fmt::format("Initialization of software DeflateQpl codec failed: {} QPL compression/decompression cannot be enabled.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
+                    throw Exception(fmt::format("Initialization of software DeflateQpl codec failed: {} QPL compression/decompression cannot be enabled.", std::to_string(status)), ErrorCodes::QPL_INIT_JOB_FAILED);
                 }
             }
         }
