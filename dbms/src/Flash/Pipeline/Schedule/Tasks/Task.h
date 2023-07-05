@@ -98,13 +98,14 @@ public:
     // level of multi-level feedback queue.
     size_t mlfq_level{0};
 
+protected:
+    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+
 private:
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;
     // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
-
-    ExecTaskStatus task_status{ExecTaskStatus::INIT};
 
     bool is_finalized = false;
 };
