@@ -36,8 +36,8 @@ protected:
             return grpc_call_error::GRPC_CALL_OK;
         });
     }
-    GRPCKickTag * tag;
 
+    GRPCKickTag * tag;
     GRPCSendQueue<int> queue;
 
 public:

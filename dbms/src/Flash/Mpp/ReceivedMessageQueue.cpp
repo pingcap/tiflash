@@ -126,7 +126,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(ReceivedMessagePtr & message, size_t s
         else
             res = msg_channels_for_fine_grained_shuffle[stream_id].tryPop(message);
 
-        if (res == MPMCQueueResult::OK && message != nullptr)
+        if (res == MPMCQueueResult::OK)
         {
             if (message->getRemainingConsumers()->fetch_sub(1) == 1)
             {
