@@ -114,8 +114,10 @@ private:
         std::lock_guard lock(spill_finished_mutex);
         return spill_finished;
     }
+    bool isAllConstant() const { return header_without_constants.columns() == 0; }
     void recordAllConstantBlockRows(UInt64 partition_id, UInt64 rows)
     {
+        assert(isAllConstant());
         RUNTIME_CHECK_MSG(isSpillFinished() == false, "{}: spill after the spiller is finished.", config.spill_id);
         std::lock_guard lock(all_constant_mutex);
         all_constant_block_rows[partition_id] += rows;

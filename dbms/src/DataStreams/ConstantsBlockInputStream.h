@@ -27,12 +27,11 @@ public:
         , remaining_rows(rows_)
         , max_block_size(std::max(1, max_block_size_))
     {
+        RUNTIME_CHECK_MSG(header.columns() > 0, "the empty header is illegal.");
         for (const auto & col : header)
         {
             RUNTIME_CHECK(col.column != nullptr && col.column->isColumnConst());
         }
-        if unlikely (header.columns() == 0)
-            remaining_rows = 0;
     }
 
     Block read() override

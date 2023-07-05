@@ -516,6 +516,7 @@ try
         Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
 
         Block expected_block = constant_header;
         for (auto & col : expected_block)
@@ -536,6 +537,7 @@ try
         Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
 
         Blocks expected_blocks;
         Block block1 = constant_header;

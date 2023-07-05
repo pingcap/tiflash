@@ -291,6 +291,11 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
             spiller = std::make_unique<Spiller>(params.spill_config, true, 1, header, log);
         }
+        else
+        {
+            params.setMaxBytesBeforeExternalGroupBy(0);
+            LOG_WARNING(log, "Aggregation does not support spill because aggregator hash table does not support two level");
+        }
     }
 }
 
