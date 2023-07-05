@@ -37,15 +37,15 @@ void SortSpillContext::markSpill()
 
 void SortSpillContext::clearRevocableMemory()
 {
-    total_revocable_memory = INVALID_REVOCABLE_MEMORY;
+    revocable_memory = INVALID_REVOCABLE_MEMORY;
 }
 
 bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 {
     assert(new_value > INVALID_REVOCABLE_MEMORY);
-    if (total_revocable_memory == INVALID_REVOCABLE_MEMORY)
+    if (revocable_memory == INVALID_REVOCABLE_MEMORY)
         return false;
-    total_revocable_memory = new_value;
-    return operator_spill_threshold > 0 && total_revocable_memory > static_cast<Int64>(operator_spill_threshold);
+    revocable_memory = new_value;
+    return enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold);
 }
 } // namespace DB

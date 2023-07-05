@@ -124,9 +124,9 @@ Join::Join(
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
-    size_t max_bytes_before_external_join_,
-    const SpillConfig & build_spill_config_,
-    const SpillConfig & probe_spill_config_,
+    size_t max_bytes_before_external_join,
+    const SpillConfig & build_spill_config,
+    const SpillConfig & probe_spill_config,
     Int64 join_restore_concurrency_,
     const Names & tidb_output_column_names_,
     const TiDB::TiDBCollators & collators_,
@@ -155,9 +155,6 @@ Join::Join(
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
     , runtime_filter_list(runtime_filter_list_)
-    , max_bytes_before_external_join(max_bytes_before_external_join_)
-    , build_spill_config(build_spill_config_)
-    , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
     , shallow_copy_cross_probe_threshold(shallow_copy_cross_probe_threshold_ > 0 ? shallow_copy_cross_probe_threshold_ : std::max(1, max_block_size / 10))
     , tidb_output_column_names(tidb_output_column_names_)
@@ -186,6 +183,8 @@ Join::Join(
     String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
+
+    hash_join_spill_context = std::make_shared<HashJoinSpillContext>(build_spill_config, probe_spill_config, max_bytes_before_external_join, log);
 
     LOG_DEBUG(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
@@ -348,22 +347,23 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
-    if (max_bytes_before_external_join > 0)
+    hash_join_spill_context->init(build_concurrency);
+    if (hash_join_spill_context->isSpillEnabled())
     {
         if (join_map_method == JoinMapMethod::CROSS)
         {
             /// todo support spill for cross join
-            max_bytes_before_external_join = 0;
+            hash_join_spill_context->disableSpill();
             LOG_WARNING(log, "Join does not support spill, reason: cross join spill is not supported");
         }
         if (isNullAwareSemiFamily(kind))
         {
-            max_bytes_before_external_join = 0;
+            hash_join_spill_context->disableSpill();
             LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
-        if (max_bytes_before_external_join > 0)
-            build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     }
+    if (hash_join_spill_context->isSpillEnabled())
+        hash_join_spill_context->buildBuildSpiller(build_sample_block);
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
@@ -373,8 +373,8 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     std::unique_lock lock(rwlock);
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
-    if (max_bytes_before_external_join > 0)
-        probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+    if (hash_join_spill_context->isSpillEnabled())
+        hash_join_spill_context->buildProbeSpiller(probe_sample_block);
     probe_side_marked_spilled_data.resize(probe_concurrency);
 }
 

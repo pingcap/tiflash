@@ -24,6 +24,7 @@ class SortSpillContext : public OperatorSpillContext
 {
 private:
     std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
+    std::atomic<Int64> revocable_memory;
     SpillConfig spill_config;
     SpillerPtr spiller;
 
@@ -35,6 +36,7 @@ public:
     void markSpill();
     bool updateRevocableMemory(Int64 new_value);
     void clearRevocableMemory();
+    Int64 getTotalRevocableMemory() override { return revocable_memory; };
 };
 
 using SortSpillContextPtr = std::shared_ptr<SortSpillContext>;
