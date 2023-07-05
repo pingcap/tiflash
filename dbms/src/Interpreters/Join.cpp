@@ -30,7 +30,10 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include <exception>
 #include <magic_enum.hpp>
+
+#include "DataStreams/IBlockInputStream.h"
 
 namespace DB
 {
@@ -1829,70 +1832,63 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         throw Exception(error_message);
     try
     {
-        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_scan_hash_map_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_scan_hash_map_streams.size()));
-        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_scan_hash_map_streams.size());
-        auto get_back_stream = [](BlockInputStreams & streams) {
-            BlockInputStreamPtr stream = streams.back();
-            streams.pop_back();
-            return stream;
-        };
-        if (!restore_build_streams.empty())
+        while (true)
         {
-            auto build_stream = get_back_stream(restore_build_streams);
-            auto probe_stream = get_back_stream(restore_probe_streams);
-            auto scan_hash_map_stream = get_back_stream(restore_scan_hash_map_streams);
-            if (restore_build_streams.empty())
+            LOG_TRACE(log, "restore_infos {}", restore_infos.size());
+            if (!restore_infos.empty())
             {
-                spilled_partition_indexes.pop_front();
+                auto restore_info = std::move(restore_infos.back());
+                restore_infos.pop_back();
+                if (restore_infos.empty())
+                {
+                    spilled_partition_indexes.pop_front();
+                }
+                return restore_info;
             }
-            return RestoreInfo{restore_join, std::move(scan_hash_map_stream), std::move(build_stream), std::move(probe_stream)};
-        }
-        if (spilled_partition_indexes.empty())
-        {
-            return {};
-        }
-        auto spilled_partition_index = spilled_partition_indexes.front();
-        RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
-        if (restore_join_build_concurrency <= 0)
-            restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
-        /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
-        assert(restore_join_build_concurrency >= 2);
-        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
-        restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
-        RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
-        auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
-        restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
-        restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
-        restore_join->setInitActiveBuildThreads();
-        restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
-        for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-        {
-            restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
-        }
-        auto build_stream = get_back_stream(restore_build_streams);
-        auto probe_stream = get_back_stream(restore_probe_streams);
-        if (restore_build_streams.empty())
-        {
-            spilled_partition_indexes.pop_front();
-        }
-        if (needScanHashMapAfterProbe(kind))
-        {
+            if (spilled_partition_indexes.empty())
+            {
+                return {};
+            }
+
+            // build new restore infos.
+            auto spilled_partition_index = spilled_partition_indexes.front();
+            RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
+            if (restore_join_build_concurrency <= 0)
+                restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
+            /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
+            assert(restore_join_build_concurrency >= 2);
+            LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
+            auto restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+            RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
+            auto restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+            auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
+            restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
+            restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
+            restore_join->setInitActiveBuildThreads();
+            restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-                restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
+            {
+                restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
+            }
+            BlockInputStreams restore_scan_hash_map_streams;
+            restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
+            if (needScanHashMapAfterProbe(kind))
+            {
+                auto header = restore_probe_streams.back()->getHeader();
+                for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+                    restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(header, i, restore_join_build_concurrency, max_block_size_);
+            }
+            for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
+            {
+                restore_infos.emplace_back(restore_join, std::move(restore_scan_hash_map_streams[i]), std::move(restore_build_streams[i]), std::move(restore_probe_streams[i]));
+            }
         }
-        auto scan_hash_map_streams = get_back_stream(restore_scan_hash_map_streams);
-        return RestoreInfo{restore_join, std::move(scan_hash_map_streams), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
-        restore_build_streams.clear();
-        restore_probe_streams.clear();
-        restore_scan_hash_map_streams.clear();
-        auto err_message = getCurrentExceptionMessage(false, true);
-        meetErrorImpl(err_message, lock);
-        throw Exception(err_message);
+        restore_infos.clear();
+        meetErrorImpl(getCurrentExceptionMessage(false, true), lock);
+        std::rethrow_exception(std::current_exception());
     }
 }
 

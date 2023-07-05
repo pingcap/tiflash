@@ -336,9 +336,7 @@ private:
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
 
-    BlockInputStreams restore_build_streams;
-    BlockInputStreams restore_probe_streams;
-    BlockInputStreams restore_scan_hash_map_streams;
+    std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;
