@@ -35,8 +35,9 @@ public:
         : log(Logger::get())
     {}
 
-    explicit PipelineExecutorStatus(const String & req_id)
-        : log(Logger::get(req_id))
+    PipelineExecutorStatus(const String & query_id_, const String & req_id)
+        : query_id(query_id_)
+        , log(Logger::get(req_id))
     {}
 
     ExecutionResult toExecutionResult();
@@ -140,6 +141,11 @@ public:
         return query_profile_info;
     }
 
+    const String & getQueryId() const
+    {
+        return query_id;
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -149,6 +155,8 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
 private:
+    const String query_id;
+
     LoggerPtr log;
 
     std::mutex mu;

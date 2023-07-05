@@ -79,6 +79,11 @@ void EventTask::finalizeImpl()
     event.reset();
 }
 
+const String & EventTask::getQueryId() const
+{
+    return exec_status.getQueryId();
+}
+
 ExecTaskStatus EventTask::executeImpl()
 {
     EXECUTE(doExecuteImpl);

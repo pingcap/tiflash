@@ -77,6 +77,12 @@ public:
         current_memory_tracker = nullptr;
     }
 
+    virtual const String & getQueryId() const
+    {
+        static const String empty_query_id{};
+        return empty_query_id;
+    }
+
 public:
     LoggerPtr log;
 

@@ -34,6 +34,8 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
 
+    const String & getQueryId() const override;
+
 protected:
     ExecTaskStatus executeImpl() override;
     virtual ExecTaskStatus doExecuteImpl() = 0;
