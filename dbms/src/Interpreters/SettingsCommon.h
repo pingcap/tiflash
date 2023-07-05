@@ -829,7 +829,7 @@ struct SettingTaskQueueType
 public:
     bool changed = false;
 
-    SettingTaskQueueType(TaskQueueType x = TaskQueueType::FIFO)
+    SettingTaskQueueType(TaskQueueType x = TaskQueueType::DEFAULT)
         : value(x)
     {}
 

@@ -98,7 +98,7 @@ public:
     // level of multi-level feedback queue.
     size_t mlfq_level{0};
 
-protected:
+private:
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;
     // To reduce the overheads of `mem_tracker_holder.get()`
