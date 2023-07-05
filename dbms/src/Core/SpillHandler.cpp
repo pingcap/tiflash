@@ -90,12 +90,15 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         if unlikely (spiller->isAllConstant())
         {
             LOG_WARNING(spiller->logger, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
+            UInt64 total_rows = 0;
             for (auto & block : blocks)
             {
                 if (unlikely(!block || block.rows() == 0))
                     continue;
-                spiller->recordAllConstantBlockRows(partition_id, block.rows());
+                total_rows += block.rows();
             }
+            if (total_rows > 0)
+                spiller->recordAllConstantBlockRows(partition_id, total_rows);
         }
         else
         {
