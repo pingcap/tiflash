@@ -89,7 +89,7 @@ public:
         };
     }
 
-    void execute(bool &) override {}
+    void execute(bool) override {}
 
     void run()
     {
@@ -209,7 +209,7 @@ public:
         while (true)
         {
             ReceivedMessagePtr data;
-            auto pop_result = received_message_queue.pop<true>(data, 0);
+            auto pop_result = received_message_queue.pop<true>(0, data);
             switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:

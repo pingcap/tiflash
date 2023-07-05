@@ -107,7 +107,7 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false>(recv_msg, k);
+                            auto pop_result = queue.pop<false>(k, recv_msg);
                             ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*recv_msg->getRespPtr(k) == fmt::format("test_{}", i));
@@ -121,7 +121,7 @@ try
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false>(recv_msg, 0);
+                        auto pop_result = queue.pop<false>(0, recv_msg);
                         ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                         ASSERT_TRUE(*recv_msg->getRespPtr(0) == fmt::format("test_{}", i));
                     }
@@ -169,7 +169,7 @@ try
                         for (size_t k = 0; k < fine_grained_stream_size; k++)
                         {
                             ReceivedMessagePtr recv_msg;
-                            auto pop_result = queue.pop<false>(recv_msg, k);
+                            auto pop_result = queue.pop<false>(k, recv_msg);
                             ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                             if (k == 0)
                                 ASSERT_TRUE(*recv_msg->getRespPtr(k) == fmt::format("test_{}", i));
@@ -183,7 +183,7 @@ try
                     for (size_t i = 0; i <= buffer_size; ++i)
                     {
                         ReceivedMessagePtr recv_msg;
-                        auto pop_result = queue.pop<false>(recv_msg, 0);
+                        auto pop_result = queue.pop<false>(0, recv_msg);
                         ASSERT_TRUE(pop_result == MPMCQueueResult::OK);
                         ASSERT_TRUE(*recv_msg->getRespPtr(0) == fmt::format("test_{}", i));
                     }
