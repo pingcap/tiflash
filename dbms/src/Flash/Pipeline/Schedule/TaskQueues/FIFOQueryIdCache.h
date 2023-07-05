@@ -14,9 +14,10 @@
 
 #pragma once
 
+#include <common/types.h>
+
 #include <mutex>
 #include <unordered_set>
-#include <common/types.h>
 
 namespace DB
 {
