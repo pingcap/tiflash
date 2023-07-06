@@ -263,6 +263,8 @@ namespace DB
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))             \
     M(tiflash_raft_raft_log_lag_count, "Bucketed histogram of applying write command Raft logs", Histogram,                                         \
         F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
+    M(tiflash_raft_raft_events_count, "Raft event counter", Counter,                                                                                \
+        F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}))                                                                                   \
     /* required by DBaaS */                                                                                                                         \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                                    \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                                \

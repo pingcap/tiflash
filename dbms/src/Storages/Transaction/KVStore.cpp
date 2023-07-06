@@ -45,8 +45,8 @@ extern const int TABLE_IS_DROPPED;
 namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
-extern const char proactive_flush_before_persist_region[];
-extern const char passive_flush_before_persist_region[];
+extern const char pause_proactive_flush_before_persist_region[];
+extern const char pause_passive_flush_before_persist_region[];
 extern const char proactive_flush_between_persist_cache_and_region[];
 extern const char proactive_flush_between_persist_regions[];
 } // namespace FailPoints
@@ -422,7 +422,7 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         return true;
     }
 
-    FAIL_POINT_PAUSE(FailPoints::passive_flush_before_persist_region);
+    FAIL_POINT_PAUSE(FailPoints::pause_passive_flush_before_persist_region);
     if (force_persist)
     {
         auto & curr_region = *curr_region_ptr;
@@ -450,6 +450,8 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
     auto current_gap = index - truncated_index;
+
+    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
     GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
     auto gap_threshold = region_compact_log_gap.load();
     if (flush_if_possible)
@@ -1016,43 +1018,45 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
             region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
         }
     }
-    FAIL_POINT_PAUSE(FailPoints::proactive_flush_before_persist_region);
+    FAIL_POINT_PAUSE(FailPoints::pause_proactive_flush_before_persist_region);
     // Flush all segments in the range of regions.
     // TODO: combine adjacent range to do one flush.
+    std::string reason = fmt::format("proactiveFlush{}", is_background ? "Bg" : "Fg");
     for (const auto & region : region_compact_indexes)
     {
         auto region_rowkey_range = std::get<2>(region.second);
         auto region_id = region.first;
         auto region_ptr = std::get<3>(region.second);
-        if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
         {
-            // `region_rowkey_range` belongs to rowkey_range.
-            // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
-            // This segment has flushed. However, we still need to persist the region.
-            LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}]", region.first, std::get<0>(region.second), std::get<1>(region.second));
             auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-            persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
-        }
-        else
-        {
-            LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
-            // Both flushCache and persistRegion should be protected by region task lock.
-            // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache.
-            // Merely store applied_index is not enough, considering some cmds leads to modification of other meta data.
-            // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
-            // However, this solution still involves region task lock in this function.
-            // Meanwhile, other write/admin cmds may be executed, they requires we acquire lock here:
-            // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
-            // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
-
-            auto region_task_lock = region_manager.genRegionTaskLock(region_id);
-            storage->flushCache(tmt.getContext(), std::get<2>(region.second));
-            persistRegion(*region_ptr, std::make_optional(&region_task_lock), "triggerCompactLog");
+            if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
+            {
+                // `region_rowkey_range` belongs to rowkey_range.
+                // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
+                // This segment has flushed. However, we still need to persist the region.
+                LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}]", region.first, std::get<0>(region.second), std::get<1>(region.second));
+            }
+            else
+            {
+                LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
+                // Both flushCache and persistRegion should be protected by region task lock.
+                // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache.
+                // Merely store applied_index is not enough, considering some cmds leads to modification of other meta data.
+                // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
+                // However, this solution still involves region task lock in this function.
+                // Meanwhile, other write/admin cmds may be executed, they requires we acquire lock here:
+                // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
+                // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
+                storage->flushCache(tmt.getContext(), std::get<2>(region.second));
+            }
+            fiu_do_on(FailPoints::proactive_flush_between_persist_cache_and_region, return;);
+            persistRegion(*region_ptr, std::make_optional(&region_task_lock), reason.c_str());
         }
     }
     auto elapsed_coupled_flush = watch.elapsedMilliseconds();
     watch.restart();
 
+    fiu_do_on(FailPoints::proactive_flush_between_persist_regions, return;);
     // forbid regions being removed.
     for (const auto & region : region_compact_indexes)
     {
