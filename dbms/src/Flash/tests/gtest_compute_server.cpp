@@ -980,6 +980,9 @@ try
         assertGatherCancelled(gather_ids[1]);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        for (auto & t : running_queries)
+            if (t.joinable())
+                t.join();
     }
     catch (...)
     {
