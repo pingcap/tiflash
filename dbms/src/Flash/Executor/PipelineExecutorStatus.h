@@ -150,7 +150,10 @@ public:
         return query_id;
     }
 
-    const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
+    const MemoryTrackerPtr & getMemoryTracker() const
+    {
+        return mem_tracker;
+    }
 
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);

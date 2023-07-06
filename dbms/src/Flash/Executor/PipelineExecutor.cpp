@@ -27,7 +27,7 @@ PipelineExecutor::PipelineExecutor(
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , status(
-          context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().query_id.toString() : "",
+          context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
           memory_tracker_)
 {
