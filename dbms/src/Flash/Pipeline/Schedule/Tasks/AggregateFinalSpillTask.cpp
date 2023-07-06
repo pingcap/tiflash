@@ -24,7 +24,7 @@ AggregateFinalSpillTask::AggregateFinalSpillTask(
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
     size_t index_)
-    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    : OutputIOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {
