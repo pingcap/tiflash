@@ -53,7 +53,8 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
     {
         M(ExecTaskStatus::WAITING, type_to_waiting)
         M(ExecTaskStatus::RUNNING, type_to_running)
-        M(ExecTaskStatus::IO, type_to_io)
+        M(ExecTaskStatus::IO_IN, type_to_io)
+        M(ExecTaskStatus::IO_OUT, type_to_io)
         M(ExecTaskStatus::FINISHED, type_to_finished)
         M(ExecTaskStatus::ERROR, type_to_error)
         M(ExecTaskStatus::CANCELLED, type_to_cancelled)
@@ -106,14 +107,16 @@ ExecTaskStatus Task::execute()
 ExecTaskStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT || task_status == ExecTaskStatus::INIT);
     switchStatus(executeIOImpl());
     return task_status;
 }
 
 ExecTaskStatus Task::await()
 {
-    assert(mem_tracker_ptr == current_memory_tracker);
+    // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
+    // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.
+    assert(current_memory_tracker == nullptr);
     assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
     switchStatus(awaitImpl());
     return task_status;

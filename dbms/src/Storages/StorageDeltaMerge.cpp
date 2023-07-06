@@ -624,7 +624,7 @@ void setColumnsToRead(const DeltaMergeStorePtr & store, ColumnDefines & columns_
 }
 
 // Check whether tso is smaller than TiDB GcSafePoint
-void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id)
+void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id, KeyspaceID keyspace_id)
 {
     auto & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
@@ -633,6 +633,7 @@ void checkReadTso(UInt64 read_tso, const Context & context, const String & req_i
         return;
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
+        keyspace_id,
         /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds);
     if (read_tso < safe_point)
@@ -655,7 +656,8 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
 {
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
-    checkReadTso(mvcc_query_info.read_tso, context, req_id);
+    auto keyspace_id = getTableInfo().getKeyspaceID();
+    checkReadTso(mvcc_query_info.read_tso, context, req_id, keyspace_id);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -935,15 +937,16 @@ BlockInputStreams StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
 
-RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context)
+RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const
 {
     if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
     {
@@ -986,6 +989,8 @@ void StorageDeltaMerge::read(
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
+    auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
+
     const auto & scan_context = mvcc_query_info.scan_context;
 
     store->read(
@@ -998,6 +1003,8 @@ void StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+        runtime_filter_list,
+        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -1006,8 +1013,9 @@ void StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
@@ -1043,8 +1051,9 @@ StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
 
     snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     // Ensure read_tso is valid after snapshot is built
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
     return snap;
 }
 

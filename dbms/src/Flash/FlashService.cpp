@@ -643,7 +643,16 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
-    // TODO metrics
+
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_establish_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_establish_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_disagg_establish_task).Increment(response->ByteSizeLong());
+    });
+
     auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
         return status;
@@ -746,6 +755,14 @@ grpc::Status FlashService::FetchDisaggPages(
 
     RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "FetchDisaggPages should only be called on write node");
 
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages).Observe(watch.elapsedSeconds());
+    });
+
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
     // get the keyspace from meta, it is now used for debugging
@@ -773,7 +790,7 @@ grpc::Status FlashService::FetchDisaggPages(
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids);
+        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids, context->getSettingsRef().dt_fetch_pages_packet_limit_size);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 

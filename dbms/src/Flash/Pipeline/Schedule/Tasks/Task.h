@@ -25,19 +25,20 @@ namespace DB
  *           CANCELLED/ERROR/FINISHED
  *                      ▲
  *                      │
- *         ┌────────────────────────┐
- *         │     ┌──►RUNNING◄──┐    │
- * INIT───►│     │             │    │
- *         │     ▼             ▼    │
- *         │ WATITING◄────────►IO   │
- *         └────────────────────────┘
+ *         ┌───────────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐           │
+ * INIT───►│     │             │           │
+ *         │     ▼             ▼           │
+ *         │ WATITING◄────────►IO_IN/OUT   │
+ *         └───────────────────────────────┘
  */
 enum class ExecTaskStatus
 {
     INIT,
     WAITING,
     RUNNING,
-    IO,
+    IO_IN,
+    IO_OUT,
     FINISHED,
     ERROR,
     CANCELLED,
@@ -51,6 +52,8 @@ public:
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
 
     virtual ~Task();
+
+    ExecTaskStatus getStatus() const { return task_status; }
 
     ExecTaskStatus execute();
 

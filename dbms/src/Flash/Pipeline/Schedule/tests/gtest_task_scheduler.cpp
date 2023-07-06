@@ -142,7 +142,7 @@ protected:
         if (loop_count > 0)
         {
             if ((loop_count % 2) == 0)
-                return ExecTaskStatus::IO;
+                return ExecTaskStatus::IO_IN;
             else
             {
                 --loop_count;
@@ -159,7 +159,7 @@ protected:
             if ((loop_count % 2) == 0)
             {
                 --loop_count;
-                return ExecTaskStatus::IO;
+                return ExecTaskStatus::IO_IN;
             }
             else
                 return ExecTaskStatus::RUNNING;
@@ -191,8 +191,8 @@ public:
 protected:
     ExecTaskStatus executeImpl() noexcept override
     {
-        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
-        return ExecTaskStatus::IO;
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
+        return ExecTaskStatus::IO_IN;
     }
 
     ExecTaskStatus executeIOImpl() override
@@ -203,7 +203,7 @@ protected:
 
     ExecTaskStatus awaitImpl() override
     {
-        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
+        // await wouldn't call MemoryTracker.
         return ExecTaskStatus::FINISHED;
     }
 
@@ -221,7 +221,7 @@ protected:
 
     ExecTaskStatus awaitImpl() override
     {
-        return ExecTaskStatus::IO;
+        return ExecTaskStatus::IO_IN;
     }
 
     ExecTaskStatus executeIOImpl() override
