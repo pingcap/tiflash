@@ -556,13 +556,42 @@ try
         Blocks expected_blocks;
         Block block1 = constant_header;
         for (auto & col : block1)
-            col.column = col.column->cloneResized(DEFAULT_BLOCK_SIZE);
+            col.column = col.column->cloneResized(new_spill_config.for_all_constant_block_size);
         expected_blocks.push_back(std::move(block1));
         Block block2 = constant_header;
         for (auto & col : block2)
             col.column = col.column->cloneResized(1);
         expected_blocks.push_back(std::move(block2));
         verifyRestoreBlocks(spiller, 0, 100, 2, expected_blocks);
+    }
+
+    {
+        Blocks blocks;
+        size_t block_num = DEFAULT_BLOCK_SIZE + 1;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            Block block = constant_header;
+            for (auto & col : block)
+                col.column = col.column->cloneResized(1);
+            blocks.push_back(std::move(block));
+        }
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock3", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData());
+
+        Blocks expected_blocks;
+        Block block1 = constant_header;
+        for (auto & col : block1)
+            col.column = col.column->cloneResized(new_spill_config.for_all_constant_block_size);
+        expected_blocks.push_back(std::move(block1));
+        Block block2 = constant_header;
+        for (auto & col : block2)
+            col.column = col.column->cloneResized(1);
+        expected_blocks.push_back(std::move(block2));
+        verifyRestoreBlocks(spiller, 0, 1, 1, expected_blocks);
     }
 }
 CATCH
