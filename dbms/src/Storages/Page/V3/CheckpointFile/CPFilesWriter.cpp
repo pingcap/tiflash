@@ -137,19 +137,6 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         // No need to read and write page data for the manifest only checkpoint.
         if (manifest_only)
         {
-            if (!rec_edit.entry.checkpoint_info.has_value())
-            {
-                // set a fake checkpoint info in manifest file
-                rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
-                    .data_location = CheckpointLocation{
-                        .data_file_id = std::make_shared<String>(""),
-                        .offset_in_file = 0,
-                        .size_in_file = 0,
-                    },
-                    .is_valid = true,
-                    .is_local_data_reclaimed = false,
-                };
-            }
             continue;
         }
         bool is_compaction = false;

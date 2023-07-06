@@ -525,6 +525,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
+        RUNTIME_CHECK(!options.only_upload_manifest);
         page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
     }
     auto copy_checkpoint_info_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
