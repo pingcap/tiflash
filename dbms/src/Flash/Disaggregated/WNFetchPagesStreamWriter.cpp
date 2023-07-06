@@ -13,14 +13,16 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
-#include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Page/PageUtil.h>
@@ -34,37 +36,67 @@ namespace DB
 {
 WNFetchPagesStreamWriterPtr WNFetchPagesStreamWriter::build(
     const DM::Remote::SegmentPagesFetchTask & task,
-    const PageIdU64s & read_page_ids)
+    const PageIdU64s & read_page_ids,
+    UInt64 packet_limit_size)
 {
     return std::unique_ptr<WNFetchPagesStreamWriter>(new WNFetchPagesStreamWriter(
         task.seg_task,
         task.column_defines,
         task.output_field_types,
-        read_page_ids));
+        read_page_ids,
+        packet_limit_size));
 }
 
-disaggregated::PagesPacket WNFetchPagesStreamWriter::nextPacket()
+std::pair<DM::RemotePb::RemotePage, size_t> WNFetchPagesStreamWriter::getPersistedRemotePage(UInt64 page_id)
 {
-    // TODO: the returned rows should respect max_rows_per_chunk
+    auto page = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot()->getDataProvider()->readTinyData(page_id);
+    DM::RemotePb::RemotePage remote_page;
+    remote_page.set_page_id(page_id);
+    remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
+    const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
+    for (const auto field_sz : field_sizes)
+    {
+        remote_page.add_field_sizes(field_sz);
+    }
+    return {remote_page, page.data.size()};
+}
 
+void WNFetchPagesStreamWriter::pipeTo(SyncPagePacketWriter * sync_writer)
+{
     disaggregated::PagesPacket packet;
-
-    // read page data by page_ids
-    size_t total_pages_data_size = 0;
-    auto persisted_cf = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot();
+    MemTrackerWrapper packet_mem_tracker_wrapper(fetch_pages_mem_tracker.get());
+    UInt64 total_pages_data_size = 0;
+    UInt64 packet_count = 0;
+    UInt64 pending_pages_data_size = 0;
+    UInt64 read_page_ns = 0;
+    UInt64 send_page_ns = 0;
     for (const auto page_id : read_page_ids)
     {
-        auto page = persisted_cf->getDataProvider()->readTinyData(page_id);
-        DM::RemotePb::RemotePage remote_page;
-        remote_page.set_page_id(page_id);
-        remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
-        const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
-        for (const auto field_sz : field_sizes)
-        {
-            remote_page.add_field_sizes(field_sz);
-        }
-        total_pages_data_size += page.data.size();
+        Stopwatch sw_packet;
+        auto [remote_page, page_size] = getPersistedRemotePage(page_id);
+        total_pages_data_size += page_size;
+        pending_pages_data_size += page_size;
         packet.mutable_pages()->Add(remote_page.SerializeAsString());
+        packet_mem_tracker_wrapper.alloc(page_size);
+        read_page_ns += sw_packet.elapsedFromLastTime();
+
+        if (pending_pages_data_size > packet_limit_size)
+        {
+            ++packet_count;
+            sync_writer->Write(packet);
+            send_page_ns += sw_packet.elapsedFromLastTime();
+            pending_pages_data_size = 0;
+            packet.clear_pages(); // Only set pages field before.
+            packet_mem_tracker_wrapper.freeAll();
+        }
+    }
+
+    if (packet.pages_size() > 0)
+    {
+        Stopwatch sw;
+        ++packet_count;
+        sync_writer->Write(packet);
+        send_page_ns += sw.elapsedFromLastTime();
     }
 
     // TODO: Currently the memtable data is responded in the Establish stage, instead of in the FetchPages stage.
@@ -72,18 +104,13 @@ disaggregated::PagesPacket WNFetchPagesStreamWriter::nextPacket()
     //       as soon as possible.
 
     LOG_DEBUG(log,
-              "Send FetchPagesStream, pages={} pages_size={} blocks={}",
-              packet.pages_size(),
+              "Send FetchPagesStream, pages={} pages_size={} blocks={} packets={} read_page_ms={} send_page_ms={}",
+              read_page_ids.size(),
               total_pages_data_size,
-              packet.chunks_size());
-    return packet;
-}
-
-void WNFetchPagesStreamWriter::pipeTo(SyncPagePacketWriter * sync_writer)
-{
-    // Currently we only send one stream packet.
-    // TODO: split the packet into smaller size
-    sync_writer->Write(nextPacket());
+              packet.chunks_size(),
+              packet_count,
+              read_page_ns / 1000000,
+              send_page_ns / 1000000);
 }
 
 
