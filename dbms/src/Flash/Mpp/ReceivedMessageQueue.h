@@ -67,7 +67,7 @@ public:
         size_t fine_grained_channel_size_);
 
     template <bool need_wait>
-    MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & message);
+    MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
     bool pushFromLocal(size_t source_index,
