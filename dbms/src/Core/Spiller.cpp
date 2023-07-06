@@ -210,7 +210,8 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         {
             std::lock_guard lock(all_constant_mutex);
             total_rows = all_constant_block_rows[partition_id];
-            all_constant_block_rows[partition_id] = 0;
+            if (release_spilled_file_on_restore)
+                all_constant_block_rows[partition_id] = 0;
         }
         if (total_rows > 0)
         {
