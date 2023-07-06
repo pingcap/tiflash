@@ -96,7 +96,7 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
         return;
     }
 
-    bool delete_all_gathers = true;
+    bool all_gathers_deleted = true;
     auto query = task_manager.getMPPQueryWithoutLock(query_id);
 
     if (query != nullptr) /// release all waiting tasks
@@ -119,12 +119,12 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
             }
             else
             {
-                delete_all_gathers = false;
+                all_gathers_deleted = false;
             }
         }
     }
 
-    if (delete_all_gathers)
+    if (all_gathers_deleted)
     {
         LOG_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", query_id.toString(), query_id == min_query_id, active_set.find(query_id) != active_set.end(), active_set.size(), waiting_set.find(query_id) != waiting_set.end(), waiting_set.size());
         active_set.erase(query_id);
