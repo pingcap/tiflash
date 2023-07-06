@@ -30,9 +30,9 @@ extern RuntimeFilteList dummy_runtime_filter_list;
 class RuntimeFilterMgr
 {
 public:
-    RuntimeFilterMgr(){};
+    RuntimeFilterMgr() = default;
 
-    ~RuntimeFilterMgr(){};
+    ~RuntimeFilterMgr() = default;
 
     RuntimeFilteList getLocalRuntimeFilterByIds(const std::vector<int> & ids);
 
