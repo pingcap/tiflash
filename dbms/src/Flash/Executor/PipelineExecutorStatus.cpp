@@ -154,9 +154,12 @@ void PipelineExecutorStatus::decActiveRefCount()
 
 void PipelineExecutorStatus::cancel()
 {
-    is_cancelled.store(true, std::memory_order_release);
-    if likely (TaskScheduler::instance && !query_id.empty())
-        TaskScheduler::instance->cancel(query_id);
+    bool origin_value = false;
+    if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
+    {
+        if likely (TaskScheduler::instance && !query_id.empty())
+            TaskScheduler::instance->cancel(query_id);
+    }
 }
 
 ResultQueuePtr PipelineExecutorStatus::toConsumeMode(size_t queue_size)
