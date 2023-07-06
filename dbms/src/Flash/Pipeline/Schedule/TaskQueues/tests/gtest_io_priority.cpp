@@ -45,6 +45,13 @@ public:
 TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
+    PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     IOPriorityQueue queue;
 
     auto thread_manager = newThreadManager();
@@ -62,7 +69,6 @@ try
         }
         ASSERT_EQ(taken_take_num, 2 * task_num_per_status);
     });
-    PipelineExecutorStatus status;
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < task_num_per_status; ++i)
@@ -88,9 +94,15 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, priority)
 try
 {
+    PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     // in 0 : out 0
     {
-        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.submit(std::make_unique<MockIOTask>(status, true));
         queue.submit(std::make_unique<MockIOTask>(status, false));
@@ -107,7 +119,6 @@ try
 
     // in 1 : out ratio_of_in_to_out
     {
-        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_out_to_in);
@@ -126,7 +137,6 @@ try
 
     // in 1 : out ratio_of_in_to_out+1
     {
-        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
@@ -145,7 +155,6 @@ try
 
     // in 1 : out ratio_of_in_to_out-1
     {
-        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
@@ -167,12 +176,24 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, cancel)
 try
 {
+    PipelineExecutorStatus status1("id1", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    status1.incActiveRefCount();
+    SCOPE_EXIT({
+        status1.decActiveRefCount();
+    });
+
+    PipelineExecutorStatus status2("id2", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    status2.incActiveRefCount();
+    SCOPE_EXIT({
+        status2.decActiveRefCount();
+    });
+
     // case1 submit first.
     {
         IOPriorityQueue queue;
-        PipelineExecutorStatus status1("id1", "", nullptr);
         queue.submit(std::make_unique<MockIOTask>(status1, false));
-        PipelineExecutorStatus status2("id2", "", nullptr);
         queue.submit(std::make_unique<MockIOTask>(status2, true));
         queue.cancel("id2");
         TaskPtr task;
@@ -190,9 +211,7 @@ try
     {
         IOPriorityQueue queue;
         queue.cancel("id2");
-        PipelineExecutorStatus status1("id1", "", nullptr);
         queue.submit(std::make_unique<MockIOTask>(status1, false));
-        PipelineExecutorStatus status2("id2", "", nullptr);
         queue.submit(std::make_unique<MockIOTask>(status2, true));
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());

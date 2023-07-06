@@ -43,6 +43,12 @@ TEST_F(TestMLFQTaskQueue, init)
 try
 {
     PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
     size_t valid_task_num = 1000;
     // submit
@@ -68,6 +74,13 @@ CATCH
 TEST_F(TestMLFQTaskQueue, random)
 try
 {
+    PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
 
     auto thread_manager = newThreadManager();
@@ -76,7 +89,6 @@ try
         return CPUMultiLevelFeedbackQueue::LEVEL_TIME_SLICE_BASE_NS * (1 + random() % 100);
     };
 
-    PipelineExecutorStatus status;
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < valid_task_num; ++i)
@@ -108,8 +120,14 @@ CATCH
 TEST_F(TestMLFQTaskQueue, level)
 try
 {
-    CPUMultiLevelFeedbackQueue queue;
     PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
+    CPUMultiLevelFeedbackQueue queue;
     TaskPtr task = std::make_unique<PlainTask>(status);
     queue.submit(std::move(task));
     for (size_t level = 0; level < CPUMultiLevelFeedbackQueue::QUEUE_SIZE; ++level)
@@ -139,6 +157,12 @@ TEST_F(TestMLFQTaskQueue, feedback)
 try
 {
     PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     CPUMultiLevelFeedbackQueue queue;
 
     // The case that low level > high level
@@ -216,12 +240,24 @@ CATCH
 TEST_F(TestMLFQTaskQueue, cancel)
 try
 {
+    PipelineExecutorStatus status1("id1", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    status1.incActiveRefCount();
+    SCOPE_EXIT({
+        status1.decActiveRefCount();
+    });
+
+    PipelineExecutorStatus status2("id2", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    status2.incActiveRefCount();
+    SCOPE_EXIT({
+        status2.decActiveRefCount();
+    });
+
     // case1 submit first.
     {
         CPUMultiLevelFeedbackQueue queue;
-        PipelineExecutorStatus status1("id1", "", nullptr);
         queue.submit(std::make_unique<PlainTask>(status1));
-        PipelineExecutorStatus status2("id2", "", nullptr);
         queue.submit(std::make_unique<PlainTask>(status2));
         queue.cancel("id2");
         TaskPtr task;
@@ -239,9 +275,7 @@ try
     {
         CPUMultiLevelFeedbackQueue queue;
         queue.cancel("id2");
-        PipelineExecutorStatus status1("id1", "", nullptr);
         queue.submit(std::make_unique<PlainTask>(status1));
-        PipelineExecutorStatus status2("id2", "", nullptr);
         queue.submit(std::make_unique<PlainTask>(status2));
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());

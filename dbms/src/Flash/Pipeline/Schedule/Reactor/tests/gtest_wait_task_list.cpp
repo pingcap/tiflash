@@ -41,13 +41,18 @@ class TestWaitingTaskList : public ::testing::Test
 TEST_F(TestWaitingTaskList, base)
 try
 {
+    PipelineExecutorStatus status;
+    // To avoid the active ref count being returned to 0 in advance.
+    status.incActiveRefCount();
+    SCOPE_EXIT({
+        status.decActiveRefCount();
+    });
+
     WaitingTaskList list;
 
     auto thread_manager = newThreadManager();
     size_t round = 1000;
     size_t valid_task_num = 2 * round;
-
-    PipelineExecutorStatus exec_status;
 
     // take/tryTask valid task
     std::atomic_size_t taken_task_num = 0;
@@ -69,9 +74,9 @@ try
     // submit valid task
     for (size_t i = 0; i < round; ++i)
     {
-        list.submit(std::make_unique<PlainTask>(exec_status));
+        list.submit(std::make_unique<PlainTask>(status));
         std::list<TaskPtr> local_list;
-        local_list.push_back(std::make_unique<PlainTask>(exec_status));
+        local_list.push_back(std::make_unique<PlainTask>(status));
         list.submit(local_list);
     }
     list.finish();
@@ -80,7 +85,7 @@ try
     ASSERT_EQ(taken_task_num, valid_task_num);
 
     // No tasks are submitted after the list is finished.
-    list.submit(std::make_unique<PlainTask>(exec_status));
+    list.submit(std::make_unique<PlainTask>(status));
     {
         std::list<TaskPtr> local_list;
         ASSERT_FALSE(list.take(local_list));
