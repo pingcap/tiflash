@@ -92,6 +92,32 @@ void RNLocalPageCache::write(const PageOID & oid, std::string_view data, const P
     write(oid, read_buf, data.size(), field_sizes);
 }
 
+void RNLocalPageCache::write(UniversalWriteBatch && wb)
+{
+    if (max_size > 0)
+    {
+        const auto & writes = wb.getWrites();
+        std::unique_lock lock(mu);
+        for (const auto & w : writes)
+        {
+            const auto & itr = occupied_keys.find(w.page_id);
+            RUNTIME_CHECK_MSG(
+                itr != occupied_keys.end(),
+                "Page {} was not occupied before writing",
+                w.page_id);
+            RUNTIME_CHECK_MSG(
+                itr->second.size == w.size,
+                "Page {} write size is different to occupy size, write_size={} occupy_size={}",
+                w.page_id,
+                w.size,
+                itr->second.size);
+        }
+    }
+    GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment(wb.getWrites().size());
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(wb.getTotalDataSize());
+    storage->write(std::move(wb));
+}
+
 Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & indices)
 {
     auto key = buildCacheId(oid);

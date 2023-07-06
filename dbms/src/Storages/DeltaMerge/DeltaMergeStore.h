@@ -382,6 +382,8 @@ public:
         size_t num_streams,
         UInt64 max_version,
         const PushDownFilterPtr & filter,
+        const RuntimeFilteList & runtime_filter_list,
+        const int rf_max_wait_time_ms,
         const String & tracing_id,
         bool keep_order,
         bool is_fast_scan = false,
