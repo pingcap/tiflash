@@ -61,11 +61,11 @@ public:
     void startEstablishConnection();
     void setToWaitingTunnelState()
     {
-        state = WAITING_TUNNEL;
+        state = WAIT_TUNNEL;
     }
     bool isWaitingTunnelState()
     {
-        return state == WAITING_TUNNEL;
+        return state == WAIT_TUNNEL;
     }
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
@@ -123,9 +123,10 @@ private:
     enum CallStatus
     {
         NEW_REQUEST,
-        WAITING_TUNNEL,
-        PROCESSING,
-        ERR_HANDLE,
+        WAIT_TUNNEL,
+        WAIT_WRITE,
+        WAIT_POP_FROM_QUEUE,
+        WAIT_WRITE_ERR,
         FINISH
     };
     // The current serving state.

@@ -15,11 +15,10 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/GRPCKickTag.h>
 #include <Common/Logger.h>
 #include <Common/LooseBoundedMPMCQueue.h>
-#include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
-#include <common/logger_useful.h>
 
 #include <functional>
 #include <magic_enum.hpp>
@@ -31,58 +30,6 @@ namespace tests
 {
 class TestGRPCSendQueue;
 } // namespace tests
-
-/// In grpc cpp framework, the tag that is pushed into grpc completion
-/// queue must be inherited from `CompletionQueueTag`.
-class GRPCKickTag : public grpc::internal::CompletionQueueTag
-{
-public:
-    GRPCKickTag()
-        : call(nullptr)
-        , status(true)
-    {}
-
-    virtual void execute(bool ok) = 0;
-
-    bool FinalizeResult(void ** tag_, bool * status_) override
-    {
-        *tag_ = this;
-        *status_ = status;
-        return true;
-    }
-
-    void setCall(grpc_call * call_)
-    {
-        call = call_;
-    }
-
-    grpc_call * getCall()
-    {
-        return call;
-    }
-
-    void setStatus(bool status_)
-    {
-        status = status_;
-    }
-
-    GRPCKickTag * asGRPCKickTag()
-    {
-        return this;
-    }
-
-private:
-    grpc_call * call;
-    bool status;
-};
-
-/// For test usage only.
-class DummyGRPCKickTag : public GRPCKickTag
-{
-    void execute(bool) override {}
-};
-
-using GRPCKickFunc = std::function<grpc_call_error(GRPCKickTag *)>;
 
 /// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
 ///
@@ -171,6 +118,11 @@ public:
         return res;
     }
 
+    MPMCQueueStatus getStatus() const
+    {
+        return send_queue.getStatus();
+    }
+
     /// Cancel the send queue, and set the cancel reason.
     bool cancelWith(const String & reason)
     {
@@ -193,7 +145,7 @@ public:
     {
         auto ret = send_queue.finish();
         if (ret)
-            kickOneTag(true);
+            kickOneTag(false);
 
         return ret;
     }
@@ -218,20 +170,7 @@ private:
         }
 
         t->setStatus(status);
-        grpc_call_error error;
-        if unlikely (test_kick_func)
-        {
-            error = test_kick_func(t);
-        }
-        else
-        {
-            // If a call to `grpc_call_start_batch` with an empty batch returns
-            // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
-            // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-            error = grpc_call_start_batch(t->getCall(), nullptr, 0, static_cast<grpc::internal::CompletionQueueTag *>(t), nullptr);
-        }
-        // If an error occur, there must be something wrong about shutdown process.
-        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
+        t->kick(test_kick_func);
     }
 
     const LoggerPtr log;
@@ -342,27 +281,23 @@ public:
         return recv_queue.forcePush(std::move(data));
     }
 
+    MPMCQueueStatus getStatus() const
+    {
+        return recv_queue.getStatus();
+    }
+
     bool cancel()
     {
         return cancelWith("");
     }
 
-    /// Cancel the recv queue, and set the cancel reason.
+    /// Cancel the recv queue and set the cancel reason.
     /// Then kick all tags with false status.
     bool cancelWith(const String & reason)
     {
-        std::unique_lock lock(mu);
         auto ret = recv_queue.cancelWith(reason);
         if (ret)
-        {
-            while (!data_tags.empty())
-            {
-                GRPCKickTag * t = data_tags.front().second;
-                data_tags.pop();
-                t->setStatus(false);
-                kick(t);
-            }
-        }
+            kickAllTagsWithFailure();
 
         return ret;
     }
@@ -372,14 +307,14 @@ public:
         return recv_queue.getCancelReason();
     }
 
-    /// Finish the queue.
-    ///
-    /// For return value meanings, see `MPMCQueue::finish`.
+    /// Finish the recv queue.
+    /// Then kick all tags with false status.
     bool finish()
     {
-        RUNTIME_ASSERT(data_tags.empty(), log, "data_tags is not empty, size {}", data_tags.size());
-
-        return recv_queue.finish();
+        auto ret = recv_queue.finish();
+        if (ret)
+            kickAllTagsWithFailure();
+        return ret;
     }
 
     bool isWritable() const
@@ -403,25 +338,19 @@ private:
         }
 
         t->setStatus(true);
-        kick(t);
+        t->kick(test_kick_func);
     }
 
-    void kick(GRPCKickTag * t)
+    void kickAllTagsWithFailure()
     {
-        grpc_call_error error;
-        if unlikely (test_kick_func)
+        std::lock_guard lock(mu);
+        while (!data_tags.empty())
         {
-            error = test_kick_func(t);
+            GRPCKickTag * t = data_tags.front().second;
+            data_tags.pop();
+            t->setStatus(false);
+            t->kick(test_kick_func);
         }
-        else
-        {
-            // If a call to `grpc_call_start_batch` with an empty batch returns
-            // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
-            // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-            error = grpc_call_start_batch(t->getCall(), nullptr, 0, static_cast<grpc::internal::CompletionQueueTag *>(t), nullptr);
-        }
-        // If an error occur, there must be something wrong about shutdown process.
-        RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
     const LoggerPtr log;

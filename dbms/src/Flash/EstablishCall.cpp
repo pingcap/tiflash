@@ -58,53 +58,68 @@ EstablishCallData::~EstablishCallData()
 
 void EstablishCallData::execute(bool ok)
 {
-    if (state == WAITING_TUNNEL)
+    switch (state)
+    {
+    case NEW_REQUEST:
+    {
+        if unlikely (!ok)
+        {
+            delete this;
+            return;
+        }
+        spawn(service, cq, notify_cq, is_shutdown);
+        initRpc();
+        break;
+    }
+    case WAIT_TUNNEL:
     {
         /// ok == true means the alarm meet deadline, otherwise means alarm is cancelled
         /// here we don't care the alarm is cancelled or meet deadline, in both cases just
         /// try connect tunnel is ok
         tryConnectTunnel();
-        return;
+        break;
     }
-
-    if (unlikely(!ok))
+    case WAIT_WRITE:
+    case WAIT_POP_FROM_QUEUE:
     {
-        /// state == NEW_REQUEST means the server is shutdown and no new rpc has come.
-        if (state == NEW_REQUEST || state == FINISH)
-        {
-            delete this;
-            return;
-        }
-        unexpectedWriteDone();
-        return;
-    }
-
-    if (state == NEW_REQUEST)
-    {
-        spawn(service, cq, notify_cq, is_shutdown);
-        initRpc();
-    }
-    else if (state == PROCESSING)
-    {
-        if (unlikely(is_shutdown->load(std::memory_order_relaxed)))
+        if unlikely (is_shutdown->load(std::memory_order_relaxed))
         {
             unexpectedWriteDone();
-            return;
+            break;
+        }
+
+        // If ok is false,
+        // For WAIT_WRITE state, it means grpc write is failed.
+        // For WAIT_POP_FROM_QUEUE state, it means queue state is finished or cancelled so
+        // it is convenient to call trySendOneMsg(call pop queue inside) to handle it which
+        // is the same as the case that the pop function is not blocked and the queue is finished
+        // or cancelled.
+        if (!ok && state == WAIT_WRITE)
+        {
+            unexpectedWriteDone();
+            break;
         }
 
         trySendOneMsg();
+        break;
     }
-    else if (state == ERR_HANDLE)
+    case WAIT_WRITE_ERR:
     {
-        writeDone("state is ERR_HANDLE", grpc::Status::OK);
+        if unlikely (!ok)
+        {
+            unexpectedWriteDone();
+            break;
+        }
+        writeDone("state is WAIT_WRITE_ERR", grpc::Status::OK);
+        break;
     }
-    else
+    case FINISH:
     {
-        assert(state == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That's the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
         delete this;
-        return;
+        break;
+    }
     }
 }
 
@@ -169,7 +184,6 @@ void EstablishCallData::tryConnectTunnel()
             /// Connect the tunnel
             tunnel->connectAsync(this);
             /// Initialization is successful.
-            state = PROCESSING;
             /// Try to send one message.
             /// If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
             trySendOneMsg();
@@ -194,7 +208,7 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
-    state = ERR_HANDLE;
+    state = WAIT_WRITE_ERR;
     write(packet);
 }
 
@@ -250,6 +264,7 @@ void EstablishCallData::unexpectedWriteDone()
 void EstablishCallData::trySendOneMsg()
 {
     TrackedMppDataPacketPtr packet;
+    state = WAIT_POP_FROM_QUEUE;
     auto res = async_tunnel_sender->pop(packet, asGRPCKickTag());
     switch (res)
     {
@@ -260,6 +275,7 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
+        state = WAIT_WRITE;
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
