@@ -96,7 +96,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
-        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_addr, etcd_client);
+        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
@@ -353,6 +353,10 @@ UInt64 TMTContext::batchReadIndexTimeout() const
 UInt64 TMTContext::waitIndexTimeout() const
 {
     return wait_index_timeout_ms.load(std::memory_order_relaxed);
+}
+void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
+{
+    return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
 }
 Int64 TMTContext::waitRegionReadyTimeout() const
 {

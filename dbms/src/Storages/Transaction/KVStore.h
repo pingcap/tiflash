@@ -16,6 +16,7 @@
 
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 namespace TiDB
@@ -85,7 +86,7 @@ public:
 
     RegionPtr getRegion(RegionID region_id) const;
 
-    using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+    using RegionRange = RegionRangeKeys::RegionRange;
 
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
 
@@ -93,7 +94,7 @@ public:
 
     void gcRegionPersistedCache(Seconds gc_persist_period = Seconds(60 * 5));
 
-    void tryPersist(RegionID region_id);
+    void tryPersistRegion(RegionID region_id);
 
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
@@ -119,15 +120,18 @@ public:
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, std::optional<uint64_t>, TMTContext & tmt);
 
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
+    // For Raftstore V2, there could be some orphan keys in the write column family being left to `new_region` after pre-handled.
+    // All orphan write keys are asserted to be replayed before reaching `deadline_index`.
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
         SSTViewVec,
         uint64_t index,
         uint64_t term,
+        std::optional<uint64_t> deadline_index,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
@@ -229,9 +233,9 @@ private:
     void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
-    RegionManager::RegionReadLock genRegionReadLock() const;
+    RegionManager::RegionReadLock genRegionMgrReadLock() const;
 
-    RegionManager::RegionWriteLock genRegionWriteLock(const KVStoreTaskLock &);
+    RegionManager::RegionWriteLock genRegionMgrWriteLock(const KVStoreTaskLock &);
 
     EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type,
@@ -246,7 +250,7 @@ private:
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
     bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
-    void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
+    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 

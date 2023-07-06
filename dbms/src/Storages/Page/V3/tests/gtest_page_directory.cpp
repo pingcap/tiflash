@@ -549,6 +549,90 @@ TEST_F(PageDirectoryTest, RefWontDeadLock)
     dir->apply(std::move(edit2));
 }
 
+TEST_F(PageDirectoryTest, BatchWriteSuccess)
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
+        dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    // form a write group
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
+        dir->apply(std::move(edit));
+    });
+    auto th_write3 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry3);
+        dir->apply(std::move(edit));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3); // 3 writers in write group
+
+    sp_before_leader_apply.next(); // continue first leader_apply
+    th_write1.get();
+
+    sp_before_leader_apply.waitAndNext(); // continue second leader_apply
+    th_write2.get();
+    th_write3.get();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 0);
+
+    auto snap = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, 1, snap);
+    EXPECT_ENTRY_EQ(entry2, dir, 2, snap);
+    EXPECT_ENTRY_EQ(entry3, dir, 3, snap);
+}
+
+TEST_F(PageDirectoryTest, BatchWriteException)
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
+        dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    // form a write group
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 100));
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
+    });
+    auto th_write3 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 100));
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3); // 3 writers in write group
+
+    sp_before_leader_apply.next(); // continue first leader_apply
+    th_write1.get();
+
+    sp_before_leader_apply.waitAndNext(); // continue secode leader_apply
+    th_write2.get();
+    th_write3.get();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 0);
+
+    auto snap = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, 1, snap);
+}
+
 TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
 {
     // Make sure creating ext page after itself and all its reference are clean

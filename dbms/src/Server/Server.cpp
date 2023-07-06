@@ -290,16 +290,14 @@ struct TiFlashProxyConfig
         auto disaggregated_mode = getDisaggregatedMode(config);
 
         // tiflash_compute doesn't need proxy.
-        // todo: remove after AutoScaler is stable.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            LOG_INFO(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
-
         if (!config.has("raft.pd_addr"))
         {
             LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
@@ -339,11 +337,11 @@ struct TiFlashProxyConfig
     }
 };
 
-pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const int api_version, const LoggerPtr & log)
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const int api_version, const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
-    config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
+    config.tiflash_engine_key = "engine";
+    config.tiflash_engine_value = DEF_PROXY_LABEL;
     auto [ca_path, cert_path, key_path] = security_config->getPaths();
     config.ca_path = ca_path;
     config.cert_path = cert_path;
@@ -826,7 +824,8 @@ void syncSchemaWithTiDB(
     /// If in API V2 mode, each keyspace's schema is fetch lazily.
     if (storage_config.api_version == 1)
     {
-        for (int i = 0; i < 60; i++) // retry for 3 mins
+        Stopwatch watch;
+        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
         {
             try
             {
@@ -1022,25 +1021,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// get CPU/memory/disk info of this server
-    if (tiflash_instance_wrap.proxy_helper)
-    {
-        diagnosticspb::ServerInfoRequest request;
-        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-        diagnosticspb::ServerInfoResponse response;
-        std::string req = request.SerializeAsString();
-        auto * helper = tiflash_instance_wrap.proxy_helper;
-        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
-        server_info.parseSysInfo(response);
-        setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-        computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
-    }
-    else
-    {
-        setNumberOfLogicalCPUCores(std::thread::hardware_concurrency());
-        computeAndSetNumberOfPhysicalCPUCores(std::thread::hardware_concurrency(), std::thread::hardware_concurrency() / 2);
-        LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
-    }
+    diagnosticspb::ServerInfoRequest request;
+    diagnosticspb::ServerInfoResponse response;
+    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+    std::string req = request.SerializeAsString();
+    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
+    server_info.parseSysInfo(response);
+    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
+    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
+    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
@@ -1337,7 +1326,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
                     global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
@@ -1410,7 +1399,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         if (store_ident)
         {

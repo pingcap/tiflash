@@ -255,12 +255,28 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         SSTViewVec{nullptr, 0},
         MockTiKV::instance().getRaftIndex(region_id),
         RAFT_INIT_LOG_TERM,
+        std::nullopt,
         tmt);
 
     output(fmt::format("put region #{}, range[{}, {}) to table #{} with raft commands", region_id, RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key), RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key), table_id));
 }
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
+
+class RegionMockTest final
+{
+public:
+    RegionMockTest(KVStore * kvstore_, RegionPtr region_);
+    ~RegionMockTest();
+
+    DISALLOW_COPY_AND_MOVE(RegionMockTest);
+
+private:
+    TiFlashRaftProxyHelper mock_proxy_helper{};
+    const TiFlashRaftProxyHelper * ori_proxy_helper{};
+    KVStore * kvstore;
+    RegionPtr region;
+};
 
 RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
@@ -730,6 +746,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
+        std::nullopt,
         tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
@@ -827,6 +844,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
+        std::nullopt,
         tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 

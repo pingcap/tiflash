@@ -84,9 +84,9 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryFlushRegion(old_region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(old_region, false);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, region_lock, "save previous region before apply");
+            persistRegion(*old_region, &region_lock, "save previous region before apply");
         }
     }
 
@@ -209,7 +209,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         {
             try
             {
-                auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
+                auto tmp = region_table.tryWriteBlockByRegionAndFlush(new_region_wrap, false);
                 {
                     std::lock_guard lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
@@ -242,26 +242,27 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
                 {
-                    auto manage_lock = genRegionWriteLock(task_lock);
+                    auto manage_lock = genRegionMgrWriteLock(task_lock);
                     manage_lock.index.remove(range, region_id);
                 }
             }
+            // Reuse the old region for non-region-related data.
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
             {
                 // add index
-                auto manage_lock = genRegionWriteLock(task_lock);
+                auto manage_lock = genRegionMgrWriteLock(task_lock);
                 manage_lock.index.add(new_region);
             }
         }
         else
         {
-            auto manage_lock = genRegionWriteLock(task_lock);
+            auto manage_lock = genRegionMgrWriteLock(task_lock);
             manage_lock.regions.emplace(region_id, new_region);
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, region_lock, "save current region after apply");
+        persistRegion(*new_region, &region_lock, "save current region after apply");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -272,11 +273,14 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     std::vector<DM::ExternalDTFileInfo> external_files;
+    new_region->beforePrehandleSnapshot(new_region->id(), deadline_index);
     try
     {
+        SCOPE_EXIT({ new_region->afterPrehandleSnapshot(); });
         external_files = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
     }
     catch (DB::Exception & e)
@@ -475,10 +479,11 @@ void KVStore::handleApplySnapshot(
     const SSTViewVec snaps,
     uint64_t index,
     uint64_t term,
+    std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
@@ -506,7 +511,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
             return;
         try
         {
-            tmt.getRegionTable().tryFlushRegion(region, false);
+            tmt.getRegionTable().tryWriteBlockByRegionAndFlush(region, false);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
@@ -533,7 +538,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
     else
     {
-        persistRegion(*region, region_task_lock, __FUNCTION__);
+        persistRegion(*region, &region_task_lock, __FUNCTION__);
         return EngineStoreApplyRes::Persist;
     }
 }
@@ -546,7 +551,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     // Create a tmp region to store uncommitted data
     RegionPtr tmp_region;
     {
-        auto meta_region = region->getMetaRegion();
+        auto meta_region = region->cloneMetaRegion();
         auto meta_snap = region->dumpRegionMetaSnapshot();
         auto peer_id = meta_snap.peer.id();
         tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
