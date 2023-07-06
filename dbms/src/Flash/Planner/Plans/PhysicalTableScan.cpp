@@ -32,6 +32,7 @@ namespace
 {
 ExpressionActionsPtr getSchemaExprActions(
     Context & context,
+    const LoggerPtr & log,
     const NamesAndTypes & storage_schema,
     const NamesAndTypes & plan_schema)
 {
@@ -40,20 +41,27 @@ ExpressionActionsPtr getSchemaExprActions(
         "the size({}) of storge schema is not equals to the size({}) of table scan schema",
         storage_schema.size(),
         plan_schema.size());
+
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
+
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(storage_schema);
 
     // perform pre-cast.
+    // Because sometimes the table scan schema sent by tidb does not correspond to the actual tiflash storage schema, so add cast here to handle this case.
+    // See https://github.com/pingcap/tiflash/issues/6806
     DAGExpressionAnalyzer analyzer{storage_schema, context};
     Names input_names;
     for (size_t i = 0; i < storage_schema.size(); ++i)
     {
         const auto & storage_col = storage_schema[i];
         const auto & plan_col = plan_schema[i];
-        auto input_name = storage_col.type->equals(*plan_col.type)
-            ? storage_col.name
-            : analyzer.appendCast(plan_col.type, schema_actions, storage_col.name);
+        auto input_name = storage_col.name;
+        if (!storage_col.type->equals(*plan_col.type))
+        {
+            LOG_WARNING(log, "");
+            input_name = analyzer.appendCast(plan_col.type, schema_actions, storage_col.name);
+        }
         input_names.push_back(input_name);
     }
 
@@ -101,15 +109,13 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
-        auto schema_actions = getSchemaExprActions(context, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns(), schema);
-        executeExpression(pipeline, schema_actions, log, "table scan schema projection");
+        buildProjection(pipeline, context, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
-        auto schema_actions = getSchemaExprActions(context, storage_interpreter.analyzer->getCurrentInputColumns(), schema);
-        executeExpression(pipeline, schema_actions, log, "table scan schema projection");
+        buildProjection(pipeline, context, storage_interpreter.analyzer->getCurrentInputColumns());
     }
 }
 
@@ -118,28 +124,46 @@ void PhysicalTableScan::buildPipeline(
     Context & context,
     PipelineExecutorStatus & exec_status)
 {
-    storage_interpreter = std::make_unique<DAGStorageInterpreter>(
-        context,
-        tidb_table_scan,
-        filter_conditions,
-        context.getMaxStreams());
-    source_ops = storage_interpreter->execute(exec_status);
+    // For building PipelineExec in compile time.
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        disaggregated_tiflash_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, context, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+    }
+    else
+    {
+        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        storage_interpreter.execute(exec_status, pipeline_exec_builder);
+        buildProjection(exec_status, pipeline_exec_builder, context, storage_interpreter.analyzer->getCurrentInputColumns());
+    }
+
     PhysicalPlanNode::buildPipeline(builder, context, exec_status);
 }
 
-void PhysicalTableScan::buildPipelineExecGroup(
+void PhysicalTableScan::buildPipelineExecGroupImpl(
+    PipelineExecutorStatus & /*exec_status*/,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
+{
+    assert(group_builder.empty());
+    group_builder = std::move(pipeline_exec_builder);
+}
+
+void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, Context & context, const NamesAndTypes & storage_schema)
+{
+    auto schema_actions = getSchemaExprActions(context, log, storage_schema, schema);
+    executeExpression(pipeline, schema_actions, log, "table scan schema projection");
+}
+
+void PhysicalTableScan::buildProjection(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t)
+    const NamesAndTypes & storage_schema)
 {
-    group_builder.init(source_ops.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
-    storage_interpreter->executeSuffix(exec_status, group_builder);
-    auto schema_actions = getSchemaExprActions(context, storage_interpreter->analyzer->getCurrentInputColumns(), schema);
+    auto schema_actions = getSchemaExprActions(context, log, storage_schema, schema);
     executeExpression(exec_status, group_builder, schema_actions, log);
 }
 

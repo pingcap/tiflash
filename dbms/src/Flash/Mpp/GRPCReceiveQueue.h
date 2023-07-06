@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -71,10 +71,14 @@ public:
         return wait_retry_queue.empty();
     }
 
-    void push(AsyncRetryConnection conn)
+    // Return false when AsyncRequestHandlerWaitQueue is closed
+    bool push(AsyncRetryConnection conn)
     {
         std::lock_guard lock(mu);
+        if unlikely (is_closed)
+            return false;
         wait_retry_queue.push(conn);
+        return true;
     }
 
     AsyncRetryConnection pop()
@@ -99,9 +103,17 @@ public:
         return ret_conn;
     }
 
+    // AsyncRequestHandlerWaitQueue should not receive any tag after close.
+    void close()
+    {
+        std::lock_guard lock(mu);
+        is_closed = true;
+    }
+
 private:
     std::mutex mu;
     std::queue<AsyncRetryConnection> wait_retry_queue;
+    bool is_closed = false;
 };
 
 using AsyncRequestHandlerWaitQueuePtr = std::shared_ptr<AsyncRequestHandlerWaitQueue>;
@@ -123,7 +135,7 @@ template <typename T>
 class GRPCReceiveQueue
 {
 private:
-    using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<T>>;
+    using MsgChannelPtr = std::shared_ptr<LooseBoundedMPMCQueue<T>>;
 
 public:
     GRPCReceiveQueue(MsgChannelPtr recv_queue_, AsyncRequestHandlerWaitQueuePtr conn_wait_queue_, const LoggerPtr & log_)
@@ -148,6 +160,9 @@ public:
     bool cancelWith(const String & reason)
     {
         auto ret = recv_queue->cancelWith(reason);
+        // We should close conn_wait_queue in advance in case newer tag is pushed after handleRemainingTags()
+        conn_wait_queue->close();
+
         if (ret)
             handleRemainingTags();
         return ret;
@@ -161,6 +176,9 @@ public:
     bool finish()
     {
         auto ret = recv_queue->finish();
+        // We should close conn_wait_queue in advance in case newer tag is pushed after handleRemainingTags()
+        conn_wait_queue->close();
+
         if (ret)
             handleRemainingTags();
         return ret;
@@ -181,6 +199,14 @@ public:
     MPMCQueueResult tryPop(U && data)
     {
         auto ret = recv_queue->tryPop(std::forward<U>(data));
+        if (ret == MPMCQueueResult::OK)
+            kickCompletionQueue();
+        return ret;
+    }
+
+    MPMCQueueResult dequeue()
+    {
+        auto ret = recv_queue->dequeue();
         if (ret == MPMCQueueResult::OK)
             kickCompletionQueue();
         return ret;

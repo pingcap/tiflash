@@ -14,6 +14,7 @@
 
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
+#include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -288,7 +289,7 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     auto & region_table = context.getTMTContext().getRegionTable();
     {
         {
-            auto manage_lock = kvstore->genRegionReadLock();
+            auto manage_lock = kvstore->genRegionMgrReadLock();
             for (const auto & e : manage_lock.regions)
                 regions.emplace_back(e.first);
         }
@@ -304,7 +305,8 @@ void MockTiDBTable::dbgFuncCreateTiDBTables(Context & context, const ASTs & args
     if (args.size() < 2)
         throw Exception("Args not matched, should be: db_name, table_name, [table_name], ..., [table_name]", ErrorCodes::BAD_ARGUMENTS);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    auto db = context.getDatabase(database_name);
+    auto mapped_database_name = mappedDatabase(context, database_name);
+    auto db = context.getDatabase(mapped_database_name);
 
     std::vector<std::tuple<String, ColumnsDescription, String>> tables;
 

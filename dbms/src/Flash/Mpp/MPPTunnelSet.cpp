@@ -47,10 +47,10 @@ void MPPTunnelSetBase<Tunnel>::write(TrackedMppDataPacketPtr && data, size_t ind
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::nonBlockingWrite(TrackedMppDataPacketPtr && data, size_t index)
+void MPPTunnelSetBase<Tunnel>::forceWrite(TrackedMppDataPacketPtr && data, size_t index)
 {
     assert(index < tunnels.size());
-    tunnels[index]->nonBlockingWrite(std::move(data));
+    tunnels[index]->forceWrite(std::move(data));
 }
 
 template <typename Tunnel>
@@ -61,18 +61,18 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, size_t ind
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::nonBlockingWrite(tipb::SelectResponse & response, size_t index)
+void MPPTunnelSetBase<Tunnel>::forceWrite(tipb::SelectResponse & response, size_t index)
 {
     assert(index < tunnels.size());
-    tunnels[index]->nonBlockingWrite(serializePacket(response));
+    tunnels[index]->forceWrite(serializePacket(response));
 }
 
 template <typename Tunnel>
-bool MPPTunnelSetBase<Tunnel>::isReadyForWrite() const
+bool MPPTunnelSetBase<Tunnel>::isWritable() const
 {
     for (const auto & tunnel : tunnels)
     {
-        if (!tunnel->isReadyForWrite())
+        if (!tunnel->isWritable())
             return false;
     }
     return true;

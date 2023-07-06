@@ -61,7 +61,7 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
         return;
 
     auto task_lock = genTaskLock();
-    auto manage_lock = genRegionWriteLock(task_lock);
+    auto manage_lock = genRegionMgrWriteLock(task_lock);
 
     this->proxy_helper = proxy_helper;
     manage_lock.regions = region_persister->restore(path_pool, proxy_helper);
@@ -97,14 +97,14 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
 
 RegionPtr KVStore::getRegion(RegionID region_id) const
 {
-    auto manage_lock = genRegionReadLock();
+    auto manage_lock = genRegionMgrReadLock();
     if (auto it = manage_lock.regions.find(region_id); it != manage_lock.regions.end())
         return it->second;
     return nullptr;
 }
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
-    auto manage_lock = genRegionReadLock();
+    auto manage_lock = genRegionMgrReadLock();
     return manage_lock.index.findByRangeOverlap(range);
 }
 
@@ -126,13 +126,13 @@ RegionTaskLock RegionManager::genRegionTaskLock(RegionID region_id) const
 
 size_t KVStore::regionSize() const
 {
-    auto manage_lock = genRegionReadLock();
+    auto manage_lock = genRegionMgrReadLock();
     return manage_lock.regions.size();
 }
 
 void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const
 {
-    auto manage_lock = genRegionReadLock();
+    auto manage_lock = genRegionMgrReadLock();
     for (const auto & region : manage_lock.regions)
         callback(region.first, region.second);
 }
@@ -201,7 +201,7 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
     LOG_INFO(log, "Start to remove [region {}]", region_id);
 
     {
-        auto manage_lock = genRegionWriteLock(task_lock);
+        auto manage_lock = genRegionMgrWriteLock(task_lock);
         auto it = manage_lock.regions.find(region_id);
         manage_lock.index.remove(it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id); // remove index
         manage_lock.regions.erase(it);
@@ -228,14 +228,14 @@ KVStoreTaskLock KVStore::genTaskLock() const
     return KVStoreTaskLock(task_mutex);
 }
 
-RegionManager::RegionReadLock KVStore::genRegionReadLock() const
+RegionManager::RegionReadLock KVStore::genRegionMgrReadLock() const
 {
-    return region_manager.genRegionReadLock();
+    return region_manager.genReadLock();
 }
 
-RegionManager::RegionWriteLock KVStore::genRegionWriteLock(const KVStoreTaskLock &)
+RegionManager::RegionWriteLock KVStore::genRegionMgrWriteLock(const KVStoreTaskLock &)
 {
-    return region_manager.genRegionWriteLock();
+    return region_manager.genWriteLock();
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
@@ -295,6 +295,10 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
     }
 
     auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
+    if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        region->orphanKeysInfo().advanceAppliedIndex(index);
+    }
     return res;
 }
 
@@ -463,12 +467,16 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
               term,
               index);
 
+    if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+    }
 
     if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
         // Before CompactLog, we ought to make sure all data of this region are persisted.
         // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
-        // An advance of apply index aka `handleWriteRaftCmd` is executed in `fn_try_flush_data`.
+        // The advance of apply index aka `handleWriteRaftCmd` is executed in `fn_try_flush_data`.
         // If the attempt fails, Proxy will filter execution of this CompactLog, which means every CompactLog observed by TiFlash can ALWAYS succeed now.
         // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
         return EngineStoreApplyRes::Persist;
@@ -514,6 +522,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
     RegionTable & region_table = tmt.getRegionTable();
 
+    // Lock the whole kvstore.
     auto task_lock = genTaskLock();
 
     {
@@ -531,6 +540,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         }
 
         auto & curr_region = *curr_region_ptr;
+
+        // Admin cmd contains no normal data, we can advance orphan keys info just before handling.
+        if (curr_region.getClusterRaftstoreVer() == RaftstoreVer::V2)
+        {
+            curr_region.orphanKeysInfo().advanceAppliedIndex(index);
+        }
+
         curr_region.makeRaftCommandDelegate(task_lock).handleAdminRaftCmd(
             request,
             response,
@@ -560,7 +576,8 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto handle_batch_split = [&](Regions & split_regions) {
             {
-                auto manage_lock = genRegionWriteLock(task_lock);
+                // `split_regions` doesn't include the derived region.
+                auto manage_lock = genRegionMgrWriteLock(task_lock);
 
                 for (auto & new_region : split_regions)
                 {
@@ -632,7 +649,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                     region_manager.genRegionTaskLock(source_region_id));
             }
             {
-                auto manage_lock = genRegionWriteLock(task_lock);
+                auto manage_lock = genRegionMgrWriteLock(task_lock);
                 manage_lock.index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
                 manage_lock.index.add(curr_region_ptr);
             }

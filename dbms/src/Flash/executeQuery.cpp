@@ -30,6 +30,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/S3/S3Common.h>
 
 namespace ProfileEvents
 {
@@ -59,7 +60,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
 {
     if (dag_context.is_mpp_task)
     {
-        /// for MPPTask, process list entry is created in MPPTask::prepare()
+        /// for MPPTask, process list entry is set in MPPTask::initProcessListEntry()
         RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
         return dag_context.getProcessListEntry();
     }
@@ -69,7 +70,8 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
         auto process_list_entry = setProcessListElement(
             context,
             dag_context.dummy_query_string,
-            dag_context.dummy_ast.get());
+            dag_context.dummy_ast.get(),
+            true);
         dag_context.setProcessListEntry(process_list_entry);
         return process_list_entry;
     }
@@ -101,7 +103,6 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
         memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
     }
 
-
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
 
@@ -109,6 +110,7 @@ QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool 
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
+    dag_context.switchToStreamMode();
     return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
@@ -119,9 +121,14 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 
-    if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
+    if unlikely (!TaskScheduler::instance)
     {
-        LOG_DEBUG(logger, "Can't run by pipeline model, fallback to block inputstream model");
+        LOG_WARNING(logger, "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
+        return {};
+    }
+    if (!Pipeline::isSupported(*dag_context.dag_request, context.getSettingsRef()))
+    {
+        LOG_DEBUG(logger, "Can't executed by pipeline model due to unsupported operator, and then fallback to block inputstream model");
         return {};
     }
 
@@ -142,6 +149,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier());
     if (likely(!internal))
         LOG_INFO(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
+    dag_context.switchToPipelineMode();
     return {std::move(executor)};
 }
 
@@ -162,9 +170,17 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
+    if (context.getSettingsRef().enforce_enable_pipeline)
+    {
+        RUNTIME_CHECK_MSG(
+            TaskScheduler::instance,
+            "The task scheduler of the pipeline model has not been initialized, which is an exception. It is necessary to restart the TiFlash node.");
+        auto res = executeAsPipeline(context, internal);
+        RUNTIME_CHECK_MSG(res, "Failed to execute query using pipeline model, and an error is reported because the setting enforce_enable_pipeline is true.");
+        return std::move(*res);
+    }
     if (context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline
-        && context.getSharedContextDisagg()->notDisaggregatedMode())
+        && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

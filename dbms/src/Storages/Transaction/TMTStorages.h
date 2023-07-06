@@ -48,6 +48,7 @@ public:
 private:
     StorageMap storages;
     KeyspaceSet keyspaces;
+    // if we use shared_mutex, the performance under high concurrency is obviously worser than std::mutex
     mutable std::mutex mutex;
 };
 

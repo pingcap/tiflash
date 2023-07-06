@@ -40,9 +40,9 @@ public:
         return "AggregateBuildSinkOp";
     }
 
-    void operateSuffix() override;
-
 protected:
+    void operateSuffixImpl() override;
+
     OperatorStatus writeImpl(Block && block) override;
 
     OperatorStatus executeIOImpl() override;

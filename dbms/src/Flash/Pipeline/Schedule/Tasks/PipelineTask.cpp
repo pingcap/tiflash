@@ -26,7 +26,8 @@ PipelineTask::PipelineTask(
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
     : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
-    , pipeline_exec(std::move(pipeline_exec_))
+    , pipeline_exec_holder(std::move(pipeline_exec_))
+    , pipeline_exec(pipeline_exec_holder.get())
 {
     RUNTIME_CHECK(pipeline_exec);
     pipeline_exec->executePrefix();
@@ -34,9 +35,11 @@ PipelineTask::PipelineTask(
 
 void PipelineTask::doFinalizeImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     pipeline_exec->executeSuffix();
-    pipeline_exec.reset();
+    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+    pipeline_exec = nullptr;
+    pipeline_exec_holder.reset();
 }
 
 #define HANDLE_NOT_RUNNING_STATUS         \
@@ -48,9 +51,13 @@ void PipelineTask::doFinalizeImpl()
     {                                     \
         return ExecTaskStatus::CANCELLED; \
     }                                     \
-    case OperatorStatus::IO:              \
+    case OperatorStatus::IO_IN:           \
     {                                     \
-        return ExecTaskStatus::IO;        \
+        return ExecTaskStatus::IO_IN;     \
+    }                                     \
+    case OperatorStatus::IO_OUT:          \
+    {                                     \
+        return ExecTaskStatus::IO_OUT;    \
     }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \
@@ -62,7 +69,7 @@ void PipelineTask::doFinalizeImpl()
 
 ExecTaskStatus PipelineTask::doExecuteImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->execute();
     switch (op_status)
     {
@@ -78,7 +85,7 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
 
 ExecTaskStatus PipelineTask::doExecuteIOImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->executeIO();
     switch (op_status)
     {
@@ -97,13 +104,16 @@ ExecTaskStatus PipelineTask::doExecuteIOImpl()
 
 ExecTaskStatus PipelineTask::doAwaitImpl()
 {
-    RUNTIME_CHECK(pipeline_exec);
+    assert(pipeline_exec);
     auto op_status = pipeline_exec->await();
     switch (op_status)
     {
         HANDLE_NOT_RUNNING_STATUS
-    // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // After `pipeline_exec->await`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
     case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:

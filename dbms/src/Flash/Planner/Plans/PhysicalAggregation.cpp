@@ -137,13 +137,14 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
             params,
             true,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
 
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
     else
     {
@@ -162,7 +163,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
-void PhysicalAggregation::buildPipelineExecGroup(
+void PhysicalAggregation::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
@@ -175,7 +176,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
     executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
-    size_t concurrency = group_builder.concurrency;
+    size_t concurrency = group_builder.concurrency();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     SpillConfig spill_config(
         context.getTemporaryPath(),

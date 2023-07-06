@@ -59,5 +59,8 @@ private:
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
+
+private:
+    void updateExchangeReceiveDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos);
 };
 } // namespace DB

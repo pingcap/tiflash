@@ -222,6 +222,8 @@ struct Settings
     M(SettingUInt64, dt_filecache_min_age_seconds, 1800, "Files of the same priority can only be evicted from files that were not accessed within `dt_filecache_min_age_seconds` seconds.")                                             \
     M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "When S3 is enabled, file size less than dt_small_file_size_threshold will be merged before uploading to S3")                                                            \
     M(SettingDouble, dt_merged_file_max_size, 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                     \
+    M(SettingUInt64, dt_fetch_pages_packet_limit_size, 0, "Response packet size limit of FetchDisaggPages, 0 means one page per packet")                                                                                                  \
+    M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                          \
     M(SettingDouble, io_thread_count_scale, 5.0, "Number of thread of IOThreadPool = number of logical cpu cores * io_thread_count_scale.  Only has meaning at server startup.")                                                        \
     M(SettingUInt64, init_thread_count_scale, 100, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")                                           \
                                                                                                                                                                                                                                         \
@@ -241,6 +243,7 @@ struct Settings
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 60, "The max time wait for a usable checkpoint for FAP. Unit is second.")                                                                                                      \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
+    M(SettingUInt64, rf_max_in_value_set, 1024, "Maximum size of the set (in number of elements) resulting from the execution of the RF IN Predicate.")                                                                                 \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.")                                                                                               \
     M(SettingOverflowMode<false>, set_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.")                                                                                                                     \
                                                                                                                                                                                                                                         \
@@ -290,11 +293,20 @@ struct Settings
     M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 0 as the default value, 0 means no limit.")                                                                                                 \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
+    M(SettingBool, enforce_enable_pipeline, false, "Enforce the enablement of the pipeline model")                                                                                                                                      \
     M(SettingUInt64, pipeline_cpu_task_thread_pool_size, 0, "The size of cpu task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                             \
     M(SettingUInt64, pipeline_io_task_thread_pool_size, 0, "The size of io task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                               \
+    M(SettingTaskQueueType, pipeline_cpu_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of cpu task thread pool")                                                                                                 \
+    M(SettingTaskQueueType, pipeline_io_task_thread_pool_queue_type, TaskQueueType::DEFAULT, "The task queue of io task thread pool")                                                                                                   \
     M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")                                                                                                                                                             \
-    M(SettingUInt64, async_recv_version, 2, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
-    M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")
+    M(SettingBool, force_push_down_all_filters_to_scan, false, "Push down all filters to scan, only used for test")                                                                                                                     \
+    M(SettingUInt64, async_recv_version, 1, "1: reactor mode, 2: no additional threads")                                                                                                                                                \
+    M(SettingUInt64, recv_queue_size, 0, "size of ExchangeReceiver queue, 0 means the size is set to data_source_mpp_task_num * 50")                                                                                                    \
+    M(SettingUInt64, shallow_copy_cross_probe_threshold, 0, "minimum right rows to use shallow copy probe mode for cross join, default is max(1, max_block_size/10)")                                                                   \
+    M(SettingInt64, max_buffered_bytes_in_executor, 200LL * 1024 * 1024, "The max buffered size in each executor, 0 mean unlimited, use 200MB as the default value")                                                                    \
+    M(SettingUInt64, ddl_sync_interval_seconds, 60, "The interval of background DDL sync schema in seconds")                                                                                                                            \
+    M(SettingUInt64, ddl_restart_wait_seconds, 180, "The wait time for sync schema in seconds when restart")
+
 
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};

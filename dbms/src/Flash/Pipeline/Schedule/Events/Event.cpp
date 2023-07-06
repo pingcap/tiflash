@@ -85,13 +85,13 @@ bool Event::prepare()
     assertStatus(EventStatus::INIT);
     if (is_source)
     {
-        // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
+        // For source event, `exec_status.incActiveRefCount()` needs to be called before schedule.
         // Suppose there are two source events, A and B, a possible sequence of calls is:
         // `A.prepareForSource --> B.prepareForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
-        // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
+        // if `exec_status.incActiveRefCount()` be called in schedule just like non-source event,
         // `exec_status.wait` and `result_queue.pop` may return early.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_status.incActiveRefCount();
         return true;
     }
     else
@@ -120,9 +120,9 @@ void Event::schedule()
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepare`.
+        // for is_source == true, `exec_status.incActiveRefCount()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_status.incActiveRefCount();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
@@ -131,6 +131,7 @@ void Event::schedule()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
+    schedule_duration = stopwatch.elapsed();
     scheduleTasks();
 }
 
@@ -145,13 +146,7 @@ void Event::scheduleTasks()
         unfinished_tasks);
     if (!tasks.empty())
     {
-        // If query has already been cancelled, we can skip scheduling tasks.
-        // Then tasks will be destroyed and call `onTaskFinish`.
-        if (likely(!exec_status.isCancelled()))
-        {
-            LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
-            TaskScheduler::instance->submit(tasks);
-        }
+        TaskScheduler::instance->submit(tasks);
         tasks.clear();
     }
     else
@@ -161,16 +156,19 @@ void Event::scheduleTasks()
     }
 }
 
-void Event::onTaskFinish()
+void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 {
     assertStatus(EventStatus::SCHEDULED);
+    exec_status.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
         remaining_tasks >= 0,
         log,
         "remaining_tasks must >= 0, but actual value is {}",
         remaining_tasks);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+#ifndef NDEBUG
+    LOG_TRACE(log, "one task finished, {} tasks remaining", remaining_tasks);
+#endif // !NDEBUG
     if (0 == remaining_tasks)
         finish();
 }
@@ -178,6 +176,7 @@ void Event::onTaskFinish()
 void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
+    finish_duration = stopwatch.elapsed();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
     {
@@ -200,10 +199,22 @@ void Event::finish()
     // because of `exec_status.isCancelled()` will be destructured before the end of `exec_status.wait`.
     outputs.clear();
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
-    // we have to call `exec_status.onEventFinish()` here,
-    // since `exec_status.onEventSchedule()` will have been called by outputs.
+    // we have to call `exec_status.decActiveRefCount()` here,
+    // since `exec_status.incActiveRefCount()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
-    exec_status.onEventFinish();
+    exec_status.decActiveRefCount();
+}
+
+UInt64 Event::getScheduleDuration() const
+{
+    assertStatus(EventStatus::SCHEDULED);
+    return schedule_duration;
+}
+
+UInt64 Event::getFinishDuration() const
+{
+    assertStatus(EventStatus::FINISHED);
+    return finish_duration;
 }
 
 void Event::switchStatus(EventStatus from, EventStatus to)
@@ -215,10 +226,11 @@ void Event::switchStatus(EventStatus from, EventStatus to)
         magic_enum::enum_name(from),
         magic_enum::enum_name(to),
         magic_enum::enum_name(status.load()));
+
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 
-void Event::assertStatus(EventStatus expect)
+void Event::assertStatus(EventStatus expect) const
 {
     auto cur_status = status.load();
     RUNTIME_ASSERT(

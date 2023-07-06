@@ -18,10 +18,10 @@ mysql> drop table if exists test.t_new;
 mysql> create table test.t(a int, b int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-func> wait_table test t
-
 mysql> insert into test.t values (1, 1);
 mysql> insert into test.t values (1, 2);
+
+func> wait_table test t
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+------+
@@ -39,8 +39,10 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 
 # rename table
 mysql> rename table test.t to test.t_new;
+
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 ERROR 1146 (42S02) at line 1: Table 'test.t' doesn't exist
+
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_new;
 +------+------+
 | a    | b    |
@@ -50,12 +52,68 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_n
 +------+------+
 
 # check if table info updated.
+=> DBGInvoke __refresh_schemas()
 >> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and tidb_database = 'test' and (tidb_name='t' or tidb_name='t_new')
 ┌─tidb_database─┬─tidb_name─┐
 │ test          │ t_new     │
 └───────────────┴───────────┘
 
 mysql> drop table if exists test.t_new;
+
+
+
+# test rename the database and table
+mysql> drop table if exists d1.t1;
+mysql> drop table if exists d2.t2;
+mysql> drop database if exists d1;
+mysql> drop database if exists d2;
+
+mysql> create database d1;
+mysql> create database d2;
+mysql> create table d1.t1(a int, b int);
+mysql> alter table d1.t1 set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+mysql> insert into d1.t1 values (1, 1);
+
+func> wait_table d1 t1
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1.t1;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    1 |
++------+------+
+
+# check table info in tiflash
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'd1' and tidb_name='t1' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ d1            │ t1        │
+└───────────────┴───────────┘
+
+# rename table
+mysql> rename table d1.t1 to d2.t2;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d1.t1;
+ERROR 1146 (42S02) at line 1: Table 'd1.t1' doesn't exist
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from d2.t2;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    1 |
++------+------+
+
+# check if table info updated.
+=> DBGInvoke __refresh_schemas()
+>> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and (tidb_database = 'd1' or tidb_database = 'd2') and (tidb_name='t1' or tidb_name='t2')
+┌─tidb_database─┬─tidb_name─┐
+│ d2            │ t2        │
+└───────────────┴───────────┘
+
+mysql> drop table if exists d1.t1;
+mysql> drop table if exists d2.t2;
+mysql> drop database if exists d1;
+mysql> drop database if exists d2;  
 
 
 # test rename tables
@@ -67,10 +125,13 @@ mysql> create table test.t1(a int, b int);
 mysql> create table test.t2(a int, b int);
 mysql> alter table test.t1 set tiflash replica 1 location labels 'rack', 'host', 'abc'
 mysql> alter table test.t2 set tiflash replica 1 location labels 'rack', 'host', 'abc'
-func> wait_table test t1
-func> wait_table test t2
 mysql> insert into test.t1 values (1, 2);
 mysql> insert into test.t2 values (3, 4);
+
+func> wait_table test t1
+func> wait_table test t2
+
+
 mysql> rename table test.t1 to test.r1, test.t2 to test.r2;
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t1;
 ERROR 1146 (42S02) at line 1: Table 'test.t1' doesn't exist

@@ -26,6 +26,7 @@
 #include <grpcpp/completion_queue.h>
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 
 namespace DB
@@ -58,17 +59,17 @@ public:
     virtual void wait() = 0;
 };
 
-template <typename RPCContext, bool enable_fine_grained_shuffle>
+template <typename RPCContext>
 class AsyncRequestHandler : public AsyncRequestHandlerBase
 {
 public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
-    using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
+    using Self = AsyncRequestHandler<RPCContext>;
 
     AsyncRequestHandler(
-        std::vector<GRPCReceiveQueue<RecvMsgPtr>> & grpc_recv_queues_,
+        ReceivedMessageQueue * received_message_queue_,
         AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue_,
         const std::shared_ptr<RPCContext> & context,
         Request && req,
@@ -78,7 +79,7 @@ public:
         : cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , rpc_context(context)
         , request(std::move(req))
-        , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
+        , req_info(fmt::format("async tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , has_data(false)
         , retry_times(0)
         , stage(AsyncRequestStage::NEED_INIT)
@@ -86,7 +87,7 @@ public:
         , received_packet_index(0)
         , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
-        , channel_try_writer(grpc_recv_queues_, req_info, log, data_size_in_queue, ReceiverMode::Async)
+        , channel_try_writer(received_message_queue_, req_info, log, data_size_in_queue, ReceiverMode::Async)
         , async_wait_rewrite_queue(std::move(async_wait_rewrite_queue_))
         , kick_recv_tag(thisAsUnaryCallback())
         , close_conn(std::move(close_conn_))
@@ -94,8 +95,8 @@ public:
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_exception_when_construct_async_request_handler);
         packets.resize(batch_packet_count);
-        for (auto & packet : packets)
-            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+        for (auto & p : packets)
+            p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         start();
     }
 
@@ -274,6 +275,7 @@ private:
         {
             stage = AsyncRequestStage::FINISHED;
             close_conn(!msg.empty(), msg, log);
+            closeGrpcConnection();
             is_close_conn_called = true;
         }
         condition_cv.notify_all();
@@ -285,7 +287,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(make_reader_mu);
-        rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(request, cq, thisAsUnaryCallback());
     }
 
     void retryOrDone(String && done_msg, const String & log_msg)
@@ -313,18 +315,18 @@ private:
             // note: no exception should be thrown rudely, since it's called by a GRPC poller.
             while (received_packet_index < read_packet_index)
             {
-                auto & packet = packets[received_packet_index++];
-                auto res = channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+                auto & p = packets[received_packet_index++];
+                auto res = channel_try_writer.tryWrite(request.source_index, p);
                 if (res == GRPCReceiveQueueRes::FULL)
                 {
-                    packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                    p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
                     return res;
                 }
                 if (res != GRPCReceiveQueueRes::OK)
                     return res;
 
                 // can't reuse packet since it is sent to readers.
-                packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                p = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
             }
             return GRPCReceiveQueueRes::OK;
         }
@@ -337,7 +339,7 @@ private:
 
     GRPCReceiveQueueRes reSendPackets()
     {
-        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite<enable_fine_grained_shuffle>();
+        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite();
         if (res != GRPCReceiveQueueRes::OK)
             return res;
         return sendPackets();
@@ -365,7 +367,14 @@ private:
         // Do not change the order of these two clauses.
         // We must ensure that status is set before pushing async handler into queue
         stage = AsyncRequestStage::WAIT_REWRITE;
-        async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+        bool res = async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+        if (!res)
+            closeConnection("AsyncRequestHandlerWaitQueue has been closed");
+    }
+
+    void closeGrpcConnection()
+    {
+        reader.reset();
     }
 
     // won't be null and do not delete this pointer
@@ -384,7 +393,7 @@ private:
     Int32 received_packet_index;
     TrackedMppDataPacketPtrs packets;
 
-    std::shared_ptr<AsyncReader> reader;
+    std::unique_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
     Status finish_status;
     LoggerPtr log;

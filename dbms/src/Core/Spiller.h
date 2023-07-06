@@ -85,6 +85,7 @@ struct SpilledFiles
 class Spiller
 {
 public:
+    static bool supportSpill(const Block & header);
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
@@ -101,6 +102,7 @@ public:
     bool hasSpilledData() const { return has_spilled_data; };
     /// only for test now
     bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
+    void removeConstantColumns(Block & block) const;
 
 private:
     friend class SpillHandler;
@@ -117,6 +119,8 @@ private:
     const UInt64 partition_num;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
     const Block input_schema;
+    std::vector<size_t> const_column_indexes;
+    Block header_without_constants;
     const LoggerPtr logger;
     std::mutex spill_finished_mutex;
     bool spill_finished = false;

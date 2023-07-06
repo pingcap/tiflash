@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -29,7 +30,7 @@ try
     PipelineExecutorStatus status;
     try
     {
-        status.onEventSchedule();
+        status.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         status.waitFor(timeout);
         GTEST_FAIL();
@@ -50,7 +51,7 @@ try
     status.toConsumeMode(1);
     try
     {
-        status.onEventSchedule();
+        status.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         ResultHandler result_handler{[](const Block &) {
         }};
@@ -70,9 +71,9 @@ TEST_F(PipelineExecutorStatusTestRunner, run)
 try
 {
     PipelineExecutorStatus status;
-    status.onEventSchedule();
+    status.incActiveRefCount();
     auto thread_manager = newThreadManager();
-    thread_manager->schedule(false, "run", [&status]() mutable { status.onEventFinish(); });
+    thread_manager->schedule(false, "run", [&status]() mutable { status.decActiveRefCount(); });
     status.wait();
     auto exception_ptr = status.getExceptionPtr();
     auto err_msg = status.getExceptionMsg();
@@ -81,17 +82,17 @@ try
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, to_err)
+TEST_F(PipelineExecutorStatusTestRunner, toErr)
 try
 {
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg;
         PipelineExecutorStatus status;
-        status.onEventSchedule();
+        status.incActiveRefCount();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
             status.onErrorOccurred(err_msg);
-            status.onEventFinish();
+            status.decActiveRefCount();
         });
         status.wait();
         status.onErrorOccurred("unexpect exception");
@@ -102,6 +103,22 @@ try
     };
     test("throw exception");
     test("");
+}
+CATCH
+
+TEST_F(PipelineExecutorStatusTestRunner, consumeThrowError)
+try
+{
+    PipelineExecutorStatus status;
+    auto ret_queue = status.toConsumeMode(1);
+    ret_queue->push(Block{});
+    ResultHandler handler{[](const Block &) {
+        throw Exception("for test");
+    }};
+    status.consume(handler);
+    ASSERT_TRUE(status.getExceptionPtr());
+    auto actual_err_msg = status.getExceptionMsg();
+    ASSERT_EQ(actual_err_msg, "for test");
 }
 CATCH
 

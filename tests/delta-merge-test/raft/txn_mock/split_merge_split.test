@@ -14,7 +14,8 @@
 
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
+
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke find_region_by_range('','',1)
 ┌─find_region_by_range("", "", 1)─┐
@@ -67,7 +68,7 @@
 │ total size: 1                              │
 └────────────────────────────────────────────┘
 => DBGInvoke __try_flush_region(5)
-=> manage table default.test merge delta
+>> DBGInvoke query_mapped('manage table \$d.\$t merge delta', default, test)
 => DBGInvoke region_split(5, default, test, 0, 50, 50, 100, 6)
 ┌─region_split(5, default, test, 0, 50, 50, 100, 6)─┐
 │ execute batch split, region 5 into (5,6)          │
@@ -84,7 +85,8 @@
 │ 2                               │
 │ regions: 6 5                    │
 └─────────────────────────────────┘
-=> select _tidb_rowid, col_1 from default.test order by _tidb_rowid
+
+=> DBGInvoke query_mapped('select _tidb_rowid, col_1 from \$d.\$t order by _tidb_rowid', default, test)
 ┌─_tidb_rowid─┬─col_1─┐
 │           1 │    12 │
 │           2 │    10 │
@@ -94,4 +96,4 @@
 │          10 │    19 │
 └─────────────┴───────┘
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()

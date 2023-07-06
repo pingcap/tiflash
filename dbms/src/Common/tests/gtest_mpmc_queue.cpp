@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MPMCQueue.h>
+#include <Common/ThreadManager.h>
 #include <Common/nocopyable.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -688,49 +689,92 @@ CATCH
 TEST_F(MPMCQueueTest, AuxiliaryMemoryBound)
 try
 {
-    /// case 1: no auxiliary memory usage bound
     size_t max_size = 10;
-    MPMCQueue<Int64> queue(max_size);
-    for (size_t i = 0; i < max_size; i++)
-        ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
-
-    /// case 2: less auxiliary memory bound than the capacity bound
-    size_t actual_max_size = 5;
-    Int64 auxiliary_memory_bound = sizeof(Int64) * actual_max_size;
-    MPMCQueue<Int64> queue_1(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
-    for (size_t i = 0; i < actual_max_size; i++)
-        ASSERT_TRUE(queue_1.tryPush(i) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_1.tryPush(actual_max_size) == MPMCQueueResult::FULL);
+    Int64 auxiliary_memory_bound = 0;
     Int64 value;
-    /// after pop one element, the queue can be pushed again
-    ASSERT_TRUE(queue_1.tryPop(value) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_1.tryPush(actual_max_size) == MPMCQueueResult::OK);
 
-    /// case 3: less capacity bound than the auxiliary memory bound
-    auxiliary_memory_bound = sizeof(Int64) * (max_size * 10);
-    MPMCQueue<Int64> queue_2(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
-    for (size_t i = 0; i < max_size; i++)
-        ASSERT_TRUE(queue_2.tryPush(i) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_2.tryPush(max_size) == MPMCQueueResult::FULL);
+    {
+        /// case 1: no auxiliary memory usage bound
+        MPMCQueue<Int64> queue(max_size);
+        for (size_t i = 0; i < max_size; i++)
+            ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
+    }
 
-    /// case 4, auxiliary memory bound <= 0 means unbounded for auxiliary memory usage
-    MPMCQueue<Int64> queue_3(max_size, 0, [](const Int64 &) { return 1024 * 1024; });
-    for (size_t i = 0; i < max_size; i++)
-        ASSERT_TRUE(queue_3.tryPush(i) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_3.tryPush(max_size) == MPMCQueueResult::FULL);
-    MPMCQueue<Int64> queue_4(max_size, -1, [](const Int64 &) { return 1024 * 1024; });
-    for (size_t i = 0; i < max_size; i++)
-        ASSERT_TRUE(queue_4.tryPush(i) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_4.tryPush(max_size) == MPMCQueueResult::FULL);
+    {
+        /// case 2: less auxiliary memory bound than the capacity bound
+        size_t actual_max_size = 5;
+        auxiliary_memory_bound = sizeof(Int64) * actual_max_size;
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
+        for (size_t i = 0; i < actual_max_size; i++)
+            ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(actual_max_size) == MPMCQueueResult::FULL);
+        /// after pop one element, the queue can be pushed again
+        ASSERT_TRUE(queue.tryPop(value) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(actual_max_size) == MPMCQueueResult::OK);
+    }
 
-    /// case 5 even if the element's auxiliary memory is out of bound, at least one element can be pushed
-    MPMCQueue<Int64> queue_5(max_size, 1, [](const Int64 &) { return 10; });
-    ASSERT_TRUE(queue_5.tryPush(1) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_5.tryPush(2) == MPMCQueueResult::FULL);
-    ASSERT_TRUE(queue_5.tryPop(value) == MPMCQueueResult::OK);
-    ASSERT_TRUE(queue_5.tryPop(value) == MPMCQueueResult::EMPTY);
-    ASSERT_TRUE(queue_5.tryPush(1) == MPMCQueueResult::OK);
+    {
+        /// case 3: less capacity bound than the auxiliary memory bound
+        auxiliary_memory_bound = sizeof(Int64) * (max_size * 10);
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, auxiliary_memory_bound), [](const Int64 &) { return sizeof(Int64); });
+        for (size_t i = 0; i < max_size; i++)
+            ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
+    }
+
+    {
+        /// case 4, auxiliary memory bound <= 0 means unbounded for auxiliary memory usage
+        std::vector<Int64> bounds{0, -1};
+        for (const auto & bound : bounds)
+        {
+            MPMCQueue<Int64> queue(CapacityLimits(max_size, bound), [](const Int64 &) { return 1024 * 1024; });
+            for (size_t i = 0; i < max_size; i++)
+                ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+            ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
+        }
+    }
+
+    {
+        /// case 5 even if the element's auxiliary memory is out of bound, at least one element can be pushed
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, 1), [](const Int64 &) { return 10; });
+        ASSERT_TRUE(queue.tryPush(1) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(2) == MPMCQueueResult::FULL);
+        ASSERT_TRUE(queue.tryPop(value) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPop(value) == MPMCQueueResult::EMPTY);
+        ASSERT_TRUE(queue.tryPush(1) == MPMCQueueResult::OK);
+    }
+
+    {
+        /// case 6 after pop a huge element, more than one small push can be notified without further pop
+        MPMCQueue<Int64> queue(CapacityLimits(max_size, 20), [](const Int64 & element) { return std::abs(element); });
+        ASSERT_TRUE(queue.tryPush(100) == MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.tryPush(5) == MPMCQueueResult::FULL);
+        auto thread_manager = newThreadManager();
+        thread_manager->schedule(false, "thread_1", [&]() {
+            queue.push(5);
+        });
+        thread_manager->schedule(false, "thread_2", [&]() {
+            queue.push(6);
+        });
+        std::exception_ptr current_exception = nullptr;
+        try
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            ASSERT_TRUE(queue.pop(value) == MPMCQueueResult::OK);
+            ASSERT_EQ(value, 100);
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            ASSERT_EQ(queue.size(), 2);
+        }
+        catch (...)
+        {
+            current_exception = std::current_exception();
+            queue.cancelWith("test failed");
+        }
+        thread_manager->wait();
+        if (current_exception)
+            std::rethrow_exception(current_exception);
+    }
 }
 CATCH
 

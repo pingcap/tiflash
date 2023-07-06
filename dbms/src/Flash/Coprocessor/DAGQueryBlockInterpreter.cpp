@@ -295,6 +295,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.join_key_collators,
         join_non_equal_conditions,
         max_block_size,
+        settings.shallow_copy_cross_probe_threshold,
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
@@ -323,7 +324,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
@@ -385,7 +386,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     else
     {
         /// If there are several streams, we merge them into one.
-        executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "merge into one for window input");
         assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
@@ -446,6 +447,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             params,
             true,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
@@ -624,6 +626,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
+        if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_read_thread))
+            throw Exception("Enable late materialization but disable read thread pool, please set the config `dt_enable_read_thread` of TiFlash to true,"
+                            "or disable late materialization by set tidb variable `tidb_opt_enable_late_materialization` to false.");
         if (unlikely(context.isTest()))
         {
             handleMockTableScan(table_scan, pipeline);
@@ -754,7 +759,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams, log, false, "for partial limit");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
 }
@@ -815,7 +820,7 @@ void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
     if (query_block.can_restore_pipeline_concurrency)
-        restoreConcurrency(pipeline, dagContext().final_concurrency, log);
+        restoreConcurrency(pipeline, dagContext().final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()

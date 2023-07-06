@@ -50,13 +50,10 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
-        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
-        {
-            return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
-        }
+        return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
     }
     return false;
 }
@@ -76,6 +73,10 @@ void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Executor * executor)
 {
     TiDBTableScan table_scan(executor, executor_id, dagContext());
+    if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_read_thread))
+        throw Exception("Enable late materialization but disable read thread pool, please set the config `dt_enable_read_thread` of TiFlash to true,"
+                        "or disable late materialization by set tidb variable `tidb_opt_enable_late_materialization` to false.");
+    LOG_DEBUG(log, "tidb table scan has runtime filter size:{}", table_scan.getRuntimeFilterIDs().size());
     if (unlikely(context.isTest()))
         pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
     else

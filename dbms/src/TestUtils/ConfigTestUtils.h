@@ -29,7 +29,7 @@ namespace DB
 {
 namespace tests
 {
-inline static auto loadConfigFromString(const String & s)
+inline static auto loadConfigFromString(const std::string & s)
 {
     std::istringstream ss(s);
     cpptoml::parser p(ss);

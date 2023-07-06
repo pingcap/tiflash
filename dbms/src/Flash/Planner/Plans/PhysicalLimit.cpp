@@ -49,12 +49,12 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams, log, false, "for partial limit");
+        executeUnion(pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
 }
 
-void PhysicalLimit::buildPipelineExecGroup(
+void PhysicalLimit::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

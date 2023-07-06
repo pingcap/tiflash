@@ -142,32 +142,42 @@ public:
                 return Entry(*items.back());
             }
 
-            LOG_INFO(log, "No free connections in pool. Waiting.");
-
             if (timeout < 0)
+            {
+                LOG_INFO(log, "No free connections in pool. Waiting infinitely.");
                 available.wait(lock);
+            }
             else
+            {
+                LOG_INFO(log, "No free connections in pool. Waiting {} ms.", timeout);
                 available.wait_for(lock, std::chrono::microseconds(timeout));
+            }
         }
     }
 
     void reserve(size_t count)
     {
-        std::lock_guard lock(mutex);
+        std::unique_lock lock(mutex);
 
         while (items.size() < count)
             items.emplace_back(std::make_shared<PooledObject>(allocObject(), *this));
     }
 
+    size_t getPoolSize() const
+    {
+        std::unique_lock lock(mutex);
+        return items.size();
+    }
+
 private:
     /** The maximum size of the pool. */
-    unsigned max_items;
+    const unsigned max_items;
 
     /** Pool. */
     Objects items;
 
     /** Lock to access the pool. */
-    std::mutex mutex;
+    mutable std::mutex mutex;
     std::condition_variable available;
 
 protected:
