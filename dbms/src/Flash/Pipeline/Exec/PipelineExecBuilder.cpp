@@ -45,6 +45,32 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
+OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getProfileInfo();
+    }
+}
+
+IOProfileInfoPtr PipelineExecBuilder::getCurIOProfileInfo() const
+{
+    if (sink_op)
+        return sink_op->getIOProfileInfo();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getIOProfileInfo();
+    else
+    {
+        RUNTIME_CHECK(source_op);
+        return source_op->getIOProfileInfo();
+    }
+}
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -60,13 +86,16 @@ Block PipelineExecBuilder::getCurrentHeader() const
 
 void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
 {
-    getCurGroup().emplace_back();
-    getCurGroup().back().setSourceOp(std::move(source));
+    auto & cur_group = getCurGroup();
+    cur_group.emplace_back();
+    cur_group.back().setSourceOp(std::move(source));
 }
 
 void PipelineExecGroupBuilder::reset()
 {
     groups.clear();
+    // Re-add an empty group to ensure that the group builder after reset is available.
+    groups.emplace_back();
 }
 
 void PipelineExecGroupBuilder::merge(PipelineExecGroupBuilder && other)
@@ -92,7 +121,24 @@ PipelineExecGroup PipelineExecGroupBuilder::build()
 
 Block PipelineExecGroupBuilder::getCurrentHeader()
 {
-    RUNTIME_CHECK(!getCurGroup().empty());
-    return getCurGroup().back().getCurrentHeader();
+    auto & cur_group = getCurGroup();
+    RUNTIME_CHECK(!cur_group.empty());
+    return cur_group.back().getCurrentHeader();
+}
+
+OperatorProfileInfos PipelineExecGroupBuilder::getCurProfileInfos() const
+{
+    OperatorProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurProfileInfo());
+    return ret;
+}
+
+IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
+{
+    IOProfileInfos ret;
+    for (const auto & builder : getCurGroup())
+        ret.push_back(builder.getCurIOProfileInfo());
+    return ret;
 }
 } // namespace DB

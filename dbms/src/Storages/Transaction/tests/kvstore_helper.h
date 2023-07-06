@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
@@ -86,8 +88,7 @@ public:
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
-        proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-            RaftStoreProxyPtr{proxy_instance.get()}));
+        proxy_helper = proxy_instance->generateProxyHelper();
         kvstore->restore(*path_pool, proxy_helper.get());
         {
             auto store = metapb::Store{};
@@ -140,10 +141,38 @@ protected:
         p = path + "/data/";
         TiFlashTestEnv::tryCreatePath(p);
     }
+    void startReadIndexUtils(Context & ctx)
+    {
+        if (proxy_runner)
+        {
+            return;
+        }
+        over.store(false);
+        ctx.getTMTContext().setStatusRunning();
+        // Start mock proxy in other thread
+        proxy_runner.reset(new std::thread([&]() {
+            proxy_instance->testRunNormal(over);
+        }));
+        ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
+        kvstore->initReadIndexWorkers(
+            []() {
+                return std::chrono::milliseconds(10);
+            },
+            1);
+        ASSERT_NE(kvstore->read_index_worker_manager, nullptr);
+        kvstore->asyncRunReadIndexWorkers();
+    }
+    void stopReadIndexUtils()
+    {
+        kvstore->stopReadIndexWorkers();
+        kvstore->releaseReadIndexWorkers();
+        over = true;
+        proxy_instance->wakeNotifier();
+        proxy_runner->join();
+    }
 
 protected:
     std::tuple<uint64_t, uint64_t, uint64_t> prepareForProactiveFlushTest();
-    static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 
@@ -168,10 +197,14 @@ protected:
     std::string test_path;
 
     std::unique_ptr<PathPool> path_pool;
-    std::unique_ptr<KVStore> kvstore;
+    std::shared_ptr<KVStore> kvstore;
 
     std::unique_ptr<MockRaftStoreProxy> proxy_instance;
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
+    std::unique_ptr<std::thread> proxy_runner;
+
+    LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
+    std::atomic_bool over{false};
 };
 } // namespace tests
 } // namespace DB

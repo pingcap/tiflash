@@ -55,7 +55,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
-    // start mock proxy in other thread
+    // Start mock proxy in other thread
     std::atomic_bool over{false};
     auto proxy_runner = std::thread([&]() {
         proxy_instance->testRunNormal(over);
@@ -296,7 +296,7 @@ void RegionKVStoreTest::testRaftMergeRollback(KVStore & kvs, TMTContext & tmt)
     }
 }
 
-void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
+static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockRaftStoreProxy> & proxy_instance)
 {
     {
         auto region = kvs.getRegion(1);
@@ -311,21 +311,23 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
 
         ASSERT_EQ(region->dataInfo(), "[write 2 lock 2 default 2 ]");
     }
-
     // Split region
     RegionID region_id = 1;
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->mutMeta().getMetaRegion().region_epoch();
-    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, {{RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)}, {RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)}}, old_epoch);
+    auto & ori_source_range = source_region->getRange()->comparableKeys();
+    RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10));
+    RegionRangeKeys::RegionRange new_target_range = RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
+    auto && [request, response] = MockRaftStoreProxy::composeBatchSplit({region_id, region_id2}, regionRangeToEncodeKeys(new_source_range, new_target_range), old_epoch);
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_source_range);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
@@ -338,13 +340,8 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     // 7 is persisted
     {
         kvs.handleDestroy(1, tmt);
-        {
-            auto task_lock = kvs.genTaskLock();
-            auto lock = kvs.genRegionWriteLock(task_lock);
-            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
-            lock.regions.emplace(1, region);
-            lock.index.add(region);
-        }
+        proxy_instance->debugAddRegions(kvs, tmt, {1}, {{ori_source_range.first.key, ori_source_range.second.key}});
+
         auto table_id = 1;
         auto region = kvs.getRegion(1);
         region->insert("lock", RecordKVFormat::genKey(table_id, 3), RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
@@ -358,7 +355,7 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     }
     {
         // Region 1 and 7 overlaps.
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 2);
@@ -366,12 +363,12 @@ void RegionKVStoreTest::testRaftSplit(KVStore & kvs, TMTContext & tmt)
     // Split again
     kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), 1, 20, 5, tmt);
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_target_range);
         ASSERT_TRUE(mmp.count(7) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
     {
-        auto mmp = kvs.getRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 5), RecordKVFormat::genKey(1, 10)));
+        auto mmp = kvs.getRegionsByRangeOverlap(new_source_range);
         ASSERT_TRUE(mmp.count(1) != 0);
         ASSERT_EQ(mmp.size(), 1);
     }
@@ -478,8 +475,8 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
         {
             // add 7 back
             auto task_lock = kvs.genTaskLock();
-            auto lock = kvs.genRegionWriteLock(task_lock);
-            auto region = makeRegion(7, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5));
+            auto lock = kvs.genRegionMgrWriteLock(task_lock);
+            auto region = makeRegion(7, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 5), kvs.getProxyHelper());
             lock.regions.emplace(7, region);
             lock.index.add(region);
         }
@@ -538,7 +535,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         ASSERT_EQ(region->dataInfo(), "[write 1 lock 1 default 1 ]");
         {
             // There is a lock.
-            auto iter = region->createCommittedScanner();
+            auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
             auto k = lock->intoLockInfo();
@@ -554,7 +551,7 @@ TEST_F(RegionKVStoreTest, RegionReadWrite)
         ASSERT_EQ(0, region->writeCFCount());
         {
             region->remove("lock", RecordKVFormat::genKey(table_id, 3));
-            auto iter = region->createCommittedScanner();
+            auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);
         }
@@ -778,7 +775,7 @@ TEST_F(RegionKVStoreTest, AdminSplit)
     KVStore & kvs = getKVS();
     proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {1}, {{RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)}});
     {
-        testRaftSplit(kvs, ctx.getTMTContext());
+        testRaftSplit(kvs, ctx.getTMTContext(), proxy_instance);
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{}, raft_cmdpb::AdminResponse{}, 8192, 5, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
 }
@@ -851,6 +848,7 @@ try
     auto table_id = 101;
     auto region_id = 19;
     auto region_id_str = std::to_string(region_id);
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
 
     auto settings_backup = ctx.getGlobalContext().getSettings();
     ctx.getGlobalContext().getSettingsRef().dt_segment_limit_rows = 50;
@@ -885,7 +883,7 @@ try
     });
     // Initially region_19 range is [0, 10000)
     {
-        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10000));
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10000), kvs.getProxyHelper());
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -898,14 +896,13 @@ try
             },
         };
         {
-            RegionMockTest mock_test(kvstore.get(), region);
-
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
         }
@@ -921,7 +918,7 @@ try
     }
     // Later, its range is changed to [20000, 50000)
     {
-        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 20000), RecordKVFormat::genKey(table_id, 50000));
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 20000), RecordKVFormat::genKey(table_id, 50000), kvs.getProxyHelper());
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
         std::vector<SSTView> sst_views{
             SSTView{
@@ -934,14 +931,13 @@ try
             },
         };
         {
-            RegionMockTest mock_test(kvstore.get(), region);
-
             kvs.handleApplySnapshot(
                 region->cloneMetaRegion(),
                 2,
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 9,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(9), true);
         }
@@ -984,11 +980,11 @@ try
     createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
-    // In this test we only deal with meta,
-    ASSERT_EQ(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    // In this test we only deal with meta though,
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     {
         auto region_id = 19;
-        auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60), kvs.getProxyHelper());
         auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
@@ -1003,7 +999,7 @@ try
             ColumnFamilyType::Default,
             BaseBuffView{region_id_str.data(), region_id_str.length()},
         });
-        // Will reject a snapshot with snaller index.
+        // Will reject a snapshot with smaller index.
         {
             // Pre-handle snapshot to DTFiles is ignored because the table is dropped.
             kvs.handleApplySnapshot(
@@ -1012,6 +1008,7 @@ try
                 SSTViewVec{sst_views.data(), sst_views.size()},
                 8,
                 5,
+                std::nullopt,
                 ctx.getTMTContext());
             ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
             try
@@ -1022,6 +1019,7 @@ try
                     {}, // empty snap files
                     6, // smaller index
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 ASSERT_TRUE(false);
             }
@@ -1034,23 +1032,25 @@ try
         {
             // Snapshot will be rejected if region overlaps.
             {
-                auto region = makeRegion(22, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
+                auto region = makeRegion(22, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     9,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
             }
             try
             {
-                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
+                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     9,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
                 ASSERT_TRUE(false);
@@ -1064,20 +1064,22 @@ try
             {
                 // Applying snapshot will throw if proxy is not inited.
                 const auto * ori_ptr = proxy_helper->proxy_ptr.inner;
-                proxy_helper->proxy_ptr.inner = nullptr;
                 SCOPE_EXIT({
                     proxy_helper->proxy_ptr.inner = ori_ptr;
                 });
 
                 try
                 {
-                    auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
+                    auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
+                    // preHandleSnapshotToFiles will assert proxy_ptr is not null.
                     auto ingest_ids = kvs.preHandleSnapshotToFiles(
                         region,
                         {},
                         10,
                         5,
+                        std::nullopt,
                         ctx.getTMTContext());
+                    proxy_helper->proxy_ptr.inner = nullptr;
                     kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
                     ASSERT_TRUE(false);
                 }
@@ -1094,12 +1096,13 @@ try
                     s.set_state(::raft_serverpb::PeerState::Tombstone);
                     s;
                 }));
-                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
+                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100), kvs.getProxyHelper());
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     10,
                     5,
+                    std::nullopt,
                     ctx.getTMTContext());
                 kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
@@ -1168,6 +1171,15 @@ TEST_F(RegionKVStoreTest, Restore)
 
 TEST_F(RegionKVStoreTest, RegionRange)
 {
+    {
+        // Test util functions.
+        RegionsRangeIndex region_index;
+        region_index.split(TiKVRangeKey::makeTiKVRangeKey<true>(TiKVKey()));
+        region_index.split(TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey()));
+        region_index.tryMergeEmpty();
+        const auto & root_map = region_index.getRoot();
+        ASSERT_EQ(root_map.size(), 2);
+    }
     {
         // Test findByRangeOverlap.
         RegionsRangeIndex region_index;

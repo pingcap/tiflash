@@ -159,6 +159,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
     }
 
+    // TODO(hyy):seems aliases and default in ColumnsDescription is useless，please check if we can remove it
     ColumnsDescription new_columns(columns.ordinary, columns.materialized, columns.aliases, columns.defaults);
     size_t pks_combined_bytes = 0;
     auto all_columns = columns.getAllPhysical();
@@ -244,6 +245,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 
     setColumns(new_columns);
 
+    // TODO:Could we remove this branch?
     if (unlikely(handle_column_define.name.empty()))
     {
         // If users deploy a cluster with TiFlash node with version v4.0.0~v4.0.3, and rename primary key column. They will
@@ -623,7 +625,7 @@ void setColumnsToRead(const DeltaMergeStorePtr & store, ColumnDefines & columns_
 }
 
 // Check whether tso is smaller than TiDB GcSafePoint
-void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id)
+void checkReadTso(UInt64 read_tso, const Context & context, const String & req_id, KeyspaceID keyspace_id)
 {
     auto & tmt = context.getTMTContext();
     RUNTIME_CHECK(tmt.isInitialized());
@@ -632,6 +634,7 @@ void checkReadTso(UInt64 read_tso, const Context & context, const String & req_i
         return;
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
+        keyspace_id,
         /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds);
     if (read_tso < safe_point)
@@ -654,7 +657,8 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(
 {
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
-    checkReadTso(mvcc_query_info.read_tso, context, req_id);
+    auto keyspace_id = getTableInfo().getKeyspaceID();
+    checkReadTso(mvcc_query_info.read_tso, context, req_id, keyspace_id);
 
     FmtBuffer fmt_buf;
     if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
@@ -934,8 +938,9 @@ BlockInputStreams StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
@@ -1005,8 +1010,9 @@ void StorageDeltaMerge::read(
         extra_table_id_index,
         scan_context);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [concurrency: {}]", ranges.size(), group_builder.concurrency());
 }
@@ -1042,8 +1048,9 @@ StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
 
     snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
 
+    auto keyspace_id = getTableInfo().getKeyspaceID();
     // Ensure read_tso is valid after snapshot is built
-    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id, keyspace_id);
     return snap;
 }
 
@@ -1078,7 +1085,7 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
-void StorageDeltaMerge::ingestFiles(
+UInt64 StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range,
     const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range,
@@ -1275,7 +1282,7 @@ void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version
 //==========================================================================================
 // DDL methods.
 //==========================================================================================
-void StorageDeltaMerge::alterFromTiDB(
+void StorageDeltaMerge::updateTombstone(
     const TableLockHolder &,
     const AlterCommands & commands,
     const String & database_name,
@@ -1287,7 +1294,6 @@ void StorageDeltaMerge::alterFromTiDB(
         commands,
         database_name,
         name_mapper.mapTableName(table_info),
-        std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info),
         context);
 }
 
@@ -1302,7 +1308,6 @@ void StorageDeltaMerge::alter(
         commands,
         database_name,
         table_name_,
-        std::nullopt,
         context);
 }
 
@@ -1348,33 +1353,13 @@ void StorageDeltaMerge::alterImpl(
     const AlterCommands & commands,
     const String & database_name,
     const String & table_name_,
-    const OptionTableInfoConstRef table_info,
     const Context & context)
-try
 {
-    std::unordered_set<String> cols_drop_forbidden;
-    cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
-    cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
-    cols_drop_forbidden.insert(TAG_COLUMN_NAME);
-
     auto tombstone = getTombstone();
 
     for (const auto & command : commands)
     {
-        if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
-        {
-            // check that add primary key is forbidden
-            throw Exception(fmt::format("Storage engine {} doesn't support modify primary key.", getName()), ErrorCodes::BAD_ARGUMENTS);
-        }
-        else if (command.type == AlterCommand::DROP_COLUMN)
-        {
-            // check that drop hidden columns is forbidden
-            if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception(
-                    fmt::format("Storage engine {} doesn't support drop hidden column: {}", getName(), command.column_name),
-                    ErrorCodes::BAD_ARGUMENTS);
-        }
-        else if (command.type == AlterCommand::TOMBSTONE)
+        if (command.type == AlterCommand::TOMBSTONE)
         {
             tombstone = command.tombstone;
         }
@@ -1384,62 +1369,80 @@ try
         }
     }
 
-    // update the metadata in database, so that we can read the new schema using TiFlash's client
-    ColumnsDescription new_columns = getColumns();
-    for (const auto & command : commands)
+    updateDeltaMergeTableCreateStatement(
+        database_name,
+        table_name_,
+        getPrimarySortDescription(),
+        getColumns(),
+        hidden_columns,
+        getTableInfo(),
+        tombstone,
+        context);
+    setTombstone(tombstone);
+}
+
+NamesAndTypes getColumnsFromTableInfo(const TiDB::TableInfo & table_info)
+{
+    NamesAndTypes columns;
+    for (const auto & column : table_info.columns)
     {
-        if (command.type == AlterCommand::MODIFY_COLUMN)
-        {
-            // find the column we are going to modify
-            auto col_iter = command.findColumn(new_columns.ordinary); // just find in ordinary columns
-            if (unlikely(!isSupportedDataTypeCast(col_iter->type, command.data_type)))
-            {
-                // If this table has no tiflash replica, simply ignore this check because TiDB constraint
-                // on DDL is not strict. (https://github.com/pingcap/tidb/issues/17530)
-                // If users applied unsupported column type change on table with tiflash replica. To get rid of
-                // this exception and avoid of reading broken data, they have truncate that table.
-                if (table_info && table_info.value().get().replica_info.count == 0)
-                {
-                    LOG_WARNING(
-                        log,
-                        "Accept lossy column data type modification. Table (id:{}) modify column {}({}) from {} to {}",
-                        table_info.value().get().id,
-                        command.column_name,
-                        command.column_id,
-                        col_iter->type->getName(),
-                        command.data_type->getName());
-                }
-                else
-                {
-                    // check that lossy changes is forbidden
-                    // check that changing the UNSIGNED attribute is forbidden
-                    throw Exception(
-                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {}({}) from {} to {}",
-                                    getName(),
-                                    command.column_name,
-                                    command.column_id,
-                                    col_iter->type->getName(),
-                                    command.data_type->getName()),
-                        ErrorCodes::NOT_IMPLEMENTED);
-                }
-            }
-        }
+        DataTypePtr type = getDataTypeByColumnInfo(column);
+        columns.emplace_back(column.name, type);
     }
 
-    commands.apply(new_columns); // apply AlterCommands to `new_columns`
-    setColumns(std::move(new_columns));
-    if (table_info)
+    if (!table_info.pk_is_handle)
     {
-        tidb_table_info = table_info.value();
+        // Make primary key as a column, and make the handle column as the primary key.
+        if (table_info.is_common_handle)
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>());
+        else
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>());
     }
+
+    return columns;
+}
+
+ColumnsDescription StorageDeltaMerge::getNewColumnsDescription(const TiDB::TableInfo & table_info)
+{
+    auto columns = getColumnsFromTableInfo(table_info);
+
+    ColumnsDescription new_columns;
+    for (const auto & column : columns)
+    {
+        new_columns.ordinary.emplace_back(std::move(column));
+    }
+
+    new_columns.materialized = getColumns().materialized;
+
+    return new_columns;
+}
+
+void StorageDeltaMerge::alterSchemaChange(
+    const TableLockHolder &,
+    TiDB::TableInfo & table_info,
+    const String & database_name,
+    const String & table_name,
+    const Context & context)
+{
+    /// 1. update columnsDescription of ITableDeclaration
+    /// 2. update table info
+    /// 3. update store's columns
+    /// 4. update create table statement
+
+    ColumnsDescription new_columns = getNewColumnsDescription(table_info);
+
+    setColumns(std::move(new_columns));
+
+    tidb_table_info = table_info;
+    LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
     {
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
-            _store->applyAlters(commands, table_info, max_column_id_used, context);
+            _store->applySchemaChanges(table_info);
         }
-        else
+        else // it seems we will never come into this branch ?
         {
             updateTableColumnInfo();
         }
@@ -1448,28 +1451,18 @@ try
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();
-    TiDB::TableInfo table_info_from_store;
-    table_info_from_store.name = table_name_;
+
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
         database_name,
-        table_name_,
+        table_name,
         pk_desc,
         getColumns(),
         hidden_columns,
-        getTableInfoForCreateStatement(table_info, table_info_from_store, store_columns, hidden_columns),
-        tombstone,
+        table_info,
+        getTombstone(),
         context);
-    setTombstone(tombstone);
-}
-catch (Exception & e)
-{
-    e.addMessage(fmt::format(
-        " table name: {}, table id: {}",
-        table_name_,
-        (table_info ? DB::toString(table_info.value().get().id) : "unknown")));
-    throw;
 }
 
 ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const

@@ -31,6 +31,10 @@ struct PipelineExecBuilder
     Block getCurrentHeader() const;
 
     PipelineExecPtr build();
+
+    OperatorProfileInfoPtr getCurProfileInfo() const;
+
+    IOProfileInfoPtr getCurIOProfileInfo() const;
 };
 
 class PipelineExecGroupBuilder
@@ -43,13 +47,18 @@ public:
 
     using BuilderGroup = std::vector<PipelineExecBuilder>;
 
-    BuilderGroup & getCurGroup() { return groups.back(); }
+    PipelineExecBuilder & getCurBuilder(size_t index)
+    {
+        auto & cur_group = getCurGroup();
+        RUNTIME_CHECK(cur_group.size() > index);
+        return cur_group[index];
+    }
 
     void addGroup() { groups.emplace_back(); }
 
-    size_t concurrency() { return getCurGroup().size(); }
+    size_t concurrency() const { return getCurGroup().size(); }
 
-    bool empty() { return getCurGroup().empty(); }
+    bool empty() const { return getCurGroup().empty(); }
 
     void addConcurrency(SourceOpPtr && source);
 
@@ -70,6 +79,23 @@ public:
     PipelineExecGroup build();
 
     Block getCurrentHeader();
+
+    OperatorProfileInfos getCurProfileInfos() const;
+
+    IOProfileInfos getCurIOProfileInfos() const;
+
+private:
+    BuilderGroup & getCurGroup()
+    {
+        RUNTIME_CHECK(!groups.empty());
+        return groups.back();
+    }
+
+    const BuilderGroup & getCurGroup() const
+    {
+        RUNTIME_CHECK(!groups.empty());
+        return groups.back();
+    }
 
 private:
     // groups generates a set of pipeline_execs running in parallel.

@@ -145,7 +145,7 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::buildPipelineExecGroup(
+void PhysicalProjection::buildPipelineExecGroupImpl(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,

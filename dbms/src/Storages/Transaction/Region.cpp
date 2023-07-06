@@ -48,11 +48,11 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
     return data.removeDataByWriteIt(write_it);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
+std::optional<RegionDataReadInfo> Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error)
 {
     try
     {
-        return data.readDataByWriteIt(write_it, need_value);
+        return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex(), hard_error);
     }
     catch (DB::Exception & e)
     {
@@ -84,6 +84,18 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
 
 void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        if (type == ColumnFamilyType::Write)
+        {
+            if (orphanKeysInfo().observeKeyFromNormalWrite(key))
+            {
+                // We can't assert the key exists in write_cf here,
+                // since it may be already written into DeltaTree.
+                return;
+            }
+        }
+    }
     data.insert(type, std::move(key), std::move(value), mode);
 }
 
@@ -491,9 +503,9 @@ Timepoint Region::lastCompactLogTime() const
     return last_compact_log_time;
 }
 
-Region::CommittedScanner Region::createCommittedScanner(bool use_lock)
+Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
 {
-    return Region::CommittedScanner(this->shared_from_this(), use_lock);
+    return Region::CommittedScanner(this->shared_from_this(), use_lock, need_value);
 }
 
 Region::CommittedRemover Region::createCommittedRemover(bool use_lock)
@@ -509,6 +521,40 @@ std::string Region::toString(bool dump_status) const
 ImutRegionRangePtr Region::getRange() const
 {
     return meta.getRange();
+}
+
+RaftstoreVer Region::getClusterRaftstoreVer()
+{
+    // In non-debug/test mode, we should assert the proxy_ptr be always not null.
+    if (likely(proxy_helper != nullptr))
+    {
+        if (likely(proxy_helper->fn_get_cluster_raftstore_version))
+        {
+            // Make debug funcs happy.
+            return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
+        }
+    }
+    return RaftstoreVer::Uncertain;
+}
+
+void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
+{
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.snapshot_index = appliedIndex();
+        data.orphan_keys_info.pre_handling = true;
+        data.orphan_keys_info.deadline_index = deadline_index;
+        data.orphan_keys_info.region_id = region_id;
+    }
+}
+
+void Region::afterPrehandleSnapshot()
+{
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.pre_handling = false;
+        LOG_INFO(log, "After prehandle, remains {} orphan keys [region_id={}]", data.orphan_keys_info.remainedKeyCount(), id());
+    }
 }
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
@@ -547,9 +593,10 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log,
-                      "{} need to wait learner index {}",
+                      "{} need to wait learner index {} timeout {}",
                       toString(),
-                      index);
+                      index,
+                      timeout_ms);
             auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
@@ -593,7 +640,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }

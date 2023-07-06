@@ -45,10 +45,10 @@ public:
         return "MergeSortTransformOp";
     }
 
-    void operatePrefix() override;
-    void operateSuffix() override;
-
 protected:
+    void operatePrefixImpl() override;
+    void operateSuffixImpl() override;
+
     OperatorStatus transformImpl(Block & block) override;
     OperatorStatus tryOutputImpl(Block & block) override;
 
@@ -70,6 +70,7 @@ private:
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
+    bool hasSpilledData() const { return max_bytes_before_external_sort > 0 && spiller->hasSpilledData(); }
     SortDescription order_desc;
     // 0 means no limit.
     size_t limit;

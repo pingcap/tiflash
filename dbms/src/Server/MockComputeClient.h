@@ -42,6 +42,10 @@ public:
         {
             throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", status.error_code(), status.error_message()));
         }
+        if (response.has_error())
+        {
+            throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", 0, response.error().msg()));
+        }
     }
 
     coprocessor::Response runCoprocessor(std::shared_ptr<coprocessor::Request> request)

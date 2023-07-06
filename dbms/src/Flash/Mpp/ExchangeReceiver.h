@@ -29,6 +29,7 @@
 namespace DB
 {
 constexpr Int32 batch_packet_count_v1 = 16;
+struct Settings;
 
 struct ExchangeReceiverResult
 {
@@ -91,12 +92,6 @@ enum class ReceiveStatus
     eof,
 };
 
-struct ReceiveResult
-{
-    ReceiveStatus recv_status;
-    RecvMsgPtr recv_msg;
-};
-
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -112,9 +107,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
-        Int32 local_tunnel_version_,
-        Int32 async_recv_version_,
-        Int32 recv_queue_size,
+        const Settings & settings,
         const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
@@ -122,11 +115,13 @@ public:
     void cancel();
     void close();
 
-    ReceiveResult receive(size_t stream_id);
-    ReceiveResult tryReceive(size_t stream_id);
+    ReceiveStatus receive(size_t stream_id, ReceivedMessagePtr & recv_msg);
+    ReceiveStatus tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     ExchangeReceiverResult toExchangeReceiveResult(
-        ReceiveResult & recv_result,
+        size_t stream_id,
+        ReceiveStatus receive_status,
+        ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         const Block & header,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
@@ -141,7 +136,6 @@ public:
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
     int getExternalThreadCnt() const { return thread_count; }
-    std::vector<MsgChannelPtr> & getMsgChannels() { return msg_channels; }
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
@@ -151,11 +145,8 @@ private:
     std::shared_ptr<MemoryTracker> mem_tracker;
     using Request = typename RPCContext::Request;
 
-    // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
-    template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);
 
-    template <bool enable_fine_grained_shuffle>
     void reactor(const std::vector<Request> & async_requests);
 
     void setUpConnection();
@@ -167,7 +158,8 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     DecodeDetail decodeChunks(
-        const RecvMsgPtr & recv_msg,
+        size_t stream_id,
+        const ReceivedMessagePtr & recv_msg,
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
@@ -180,19 +172,16 @@ private:
     void waitLocalConnectionDone(std::unique_lock<std::mutex> & lock);
     void waitAsyncConnectionDone();
 
-    void finishAllMsgChannels();
-    void cancelAllMsgChannels();
+    void finishReceivedQueue();
+    void cancelReceivedQueue();
 
     ExchangeReceiverResult toDecodeResult(
+        size_t stream_id,
         std::queue<Block> & block_queue,
         const Block & header,
-        const RecvMsgPtr & recv_msg,
+        const ReceivedMessagePtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
-    inline ReceiveResult toReceiveResult(MPMCQueueResult result, RecvMsgPtr && recv_msg);
-
-    void prepareMsgChannels();
-    void prepareGRPCReceiveQueue();
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
 
@@ -213,6 +202,8 @@ private:
     }
 
 private:
+    LoggerPtr exc_log;
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -226,9 +217,8 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    std::vector<MsgChannelPtr> msg_channels;
-    std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
+    ReceivedMessageQueue received_message_queue;
 
     std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
 
@@ -239,8 +229,6 @@ private:
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
-
-    LoggerPtr exc_log;
 
     bool collected = false;
     int thread_count = 0;

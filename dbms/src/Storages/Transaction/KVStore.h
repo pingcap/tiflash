@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 namespace TiDB
@@ -87,7 +88,7 @@ public:
 
     RegionPtr getRegion(RegionID region_id) const;
 
-    using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+    using RegionRange = RegionRangeKeys::RegionRange;
 
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
 
@@ -130,15 +131,18 @@ public:
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, std::optional<uint64_t>, TMTContext & tmt);
 
     void handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
+    // For Raftstore V2, there could be some orphan keys in the write column family being left to `new_region` after pre-handled.
+    // All orphan write keys are asserted to be replayed before reaching `deadline_index`.
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
         SSTViewVec,
         uint64_t index,
         uint64_t term,
+        std::optional<uint64_t> deadline_index,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
@@ -242,9 +246,9 @@ private:
     void mockRemoveRegion(RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
-    RegionManager::RegionReadLock genRegionReadLock() const;
+    RegionManager::RegionReadLock genRegionMgrReadLock() const;
 
-    RegionManager::RegionWriteLock genRegionWriteLock(const KVStoreTaskLock &);
+    RegionManager::RegionWriteLock genRegionMgrWriteLock(const KVStoreTaskLock &);
 
     EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type,

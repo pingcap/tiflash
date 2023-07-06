@@ -153,12 +153,12 @@ struct MockRaftStoreProxy : MutexLockWrap
     }
 
     MockProxyRegionPtr getRegion(uint64_t id);
-
     MockProxyRegionPtr doGetRegion(uint64_t id);
 
     MockReadIndexTask * makeReadIndexTask(kvrpcpb::ReadIndexRequest req);
 
     void init(size_t region_num);
+    std::unique_ptr<TiFlashRaftProxyHelper> generateProxyHelper();
 
     size_t size() const;
 
@@ -229,10 +229,9 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<std::string> && keys,
         std::vector<std::string> && vals,
         std::vector<WriteCmdType> && cmd_types,
-        std::vector<ColumnFamilyType> && cmd_cf);
+        std::vector<ColumnFamilyType> && cmd_cf,
+        std::optional<uint64_t> forced_index = std::nullopt);
 
-    /// Create a compactLog admin command, returns (index, term) of the admin command itself.
-    std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
 
     std::tuple<uint64_t, uint64_t> adminCommand(UInt64 region_id, raft_cmdpb::AdminRequest &&, raft_cmdpb::AdminResponse &&, std::optional<uint64_t> forced_index = std::nullopt);
 
@@ -274,13 +273,14 @@ struct MockRaftStoreProxy : MutexLockWrap
         bool freezed;
     };
 
-    void snapshot(
+    RegionPtr snapshot(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id,
         std::vector<Cf> && cfs,
         uint64_t index,
-        uint64_t term);
+        uint64_t term,
+        std::optional<uint64_t> deadline_index);
 
     void doApply(
         KVStore & kvs,
@@ -308,6 +308,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     {
         log = Logger::get("MockRaftStoreProxy");
         table_id = 1;
+        cluster_ver = RaftstoreVer::V1;
     }
 
     // Mock Proxy will drop read index requests to these regions
@@ -318,6 +319,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::list<std::shared_ptr<RawMockReadIndexTask>> read_index_tasks;
     AsyncWaker::Notifier notifier;
     TableID table_id;
+    RaftstoreVer cluster_ver;
     LoggerPtr log;
 };
 
@@ -341,5 +343,19 @@ struct GCMonitor : MutexLockWrap
 
     static GCMonitor global_gc_monitor;
 };
+
+template <typename... Types>
+std::vector<std::pair<std::string, std::string>> regionRangeToEncodeKeys(Types &&... args)
+{
+    // RegionRangeKeys::RegionRange is not copy-constructible, however, initialize_list need copy construction.
+    // So we have to so this way, rather than create a composeXXX that accepts a vector of RegionRangeKeys::RegionRange.
+    std::vector<std::pair<std::string, std::string>> ranges_str;
+    ([&] {
+        auto & x = args;
+        ranges_str.emplace_back(std::make_pair(x.first.toString(), x.second.toString()));
+    }(),
+     ...);
+    return ranges_str;
+}
 
 } // namespace DB

@@ -35,6 +35,12 @@ std::string KeyspaceSnapshot::Get(const std::string & key)
     return snap.Get(encoded_key);
 }
 
+kvrpcpb::MvccInfo KeyspaceSnapshot::mvccGet(const std::string & key)
+{
+    auto encoded_key = encodeKey(key);
+    return snap.mvccGet(encoded_key);
+}
+
 std::string KeyspaceSnapshot::Get(pingcap::kv::Backoffer & bo, const std::string & key)
 {
     auto encoded_key = encodeKey(key);

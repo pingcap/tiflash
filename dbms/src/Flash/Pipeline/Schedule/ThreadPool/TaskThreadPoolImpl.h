@@ -23,11 +23,14 @@ namespace DB
 {
 struct CPUImpl
 {
-    static constexpr auto NAME = "cpu intensive";
+    static constexpr auto NAME = "cpu_pool";
 
     static constexpr bool is_cpu = true;
 
-    static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
+    static bool isTargetStatus(ExecTaskStatus status)
+    {
+        return status == ExecTaskStatus::RUNNING;
+    }
 
     static ExecTaskStatus exec(TaskPtr & task)
     {
@@ -39,11 +42,14 @@ struct CPUImpl
 
 struct IOImpl
 {
-    static constexpr auto NAME = "io intensive";
+    static constexpr auto NAME = "io_pool";
 
     static constexpr bool is_cpu = false;
 
-    static constexpr auto TargetStatus = ExecTaskStatus::IO;
+    static bool isTargetStatus(ExecTaskStatus status)
+    {
+        return status == ExecTaskStatus::IO_IN || status == ExecTaskStatus::IO_OUT;
+    }
 
     static ExecTaskStatus exec(TaskPtr & task)
     {

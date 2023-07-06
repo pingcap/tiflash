@@ -14,8 +14,10 @@
 
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
@@ -420,6 +422,47 @@ try
 }
 CATCH
 
+TEST_F(SSTFilesToDTFilesOutputStreamTest, Cancel)
+try
+{
+    auto table_lock = storage->lockStructureForShare("foo_query_id");
+    auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+
+    auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
+    auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
+        mock_stream,
+        storage,
+        schema_snapshot,
+        FileConvertJobType::ApplySnapshot,
+        /* split_after_rows */ 10,
+        /* split_after_size */ 0,
+        *db_context);
+
+    stream->writePrefix();
+    stream->write();
+    stream->writeSuffix();
+    auto files = stream->outputFiles();
+    ASSERT_EQ(5, files.size());
+
+    auto delegator = storage->getAndMaybeInitStore()->path_pool->getStableDiskDelegator();
+    std::unordered_map<UInt64, String> file_id_to_path;
+    for (const auto & file : files)
+    {
+        auto parent_path = delegator.getDTFilePath(file.id);
+        auto file_path = DM::DMFile::getPathByStatus(parent_path, file.id, DM::DMFile::Status::READABLE);
+        file_id_to_path.emplace(file.id, file_path);
+        ASSERT_TRUE(Poco::File(file_path).exists());
+    }
+    stream->cancel(); // remove all data
+    for (const auto & file : files)
+    {
+        ASSERT_TRUE(delegator.getDTFilePath(file.id, /*throw_on_not_exists*/ false).empty());
+        auto file_path = file_id_to_path[file.id];
+        ASSERT_FALSE(Poco::File(file_path).exists());
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

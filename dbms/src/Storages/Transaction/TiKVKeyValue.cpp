@@ -27,6 +27,12 @@ std::string_view DecodedTiKVKey::getUserKey() const
     return TiKVKeyspaceID::removeKeyspaceID(std::string_view(data(), size()));
 }
 
+std::string DecodedTiKVKey::toDebugString() const
+{
+    const auto & user_key = getUserKey();
+    return Redact::keyToDebugString(user_key.data(), user_key.size());
+}
+
 std::string DecodedTiKVKey::makeKeyspacePrefix(KeyspaceID keyspace_id)
 {
     return TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id);

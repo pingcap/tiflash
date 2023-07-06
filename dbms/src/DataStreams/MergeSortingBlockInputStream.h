@@ -55,6 +55,10 @@ protected:
     void appendInfo(FmtBuffer & buffer) const override;
 
 private:
+    bool hasSpilledData() const
+    {
+        return max_bytes_before_external_sort > 0 && spiller->hasSpilledData();
+    }
     SortDescription description;
     size_t max_merged_block_size;
     size_t limit;

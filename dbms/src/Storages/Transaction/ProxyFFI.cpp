@@ -621,9 +621,9 @@ RawCppPtr PreHandleSnapshot(
         }
 #endif
 
-
         // Pre-decode and save as DTFiles
-        auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+        // TODO Forward deadline_index when TiKV supports.
+        auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, std::nullopt, tmt);
         auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
         return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
     }

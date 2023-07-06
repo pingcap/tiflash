@@ -36,7 +36,7 @@ OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-void AggregateConvergentSourceOp::operateSuffix()
+void AggregateConvergentSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
 }

@@ -188,31 +188,47 @@ StableValueSpacePtr createNewStable( //
     auto store_path = delegator.choosePath();
 
     PageIdU64 dtfile_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
-
-    auto stable = std::make_shared<StableValueSpace>(stable_id);
-    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
-    stable->saveMeta(wbs.meta);
-    if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+    DMFilePtr dtfile;
+    try
     {
-        wbs.data.putExternal(dtfile_id, 0);
-        delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
-    }
-    else
-    {
-        auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
-        Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = context.keyspace_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
-        data_store->putDMFile(dtfile, oid, /*remove_local*/ true);
-        PS::V3::CheckpointLocation loc{
-            .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
-            .offset_in_file = 0,
-            .size_in_file = 0,
-        };
-        delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
-        wbs.data.putRemoteExternal(dtfile_id, loc);
-    }
+        dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
 
-    return stable;
+        auto stable = std::make_shared<StableValueSpace>(stable_id);
+        stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+        stable->saveMeta(wbs.meta);
+        if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
+        {
+            wbs.data.putExternal(dtfile_id, 0);
+            delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
+        }
+        else
+        {
+            auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
+            Remote::DMFileOID oid{
+                .store_id = store_id,
+                .keyspace_id = context.keyspace_id,
+                .table_id = context.physical_table_id,
+                .file_id = dtfile_id,
+            };
+            data_store->putDMFile(dtfile, oid, /*switch_to_remote*/ true);
+            PS::V3::CheckpointLocation loc{
+                .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
+                .offset_in_file = 0,
+                .size_in_file = 0,
+            };
+            delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
+            wbs.data.putRemoteExternal(dtfile_id, loc);
+        }
+        return stable;
+    }
+    catch (...)
+    {
+        if (dtfile)
+        {
+            dtfile->remove(context.db_context.getFileProvider());
+        }
+        throw;
+    }
 }
 
 //==========================================================================================
@@ -680,8 +696,9 @@ SegmentPtr Segment::ingestDataForTest(DMContext & dm_context,
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(););
+    SCOPE_EXIT({
+        dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed();
+    });
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
@@ -2506,7 +2523,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
     bitmap_filter->set(stream);
     bitmap_filter->runOptimize();
-    LOG_DEBUG(log, "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
+    LOG_DEBUG(log->getChild(dm_context.tracing_id), "buildBitmapFilterNormal total_rows={} cost={}ms", total_rows, sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 

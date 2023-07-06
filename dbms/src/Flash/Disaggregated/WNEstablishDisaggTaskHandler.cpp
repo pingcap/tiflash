@@ -54,15 +54,6 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     auto start_ts = meta.start_ts();
     context->setSetting("read_tso", start_ts);
 
-    if (request->timeout_s() < 0)
-    {
-        throw TiFlashException(Errors::Coprocessor::BadRequest, "invalid timeout={}", request->timeout_s());
-    }
-    else if (request->timeout_s() > 0)
-    {
-        context->setSetting("disagg_task_snapshot_timeout", request->timeout_s());
-    } // use default timeout if it is 0
-
     // Parse the encoded plan into `dag_req`
     dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());
     LOG_DEBUG(log, "DAGReq: {}", dag_req.ShortDebugString());
@@ -80,14 +71,15 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
 
 void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskResponse * response)
 {
-    // run into DAGStorageInterpreter and build the segment snapshots
-    query_executor_holder.set(queryExecute(*context));
-
+    // Set the store_id to response before executing query
     auto & tmt = context->getTMTContext();
     {
         const auto & kvstore = tmt.getKVStore();
         response->set_store_id(kvstore->getStoreID());
     }
+
+    // run into DAGStorageInterpreter and build the segment snapshots
+    query_executor_holder.set(queryExecute(*context));
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();

@@ -149,10 +149,11 @@ public:
     explicit MockExchangeReceiver(Int32 conn_num)
         : live_connections(conn_num)
         , live_local_connections(0)
+        , mock_async_request_handler_wait_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
+        , received_message_queue(mock_async_request_handler_wait_queue, Logger::get(), 10, false, 0)
         , data_size_in_queue(0)
         , log(Logger::get())
     {
-        msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
     }
 
     void connectionDone(bool meet_error, const String & local_err_msg)
@@ -167,7 +168,7 @@ public:
         }
 
         if (meet_error || copy_connection == 0)
-            msg_channels[0]->finish();
+            received_message_queue.finish();
     }
 
     void addLocalConnectionNum()
@@ -190,16 +191,15 @@ public:
         for (auto & tunnel : tunnels)
         {
             LocalRequestHandler local_request_handler(
-                nullptr,
-                [this](bool meet_error, const String & err_msg) {
-                    this->connectionDone(meet_error, err_msg);
+                [this](bool meet_error, const String & local_err_msg) {
+                    this->connectionDone(meet_error, local_err_msg);
                 },
                 [this]() {
                     this->connectionLocalDone();
                 },
                 []() {},
-                ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false, true);
+                ReceiverChannelWriter(&received_message_queue, "", log, &data_size_in_queue, ReceiverMode::Local));
+            tunnel->connectLocalV2(0, local_request_handler, true);
         }
     }
 
@@ -207,8 +207,9 @@ public:
     {
         while (true)
         {
-            std::shared_ptr<ReceivedMessage> recv_msg;
-            switch (msg_channels[0]->pop(recv_msg))
+            ReceivedMessagePtr recv_msg;
+            auto pop_result = received_message_queue.pop<true>(0, recv_msg);
+            switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:
                 received_msgs.push_back(recv_msg);
@@ -232,7 +233,8 @@ private:
     std::condition_variable cv;
     Int32 live_connections;
     Int32 live_local_connections;
-    std::vector<MsgChannelPtr> msg_channels;
+    AsyncRequestHandlerWaitQueuePtr mock_async_request_handler_wait_queue;
+    ReceivedMessageQueue received_message_queue;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
     std::atomic<Int64> data_size_in_queue;
@@ -283,12 +285,8 @@ public:
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
         if (tunnel->local_tunnel_v2)
             tunnel->local_tunnel_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_v2)
-            tunnel->local_tunnel_fine_grained_v2->is_done.store(true);
         else if (tunnel->local_tunnel_local_only_v2)
             tunnel->local_tunnel_local_only_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_local_only_v2)
-            tunnel->local_tunnel_fine_grained_local_only_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -643,8 +641,8 @@ try
     t.join();
     auto result_size = receiver->getReceivedMsgs().size();
     GTEST_ASSERT_EQ(result_size == 2, true);
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->packet->getPacket().data(), "First");
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->packet->getPacket().data(), "Second");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->getPacket().data(), "Second");
 }
 CATCH
 
@@ -653,16 +651,15 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
-    std::vector<MsgChannelPtr> msg_channels;
-    msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(1));
+    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
+    ReceivedMessageQueue received_message_queue(mock_ptr, Logger::get(), 1, false, 0);
 
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
+        ReceiverChannelWriter(&received_message_queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -675,15 +672,14 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
-    std::vector<MsgChannelPtr> msg_channels;
-    msg_channels.push_back(std::make_shared<LooseBoundedMPMCQueue<std::shared_ptr<ReceivedMessage>>>(1));
+    AsyncRequestHandlerWaitQueuePtr mock_ptr = std::make_shared<AsyncRequestHandlerWaitQueue>();
+    ReceivedMessageQueue queue(mock_ptr, Logger::get(), 1, false, 0);
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(&msg_channels, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
+        ReceiverChannelWriter(&queue, "", Logger::get(), nullptr, ReceiverMode::Local));
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -838,7 +834,7 @@ TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
     t.join();
 
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->getPacket().data(), "First");
 }
 
 TEST_F(TestMPPTunnel, isWritableTimeout)

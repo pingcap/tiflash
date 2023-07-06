@@ -81,7 +81,7 @@ public:
 
         // Some stats for logging
         UInt64 num_records = 0;
-        UInt64 read_elapsed_ms = 0;
+        UInt64 dump_elapsed_ms = 0;
 
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
@@ -113,7 +113,7 @@ private:
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        bool manual_flush);
+        bool temp_file);
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 

@@ -21,9 +21,9 @@
 namespace DB
 {
 /** A simple thread-safe loose-bounded concurrent queue and basically compatible with MPMCQueue.
-  * Provide functions `forcePush` and `isFull` to support asynchronous writes.
+  * Provide functions `forcePush` and `isWritable` to support non-blocking writes.
   * ```
-  * while (queue.isFull()) {}
+  * while (!queue.isWritable()) {}
   * queue.forcePush(std::move(obj));
   * ```
   */
@@ -32,21 +32,20 @@ class LooseBoundedMPMCQueue
 {
 public:
     using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
+    using PushCallback = std::function<void(const T & element)>;
 
-    explicit LooseBoundedMPMCQueue(size_t capacity_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
-        , get_auxiliary_memory_usage([](const T &) { return 0; })
-    {}
-    LooseBoundedMPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
-        : capacity(std::max(1, capacity_))
-        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+    explicit LooseBoundedMPMCQueue(
+        const CapacityLimits & capacity_limits_,
+        ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_ = [](const T &) { return 0; },
+        PushCallback && push_callback_ = {})
+        : capacity_limits(capacity_limits_)
         , get_auxiliary_memory_usage(
-              max_auxiliary_memory_usage == std::numeric_limits<Int64>::max()
+              capacity_limits.max_bytes == std::numeric_limits<Int64>::max()
                   ? [](const T &) {
                         return 0;
                     }
                   : std::move(get_auxiliary_memory_usage_))
+        , push_callback(std::move(push_callback_))
     {}
 
     /// blocking function.
@@ -147,16 +146,35 @@ public:
         return MPMCQueueResult::OK;
     }
 
+    MPMCQueueResult dequeue()
+    {
+        std::lock_guard lock(mu);
+
+        if unlikely (status == MPMCQueueStatus::CANCELLED)
+            return MPMCQueueResult::CANCELLED;
+
+        if (queue.empty())
+            return status == MPMCQueueStatus::NORMAL
+                ? MPMCQueueResult::EMPTY
+                : MPMCQueueResult::FINISHED;
+
+        popBack();
+        return MPMCQueueResult::OK;
+    }
+
     size_t size() const
     {
         std::lock_guard lock(mu);
         return queue.size();
     }
 
-    bool isFull() const
+    bool isWritable() const
     {
         std::lock_guard lock(mu);
-        return isFullWithoutLock();
+        // When the queue is not in normal status, isWritable returns true to ensure that forcePush can be called.
+        if unlikely (status != MPMCQueueStatus::NORMAL)
+            return true;
+        return !isFullWithoutLock();
     }
 
     MPMCQueueStatus getStatus() const
@@ -202,7 +220,7 @@ private:
     bool isFullWithoutLock() const
     {
         assert(current_auxiliary_memory_usage >= 0);
-        return queue.size() >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage;
+        return static_cast<Int64>(queue.size()) >= capacity_limits.max_size || current_auxiliary_memory_usage >= capacity_limits.max_bytes;
     }
 
     template <typename FF>
@@ -235,6 +253,10 @@ private:
         Int64 memory_usage = get_auxiliary_memory_usage(data);
         queue.emplace_front(std::forward<U>(data), memory_usage);
         current_auxiliary_memory_usage += memory_usage;
+        if (push_callback)
+        {
+            push_callback(queue.front().data);
+        }
         reader_head.notifyNext();
         /// consider a case that the queue capacity is 2, the max_auxiliary_memory_usage is 100,
         /// T1: a writer write an object with size 100
@@ -246,7 +268,7 @@ private:
         /// 1. there is another reader
         /// 2. there is another writer
         /// if we notify the writer if the queue is not full here, w3 can write immediately
-        if (max_auxiliary_memory_usage != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
+        if (capacity_limits.max_bytes != std::numeric_limits<Int64>::max() && !isFullWithoutLock())
             writer_head.notifyNext();
     }
 
@@ -256,20 +278,20 @@ private:
     {
         T data;
         Int64 memory_usage;
-        DataWithMemoryUsage(T && data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T && data_, Int64 memory_usage_)
             : data(std::move(data_))
             , memory_usage(memory_usage_)
         {}
-        DataWithMemoryUsage(T & data_, Int64 memory_usage_)
+        DataWithMemoryUsage(const T & data_, Int64 memory_usage_)
             : data(data_)
             , memory_usage(memory_usage_)
         {}
     };
 
     std::deque<DataWithMemoryUsage> queue;
-    size_t capacity;
-    const Int64 max_auxiliary_memory_usage;
+    CapacityLimits capacity_limits;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
+    const PushCallback push_callback;
     Int64 current_auxiliary_memory_usage = 0;
 
     MPMCQueueDetail::WaitingNode reader_head;

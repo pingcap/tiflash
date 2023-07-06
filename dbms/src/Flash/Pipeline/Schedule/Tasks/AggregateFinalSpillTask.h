@@ -21,7 +21,7 @@ namespace DB
 class AggregateContext;
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
 
-class AggregateFinalSpillTask : public IOEventTask
+class AggregateFinalSpillTask : public OutputIOEventTask
 {
 public:
     AggregateFinalSpillTask(

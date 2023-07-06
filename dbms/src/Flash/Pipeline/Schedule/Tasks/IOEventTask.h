@@ -18,6 +18,7 @@
 
 namespace DB
 {
+template <bool is_input>
 class IOEventTask : public EventTask
 {
 public:
@@ -33,12 +34,22 @@ public:
 private:
     ExecTaskStatus doExecuteImpl() override
     {
-        return ExecTaskStatus::IO;
+        if constexpr (is_input)
+            return ExecTaskStatus::IO_IN;
+        else
+            return ExecTaskStatus::IO_OUT;
     }
 
     ExecTaskStatus doAwaitImpl() override
     {
-        return ExecTaskStatus::IO;
+        if constexpr (is_input)
+            return ExecTaskStatus::IO_IN;
+        else
+            return ExecTaskStatus::IO_OUT;
     }
 };
+
+using InputIOEventTask = IOEventTask<true>;
+using OutputIOEventTask = IOEventTask<false>;
+
 } // namespace DB

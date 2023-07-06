@@ -25,7 +25,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
         {
             RUNTIME_CHECK(!is_final_spill);
             is_final_spill = true;
-            return OperatorStatus::IO;
+            return OperatorStatus::IO_OUT;
         }
         return OperatorStatus::FINISHED;
     }
@@ -33,7 +33,7 @@ OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
     total_rows += block.rows();
     block.clear();
     return agg_context->needSpill(index)
-        ? OperatorStatus::IO
+        ? OperatorStatus::IO_OUT
         : OperatorStatus::NEED_INPUT;
 }
 
@@ -45,7 +45,7 @@ OperatorStatus AggregateBuildSinkOp::executeIOImpl()
         : OperatorStatus::NEED_INPUT;
 }
 
-void AggregateBuildSinkOp::operateSuffix()
+void AggregateBuildSinkOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish build with {} rows", total_rows);
 }

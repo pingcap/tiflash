@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/Types.h>
 
 #include <map>
@@ -21,13 +22,12 @@
 
 namespace DB
 {
-
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 struct TiKVRangeKey;
-using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+using RegionRange = RegionRangeKeys::RegionRange;
 
 struct TiKVRangeKeyCmp
 {
@@ -60,9 +60,12 @@ public:
 
     void clear();
 
+    // TODO Used by RegionKVStoreTest, using a friend decl here.
+    RootMap::iterator split(const TiKVRangeKey & new_start);
+    void tryMergeEmpty();
+
 private:
     void tryMergeEmpty(RootMap::iterator remove_it);
-    RootMap::iterator split(const TiKVRangeKey & new_start);
 
 private:
     RootMap root;

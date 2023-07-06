@@ -837,6 +837,7 @@ try
         try
         {
             FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+            SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
             page_storage->write(std::move(batch));
         }
         catch (DB::Exception & e)
@@ -847,7 +848,6 @@ try
         }
     }
 
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
     {
         size_t num_pages = 0;
         page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
@@ -1710,7 +1710,7 @@ try
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
 
-    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
     ASSERT_TRUE(done_snapshot);
 
     {
@@ -1784,7 +1784,7 @@ try
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
 
-    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
     ASSERT_TRUE(done_snapshot);
 
     {

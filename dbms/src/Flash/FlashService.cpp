@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
@@ -61,6 +62,10 @@ extern const int NOT_IMPLEMENTED;
 extern const int UNKNOWN_EXCEPTION;
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char exception_when_fetch_disagg_pages[];
+} // namespace FailPoints
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -139,6 +144,7 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+        std::make_pair("tidb_enable_tiflash_pipeline_model", "enable_pipeline"),
     };
     for (const auto & names : tidb_varname_to_tiflash_varname)
     {
@@ -637,7 +643,16 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
-    // TODO metrics
+
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_establish_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_establish_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_disagg_establish_task).Increment(response->ByteSizeLong());
+    });
+
     auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
         return status;
@@ -740,13 +755,21 @@ grpc::Status FlashService::FetchDisaggPages(
 
     RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "FetchDisaggPages should only be called on write node");
 
+    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages).Observe(watch.elapsedSeconds());
+    });
+
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
     // get the keyspace from meta, it is now used for debugging
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
+    LOG_DEBUG(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -760,12 +783,14 @@ grpc::Status FlashService::FetchDisaggPages(
         auto task = snap->popSegTask(request->table_id(), request->segment_id());
         RUNTIME_CHECK(task.isValid(), task.err_msg);
 
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_when_fetch_disagg_pages);
+
         PageIdU64s read_ids;
         read_ids.reserve(request->page_ids_size());
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids);
+        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids, context->getSettingsRef().dt_fetch_pages_packet_limit_size);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 
