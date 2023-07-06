@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,93 @@
 
 #pragma once
 
+#include <Common/typeid_cast.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/FlashService.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <tipb/executor.pb.h>
+#include <tipb/expression.pb.h>
+
+#include <memory>
 
 namespace DB::mock
 {
-// true: unbounded, false: not unbounded
-using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
+// This struct contains something that could help to build the range frame's tipb::Expr
+struct BuildRangeFrameHelper
+{
+    ASTPtr range_aux_func;
+    ContextPtr context;
+};
+
+class MockWindowFrameBound
+{
+public:
+    // Constructor for non-range frame type
+    MockWindowFrameBound(tipb::WindowBoundType bound_type_, bool is_unbounded_, UInt64 offset_)
+        : bound_type(bound_type_)
+        , is_unbounded(is_unbounded_)
+        , offset(offset_)
+    {}
+
+    // Constructor for range frame type
+    MockWindowFrameBound(
+        tipb::WindowBoundType bound_type_,
+        tipb::RangeCmpDataType cmp_data_type_,
+        const BuildRangeFrameHelper & range_frame_helper_)
+        : bound_type(bound_type_)
+        , is_unbounded(false)
+        , offset(0)
+        , range_frame_helper(range_frame_helper_)
+        , cmp_data_type(cmp_data_type_)
+        , range_frame(nullptr)
+    {}
+
+    tipb::WindowBoundType getBoundType() const { return bound_type; }
+    bool isUnbounded() const { return is_unbounded; }
+    UInt64 getOffset() const { return offset; }
+
+    tipb::Expr * robRangeFrame()
+    {
+        auto * tmp = range_frame;
+        range_frame = nullptr;
+        return tmp;
+    }
+
+    tipb::RangeCmpDataType getCmpDataType() const { return cmp_data_type; }
+
+    // This is a range frame type when range_frame_helper.range_aux_func is set.
+    bool isRangeFrame() const
+    {
+        return static_cast<bool>(range_frame_helper.range_aux_func);
+    }
+
+    void buildRangeFrameAuxFunction(const DAGSchema & input)
+    {
+        range_frame = new tipb::Expr();
+        auto * ast_func = typeid_cast<ASTFunction *>(range_frame_helper.range_aux_func.get());
+        if (ast_func == nullptr)
+            throw Exception("Building range frame needs ASTFunction");
+
+        // collator is useless when building range frame,
+        // because range frame's order by column is forbidden to be string type
+        functionToPB(input, ast_func, range_frame, 0, *range_frame_helper.context);
+    }
+
+private:
+    tipb::WindowBoundType bound_type;
+    bool is_unbounded; // true: unbounded, false: not unbounded
+    UInt64 offset;
+
+    BuildRangeFrameHelper range_frame_helper;
+    tipb::RangeCmpDataType cmp_data_type; // only for range frame type
+
+    // only for range frame type
+    // Self class is responsible for creating and destroy this pointer
+    tipb::Expr * range_frame = nullptr;
+};
+
 struct MockWindowFrame
 {
     std::optional<tipb::WindowFrameType> type;
@@ -28,6 +108,7 @@ struct MockWindowFrame
     std::optional<MockWindowFrameBound> end;
     // TODO: support calcFuncs
 };
+
 using ASTPartitionByElement = ASTOrderByElement;
 
 class WindowBinder : public ExecutorBinder
@@ -56,5 +137,5 @@ private:
     uint64_t fine_grained_shuffle_stream_count;
 };
 
-ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count);
+ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count);
 } // namespace DB::mock

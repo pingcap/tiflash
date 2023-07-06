@@ -164,9 +164,9 @@ public:
     DAGRequestBuilder & aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs, uint64_t fine_grained_shuffle_stream_count = 0);
 
     // window
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -282,8 +282,12 @@ MockWindowFrame buildDefaultRowsFrame();
 
 // expressions
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
-#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
-#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusInt", (expr1), (expr2))
+#define plusReal(expr1, expr2) makeASTFunction("plusReal", (expr1), (expr2))
+#define plusDecimal(expr1, expr2) makeASTFunction("plusDecimal", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusInt", (expr1), (expr2))
+#define minusReal(expr1, expr2) makeASTFunction("minusReal", (expr1), (expr2))
+#define minusDecimal(expr1, expr2) makeASTFunction("minusDecimal", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
