@@ -19,8 +19,6 @@
 
 namespace DB
 {
-class PipelineExecutorStatus;
-
 // The base class of event related task.
 class EventTask : public Task
 {
@@ -29,30 +27,17 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
     EventTask(
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id,
         PipelineExecutorStatus & exec_status_,
+        const String & req_id,
         const EventPtr & event_);
 
-    const String & getQueryId() const override;
-
 protected:
-    ExecTaskStatus executeImpl() override;
-    virtual ExecTaskStatus doExecuteImpl() = 0;
-
-    ExecTaskStatus executeIOImpl() override;
-    virtual ExecTaskStatus doExecuteIOImpl() { return ExecTaskStatus::RUNNING; };
-
-    ExecTaskStatus awaitImpl() override;
-    virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
-
     void finalizeImpl() override;
     virtual void doFinalizeImpl(){};
 
     UInt64 getScheduleDuration() const;
 
 private:
-    PipelineExecutorStatus & exec_status;
     EventPtr event;
 };
 

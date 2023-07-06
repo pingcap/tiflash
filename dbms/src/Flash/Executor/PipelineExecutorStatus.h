@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MemoryTracker.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
@@ -31,13 +32,16 @@ class PipelineExecutorStatus : private boost::noncopyable
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
+    // Only used for unit test.
     PipelineExecutorStatus()
         : log(Logger::get())
+        , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorStatus(const String & query_id_, const String & req_id)
+    PipelineExecutorStatus(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
         : query_id(query_id_)
         , log(Logger::get(req_id))
+        , mem_tracker(mem_tracker_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -146,6 +150,8 @@ public:
         return query_id;
     }
 
+    const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -158,6 +164,8 @@ private:
     const String query_id;
 
     LoggerPtr log;
+
+    MemoryTrackerPtr mem_tracker;
 
     std::mutex mu;
     std::condition_variable cv;

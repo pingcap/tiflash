@@ -26,7 +26,10 @@ PipelineExecutor::PipelineExecutor(
     Context & context_,
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
-    , status(context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().query_id.toString() : "", req_id)
+    , status(
+          context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().query_id.toString() : "",
+          req_id,
+          memory_tracker_)
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());

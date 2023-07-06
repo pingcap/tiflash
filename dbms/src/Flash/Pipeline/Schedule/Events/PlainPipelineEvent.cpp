@@ -24,7 +24,7 @@ void PlainPipelineEvent::scheduleImpl()
     auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     for (auto & pipeline_exec : pipeline_exec_group)
-        addTask(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
+        addTask(std::make_unique<PipelineTask>(exec_status, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
 }
 
 void PlainPipelineEvent::finishImpl()

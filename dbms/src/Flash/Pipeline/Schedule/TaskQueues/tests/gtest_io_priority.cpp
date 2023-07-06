@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -25,18 +26,13 @@ namespace
 class MockIOTask : public Task
 {
 public:
-    explicit MockIOTask(bool is_io_in, const String & query_id_ = "")
-        : query_id(query_id_)
+    MockIOTask(PipelineExecutorStatus & exec_status_, bool is_io_in)
+        : Task(exec_status_)
     {
         task_status = is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT;
     }
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
-
-    const String & getQueryId() const override { return query_id; }
-
-private:
-    String query_id;
 };
 } // namespace
 
@@ -66,15 +62,16 @@ try
         }
         ASSERT_EQ(taken_take_num, 2 * task_num_per_status);
     });
+    PipelineExecutorStatus status;
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(true));
+            queue.submit(std::make_unique<MockIOTask>(status, true));
         }
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(false));
+            queue.submit(std::make_unique<MockIOTask>(status, false));
         }
         queue.finish();
     });
@@ -82,7 +79,7 @@ try
     thread_manager->wait();
 
     // No tasks can be submitted after the queue is finished.
-    queue.submit(std::make_unique<MockIOTask>(false));
+    queue.submit(std::make_unique<MockIOTask>(status, false));
     TaskPtr task;
     ASSERT_FALSE(queue.take(task));
 }
@@ -93,9 +90,10 @@ try
 {
     // in 0 : out 0
     {
+        PipelineExecutorStatus status;
         IOPriorityQueue queue;
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(status, true));
+        queue.submit(std::make_unique<MockIOTask>(status, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -109,11 +107,12 @@ try
 
     // in 1 : out ratio_of_in_to_out
     {
+        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_out_to_in);
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(status, true));
+        queue.submit(std::make_unique<MockIOTask>(status, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -127,11 +126,12 @@ try
 
     // in 1 : out ratio_of_in_to_out+1
     {
+        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(status, true));
+        queue.submit(std::make_unique<MockIOTask>(status, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -145,11 +145,12 @@ try
 
     // in 1 : out ratio_of_in_to_out-1
     {
+        PipelineExecutorStatus status;
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(status, true));
+        queue.submit(std::make_unique<MockIOTask>(status, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -169,8 +170,10 @@ try
     // case1 submit first.
     {
         IOPriorityQueue queue;
-        queue.submit(std::make_unique<MockIOTask>(false, "id1"));
-        queue.submit(std::make_unique<MockIOTask>(true, "id2"));
+        PipelineExecutorStatus status1("id1", "", nullptr);
+        queue.submit(std::make_unique<MockIOTask>(status1, false));
+        PipelineExecutorStatus status2("id2", "", nullptr);
+        queue.submit(std::make_unique<MockIOTask>(status2, true));
         queue.cancel("id2");
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
@@ -187,8 +190,10 @@ try
     {
         IOPriorityQueue queue;
         queue.cancel("id2");
-        queue.submit(std::make_unique<MockIOTask>(false, "id1"));
-        queue.submit(std::make_unique<MockIOTask>(true, "id2"));
+        PipelineExecutorStatus status1("id1", "", nullptr);
+        queue.submit(std::make_unique<MockIOTask>(status1, false));
+        PipelineExecutorStatus status2("id2", "", nullptr);
+        queue.submit(std::make_unique<MockIOTask>(status2, true));
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);

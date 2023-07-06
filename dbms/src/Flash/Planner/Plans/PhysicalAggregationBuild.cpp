@@ -86,8 +86,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_
     }
     if (!indexes.empty())
     {
-        auto mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-        return std::make_shared<AggregateFinalSpillEvent>(exec_status, mem_tracker, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
+        return std::make_shared<AggregateFinalSpillEvent>(exec_status, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
     }
     return nullptr;
 }

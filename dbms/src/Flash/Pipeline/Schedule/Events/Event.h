@@ -41,14 +41,8 @@ class PipelineExecutorStatus;
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    Event(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id = "")
-        : exec_status(exec_status_)
-        , mem_tracker(std::move(mem_tracker_))
-        , log(Logger::get(req_id))
-    {}
+    explicit Event(PipelineExecutorStatus & exec_status_, const String & req_id = "");
+
     virtual ~Event() = default;
 
     void addInput(const EventPtr & input);

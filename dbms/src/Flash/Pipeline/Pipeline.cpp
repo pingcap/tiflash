@@ -217,19 +217,18 @@ Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, si
 
 PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
-    auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
-        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, log->identifier(), context, shared_from_this(), concurrency));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};

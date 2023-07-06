@@ -38,6 +38,12 @@ extern const char random_pipeline_model_event_finish_failpoint[];
         exec_status.onErrorOccurred(std::current_exception());   \
     }
 
+Event::Event(PipelineExecutorStatus & exec_status_, const String & req_id)
+    : exec_status(exec_status_)
+    , mem_tracker(exec_status_.getMemoryTracker())
+    , log(Logger::get(req_id))
+{}
+
 void Event::addInput(const EventPtr & input)
 {
     assertStatus(EventStatus::INIT);

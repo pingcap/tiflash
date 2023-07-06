@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -25,18 +26,11 @@ namespace
 class PlainTask : public Task
 {
 public:
-    PlainTask() = default;
-
-    explicit PlainTask(const String & query_id_)
-        : query_id(query_id_)
+    explicit PlainTask(PipelineExecutorStatus & exec_status_)
+        : Task(exec_status_)
     {}
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
-
-    const String & getQueryId() const override { return query_id; }
-
-private:
-    String query_id;
 };
 } // namespace
 
@@ -48,11 +42,12 @@ class TestMLFQTaskQueue : public ::testing::Test
 TEST_F(TestMLFQTaskQueue, init)
 try
 {
+    PipelineExecutorStatus status;
     TaskQueuePtr queue = std::make_unique<CPUMultiLevelFeedbackQueue>();
     size_t valid_task_num = 1000;
     // submit
     for (size_t i = 0; i < valid_task_num; ++i)
-        queue->submit(std::make_unique<PlainTask>());
+        queue->submit(std::make_unique<PlainTask>(status));
     // take
     for (size_t i = 0; i < valid_task_num; ++i)
     {
@@ -64,7 +59,7 @@ try
     ASSERT_TRUE(queue->empty());
     queue->finish();
     // No tasks can be submitted after the queue is finished.
-    queue->submit(std::make_unique<PlainTask>());
+    queue->submit(std::make_unique<PlainTask>(status));
     TaskPtr task;
     ASSERT_FALSE(queue->take(task));
 }
@@ -81,11 +76,12 @@ try
         return CPUMultiLevelFeedbackQueue::LEVEL_TIME_SLICE_BASE_NS * (1 + random() % 100);
     };
 
+    PipelineExecutorStatus status;
     // submit valid task
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < valid_task_num; ++i)
         {
-            TaskPtr task = std::make_unique<PlainTask>();
+            TaskPtr task = std::make_unique<PlainTask>(status);
             auto value = mock_value();
             queue->updateStatistics(task, ExecTaskStatus::INIT, value);
             task->profile_info.addCPUExecuteTime(value);
@@ -113,7 +109,8 @@ TEST_F(TestMLFQTaskQueue, level)
 try
 {
     CPUMultiLevelFeedbackQueue queue;
-    TaskPtr task = std::make_unique<PlainTask>();
+    PipelineExecutorStatus status;
+    TaskPtr task = std::make_unique<PlainTask>(status);
     queue.submit(std::move(task));
     for (size_t level = 0; level < CPUMultiLevelFeedbackQueue::QUEUE_SIZE; ++level)
     {
@@ -141,12 +138,13 @@ CATCH
 TEST_F(TestMLFQTaskQueue, feedback)
 try
 {
+    PipelineExecutorStatus status;
     CPUMultiLevelFeedbackQueue queue;
 
     // The case that low level > high level
     {
         // level `QUEUE_SIZE - 1`
-        TaskPtr task = std::make_unique<PlainTask>();
+        TaskPtr task = std::make_unique<PlainTask>(status);
         task->mlfq_level = CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1;
         auto value = queue.getUnitQueueInfo(task->mlfq_level).time_slice;
         queue.updateStatistics(task, ExecTaskStatus::INIT, value);
@@ -155,7 +153,7 @@ try
     }
     {
         // level `0`
-        TaskPtr task = std::make_unique<PlainTask>();
+        TaskPtr task = std::make_unique<PlainTask>(status);
         auto value = queue.getUnitQueueInfo(0).time_slice - 1;
         queue.updateStatistics(task, ExecTaskStatus::INIT, value);
         task->profile_info.addCPUExecuteTime(value);
@@ -181,7 +179,7 @@ try
     for (size_t i = 0; i < task_num; ++i)
     {
         // level `0`
-        TaskPtr task = std::make_unique<PlainTask>();
+        TaskPtr task = std::make_unique<PlainTask>(status);
         auto value = queue.getUnitQueueInfo(0).time_slice - 1;
         queue.updateStatistics(task, ExecTaskStatus::INIT, value);
         task->profile_info.addCPUExecuteTime(value);
@@ -189,7 +187,7 @@ try
     }
     {
         // level `QUEUE_SIZE - 1`
-        TaskPtr task = std::make_unique<PlainTask>();
+        TaskPtr task = std::make_unique<PlainTask>(status);
         task->mlfq_level = CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1;
         auto value = queue.getUnitQueueInfo(task->mlfq_level).time_slice;
         queue.updateStatistics(task, ExecTaskStatus::INIT, value);
@@ -221,8 +219,10 @@ try
     // case1 submit first.
     {
         CPUMultiLevelFeedbackQueue queue;
-        queue.submit(std::make_unique<PlainTask>("id1"));
-        queue.submit(std::make_unique<PlainTask>("id2"));
+        PipelineExecutorStatus status1("id1", "", nullptr);
+        queue.submit(std::make_unique<PlainTask>(status1));
+        PipelineExecutorStatus status2("id2", "", nullptr);
+        queue.submit(std::make_unique<PlainTask>(status2));
         queue.cancel("id2");
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
@@ -239,8 +239,10 @@ try
     {
         CPUMultiLevelFeedbackQueue queue;
         queue.cancel("id2");
-        queue.submit(std::make_unique<PlainTask>("id1"));
-        queue.submit(std::make_unique<PlainTask>("id2"));
+        PipelineExecutorStatus status1("id1", "", nullptr);
+        queue.submit(std::make_unique<PlainTask>(status1));
+        PipelineExecutorStatus status2("id2", "", nullptr);
+        queue.submit(std::make_unique<PlainTask>(status2));
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);

@@ -23,16 +23,15 @@ class IOEventTask : public EventTask
 {
 public:
     IOEventTask(
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id,
         PipelineExecutorStatus & exec_status_,
+        const String & req_id,
         const EventPtr & event_)
-        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        : EventTask(exec_status_, req_id, event_)
     {
     }
 
 private:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;
@@ -40,7 +39,7 @@ private:
             return ExecTaskStatus::IO_OUT;
     }
 
-    ExecTaskStatus doAwaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
         if constexpr (is_input)
             return ExecTaskStatus::IO_IN;

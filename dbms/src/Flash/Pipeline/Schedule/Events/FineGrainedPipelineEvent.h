@@ -24,10 +24,9 @@ class FineGrainedPipelineEvent : public Event
 public:
     FineGrainedPipelineEvent(
         PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         PipelineExecPtr && pipeline_exec_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        : Event(exec_status_, req_id)
         , pipeline_exec(std::move(pipeline_exec_))
     {
         RUNTIME_CHECK(pipeline_exec);

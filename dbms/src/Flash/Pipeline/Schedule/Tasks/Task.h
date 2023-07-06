@@ -44,12 +44,14 @@ enum class ExecTaskStatus
     CANCELLED,
 };
 
+class PipelineExecutorStatus;
+
 class Task
 {
 public:
-    Task();
+    Task(PipelineExecutorStatus & exec_status_, const String & req_id);
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
+    explicit Task(PipelineExecutorStatus & exec_status_);
 
     virtual ~Task();
 
@@ -77,11 +79,7 @@ public:
         current_memory_tracker = nullptr;
     }
 
-    virtual const String & getQueryId() const
-    {
-        static const String empty_query_id{};
-        return empty_query_id;
-    }
+    const String & getQueryId() const;
 
 public:
     LoggerPtr log;
@@ -108,6 +106,8 @@ protected:
     ExecTaskStatus task_status{ExecTaskStatus::INIT};
 
 private:
+    PipelineExecutorStatus & exec_status;
+
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;
     // To reduce the overheads of `mem_tracker_holder.get()`

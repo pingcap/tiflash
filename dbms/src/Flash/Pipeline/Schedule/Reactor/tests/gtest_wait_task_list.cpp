@@ -13,12 +13,11 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
-
-#include <thread>
 
 namespace DB::tests
 {
@@ -27,6 +26,10 @@ namespace
 class PlainTask : public Task
 {
 public:
+    explicit PlainTask(PipelineExecutorStatus & exec_status_)
+        : Task(exec_status_)
+    {}
+
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };
 } // namespace
@@ -43,6 +46,8 @@ try
     auto thread_manager = newThreadManager();
     size_t round = 1000;
     size_t valid_task_num = 2 * round;
+
+    PipelineExecutorStatus exec_status;
 
     // take/tryTask valid task
     std::atomic_size_t taken_task_num = 0;
@@ -64,9 +69,9 @@ try
     // submit valid task
     for (size_t i = 0; i < round; ++i)
     {
-        list.submit(std::make_unique<PlainTask>());
+        list.submit(std::make_unique<PlainTask>(exec_status));
         std::list<TaskPtr> local_list;
-        local_list.push_back(std::make_unique<PlainTask>());
+        local_list.push_back(std::make_unique<PlainTask>(exec_status));
         list.submit(local_list);
     }
     list.finish();
@@ -75,7 +80,7 @@ try
     ASSERT_EQ(taken_task_num, valid_task_num);
 
     // No tasks are submitted after the list is finished.
-    list.submit(std::make_unique<PlainTask>());
+    list.submit(std::make_unique<PlainTask>(exec_status));
     {
         std::list<TaskPtr> local_list;
         ASSERT_FALSE(list.take(local_list));

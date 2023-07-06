@@ -36,7 +36,7 @@ public:
     {}
 
 protected:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
         --counter;
         return ExecTaskStatus::FINISHED;
@@ -52,7 +52,7 @@ public:
     BaseEvent(
         PipelineExecutorStatus & exec_status_,
         std::atomic_int64_t & counter_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , counter(counter_)
     {}
 
@@ -84,7 +84,7 @@ public:
     {}
 
 protected:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -101,7 +101,7 @@ public:
     RunEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_tasks_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , with_tasks(with_tasks_)
     {}
 
@@ -129,7 +129,7 @@ public:
     {}
 
 protected:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         return ExecTaskStatus::RUNNING;
@@ -142,7 +142,7 @@ public:
     DeadLoopEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_tasks_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , with_tasks(with_tasks_)
     {}
 
@@ -168,7 +168,7 @@ class OnErrEvent : public Event
 {
 public:
     explicit OnErrEvent(PipelineExecutorStatus & exec_status_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
     {}
 
     static constexpr auto err_msg = "error from OnErrEvent";
@@ -183,9 +183,11 @@ protected:
 class AssertMemoryTraceEvent : public Event
 {
 public:
-    AssertMemoryTraceEvent(PipelineExecutorStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
-        : Event(exec_status_, std::move(mem_tracker_))
-    {}
+    explicit AssertMemoryTraceEvent(PipelineExecutorStatus & exec_status_)
+        : Event(exec_status_)
+    {
+        assert(mem_tracker != nullptr);
+    }
 
 protected:
     void scheduleImpl() override
@@ -209,7 +211,7 @@ public:
     {}
 
 protected:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
         throw Exception("throw exception in doExecuteImpl");
     }
@@ -221,7 +223,7 @@ public:
     ThrowExceptionEvent(
         PipelineExecutorStatus & exec_status_,
         bool with_task_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , with_task(with_task_)
     {}
 
@@ -251,7 +253,7 @@ public:
     ManyTasksEvent(
         PipelineExecutorStatus & exec_status_,
         size_t task_num_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , task_num(task_num_)
     {}
 
@@ -275,7 +277,7 @@ public:
     DoInsertEvent(
         PipelineExecutorStatus & exec_status_,
         int16_t & counter_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , counter(counter_)
     {
         assert(counter > 0);
@@ -302,7 +304,7 @@ class CreateTaskFailEvent : public Event
 {
 public:
     explicit CreateTaskFailEvent(PipelineExecutorStatus & exec_status_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
     {
     }
 
@@ -329,8 +331,8 @@ public:
     {}
 
 protected:
-    // doExecuteImpl min_time ==> doExecuteIOImpl min_time ==> doAwaitImpl min_time.
-    ExecTaskStatus doExecuteImpl() override
+    // executeImpl min_time ==> executeIOImpl min_time ==> awaitImpl min_time.
+    ExecTaskStatus executeImpl() override
     {
         if (cpu_execute_time < min_time)
         {
@@ -341,7 +343,7 @@ protected:
         return ExecTaskStatus::IO_IN;
     }
 
-    ExecTaskStatus doExecuteIOImpl() override
+    ExecTaskStatus executeIOImpl() override
     {
         if (io_execute_time < min_time)
         {
@@ -352,7 +354,7 @@ protected:
         return ExecTaskStatus::WAITING;
     }
 
-    ExecTaskStatus doAwaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
         if unlikely (!wait_stopwatch)
             wait_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
@@ -371,7 +373,7 @@ class TestPorfileEvent : public Event
 {
 public:
     explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_, size_t task_num_)
-        : Event(exec_status_, nullptr)
+        : Event(exec_status_)
         , task_num(task_num_)
     {}
 
@@ -559,9 +561,8 @@ CATCH
 TEST_F(EventTestRunner, memoryTrace)
 try
 {
-    PipelineExecutorStatus exec_status;
-    auto tracker = MemoryTracker::create();
-    auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
+    PipelineExecutorStatus exec_status{"", "", MemoryTracker::create()};
+    auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status);
     if (event->prepare())
         event->schedule();
     wait(exec_status);
