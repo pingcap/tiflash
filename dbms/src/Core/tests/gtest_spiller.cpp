@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Core/Defines.h>
 #include <Core/Spiller.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -21,7 +22,6 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 
 namespace DB
 {
@@ -44,7 +44,7 @@ protected:
         spiller_test_header = Block(names_and_types);
         auto key_manager = std::make_shared<MockKeyManager>(false);
         auto file_provider = std::make_shared<FileProvider>(key_manager, false);
-        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider);
+        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider, DEFAULT_BLOCK_SIZE, 10);
     }
     void TearDown() override
     {
@@ -523,7 +523,9 @@ try
                 col.column = col.column->cloneResized(rows);
             blocks.push_back(std::move(block));
         }
-        Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock1", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
         ASSERT_TRUE(spiller.hasSpilledData());
@@ -544,6 +546,8 @@ try
                 col.column = col.column->cloneResized(1);
             blocks.push_back(std::move(block));
         }
+        auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock2", rand());
+        SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
         Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
@@ -558,7 +562,7 @@ try
         for (auto & col : block2)
             col.column = col.column->cloneResized(1);
         expected_blocks.push_back(std::move(block2));
-        verifyRestoreBlocks(spiller, 0, 100, 1, expected_blocks);
+        verifyRestoreBlocks(spiller, 0, 100, 2, expected_blocks);
     }
 }
 CATCH

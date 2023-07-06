@@ -206,12 +206,32 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     BlockInputStreams ret;
     if unlikely (isAllConstant())
     {
-        std::lock_guard lock(all_constant_mutex);
-        if (all_constant_block_rows[partition_id] > 0)
+        UInt64 total_rows = 0;
         {
-            // TODO use settings.max_block_size instead of DEFAULT_BLOCK_SIZE.
-            ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, all_constant_block_rows[partition_id], DEFAULT_BLOCK_SIZE));
+            std::lock_guard lock(all_constant_mutex);
+            total_rows = all_constant_block_rows[partition_id];
             all_constant_block_rows[partition_id] = 0;
+        }
+        if (total_rows > 0)
+        {
+            if (max_stream_size == 0)
+                max_stream_size = config.for_all_constant_max_streams;
+            std::vector<UInt64> stream_rows;
+            stream_rows.resize(max_stream_size, 0);
+            size_t index = 0;
+            while (total_rows > 0)
+            {
+                auto cur_rows = std::min(total_rows, config.for_all_constant_block_size);
+                total_rows -= cur_rows;
+                stream_rows[index++] += cur_rows;
+                if (index == stream_rows.size())
+                    index = 0;
+            }
+            for (auto stream_row : stream_rows)
+            {
+                if (stream_row > 0)
+                    ret.push_back(std::make_shared<ConstantsBlockInputStream>(input_schema, stream_row, config.for_all_constant_block_size));
+            }
         }
     }
     else
