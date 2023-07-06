@@ -100,11 +100,22 @@ public:
     ColumnWithNullableString col_string{{}, "pingcap", "PingCAP", {}, "PINGCAP", "PingCAP", {}, "Shanghai", "Shanghai"};
 };
 
+#define WRAP_FOR_DM_TEST_BEGIN                     \
+    enablePlanner(true);                           \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_DM_TEST_END \
+    }
+
 TEST_F(ExecutorsWithDMTestRunner, Basic)
 try
 {
     std::vector<bool> keep_order_opt{false, true};
 
+    WRAP_FOR_DM_TEST_BEGIN
     for (auto keep_order : keep_order_opt)
     {
         auto request = context
@@ -191,8 +202,12 @@ try
             {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
              {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
     }
+    WRAP_FOR_DM_TEST_END
 }
 CATCH
+
+#undef WRAP_FOR_DM_TEST_BEGIN
+#undef WRAP_FOR_DM_TEST_END
 
 } // namespace tests
 } // namespace DB

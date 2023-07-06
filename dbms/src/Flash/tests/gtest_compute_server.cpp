@@ -788,7 +788,7 @@ try
         "random_pipeline_model_task_run_failpoint-0.8",
         "random_pipeline_model_task_construct_failpoint-1.0",
         "random_pipeline_model_event_schedule_failpoint-1.0",
-        // Because the mock table scan will always output data, there will be no event triggering onEventFinish, so the query will not terminate.
+        // Because the mock table scan will always output data, there will be no event triggering decActiveRefCount, so the query will not terminate.
         // "random_pipeline_model_event_finish_failpoint-0.99",
         "random_pipeline_model_operator_run_failpoint-0.8",
         "random_pipeline_model_cancel_failpoint-0.8",

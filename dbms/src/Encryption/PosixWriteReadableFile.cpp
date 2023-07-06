@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/PosixWriteReadableFile.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -135,6 +136,10 @@ ssize_t PosixWriteReadableFile::pread(char * buf, size_t size, off_t offset) con
 int PosixWriteReadableFile::fsync()
 {
     ProfileEvents::increment(ProfileEvents::FileFSync);
+    Stopwatch sw;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_system_seconds, type_fsync).Observe(sw.elapsedSeconds());
+    });
     return ::fsync(fd);
 }
 
