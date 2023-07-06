@@ -85,11 +85,15 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
+    MPPQuery(bool has_meaningful_gather_id_)
+        : has_meaningful_gather_id(has_meaningful_gather_id_)
+    {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
     ~MPPQuery();
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::unordered_map<MPPGatherId, MPPGatherTaskSetPtr, MPPGatherIdHash> mpp_gathers;
+    bool has_meaningful_gather_id;
 };
 using MPPQueryPtr = std::shared_ptr<MPPQuery>;
 
@@ -240,7 +244,7 @@ public:
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
 private:
-    MPPQueryPtr addMPPQuery(const MPPQueryId & query_id);
+    MPPQueryPtr addMPPQuery(const MPPGatherId & gather_id);
     void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);
     std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id);
 };

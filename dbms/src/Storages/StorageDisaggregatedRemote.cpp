@@ -65,7 +65,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;

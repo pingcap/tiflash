@@ -76,10 +76,10 @@ MPPTaskManager::~MPPTaskManager()
     monitor->cv.notify_all();
 }
 
-MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPQueryId & query_id)
+MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPGatherId & gather_id)
 {
-    auto ptr = std::make_shared<MPPQuery>();
-    mpp_query_map.insert({query_id, ptr});
+    auto ptr = std::make_shared<MPPQuery>(gather_id.hasMeaningfulGatherId());
+    mpp_query_map.insert({gather_id.query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
 }
@@ -127,7 +127,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         {
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
-                query = addMPPQuery(id.gather_id.query_id);
+                query = addMPPQuery(id.gather_id);
             if (gather_set == nullptr)
                 gather_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_set->alarms[sender_task_id][receiver_task_id];
@@ -174,7 +174,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     String error_message;
     std::unique_lock lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
-        auto [query_set, error_msg] = getGatherTaskSetWithoutLock(id.gather_id);
+        auto [gather_set, error_msg] = getGatherTaskSetWithoutLock(id.gather_id);
         if (!error_msg.empty())
         {
             /// if the query is aborted, return true to stop waiting timeout.
@@ -183,11 +183,11 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
             error_message = error_msg;
             return true;
         }
-        if (query_set == nullptr)
+        if (gather_set == nullptr)
         {
             return false;
         }
-        task = query_set->findMPPTask(id);
+        task = gather_set->findMPPTask(id);
         return task != nullptr;
     });
     fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
@@ -283,7 +283,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     auto & context = task->context;
 
     if (query == nullptr)
-        query = addMPPQuery(task->id.gather_id.query_id);
+        query = addMPPQuery(task->id.gather_id);
     if (query->process_list_entry == nullptr)
     {
         query->process_list_entry = setProcessListElement(
@@ -347,18 +347,13 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
     MPPGatherTaskSetPtr gather_set = nullptr;
     MPPQueryPtr query = nullptr;
     cv.wait(lock, [&] {
-        auto query_it = mpp_query_map.find(id.gather_id.query_id);
-        if (query_it != mpp_query_map.end())
-        {
-            query = query_it->second;
-            auto gather_it = query_it->second->mpp_gathers.find(id.gather_id);
-            if (gather_it != query_it->second->mpp_gathers.end())
-                gather_set = gather_it->second;
-        }
+        String reason;
+        std::tie(query, gather_set, reason) = getMPPQueryAndGatherTaskSet(id.gather_id);
         return gather_set == nullptr || gather_set->allowUnregisterTask();
     });
     if (gather_set != nullptr)
     {
+        assert(query != nullptr);
         if (gather_set->isTaskRegistered(id))
         {
             gather_set->removeMPPTask(id);
@@ -392,7 +387,7 @@ String MPPTaskManager::toString()
 
 std::pair<MPPGatherTaskSetPtr, String> MPPTaskManager::getGatherTaskSetWithoutLock(const MPPGatherId & gather_id)
 {
-    auto [query, gather, aborted_reason] = getMPPQueryAndGatherTaskSet(gather_id);
+    auto [_, gather, aborted_reason] = getMPPQueryAndGatherTaskSet(gather_id);
     return {gather, aborted_reason};
 }
 
@@ -404,6 +399,7 @@ std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> MPPTaskManager::getMPPQuery
     {
         return std::make_tuple(nullptr, nullptr, reason);
     }
+    RUNTIME_CHECK_MSG(query->has_meaningful_gather_id == gather_id.hasMeaningfulGatherId(), "MPP query has gather id while mpp task does not have gather id, should be something wrong in TiDB side");
     auto gather_it = query->mpp_gathers.find(gather_id);
     if (gather_it != query->mpp_gathers.end())
     {
