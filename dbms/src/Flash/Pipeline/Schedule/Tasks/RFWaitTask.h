@@ -29,26 +29,18 @@ class RFWaitTask : public Task
 {
 public:
     RFWaitTask(
-        const String & req_id,
         PipelineExecutorStatus & exec_status_,
+        const String & req_id,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         int max_wait_time_ms,
         RuntimeFilteList && waiting_rf_list_,
         RuntimeFilteList && ready_rf_list_)
-        : Task(nullptr, req_id) // memory tracker is useless for for the task that only executes wait.
-        , exec_status(exec_status_)
+        : Task(exec_status_, req_id) // memory tracker is useless for for the task that only executes wait.
         , task_pool(task_pool_)
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
         , waiting_rf_list(std::move(waiting_rf_list_))
         , ready_rf_list(std::move(ready_rf_list_))
     {
-        exec_status.incActiveRefCount();
-    }
-
-    ~RFWaitTask() override
-    {
-        // In order to ensure that `PipelineExecutorStatus` will not be destructed before `RFWaitTask` is destructed.
-        exec_status.decActiveRefCount();
     }
 
     static void filterAndMoveReadyRfs(RuntimeFilteList & waiting_rf_list, RuntimeFilteList & ready_rf_list)
@@ -89,28 +81,16 @@ private:
 
     ExecTaskStatus awaitImpl() override
     {
-        if unlikely (exec_status.isCancelled())
-            return ExecTaskStatus::CANCELLED;
-        try
+        filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
+        if (waiting_rf_list.empty() || stopwatch.elapsed() >= max_wait_time_ns)
         {
-            filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
-            if (waiting_rf_list.empty() || stopwatch.elapsed() >= max_wait_time_ns)
-            {
-                submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
-                return ExecTaskStatus::FINISHED;
-            }
-            return ExecTaskStatus::WAITING;
+            submitReadyRfsAndSegmentTaskPool(ready_rf_list, task_pool);
+            return ExecTaskStatus::FINISHED;
         }
-        catch (...)
-        {
-            exec_status.onErrorOccurred(std::current_exception());
-            return ExecTaskStatus::ERROR;
-        }
+        return ExecTaskStatus::WAITING;
     }
 
 private:
-    PipelineExecutorStatus & exec_status;
-
     DM::SegmentReadTaskPoolPtr task_pool;
 
     UInt64 max_wait_time_ns;

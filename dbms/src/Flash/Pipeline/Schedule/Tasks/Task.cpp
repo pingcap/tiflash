@@ -81,13 +81,13 @@ Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 
-    exec_status.onEventSchedule();
+    exec_status.incActiveRefCount();
 }
 
 Task::Task(PipelineExecutorStatus & exec_status_)
     : Task(exec_status_, "")
 {
-    exec_status.onEventSchedule();
+    exec_status.incActiveRefCount();
 }
 
 Task::~Task()
@@ -99,7 +99,9 @@ Task::~Task()
             "Task should be finalized before destructing, but not, the status at this time is {}. The possible reason is that an error was reported during task creation",
             magic_enum::enum_name(task_status));
     }
-    exec_status.onEventFinish();
+
+    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `Task` is destructed.
+    exec_status.decActiveRefCount();
 }
 
 #define EXECUTE(function)                                                                   \
