@@ -20,7 +20,8 @@ namespace DB
 {
 namespace
 {
-bool popTask(std::deque<TaskPtr> & queue, TaskPtr & task)
+template <typename Queue>
+bool popTask(Queue & queue, TaskPtr & task)
 {
     if (!queue.empty())
     {
@@ -34,11 +35,12 @@ bool popTask(std::deque<TaskPtr> & queue, TaskPtr & task)
     }
 }
 
-void moveCancelledTasks(std::deque<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const FIFOQueryIdCache & cancel_query_id_cache)
+void moveCancelledTasks(std::list<TaskPtr> & normal_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
+    assert(!query_id.empty());
     for (auto it = normal_queue.begin(); it != normal_queue.end();)
     {
-        if (cancel_query_id_cache.contains((*it)->getQueryId()))
+        if (query_id == (*it)->getQueryId())
         {
             cancel_queue.push_back(std::move(*it));
             it = normal_queue.erase(it);
@@ -110,6 +112,12 @@ void IOPriorityQueue::finish()
 
 void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
 {
+    if unlikely (cancel_query_id_cache.contains(task->getQueryId()))
+    {
+        cancel_task_queue.push_back(std::move(task));
+        return;
+    }
+
     auto status = task->getStatus();
     switch (status)
     {
@@ -126,7 +134,7 @@ void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
 
 void IOPriorityQueue::submit(TaskPtr && task)
 {
-    if unlikely (is_finished || cancel_query_id_cache.contains(task->getQueryId()))
+    if unlikely (is_finished)
     {
         FINALIZE_TASK(task);
         return;
@@ -144,13 +152,7 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
     if (tasks.empty())
         return;
 
-        // tasks should all have the same query id.
-#ifndef NDEBUG
-    for (auto & task : tasks)
-        assert(task->getQueryId() == tasks.back()->getQueryId());
-#endif
-
-    if unlikely (is_finished || cancel_query_id_cache.contains(tasks.back()->getQueryId()))
+    if unlikely (is_finished)
     {
         FINALIZE_TASKS(tasks);
         return;
@@ -166,11 +168,14 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
 
 void IOPriorityQueue::cancel(const String & query_id)
 {
-    cancel_query_id_cache.add(query_id);
+    if unlikely (query_id.empty())
+        return;
+
+    std::lock_guard lock(mu);
     {
-        std::lock_guard lock(mu);
-        moveCancelledTasks(io_in_task_queue, cancel_task_queue, cancel_query_id_cache);
-        moveCancelledTasks(io_out_task_queue, cancel_task_queue, cancel_query_id_cache);
+        cancel_query_id_cache.add(query_id);
+        moveCancelledTasks(io_in_task_queue, cancel_task_queue, query_id);
+        moveCancelledTasks(io_out_task_queue, cancel_task_queue, query_id);
     }
     cv.notify_all();
 }

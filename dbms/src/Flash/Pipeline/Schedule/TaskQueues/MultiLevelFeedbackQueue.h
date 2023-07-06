@@ -88,7 +88,7 @@ public:
     const UnitQueueInfo info;
     std::atomic_uint64_t accu_consume_time_microsecond{0};
 
-    std::deque<TaskPtr> task_queue;
+    std::list<TaskPtr> task_queue;
 };
 using UnitQueuePtr = std::unique_ptr<UnitQueue>;
 
@@ -126,6 +126,8 @@ public:
 
 private:
     void computeQueueLevel(const TaskPtr & task);
+
+    void submitTaskWithoutLock(TaskPtr && task);
 
 private:
     mutable std::mutex mu;

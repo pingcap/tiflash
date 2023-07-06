@@ -21,12 +21,13 @@ namespace DB
 {
 namespace
 {
-void moveCancelledTasks(UnitQueue & unit_queue, std::deque<TaskPtr> & cancel_queue, const FIFOQueryIdCache & cancel_query_id_cache)
+void moveCancelledTasks(UnitQueue & unit_queue, std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
+    assert(!query_id.empty());
     auto & normal_queue = unit_queue.task_queue;
     for (auto it = normal_queue.begin(); it != normal_queue.end();)
     {
-        if (cancel_query_id_cache.contains((*it)->getQueryId()))
+        if (query_id == (*it)->getQueryId())
         {
             cancel_queue.push_back(std::move(*it));
             it = normal_queue.erase(it);
@@ -115,9 +116,18 @@ void MultiLevelFeedbackQueue<TimeGetter>::computeQueueLevel(const TaskPtr & task
 }
 
 template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::submitTaskWithoutLock(TaskPtr && task)
+{
+    if unlikely (cancel_query_id_cache.contains(task->getQueryId()))
+        cancel_task_queue.push_back(std::move(task));
+    else
+        level_queues[task->mlfq_level]->submit(std::move(task));
+}
+
+template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
 {
-    if unlikely (is_finished || cancel_query_id_cache.contains(task->getQueryId()))
+    if unlikely (is_finished)
     {
         FINALIZE_TASK(task);
         return;
@@ -126,7 +136,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
     computeQueueLevel(task);
     {
         std::lock_guard lock(mu);
-        level_queues[task->mlfq_level]->submit(std::move(task));
+        submitTaskWithoutLock(std::move(task));
     }
     assert(!task);
     cv.notify_one();
@@ -138,13 +148,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
     if (tasks.empty())
         return;
 
-        // tasks should all have the same query id.
-#ifndef NDEBUG
-    for (auto & task : tasks)
-        assert(task->getQueryId() == tasks.back()->getQueryId());
-#endif
-
-    if unlikely (is_finished || cancel_query_id_cache.contains(tasks.back()->getQueryId()))
+    if unlikely (is_finished)
     {
         FINALIZE_TASKS(tasks);
         return;
@@ -156,7 +160,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
     std::lock_guard lock(mu);
     for (auto & task : tasks)
     {
-        level_queues[task->mlfq_level]->submit(std::move(task));
+        submitTaskWithoutLock(std::move(task));
         cv.notify_one();
     }
 }
@@ -247,11 +251,14 @@ const UnitQueueInfo & MultiLevelFeedbackQueue<TimeGetter>::getUnitQueueInfo(size
 template <typename TimeGetter>
 void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
 {
-    cancel_query_id_cache.add(query_id);
+    if unlikely (query_id.empty())
+        return;
+
     {
         std::lock_guard lock(mu);
+        cancel_query_id_cache.add(query_id);
         for (const auto & queue : level_queues)
-            moveCancelledTasks(*queue, cancel_task_queue, cancel_query_id_cache);
+            moveCancelledTasks(*queue, cancel_task_queue, query_id);
     }
     cv.notify_all();
 }

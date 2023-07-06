@@ -220,7 +220,7 @@ CATCH
 TEST_F(TestMLFQTaskQueue, cancel)
 try
 {
-    // case1 cancel task taken first.
+    // case1 submit first.
     {
         CPUMultiLevelFeedbackQueue queue;
         queue.submit(std::make_unique<PlainTask>("id1"));
@@ -237,17 +237,21 @@ try
         FINALIZE_TASK(task);
     }
 
-    // case1 cancel task will not be submmited.
+    // case2 cancel first.
     {
         CPUMultiLevelFeedbackQueue queue;
         queue.cancel("id2");
         queue.submit(std::make_unique<PlainTask>("id1"));
         queue.submit(std::make_unique<PlainTask>("id2"));
         TaskPtr task;
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id2");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(!queue.empty());
         queue.take(task);
         ASSERT_EQ(task->getQueryId(), "id1");
         FINALIZE_TASK(task);
-        ASSERT_TRUE(queue.empty());
     }
 }
 CATCH

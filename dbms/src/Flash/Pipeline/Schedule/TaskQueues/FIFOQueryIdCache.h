@@ -26,14 +26,12 @@ class FIFOQueryIdCache
 public:
     bool contains(const String & id) const
     {
-        std::lock_guard lock(mu);
         assert(set.size() == fifo.size());
         return !id.empty() && set.contains(id);
     }
 
     void add(const String & id)
     {
-        std::lock_guard lock(mu);
         assert(set.size() == fifo.size());
         if (id.empty() || set.contains(id))
             return;
@@ -48,7 +46,6 @@ public:
     }
 
 private:
-    mutable std::mutex mu;
     std::deque<String> fifo;
     std::unordered_set<String> set;
     size_t capacity{1000};
