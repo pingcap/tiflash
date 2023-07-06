@@ -90,15 +90,12 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         if unlikely (spiller->isAllConstant())
         {
             LOG_WARNING(spiller->logger, "Try to spill blocks containing only constant columns, it is meaningless to spill blocks containing only constant columns");
-            UInt64 total_rows = 0;
             for (auto & block : blocks)
             {
                 if (unlikely(!block || block.rows() == 0))
                     continue;
-                total_rows += block.rows();
+                all_constant_block_rows += block.rows();
             }
-            if (total_rows > 0)
-                spiller->recordAllConstantBlockRows(partition_id, total_rows);
         }
         else
         {
@@ -194,8 +191,12 @@ void SpillHandler::finish()
     }
     else if unlikely (spiller->isAllConstant())
     {
-        std::lock_guard lock(spiller->all_constant_mutex);
-        spiller->has_spilled_data = (spiller->all_constant_block_rows[partition_id] > 0);
+        if (all_constant_block_rows > 0)
+        {
+            spiller->recordAllConstantBlockRows(partition_id, all_constant_block_rows);
+            spiller->has_spilled_data = true;
+            all_constant_block_rows = 0;
+        }
     }
 }
 } // namespace DB
