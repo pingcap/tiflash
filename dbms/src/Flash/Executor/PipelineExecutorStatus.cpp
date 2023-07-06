@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 
 #include <exception>
 
@@ -154,6 +155,8 @@ void PipelineExecutorStatus::onEventFinish()
 void PipelineExecutorStatus::cancel()
 {
     is_cancelled.store(true, std::memory_order_release);
+    if likely (TaskScheduler::instance && !query_id.empty())
+        TaskScheduler::instance->cancel(query_id);
 }
 
 ResultQueuePtr PipelineExecutorStatus::toConsumeMode(size_t queue_size)

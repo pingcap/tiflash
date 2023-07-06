@@ -30,11 +30,11 @@ public:
         return !id.empty() && set.contains(id);
     }
 
-    void add(const String & id)
+    bool add(const String & id)
     {
         assert(set.size() == fifo.size());
         if (id.empty() || set.contains(id))
-            return;
+            return false;
         if (set.size() >= capacity)
         {
             auto evicted_id = fifo.back();
@@ -43,6 +43,7 @@ public:
         }
         fifo.push_front(id);
         set.insert(id);
+        return true;
     }
 
 private:

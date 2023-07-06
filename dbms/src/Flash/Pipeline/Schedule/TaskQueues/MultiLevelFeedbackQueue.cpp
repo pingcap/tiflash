@@ -256,9 +256,11 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
 
     {
         std::lock_guard lock(mu);
-        cancel_query_id_cache.add(query_id);
-        for (const auto & queue : level_queues)
-            moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        if (cancel_query_id_cache.add(query_id))
+        {
+            for (const auto & queue : level_queues)
+                moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        }
     }
     cv.notify_all();
 }
