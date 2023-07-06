@@ -127,10 +127,7 @@ private:
         frame_count++;
     }
 
-    off_t doSeek(off_t, int) override
-    {
-        throw Exception("framed file is not seekable in writing mode");
-    }
+    off_t doSeek(off_t, int) override { throw Exception("framed file is not seekable in writing mode"); }
 
     // For checksum buffer, this is the **faked** file size without checksum header.
     // Statistics will be inaccurate after `sync/next` operation in the middle of a frame because it will
@@ -193,10 +190,7 @@ public:
         std::memset(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>), 0, sizeof(ChecksumFrame<Backend>));
     }
 
-    ~FramedChecksumWriteBuffer() override
-    {
-        next();
-    }
+    ~FramedChecksumWriteBuffer() override { next(); }
 };
 
 /*!

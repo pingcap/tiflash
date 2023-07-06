@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/LocalRequestHandler.h>

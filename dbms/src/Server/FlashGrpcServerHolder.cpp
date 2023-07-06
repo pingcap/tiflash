@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/UnaryCallback.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
