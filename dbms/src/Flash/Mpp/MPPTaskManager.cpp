@@ -90,6 +90,12 @@ MPPQueryPtr MPPTaskManager::getMPPQueryWithoutLock(const DB::MPPQueryId & query_
     return query_it == mpp_query_map.end() ? nullptr : query_it->second;
 }
 
+MPPQueryPtr MPPTaskManager::getMPPQuery(const MPPQueryId & query_id)
+{
+    std::unique_lock lock(mu);
+    return getMPPQueryWithoutLock(query_id);
+}
+
 void MPPTaskManager::removeMPPGatherTaskSet(MPPQueryPtr & query, const MPPGatherId & gather_id, bool on_abort)
 {
     query->mpp_gathers.erase(gather_id);

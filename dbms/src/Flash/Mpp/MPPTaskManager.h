@@ -243,6 +243,8 @@ public:
 
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 
+    MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
+
 private:
     MPPQueryPtr addMPPQuery(const MPPGatherId & gather_id);
     void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);

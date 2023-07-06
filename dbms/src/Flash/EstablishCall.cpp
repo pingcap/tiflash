@@ -200,6 +200,7 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
+    std::cout << "Write error with error message: " << packet.error().msg() << std::endl;
     write(packet);
 }
 
@@ -231,16 +232,18 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
         if (stopwatch != nullptr)
             LOG_WARNING(
                 getLogger(),
-                "EstablishCallData finishes without connected, time cost {}ms, query id: {}, connection id: {}",
+                "EstablishCallData finishes without connected, time cost {}ms, query id: {}, connection id: {}, error message: {}",
                 stopwatch != nullptr ? stopwatch->elapsedMilliseconds() : 0,
                 query_id,
-                connection_id);
+                connection_id,
+                msg);
         else
             LOG_WARNING(
                 getLogger(),
-                "EstablishCallData finishes without connected, query id: {}, connection id: {}",
+                "EstablishCallData finishes without connected, query id: {}, connection id: {}, error message: {}",
                 query_id,
-                connection_id);
+                connection_id,
+                msg);
     }
 
     responder.Finish(status, this);

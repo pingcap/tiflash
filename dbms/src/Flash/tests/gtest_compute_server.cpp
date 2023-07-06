@@ -118,12 +118,11 @@ public:
             {toNullableVec<Int32>("s1", join_r_s1), toNullableVec<String>("s2", join_r_s2), toNullableVec<String>("s3", join_r_s3)});
     }
 
-    void addOneQuery(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPQueryId> & query_ids)
+    void addOneGather(std::vector<std::thread> & running_queries, std::vector<MPPGatherId> & gather_ids, const DAGProperties & properties)
     {
-        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
-        query_ids.push_back(query_id);
-        running_queries.emplace_back([&, properties]() {
+        MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        gather_ids.push_back(gather_id);
+        running_queries.emplace_back([&, properties, gather_id]() {
             try
             {
                 auto tasks = prepareMPPTasks(context
@@ -135,10 +134,15 @@ public:
             }
             catch (...)
             {
-                MockComputeServerManager::instance().cancelQuery(query_id);
-                EXPECT_TRUE(assertQueryCancelled(query_id));
+                MockComputeServerManager::instance().cancelGather(gather_id);
+                EXPECT_TRUE(assertGatherCancelled(gather_id));
             }
         });
+    }
+    void addOneGather(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPGatherId> & gather_ids)
+    {
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
+        addOneGather(running_queries, gather_ids, properties);
     }
 };
 
@@ -885,56 +889,103 @@ try
     ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
     ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
     std::vector<std::thread> running_queries;
-    std::vector<MPPQueryId> query_ids;
+    std::vector<MPPGatherId> gather_ids;
     try
     {
         /// case 1, min tso can be added
         for (size_t i = 0; i < active_set_soft_limit; ++i)
         {
-            addOneQuery(i + 10, running_queries, query_ids);
+            addOneGather(i + 10, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        addOneQuery(1, running_queries, query_ids);
+        addOneGather(1, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 3);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        for (const auto & query_id : query_ids)
-            MockComputeServerManager::instance().cancelQuery(query_id);
+        for (const auto & gather_id : gather_ids)
+            MockComputeServerManager::instance().cancelGather(gather_id);
         for (auto & t : running_queries)
             t.join();
         running_queries.clear();
-        query_ids.clear();
+        gather_ids.clear();
         /// case 2, non-min tso can't be added
         for (size_t i = 0; i < active_set_soft_limit; ++i)
         {
-            addOneQuery((i + 1) * 20, running_queries, query_ids);
+            addOneGather((i + 1) * 20, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        addOneQuery(30, running_queries, query_ids);
+        addOneGather(30, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 1);
         /// cancel 1 running query
-        MockComputeServerManager::instance().cancelQuery(query_ids[0]);
+        MockComputeServerManager::instance().cancelGather(gather_ids[0]);
         running_queries[0].join();
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
         for (size_t i = 1; i < running_queries.size(); i++)
-            MockComputeServerManager::instance().cancelQuery(query_ids[i]);
+            MockComputeServerManager::instance().cancelGather(gather_ids[i]);
         for (size_t i = 1; i < running_queries.size(); i++)
             running_queries[i].join();
     }
     catch (...)
     {
-        for (const auto & query_id : query_ids)
-            MockComputeServerManager::instance().cancelQuery(query_id);
+        for (const auto & gather_id : gather_ids)
+            MockComputeServerManager::instance().cancelGather(gather_id);
+        for (auto & t : running_queries)
+            if (t.joinable())
+                t.join();
+        throw;
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, testCancelMPPGather)
+try
+{
+    startServers(1);
+    setCancelTest();
+    ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
+    ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+    std::vector<std::thread> running_queries;
+    std::vector<MPPGatherId> gather_ids;
+    auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, 1);
+    try
+    {
+        for (size_t i = 0; i < 2; ++i)
+        {
+            properties.gather_id = i + 1;
+            addOneGather(running_queries, gather_ids, properties);
+        }
+        std::cout << "before sleep" << std::endl;
+        using namespace std::literals::chrono_literals;
+        std::this_thread::sleep_for(2s);
+        std::cout << "after sleep" << std::endl;
+        /// two gathers, but still one query
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 1);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        MockComputeServerManager::instance().cancelGather(gather_ids[0]);
+        assertGatherCancelled(gather_ids[0]);
+        assertGatherActive(gather_ids[1]);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 1);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        MockComputeServerManager::instance().cancelGather(gather_ids[1]);
+        assertGatherCancelled(gather_ids[1]);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+    }
+    catch (...)
+    {
+        std::cout << "meet exception." << std::endl;
+        for (const auto & gather_id : gather_ids)
+            MockComputeServerManager::instance().cancelGather(gather_id);
         for (auto & t : running_queries)
             if (t.joinable())
                 t.join();

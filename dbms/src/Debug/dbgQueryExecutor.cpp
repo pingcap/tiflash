@@ -27,6 +27,15 @@ namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;
 
+void fillTaskMetaUsingDAGProperties(mpp::TaskMeta & meta, const DAGProperties & properties)
+{
+    meta.set_start_ts(properties.start_ts);
+    meta.set_gather_id(properties.gather_id);
+    meta.set_query_ts(properties.query_ts);
+    meta.set_local_query_id(properties.local_query_id);
+    meta.set_server_id(properties.server_id);
+}
+
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
     tipb_region_info->set_region_id(region.first);
@@ -50,10 +59,7 @@ BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb:
     }
 
     mpp::TaskMeta root_tm;
-    root_tm.set_start_ts(properties.start_ts);
-    root_tm.set_query_ts(properties.query_ts);
-    root_tm.set_local_query_id(properties.local_query_id);
-    root_tm.set_server_id(properties.server_id);
+    fillTaskMetaUsingDAGProperties(root_tm, properties);
     root_tm.set_address(root_addr);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
@@ -83,10 +89,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     for (const auto root_task_id : root_task_ids)
     {
         mpp::TaskMeta tm;
-        tm.set_start_ts(properties.start_ts);
-        tm.set_query_ts(properties.query_ts);
-        tm.set_local_query_id(properties.local_query_id);
-        tm.set_server_id(properties.server_id);
+        fillTaskMetaUsingDAGProperties(tm, properties);
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
@@ -99,10 +102,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
 {
     mpp::TaskMeta tm;
-    tm.set_start_ts(properties.start_ts);
-    tm.set_query_ts(properties.query_ts);
-    tm.set_local_query_id(properties.local_query_id);
-    tm.set_server_id(properties.server_id);
+    fillTaskMetaUsingDAGProperties(tm, properties);
     tm.set_address(addr);
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
@@ -127,10 +127,7 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
-    tm->set_start_ts(properties.start_ts);
-    tm->set_query_ts(properties.query_ts);
-    tm->set_local_query_id(properties.local_query_id);
-    tm->set_server_id(properties.server_id);
+    fillTaskMetaUsingDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -149,10 +146,7 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
-    tm->set_start_ts(properties.start_ts);
-    tm->set_query_ts(properties.query_ts);
-    tm->set_local_query_id(properties.local_query_id);
-    tm->set_server_id(properties.server_id);
+    fillTaskMetaUsingDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
