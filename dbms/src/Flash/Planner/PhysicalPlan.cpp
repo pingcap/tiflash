@@ -50,13 +50,10 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
-        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
-        {
-            return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
-        }
+        return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
     }
     return false;
 }

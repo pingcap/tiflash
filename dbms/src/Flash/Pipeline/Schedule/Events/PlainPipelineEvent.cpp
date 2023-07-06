@@ -31,8 +31,8 @@ void PlainPipelineEvent::finishImpl()
 {
     if (auto complete_event = pipeline->complete(exec_status); complete_event)
         insertEvent(complete_event);
-    // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.onEventFinish()` is called.
-    // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
+    // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.decActiveRefCount()` is called.
+    // So pipeline needs to be released before `exec_status.decActiveRefCount()` is called.
     pipeline.reset();
 }
 

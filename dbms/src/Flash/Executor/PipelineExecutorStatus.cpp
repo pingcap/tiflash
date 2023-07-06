@@ -87,7 +87,7 @@ void PipelineExecutorStatus::wait()
     {
         std::unique_lock lock(mu);
         RUNTIME_ASSERT(isWaitMode());
-        cv.wait(lock, [&] { return 0 == active_event_count; });
+        cv.wait(lock, [&] { return 0 == active_ref_count; });
     }
     LOG_DEBUG(log, "query finished and wait done");
 }
@@ -116,25 +116,25 @@ void PipelineExecutorStatus::consume(ResultHandler & result_handler)
         // If result_handler throws an error, here should notify the query to terminate, and wait for the end of the query.
         onErrorOccurred(std::current_exception());
     }
-    // In order to ensure that `onEventFinish` has finished calling at this point
-    // and avoid referencing the already destructed `mu` in `onEventFinish`.
+    // In order to ensure that `decActiveRefCount` has finished calling at this point
+    // and avoid referencing the already destructed `mu` in `decActiveRefCount`.
     std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return 0 == active_event_count; });
+    cv.wait(lock, [&] { return 0 == active_ref_count; });
     LOG_DEBUG(log, "query finished and consume done");
 }
 
-void PipelineExecutorStatus::onEventSchedule()
+void PipelineExecutorStatus::incActiveRefCount()
 {
     std::lock_guard lock(mu);
-    ++active_event_count;
+    ++active_ref_count;
 }
 
-void PipelineExecutorStatus::onEventFinish()
+void PipelineExecutorStatus::decActiveRefCount()
 {
     std::lock_guard lock(mu);
-    RUNTIME_ASSERT(active_event_count > 0);
-    --active_event_count;
-    if (0 == active_event_count)
+    RUNTIME_ASSERT(active_ref_count > 0);
+    --active_ref_count;
+    if (0 == active_ref_count)
     {
         // It is not expected for a query to be finished more than one time.
         RUNTIME_ASSERT(!is_finished);

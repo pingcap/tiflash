@@ -59,10 +59,6 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    Int64 getLogicalTableID() const;
-
-    void updateStreams(Context & context);
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 

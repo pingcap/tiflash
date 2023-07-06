@@ -49,9 +49,9 @@ public:
     std::exception_ptr getExceptionPtr();
     String getExceptionMsg();
 
-    void onEventSchedule();
+    void incActiveRefCount();
 
-    void onEventFinish();
+    void decActiveRefCount();
 
     void onErrorOccurred(const String & err_msg);
     void onErrorOccurred(const std::exception_ptr & exception_ptr_);
@@ -65,7 +65,7 @@ public:
         {
             std::unique_lock lock(mu);
             RUNTIME_ASSERT(isWaitMode());
-            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_event_count; });
+            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_ref_count; });
         }
         if (is_timeout)
         {
@@ -118,10 +118,10 @@ public:
         }
         else
         {
-            // In order to ensure that `onEventFinish` has finished calling at this point
-            // and avoid referencing the already destructed `mu` in `onEventFinish`.
+            // In order to ensure that `decActiveRefCount` has finished calling at this point
+            // and avoid referencing the already destructed `mu` in `decActiveRefCount`.
             std::unique_lock lock(mu);
-            cv.wait(lock, [&] { return 0 == active_event_count; });
+            cv.wait(lock, [&] { return 0 == active_ref_count; });
         }
         LOG_DEBUG(log, "query finished and consume done");
     }
@@ -170,13 +170,13 @@ private:
     std::mutex mu;
     std::condition_variable cv;
     std::exception_ptr exception_ptr;
-    UInt32 active_event_count{0};
+    UInt32 active_ref_count{0};
 
     std::atomic_bool is_cancelled{false};
 
     bool is_finished{false};
 
-    // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
+    // `result_queue.finish` can only be called in `decActiveRefCount` because `result_queue.pop` cannot end until events end.
     std::optional<ResultQueuePtr> result_queue;
 
     QueryProfileInfo query_profile_info;

@@ -91,13 +91,13 @@ bool Event::prepare()
     assertStatus(EventStatus::INIT);
     if (is_source)
     {
-        // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
+        // For source event, `exec_status.incActiveRefCount()` needs to be called before schedule.
         // Suppose there are two source events, A and B, a possible sequence of calls is:
         // `A.prepareForSource --> B.prepareForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
-        // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
+        // if `exec_status.incActiveRefCount()` be called in schedule just like non-source event,
         // `exec_status.wait` and `result_queue.pop` may return early.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_status.incActiveRefCount();
         return true;
     }
     else
@@ -126,9 +126,9 @@ void Event::schedule()
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepare`.
+        // for is_source == true, `exec_status.incActiveRefCount()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.onEventSchedule();
+        exec_status.incActiveRefCount();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
@@ -205,10 +205,10 @@ void Event::finish()
     // because of `exec_status.isCancelled()` will be destructured before the end of `exec_status.wait`.
     outputs.clear();
     // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
-    // we have to call `exec_status.onEventFinish()` here,
-    // since `exec_status.onEventSchedule()` will have been called by outputs.
+    // we have to call `exec_status.decActiveRefCount()` here,
+    // since `exec_status.incActiveRefCount()` will have been called by outputs.
     // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
-    exec_status.onEventFinish();
+    exec_status.decActiveRefCount();
 }
 
 UInt64 Event::getScheduleDuration() const
