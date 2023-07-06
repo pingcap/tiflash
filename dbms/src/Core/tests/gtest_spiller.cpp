@@ -44,7 +44,7 @@ protected:
         spiller_test_header = Block(names_and_types);
         auto key_manager = std::make_shared<MockKeyManager>(false);
         auto file_provider = std::make_shared<FileProvider>(key_manager, false);
-        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider, DEFAULT_BLOCK_SIZE, 10);
+        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider);
     }
     void TearDown() override
     {
@@ -548,7 +548,7 @@ try
         }
         auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "SpillAllConstantBlock2", rand());
         SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider, 100, DEFAULT_BLOCK_SIZE);
-        Spiller spiller(*spill_config_ptr, false, 1, constant_header, logger);
+        Spiller spiller(new_spill_config, false, 1, constant_header, logger);
         spiller.spillBlocks(std::move(blocks), 0);
         spiller.finishSpill();
         ASSERT_TRUE(spiller.hasSpilledData());
