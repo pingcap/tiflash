@@ -87,7 +87,6 @@ Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id)
 Task::Task(PipelineExecutorStatus & exec_status_)
     : Task(exec_status_, "")
 {
-    exec_status.incActiveRefCount();
 }
 
 Task::~Task()
