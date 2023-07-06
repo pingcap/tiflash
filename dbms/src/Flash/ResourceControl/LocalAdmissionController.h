@@ -190,7 +190,7 @@ private:
     uint32_t user_priority;
     uint64_t user_ru_per_sec;
 
-    bool burstable;
+    bool burstable = false;
 
     // Definition of the RG, e.g. RG settings, priority etc.
     resource_manager::ResourceGroup group_pb;
@@ -201,7 +201,7 @@ private:
     TokenBucketPtr bucket;
 
     // Total used cpu_time of this ResourceGroup.
-    uint64_t cpu_time;
+    uint64_t cpu_time = 0;
 
     std::chrono::time_point<std::chrono::steady_clock> last_fetch_tokens_from_gac_timepoint;
 
@@ -209,7 +209,7 @@ private:
 
     std::chrono::steady_clock::time_point last_gac_update_timepoint;
 
-    const KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id = NullspaceID;
 
     double ru_consumption_delta = 0.0;
 };
