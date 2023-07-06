@@ -30,7 +30,7 @@ void setFieldTypeForAggFunc(const DB::ASTFunction * func, tipb::Expr * expr, con
     {
         auto * ft = expr->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+        ft->set_flag(TiDB::ColumnFlagNotNull);
     }
     else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max)
     {

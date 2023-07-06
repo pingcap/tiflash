@@ -646,7 +646,6 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
     NamesAndTypes window_columns;
     for (const tipb::Expr & expr : window.func_desc())
     {
-        RUNTIME_CHECK_MSG(isWindowFunctionExpr(expr), "Now Window Operator only support window function.");
         if (expr.tp() == tipb::ExprType::Lead || expr.tp() == tipb::ExprType::Lag)
         {
             buildLeadLag(expr, actions, getWindowFunctionName(expr), window_description, source_columns, window_columns);
@@ -657,7 +656,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
         }
         else
         {
-            buildWindowOrAggFuncImpl(expr, actions, getWindowFunctionName(expr), window_description, source_columns, window_columns, true);
+            buildWindowOrAggFuncImpl(expr, actions, getAggFunctionName(expr), window_description, source_columns, window_columns, true);
         }
     }
     window_description.add_columns = window_columns;

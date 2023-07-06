@@ -601,7 +601,7 @@ bool WindowTransformAction::onlyHaveRowNumber()
 {
     for (const auto & workspace : workspaces)
     {
-        if (workspace.window_function->getName() != "row_number")
+        if (workspace.window_function != nullptr && workspace.window_function->getName() != "row_number")
             return false;
     }
     return true;
@@ -652,7 +652,12 @@ void WindowTransformAction::appendBlock(Block & current_block)
     // Initialize output columns and add new columns to output block.
     for (auto & ws : workspaces)
     {
-        MutableColumnPtr res = ws.window_function->getReturnType()->createColumn();
+        MutableColumnPtr res;
+
+        if (ws.window_function != nullptr)
+            res = ws.window_function->getReturnType()->createColumn();
+        else
+            res = ws.aggregate_function->getReturnType()->createColumn();
         res->reserve(window_block.rows);
         window_block.output_columns.push_back(std::move(res));
     }
@@ -917,7 +922,10 @@ void WindowTransformAction::appendInfo(FmtBuffer & buffer) const
         window_description.window_functions_descriptions.begin(),
         window_description.window_functions_descriptions.end(),
         [&](const auto & func, FmtBuffer & b) {
-            b.append(func.window_function->getName());
+            if (func.window_function != nullptr)
+                b.append(func.window_function->getName());
+            else
+                b.append(func.aggregate_function->getName());
         },
         ", ");
     buffer.fmtAppend(
