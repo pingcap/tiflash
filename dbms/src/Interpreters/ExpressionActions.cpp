@@ -265,8 +265,8 @@ void ExpressionAction::prepare(Block & sample_block)
     }
     case CONVERT_TO_NULLABLE:
     {
-        if (ColumnPtr converted = sample_block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst())
-            sample_block.getByName(col_need_to_nullable).column = converted;
+        // sample block doesn't have the real column pointer, meaning sample_block.getByName(col_need_to_nullable).column will null.
+        // so expanding column if const for sample_block.getByName(col_need_to_nullable).column is meaningless.
         if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
             convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
         break;
