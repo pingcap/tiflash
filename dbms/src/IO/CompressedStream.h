@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/config.h>
+
 #include <cstdint>
 
 /** Common Defines */

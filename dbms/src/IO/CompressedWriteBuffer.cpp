@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
 #include <Core/Types.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <city.h>
@@ -22,7 +23,6 @@
 #include <zstd.h>
 
 #include <memory>
-
 #if USE_QPL
 #include "CodecDeflateQpl.h"
 #endif

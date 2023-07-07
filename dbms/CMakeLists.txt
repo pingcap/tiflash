@@ -123,10 +123,6 @@ add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tif
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
 
-if (USE_QPL)
-    target_compile_definitions (tiflash_common_io PUBLIC USE_QPL)
-endif ()
-
 if (OS_FREEBSD)
     target_compile_definitions (tiflash_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()

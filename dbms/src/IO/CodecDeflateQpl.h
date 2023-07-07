@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #pragma once
+
+#include <Common/config.h>
+
 #if USE_QPL
 
 #include <qpl/qpl.h>

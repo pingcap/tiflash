@@ -16,6 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/FieldVisitors.h>
+#include <Common/config.h>
 #include <Common/getNumberOfCPUCores.h>
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>

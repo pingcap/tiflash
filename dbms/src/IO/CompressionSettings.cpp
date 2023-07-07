@@ -14,9 +14,9 @@
 
 #include "CompressionSettings.h"
 
+#include <Common/config.h>
 #include <Interpreters/Settings.h>
 #include <lz4hc.h>
-
 
 namespace DB
 {

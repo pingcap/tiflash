@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
 #if USE_QPL
 #include <Common/Exception.h>
 #include <IO/CodecDeflateQpl.h>
