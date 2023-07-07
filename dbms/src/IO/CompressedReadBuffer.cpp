@@ -14,8 +14,6 @@
 
 #include <IO/CompressedReadBuffer.h>
 
-#include <cassert>
-
 
 namespace DB
 {
