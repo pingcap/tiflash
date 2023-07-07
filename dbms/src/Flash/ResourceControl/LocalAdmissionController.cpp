@@ -66,8 +66,7 @@ void LocalAdmissionController::fetchTokensFromGAC()
         std::lock_guard lock(mu);
         for (const auto & resource_group : resource_groups)
         {
-            double token_need_from_gac = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED);
-            // gjt todo maybe always <= 0.0
+            double token_need_from_gac = resource_group.second->getAcquireRUNum(DEFAULT_TOKEN_FETCH_ESAPSED, ACQUIRE_RU_AMPLIFICATION);
             if (token_need_from_gac <= 0.0)
                 return;
             need_tokens.emplace_back(std::make_tuple(resource_group.first, token_need_from_gac, resource_group.second->getKeyspaceID(), resource_group.second->getAndCleanConsumptionDelta()));
@@ -152,7 +151,6 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                 RUNTIME_CHECK(added_tokens >= 0);
 
                 int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
-                RUNTIME_CHECK(capacity >= 0);
 
                 RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
 
@@ -164,7 +162,7 @@ void LocalAdmissionController::handleTokenBucketsResp(const resource_manager::To
                 if (trickle_ms == 0)
                 {
                     // GAC has enough tokens for LAC.
-                    resource_group->reConfigTokenBucketInNormalMode(added_tokens);
+                    resource_group->reConfigTokenBucketInNormalMode(added_tokens, capacity);
                 }
                 else
                 {

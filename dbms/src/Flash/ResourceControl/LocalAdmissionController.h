@@ -92,14 +92,33 @@ private:
         return bucket->peek();
     }
 
-    double getAcquireRUNum(uint32_t avg_token_speed_duration) const
+    double getAcquireRUNum(uint32_t avg_token_speed_duration, double amplification) const
     {
+        assert(amplification >= 1.0);
+
         double avg_speed = 0.0;
+        double remaining_ru = 0.0;
+        double base = 0.0;
         {
             std::lock_guard lock(mu);
             avg_speed = bucket->getAvgSpeedPerSec();
+            remaining_ru = bucket->peek();
+            base = static_cast<double>(user_ru_per_sec);
         }
-        return avg_speed * avg_token_speed_duration;
+
+        // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
+        // while user query speed is limited due to LAC requests too few RU.
+        double num = avg_speed * avg_token_speed_duration * amplification;
+
+        // Prevent avg_speed from being 0 due to RU exhaustion.
+        if (num == 0.0)
+            num = base;
+
+        // Prevent a specific LAC from taking too many RUs,
+        // with each LAC only obtaining the required RU for the next second.
+        if (num > remaining_ru)
+            num -= remaining_ru;
+        return num;
     }
 
     // Positive: Less number means higher priority.
@@ -121,10 +140,15 @@ private:
 
     // New tokens fetched from GAC, update remaining tokens.
     // gjt todo new_capacity < 0? ==0? >0?
-    void reConfigTokenBucketInNormalMode(double add_tokens)
+    void reConfigTokenBucketInNormalMode(double add_tokens, double new_capacity)
     {
         std::lock_guard lock(mu);
         bucket_mode = TokenBucketMode::normal_mode;
+        if (new_capacity <= 0.0)
+        {
+            burstable = true;
+            return;
+        }
         auto [ori_tokens, ori_fill_rate, ori_capacity] = bucket->getCurrentConfig();
         bucket->reConfig(ori_tokens + add_tokens, ori_fill_rate, ori_capacity);
     }
@@ -133,6 +157,12 @@ private:
     void reConfigTokenBucketInTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms)
     {
         std::lock_guard lock(mu);
+        if (new_capacity <= 0.0)
+        {
+            burstable = true;
+            return;
+        }
+
         bucket_mode = TokenBucketMode::trickle_mode;
         double new_tokens = bucket->peek() + add_tokens;
         double trickle_sec = static_cast<double>(trickle_ms) / 1000;
@@ -157,6 +187,9 @@ private:
 
         auto now = std::chrono::steady_clock::now();
         std::lock_guard lock(mu);
+        if (burstable)
+            return;
+
         if (now - last_fetch_tokens_from_gac_timepoint >= std::chrono::seconds(dura_seconds))
         {
             if (bucket_mode == TokenBucketMode::degrade_mode)
@@ -326,6 +359,7 @@ private:
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = 120;
     static constexpr auto TARGET_REQUEST_PERIOD_MS = 5000;
+    static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
     // Background jobs:
     // 1. Fetch tokens from GAC periodically.
