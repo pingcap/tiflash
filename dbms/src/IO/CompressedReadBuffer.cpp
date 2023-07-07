@@ -14,6 +14,8 @@
 
 #include <IO/CompressedReadBuffer.h>
 
+#include <cassert>
+
 
 namespace DB
 {
@@ -26,8 +28,9 @@ bool CompressedReadBuffer<has_checksum>::nextImpl()
     if (!size_compressed)
         return false;
 
+    assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
     memory.resize(size_decompressed);
-    working_buffer = Buffer(&memory[0], &memory[size_decompressed]); // NOLINT
+    working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
 
     this->decompress(working_buffer.begin(), size_decompressed, size_compressed_without_checksum);
 
