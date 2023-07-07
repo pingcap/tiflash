@@ -35,7 +35,7 @@ public:
         int max_wait_time_ms,
         RuntimeFilteList && waiting_rf_list_,
         RuntimeFilteList && ready_rf_list_)
-        : Task(exec_status_, req_id) // memory tracker is useless for for the task that only executes wait.
+        : Task(exec_status_, req_id)
         , task_pool(task_pool_)
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
         , waiting_rf_list(std::move(waiting_rf_list_))

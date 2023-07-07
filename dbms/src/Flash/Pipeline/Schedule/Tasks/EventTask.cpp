@@ -29,8 +29,9 @@ EventTask::EventTask(
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
     const String & req_id,
-    const EventPtr & event_)
-    : Task(exec_status_, req_id)
+    const EventPtr & event_,
+    ExecTaskStatus init_status)
+    : Task(exec_status_, req_id, init_status)
     , event(event_)
 {
     RUNTIME_CHECK(event);

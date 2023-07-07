@@ -95,7 +95,7 @@ try
         {
             TaskPtr task = std::make_unique<PlainTask>(status);
             auto value = mock_value();
-            queue->updateStatistics(task, ExecTaskStatus::INIT, value);
+            queue->updateStatistics(task, ExecTaskStatus::RUNNING, value);
             task->profile_info.addCPUExecuteTime(value);
             queue->submit(std::move(task));
         }
@@ -137,7 +137,7 @@ try
             ASSERT_EQ(task->mlfq_level, level);
             ASSERT_TRUE(task);
             auto value = CPUMultiLevelFeedbackQueue::LEVEL_TIME_SLICE_BASE_NS;
-            queue.updateStatistics(task, ExecTaskStatus::INIT, value);
+            queue.updateStatistics(task, ExecTaskStatus::RUNNING, value);
             task->profile_info.addCPUExecuteTime(value);
             bool need_break = CPUTimeGetter::get(task) >= queue.getUnitQueueInfo(level).time_slice;
             queue.submit(std::move(task));
@@ -171,7 +171,7 @@ try
         TaskPtr task = std::make_unique<PlainTask>(status);
         task->mlfq_level = CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1;
         auto value = queue.getUnitQueueInfo(task->mlfq_level).time_slice;
-        queue.updateStatistics(task, ExecTaskStatus::INIT, value);
+        queue.updateStatistics(task, ExecTaskStatus::RUNNING, value);
         task->profile_info.addCPUExecuteTime(value);
         queue.submit(std::move(task));
     }
@@ -179,7 +179,7 @@ try
         // level `0`
         TaskPtr task = std::make_unique<PlainTask>(status);
         auto value = queue.getUnitQueueInfo(0).time_slice - 1;
-        queue.updateStatistics(task, ExecTaskStatus::INIT, value);
+        queue.updateStatistics(task, ExecTaskStatus::RUNNING, value);
         task->profile_info.addCPUExecuteTime(value);
         queue.submit(std::move(task));
     }
@@ -205,7 +205,7 @@ try
         // level `0`
         TaskPtr task = std::make_unique<PlainTask>(status);
         auto value = queue.getUnitQueueInfo(0).time_slice - 1;
-        queue.updateStatistics(task, ExecTaskStatus::INIT, value);
+        queue.updateStatistics(task, ExecTaskStatus::RUNNING, value);
         task->profile_info.addCPUExecuteTime(value);
         queue.submit(std::move(task));
     }
@@ -214,7 +214,7 @@ try
         TaskPtr task = std::make_unique<PlainTask>(status);
         task->mlfq_level = CPUMultiLevelFeedbackQueue::QUEUE_SIZE - 1;
         auto value = queue.getUnitQueueInfo(task->mlfq_level).time_slice;
-        queue.updateStatistics(task, ExecTaskStatus::INIT, value);
+        queue.updateStatistics(task, ExecTaskStatus::RUNNING, value);
         task->profile_info.addCPUExecuteTime(value);
         queue.submit(std::move(task));
     }

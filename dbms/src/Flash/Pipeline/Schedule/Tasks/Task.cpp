@@ -53,7 +53,6 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
     }
 #endif
 
-    // It is impossible for any task to change to init status.
     switch (to)
     {
         M(ExecTaskStatus::WAITING, type_to_waiting)
@@ -71,15 +70,16 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id)
+Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
+    , task_status(init_status)
     , exec_status(exec_status_)
     , mem_tracker_holder(exec_status_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+    addToStatusMetrics(task_status);
 
     exec_status.incActiveRefCount();
 }
@@ -129,14 +129,14 @@ Task::~Task()
 ExecTaskStatus Task::execute()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::RUNNING);
     EXECUTE(executeImpl);
 }
 
 ExecTaskStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
     EXECUTE(executeIOImpl);
 }
 
@@ -145,7 +145,7 @@ ExecTaskStatus Task::await()
     // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
     // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.
     assert(current_memory_tracker == nullptr);
-    assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::WAITING);
     EXECUTE(awaitImpl);
 }
 

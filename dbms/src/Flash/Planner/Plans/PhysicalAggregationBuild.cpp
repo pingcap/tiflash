@@ -44,7 +44,9 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         context.getSettingsRef().max_cached_data_bytes_in_spiller,
         context.getSettingsRef().max_spilled_rows_per_file,
         context.getSettingsRef().max_spilled_bytes_per_file,
-        context.getFileProvider());
+        context.getFileProvider(),
+        context.getSettingsRef().max_threads,
+        context.getSettingsRef().max_block_size);
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,

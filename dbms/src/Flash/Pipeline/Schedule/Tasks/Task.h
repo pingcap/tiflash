@@ -34,7 +34,6 @@ namespace DB
  */
 enum class ExecTaskStatus
 {
-    INIT,
     WAITING,
     RUNNING,
     IO_IN,
@@ -49,8 +48,9 @@ class PipelineExecutorStatus;
 class Task
 {
 public:
-    Task(PipelineExecutorStatus & exec_status_, const String & req_id);
+    Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
+    // Only used for unit test.
     explicit Task(PipelineExecutorStatus & exec_status_);
 
     virtual ~Task();
@@ -103,7 +103,7 @@ public:
     size_t mlfq_level{0};
 
 protected:
-    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status;
 
 private:
     PipelineExecutorStatus & exec_status;

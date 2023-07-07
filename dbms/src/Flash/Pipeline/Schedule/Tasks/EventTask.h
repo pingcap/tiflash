@@ -23,13 +23,16 @@ namespace DB
 class EventTask : public Task
 {
 public:
+    // Only used for unit test.
     EventTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
+
     EventTask(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
-        const EventPtr & event_);
+        const EventPtr & event_,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
 protected:
     void finalizeImpl() override;

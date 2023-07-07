@@ -26,7 +26,11 @@ public:
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
         const EventPtr & event_)
-        : EventTask(exec_status_, req_id, event_)
+        : EventTask(
+            exec_status_,
+            req_id,
+            event_,
+            is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }
 
