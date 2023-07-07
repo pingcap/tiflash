@@ -327,7 +327,7 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
@@ -336,7 +336,7 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
@@ -345,7 +345,7 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
@@ -612,13 +612,13 @@ DAGRequestBuilder MockDAGRequestContext::scan(
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids)
 {
-    auto dagRequestBuilder = scan(db_name, table_name);
-    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dagRequestBuilder.getRoot().get());
+    auto dag_request_builder = scan(db_name, table_name);
+    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dag_request_builder.getRoot().get());
     if (table_scan)
     {
         table_scan->setRuntimeFilterIds(rf_ids);
     }
-    return dagRequestBuilder;
+    return dag_request_builder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)

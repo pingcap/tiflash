@@ -259,7 +259,7 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
         std::move(window_exprs),
         std::move(partition_columns),
         std::move(order_columns),
-        frame,
+        std::move(frame),
         fine_grained_shuffle_stream_count);
     window->children.push_back(input);
     return window;

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -57,6 +58,30 @@ public:
         , range_frame(nullptr)
     {}
 
+    MockWindowFrameBound(MockWindowFrameBound && bound)
+    {
+        bound_type = bound.bound_type;
+        is_unbounded = bound.is_unbounded;
+        offset = bound.offset;
+        range_frame_helper = bound.range_frame_helper;
+        cmp_data_type = bound.cmp_data_type;
+        range_frame = bound.range_frame;
+
+        bound.offset = 0;
+        bound.range_frame_helper.range_aux_func.reset();
+        bound.range_frame_helper.context.reset();
+        bound.range_frame = nullptr;
+    }
+
+    ~MockWindowFrameBound()
+    {
+        RUNTIME_ASSERT(range_frame == nullptr, "range_frame should not hold data when we are destructed");
+    }
+
+    MockWindowFrameBound(const MockWindowFrameBound &) = default;
+
+    MockWindowFrameBound & operator=(const MockWindowFrameBound & bound) = default;
+
     tipb::WindowBoundType getBoundType() const { return bound_type; }
     bool isUnbounded() const { return is_unbounded; }
     UInt64 getOffset() const { return offset; }
@@ -81,7 +106,11 @@ public:
         range_frame = new tipb::Expr();
         auto * ast_func = typeid_cast<ASTFunction *>(range_frame_helper.range_aux_func.get());
         if (ast_func == nullptr)
+        {
+            delete range_frame;
+            range_frame = nullptr;
             throw Exception("Building range frame needs ASTFunction");
+        }
 
         // collator is useless when building range frame,
         // because range frame's order by column is forbidden to be string type
@@ -106,7 +135,6 @@ struct MockWindowFrame
     std::optional<tipb::WindowFrameType> type;
     std::optional<MockWindowFrameBound> start;
     std::optional<MockWindowFrameBound> end;
-    // TODO: support calcFuncs
 };
 
 using ASTPartitionByElement = ASTOrderByElement;
@@ -114,12 +142,12 @@ using ASTPartitionByElement = ASTOrderByElement;
 class WindowBinder : public ExecutorBinder
 {
 public:
-    WindowBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && func_descs_, ASTs && partition_by_exprs_, ASTs && order_by_exprs_, MockWindowFrame frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
+    WindowBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && func_descs_, ASTs && partition_by_exprs_, ASTs && order_by_exprs_, MockWindowFrame && frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))
         , order_by_exprs(order_by_exprs_)
-        , frame(frame_)
+        , frame(std::move(frame_))
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
 
