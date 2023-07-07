@@ -178,14 +178,12 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
     }
 
     // Build range frame's auxiliary function
-    if (frame.start.has_value())
-        if (frame.start->isRangeFrame())
-            frame.start->buildRangeFrameAuxFunction(input->output_schema);
+    if (frame.start.has_value() && frame.start->isRangeFrame())
+        frame.start->buildRangeFrameAuxFunction(input->output_schema);
 
     // Build range frame's auxiliary function
-    if (frame.end.has_value())
-        if (frame.end->isRangeFrame())
-            frame.end->buildRangeFrameAuxFunction(input->output_schema);
+    if (frame.end.has_value() && frame.end->isRangeFrame())
+        frame.end->buildRangeFrameAuxFunction(input->output_schema);
 
     DAGSchema output_schema;
     output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
