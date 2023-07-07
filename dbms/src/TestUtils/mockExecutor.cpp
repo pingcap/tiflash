@@ -397,7 +397,7 @@ DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set
 
 DAGRequestBuilder & DAGRequestBuilder::appendRuntimeFilter(mock::MockRuntimeFilter & rf)
 {
-    mock::JoinBinder * join = dynamic_cast<mock::JoinBinder *>(root.get());
+    auto * join = dynamic_cast<mock::JoinBinder *>(root.get());
     if (join)
     {
         join->addRuntimeFilter(rf);
@@ -630,13 +630,13 @@ DAGRequestBuilder MockDAGRequestContext::scan(
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids)
 {
-    auto dagRequestBuilder = scan(db_name, table_name);
-    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dagRequestBuilder.getRoot().get());
+    auto dag_request_builder = scan(db_name, table_name);
+    mock::TableScanBinder * table_scan = dynamic_cast<mock::TableScanBinder *>(dag_request_builder.getRoot().get());
     if (table_scan)
     {
         table_scan->setRuntimeFilterIds(rf_ids);
     }
-    return dagRequestBuilder;
+    return dag_request_builder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
