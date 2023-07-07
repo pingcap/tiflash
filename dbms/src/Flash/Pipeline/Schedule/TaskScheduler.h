@@ -58,6 +58,7 @@ public:
 
     ~TaskScheduler();
 
+    void submit(TaskPtr && task);
     void submit(std::vector<TaskPtr> & tasks);
 
     void submitToWaitReactor(TaskPtr && task);
