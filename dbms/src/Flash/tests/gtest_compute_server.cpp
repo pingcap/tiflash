@@ -984,11 +984,13 @@ try
             /// these gathers should not be affected
             assertGatherActive(gather_ids[i]);
         }
+        /// the active query count should not change
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
         /// kill single gather query
         MockComputeServerManager::instance().cancelGather(gather_ids[5]);
         assertGatherCancelled(gather_ids[5]);
+        /// the active query count should be 1
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 1);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
         /// kill the rest gathers
