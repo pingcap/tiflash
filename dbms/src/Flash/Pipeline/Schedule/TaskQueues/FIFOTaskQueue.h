@@ -32,7 +32,7 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr &, size_t) override {}
+    void updateStatistics(const TaskPtr &, ExecTaskStatus, UInt64) override {}
 
     bool empty() const override;
 

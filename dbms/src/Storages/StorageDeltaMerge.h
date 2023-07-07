@@ -259,7 +259,7 @@ private:
                                         const String & req_id,
                                         const LoggerPtr & tracing_logger);
 
-    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context);
+    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

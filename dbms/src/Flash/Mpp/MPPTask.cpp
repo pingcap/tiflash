@@ -594,13 +594,18 @@ void MPPTask::reportStatus(const String & err_msg)
     if (!ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
         return;
 
+    bool report_execution_summary = dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary());
+    // Only report status when err happened or need to report execution summary
+    if (err_msg.empty() && !report_execution_summary)
+        return;
+
     try
     {
         std::shared_ptr<mpp::ReportTaskStatusRequest> req = std::make_shared<mpp::ReportTaskStatusRequest>();
         mpp::TaskMeta * req_meta = req->mutable_meta();
         req_meta->CopyFrom(meta);
 
-        if (dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+        if (report_execution_summary)
         {
             tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
             if unlikely (!execution_info.SerializeToString(req->mutable_data()))
