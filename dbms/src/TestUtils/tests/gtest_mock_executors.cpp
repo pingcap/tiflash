@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -356,8 +356,7 @@ CATCH
 TEST_F(MockDAGRequestTest, MockWindow)
 try
 {
-    auto mock_frame = buildDefaultRowsFrame();
-    auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, mock_frame).build(context);
+    auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame()).build(context);
     {
         String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<2, false, 0>}\n"
                           " sort_1 | isPartialSort: true, partition_by: {(<0, String>, desc: false)}\n"
@@ -365,8 +364,8 @@ try
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
 
-    mock_frame = buildDefaultRowsFrame();
-    request = context.scan("test_db", "test_table").sort({"test_table.s1", false}, true).window(RowNumber(), {"test_table.s1", true}, {"test_table.s2", false}, mock_frame).build(context);
+
+    request = context.scan("test_db", "test_table").sort({"test_table.s1", false}, true).window(RowNumber(), {"test_table.s1", true}, {"test_table.s2", false}, buildDefaultRowsFrame()).build(context);
     {
         String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<2, false, 0>}\n"
                           " sort_1 | isPartialSort: true, partition_by: {(<0, String>, desc: false)}\n"

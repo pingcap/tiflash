@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,27 +126,24 @@ CATCH
 TEST_F(InterpreterExecuteTest, Window)
 try
 {
-    auto mock_frame = buildDefaultRowsFrame();
     auto request = context
                        .scan("test_db", "test_table")
                        .sort({{"s1", true}, {"s2", false}}, true)
-                       .window(RowNumber(), {"s1", true}, {"s2", false}, mock_frame)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
                        .build(context);
     runAndAssert(request, 10);
 
-    mock_frame = buildDefaultRowsFrame();
     request = context.scan("test_db", "test_table")
                   .sort({{"s1", true}, {"s2", false}}, true)
-                  .window(RowNumber(), {"s1", true}, {"s2", false}, mock_frame)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
                   .project({"s1", "s2", "RowNumber()"})
                   .build(context);
     runAndAssert(request, 10);
 
-    mock_frame = buildDefaultRowsFrame();
     request = context.scan("test_db", "test_table_1")
                   .sort({{"s1", true}, {"s2", false}}, true)
                   .project({"s1", "s2", "s3"})
-                  .window(RowNumber(), {"s1", true}, {"s1", false}, mock_frame)
+                  .window(RowNumber(), {"s1", true}, {"s1", false}, buildDefaultRowsFrame())
                   .project({"s1", "s2", "s3", "RowNumber()"})
                   .build(context);
     runAndAssert(request, 10);
@@ -157,11 +154,10 @@ TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
-    auto mock_frame = buildDefaultRowsFrame();
     auto request = context
                        .receive("sender_1", enable)
                        .sort({{"s1", true}, {"s2", false}}, true, enable)
-                       .window(RowNumber(), {"s1", true}, {"s2", false}, mock_frame, enable)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), enable)
                        .build(context);
     runAndAssert(request, 10);
 
@@ -175,7 +171,7 @@ try
     request = context
                   .receive("sender_1", disable)
                   .sort({{"s1", true}, {"s2", false}}, true, disable)
-                  .window(RowNumber(), {"s1", true}, {"s2", false}, mock_frame, disable)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), disable)
                   .build(context);
     runAndAssert(request, 10);
 
