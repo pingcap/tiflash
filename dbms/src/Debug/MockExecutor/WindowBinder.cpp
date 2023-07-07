@@ -126,10 +126,6 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             start->set_type(frame.start->getBoundType());
             if (frame.start->isRangeFrame())
             {
-                // It's ok to pass raw pointer here because the destruction of
-                // mock::MockWindowFrame happens after the execution of DAGRequest
-                // and we can ensure that the raw pointer is always valid in the
-                // process of executing.
                 start->set_allocated_frame_range(frame.start->robRangeFrame());
                 start->set_cmp_data_type(frame.start->getCmpDataType());
             }
@@ -143,10 +139,6 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
             end->set_type(frame.end->getBoundType());
             if (frame.end->isRangeFrame())
             {
-                // It's ok to pass raw pointer here because the destruction of
-                // mock::MockWindowFrame happens after the execution of DAGRequest
-                // and we can ensure that the raw pointer is always valid in the
-                // process of executing.
                 end->set_allocated_frame_range(frame.end->robRangeFrame());
                 end->set_cmp_data_type(frame.end->getCmpDataType());
             }
