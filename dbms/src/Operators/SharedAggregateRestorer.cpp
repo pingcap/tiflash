@@ -32,7 +32,7 @@ SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
         bucket_inputs.emplace_back(bucket_stream);
     RUNTIME_CHECK(!bucket_inputs.empty());
 
-    exec_status.onEventSchedule();
+    exec_status.incActiveRefCount();
 }
 
 SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
@@ -40,7 +40,7 @@ SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
     bucket_data_queue = {};
     bucket_inputs.clear();
     // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
-    exec_status.onEventFinish();
+    exec_status.decActiveRefCount();
 }
 
 bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)

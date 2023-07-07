@@ -30,7 +30,7 @@ try
     PipelineExecutorStatus status;
     try
     {
-        status.onEventSchedule();
+        status.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         status.waitFor(timeout);
         GTEST_FAIL();
@@ -51,7 +51,7 @@ try
     status.toConsumeMode(1);
     try
     {
-        status.onEventSchedule();
+        status.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         ResultHandler result_handler{[](const Block &) {
         }};
@@ -71,9 +71,9 @@ TEST_F(PipelineExecutorStatusTestRunner, run)
 try
 {
     PipelineExecutorStatus status;
-    status.onEventSchedule();
+    status.incActiveRefCount();
     auto thread_manager = newThreadManager();
-    thread_manager->schedule(false, "run", [&status]() mutable { status.onEventFinish(); });
+    thread_manager->schedule(false, "run", [&status]() mutable { status.decActiveRefCount(); });
     status.wait();
     auto exception_ptr = status.getExceptionPtr();
     auto err_msg = status.getExceptionMsg();
@@ -88,11 +88,11 @@ try
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg;
         PipelineExecutorStatus status;
-        status.onEventSchedule();
+        status.incActiveRefCount();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
             status.onErrorOccurred(err_msg);
-            status.onEventFinish();
+            status.decActiveRefCount();
         });
         status.wait();
         status.onErrorOccurred("unexpect exception");
