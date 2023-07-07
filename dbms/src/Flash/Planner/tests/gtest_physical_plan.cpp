@@ -307,11 +307,10 @@ try
         static const uint64_t enable = 8;
         static const uint64_t disable = 0;
         bool fine_grained_shuffle_stream_count = enable_fine_grained_shuffle ? enable : disable;
-        auto mock_frame = buildDefaultRowsFrame();
         return context
             .receive("exchange2", fine_grained_shuffle_stream_count)
             .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true, fine_grained_shuffle_stream_count)
-            .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame, fine_grained_shuffle_stream_count)
+            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), fine_grained_shuffle_stream_count)
             .build(context);
     };
 

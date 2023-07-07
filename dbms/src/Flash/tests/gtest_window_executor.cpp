@@ -14,7 +14,6 @@
 
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/mockExecutor.h>
 
 namespace DB::tests
 {
@@ -88,11 +87,10 @@ try
 {
     /***** row_number with different types of input *****/
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
-    auto mock_frame = buildDefaultRowsFrame();
     auto request = context
                        .scan("test_db", "test_table")
                        .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
-                       .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame)
+                       .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                        .build(context);
     executeAndAssertColumnsEqual(
         request,
@@ -119,11 +117,10 @@ try
                        toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // string - sql : select *, row_number() over w1 from test2 window w1 as (partition by partition_string order by order_string)
-    mock_frame = buildDefaultRowsFrame();
     request = context
                   .scan("test_db", "test_table_string")
                   .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
-                  .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame)
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
 
     executeAndAssertColumnsEqual(request,
@@ -142,11 +139,10 @@ try
                                                       toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // float64 - sql : select *, row_number() over w1 from test3 window w1 as (partition by partition_float order by order_float64)
-    mock_frame = buildDefaultRowsFrame();
     request = context
                   .scan("test_db", "test_table_float64")
                   .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
-                  .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame)
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
 
     executeAndAssertColumnsEqual(request,
@@ -165,11 +161,10 @@ try
                                                       toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // datetime - select *, row_number() over w1 from test4 window w1 as (partition by partition_datetime order by order_datetime);
-    mock_frame = buildDefaultRowsFrame();
     request = context
                   .scan("test_db", "test_table_datetime")
                   .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
-                  .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame)
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
     executeWithTableScanAndConcurrency(request,
                                        "test_db",
@@ -192,11 +187,10 @@ try
 
     // 2 partiton key and 2 order key
     // sql : select *, row_number() over w1 from test6 window w1 as (partition by partition_int1, partition_int2 order by order_int1,order_int2)
-    mock_frame = buildDefaultRowsFrame();
     request = context
                   .scan("test_db", "test_table_more_cols")
                   .sort({{"partition1", false}, {"partition2", false}, {"order1", false}, {"order2", false}}, true)
-                  .window(RowNumber(), {{"order1", false}, {"order2", false}}, {{"partition1", false}, {"partition2", false}}, mock_frame)
+                  .window(RowNumber(), {{"order1", false}, {"order2", false}}, {{"partition1", false}, {"partition2", false}}, buildDefaultRowsFrame())
                   .build(context);
 
     executeAndAssertColumnsEqual(request,
@@ -207,8 +201,7 @@ try
                                                 toNullableVec<Int64>("row_number", {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3})}));
 
     /***** rank, dense_rank *****/
-    mock_frame = MockWindowFrame{};
-    request = context.scan("test_db", "test_table_for_rank").sort({{"partition", false}, {"order", false}}, true).window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, mock_frame).build(context);
+    request = context.scan("test_db", "test_table_for_rank").sort({{"partition", false}, {"order", false}}, true).window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame{}).build(context);
     executeAndAssertColumnsEqual(request,
                                  createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
                                                 toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
@@ -246,7 +239,6 @@ try
         return is_table ? context.scan("test_db", "test_table") : context.receive("test_recv", 1);
     };
 
-    MockWindowFrame mock_frame;
     std::vector<ASTPtr> functions = {DenseRank(), Rank()};
     ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3})};
     auto test_single_window_function = [&](size_t index) {
@@ -254,10 +246,9 @@ try
         for (auto is_table : bools)
         {
             size_t stream_count = is_table ? 0 : 1;
-            mock_frame = MockWindowFrame{};
             auto request = add_source(is_table)
                                .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                               .window(functions[index], {"order", false}, {"partition", false}, mock_frame, stream_count)
+                               .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{}, stream_count)
                                .build(context);
             executeAndAssertColumnsEqual(request,
                                          createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
@@ -275,11 +266,10 @@ try
         // merge window request
         for (auto is_table : bools)
         {
-            mock_frame = MockWindowFrame();
             size_t stream_count = is_table ? 0 : 1;
             requests.push_back(add_source(is_table)
                                    .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                                   .window(wfs, {{"order", false}}, {{"partition", false}}, mock_frame, stream_count)
+                                   .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
                                    .build(context));
         }
 
@@ -289,10 +279,7 @@ try
             size_t stream_count = is_table ? 0 : 1;
             auto req = add_source(is_table).sort({{"partition", false}, {"order", false}}, true, stream_count);
             for (const auto & wf : wfs)
-            {
-                mock_frame = MockWindowFrame();
-                req.window(wf, {"order", false}, {"partition", false}, mock_frame, stream_count);
-            }
+                req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame(), stream_count);
             requests.push_back(req.build(context));
         }
 
@@ -337,8 +324,6 @@ try
         return is_table ? context.scan("test_db", "test_table") : context.receive("test_recv", 1);
     };
     std::vector<bool> bools{true, false};
-    MockWindowFrame mock_frame1;
-    MockWindowFrame mock_frame2;
     for (auto is_table : bools)
     {
         size_t stream_count = is_table ? 0 : 1;
@@ -351,13 +336,11 @@ try
             FROM `test_db`.`test_table`
         )t1;
         */
-        mock_frame1 = buildDefaultRowsFrame();
-        mock_frame2 = buildDefaultRowsFrame();
         auto request = add_source(is_table)
                            .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                           .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame1, stream_count)
+                           .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
                            .sort({{"partition", false}, {"order", true}}, true, stream_count)
-                           .window(RowNumber(), {"order", true}, {"partition", false}, mock_frame2, stream_count)
+                           .window(RowNumber(), {"order", true}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
                            .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                            .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
@@ -370,20 +353,17 @@ try
             FROM `test_db`.`test_table`
         )t1;
         */
-        mock_frame1 = buildDefaultRowsFrame();
-        mock_frame2 = buildDefaultRowsFrame();
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame1, stream_count)
-                      .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame2, stream_count)
+                      .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
+                      .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-        mock_frame1 = buildDefaultRowsFrame();
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, mock_frame1, stream_count)
+                      .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, buildDefaultRowsFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
@@ -396,20 +376,17 @@ try
             FROM `test_db`.`test_table`
         )t1;
         */
-        mock_frame1 = MockWindowFrame();
-        mock_frame2 = MockWindowFrame();
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window(Rank(), {"order", false}, {"partition", false}, mock_frame1, stream_count)
-                      .window(DenseRank(), {"order", false}, {"partition", false}, mock_frame2, stream_count)
+                      .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-        mock_frame1 = MockWindowFrame();
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, mock_frame1, stream_count)
+                      .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
@@ -423,22 +400,18 @@ try
             FROM `test_db`.`test_table`
         )t1;
         */
-        mock_frame1 = MockWindowFrame();
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, mock_frame1, stream_count)
+                      .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-        mock_frame1 = MockWindowFrame();
-        mock_frame2 = MockWindowFrame();
-        MockWindowFrame mock_frame3;
         request = add_source(is_table)
                       .sort({{"partition", false}, {"order", false}}, true, stream_count)
-                      .window(DenseRank(), {"order", false}, {"partition", false}, mock_frame1, stream_count)
-                      .window(DenseRank(), {"order", false}, {"partition", false}, mock_frame2, stream_count)
-                      .window(Rank(), {"order", false}, {"partition", false}, mock_frame3, stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                       .build(context);
         executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
@@ -453,31 +426,28 @@ try
         {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2})},
         {toNullableVec<Int64>("order", {1, 2, 3, 4, 5, 6, 7, 8})},
         {toNullableVec<String>("value", {"a", "b", "c", "d", "e", "f", "g", "h"})}};
-    MockWindowFrame mock_frame;
     auto request = context
                        .scan("test_db", "test_table_for_lead_lag")
                        .sort({{"partition", false}, {"order", false}}, true)
-                       .window(Lead1(concat(col("value"), col("value"))), {"order", false}, {"partition", false}, mock_frame)
+                       .window(Lead1(concat(col("value"), col("value"))), {"order", false}, {"partition", false}, MockWindowFrame())
                        .build(context);
     result.emplace_back(toNullableVec<String>({"bb", "cc", "dd", {}, "ff", "gg", "hh", {}}));
     executeAndAssertColumnsEqual(request, result);
     result.pop_back();
 
-    mock_frame = MockWindowFrame();
     request = context
                   .scan("test_db", "test_table_for_lead_lag")
                   .sort({{"partition", false}, {"order", false}}, true)
-                  .window(Lag2(concat(col("value"), lit(Field(String("0")))), lit(Field(static_cast<UInt64>(2)))), {"order", false}, {"partition", false}, mock_frame)
+                  .window(Lag2(concat(col("value"), lit(Field(String("0")))), lit(Field(static_cast<UInt64>(2)))), {"order", false}, {"partition", false}, MockWindowFrame())
                   .build(context);
     result.emplace_back(toNullableVec<String>({{}, {}, "a0", "b0", {}, {}, "e0", "f0"}));
     executeAndAssertColumnsEqual(request, result);
     result.pop_back();
 
-    mock_frame = MockWindowFrame();
     request = context
                   .scan("test_db", "test_table_for_lead_lag")
                   .sort({{"partition", false}, {"order", false}}, true)
-                  .window(Lead2(concat(col("value"), concat(lit(Field(String("0"))), col("value"))), lit(Field(static_cast<UInt64>(1)))), {"order", false}, {"partition", false}, mock_frame)
+                  .window(Lead2(concat(col("value"), concat(lit(Field(String("0"))), col("value"))), lit(Field(static_cast<UInt64>(1)))), {"order", false}, {"partition", false}, MockWindowFrame())
                   .build(context);
     result.emplace_back(toNullableVec<String>({"b0b", "c0c", "d0d", {}, "f0f", "g0g", "h0h", {}}));
     executeAndAssertColumnsEqual(request, result);
@@ -511,12 +481,11 @@ try
     context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_data, 10, partition_column_infos);
     std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
 
-    auto mock_frame = buildDefaultRowsFrame();
     auto gen_request = [&](size_t exchange_concurrency) {
         return context
             .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
             .sort({{"partition", false}, {"order", false}}, true, exchange_concurrency)
-            .window(RowNumber(), {"order", false}, {"partition", false}, mock_frame, exchange_concurrency)
+            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), exchange_concurrency)
             .build(context);
     };
 
