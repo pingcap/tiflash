@@ -26,6 +26,7 @@ bool CompressedReadBuffer<has_checksum>::nextImpl()
     if (!size_compressed)
         return false;
 
+    
     memory.resize(size_decompressed);
     working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
 
