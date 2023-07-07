@@ -72,10 +72,10 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 
 Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
-    , task_status(init_status)
     , exec_status(exec_status_)
     , mem_tracker_holder(exec_status_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
+    , task_status(init_status)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);

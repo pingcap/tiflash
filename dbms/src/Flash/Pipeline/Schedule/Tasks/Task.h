@@ -102,9 +102,6 @@ public:
     // level of multi-level feedback queue.
     size_t mlfq_level{0};
 
-protected:
-    ExecTaskStatus task_status;
-
 private:
     PipelineExecutorStatus & exec_status;
 
@@ -112,6 +109,8 @@ private:
     MemoryTrackerPtr mem_tracker_holder;
     // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
+
+    ExecTaskStatus task_status;
 
     bool is_finalized = false;
 };

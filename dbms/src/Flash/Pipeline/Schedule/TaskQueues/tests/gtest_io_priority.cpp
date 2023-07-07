@@ -27,9 +27,8 @@ class MockIOTask : public Task
 {
 public:
     MockIOTask(PipelineExecutorStatus & exec_status_, bool is_io_in)
-        : Task(exec_status_)
+        : Task(exec_status_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
-        task_status = is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT;
     }
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
