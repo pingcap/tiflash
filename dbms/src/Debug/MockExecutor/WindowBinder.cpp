@@ -149,7 +149,7 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame & frame, uint64_t fine_grained_shuffle_stream_count)
+ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> partition_columns;
     if (partition_by_expr_list != nullptr)
