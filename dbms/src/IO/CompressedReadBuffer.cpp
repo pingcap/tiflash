@@ -63,6 +63,7 @@ size_t CompressedReadBuffer<has_checksum>::readBig(char * to, size_t n)
         else
         {
             bytes += offset();
+            assert(size_decompressed > 0 && size_compressed_without_checksum > 0);
             memory.resize(size_decompressed);
             working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
             pos = working_buffer.begin();
