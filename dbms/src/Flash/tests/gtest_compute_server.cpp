@@ -956,28 +956,47 @@ try
     ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
     std::vector<std::thread> running_queries;
     std::vector<MPPGatherId> gather_ids;
-    auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, 1);
+    auto multiple_gathers_properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, 1);
+    auto single_gather_properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, 2);
     try
     {
-        for (size_t i = 0; i < 2; ++i)
+        for (size_t i = 0; i < 5; ++i)
         {
-            properties.gather_id = i + 1;
-            addOneGather(running_queries, gather_ids, properties);
+            multiple_gathers_properties.gather_id = i + 1;
+            addOneGather(running_queries, gather_ids, multiple_gathers_properties);
         }
-        std::cout << "before sleep" << std::endl;
+        single_gather_properties.gather_id = 1;
+        addOneGather(running_queries, gather_ids, single_gather_properties);
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
-        std::cout << "after sleep" << std::endl;
-        /// two gathers, but still one query
+        /// 6 gathers, but two query
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        std::vector<size_t> killed_gathers{0, 2, 4};
+        std::vector<size_t> remaining_gathers{1, 3};
+        for (const auto i : killed_gathers)
+        {
+            MockComputeServerManager::instance().cancelGather(gather_ids[i]);
+            assertGatherCancelled(gather_ids[i]);
+        }
+        for (const auto i : remaining_gathers)
+        {
+            /// these gathers should not be affected
+            assertGatherActive(gather_ids[i]);
+        }
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
+        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
+        /// kill single gather query
+        MockComputeServerManager::instance().cancelGather(gather_ids[5]);
+        assertGatherCancelled(gather_ids[5]);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 1);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        MockComputeServerManager::instance().cancelGather(gather_ids[0]);
-        assertGatherCancelled(gather_ids[0]);
-        assertGatherActive(gather_ids[1]);
-        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 1);
-        ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        MockComputeServerManager::instance().cancelGather(gather_ids[1]);
-        assertGatherCancelled(gather_ids[1]);
+        /// kill the rest gathers
+        for (const auto i : remaining_gathers)
+        {
+            MockComputeServerManager::instance().cancelGather(gather_ids[i]);
+            assertGatherCancelled(gather_ids[i]);
+        }
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 0);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
         for (auto & t : running_queries)
@@ -986,7 +1005,6 @@ try
     }
     catch (...)
     {
-        std::cout << "meet exception." << std::endl;
         for (const auto & gather_id : gather_ids)
             MockComputeServerManager::instance().cancelGather(gather_id);
         for (auto & t : running_queries)
