@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,26 +14,27 @@
 
 #pragma once
 
-#include <Core/ColumnNumbers.h>
-#include <Core/ColumnWithTypeAndName.h>
-#include <Core/ColumnsWithTypeAndName.h>
-#include <Core/Field.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
+#include <Interpreters/Expand2.h>
 
 namespace DB
 {
-namespace tests
-{
-tipb::Expr columnsToTiPBExpr(
-    const String & func_name,
-    const ColumnNumbers & argument_column_number,
-    const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator,
-    const String & val);
 
-tipb::Expr columnToTiPBExpr(
-    const ColumnWithTypeAndName & column,
-    size_t index);
-} // namespace tests
+struct ExpandTransformAction
+{
+public:
+    ExpandTransformAction(
+        const Block & header_,
+        const Expand2Ptr & expand_);
+
+    void transform(Block & block);
+    bool tryOutput(Block & block);
+    Block getHeader() const;
+
+private:
+    Block header;
+    Expand2Ptr expand;
+    Block block_cache;
+    size_t i_th_project;
+};
+
 } // namespace DB
