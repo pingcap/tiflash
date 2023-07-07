@@ -85,7 +85,7 @@ using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 struct MPPQuery
 {
-    MPPQuery(bool has_meaningful_gather_id_)
+    explicit MPPQuery(bool has_meaningful_gather_id_)
         : has_meaningful_gather_id(has_meaningful_gather_id_)
     {}
     MPPGatherTaskSetPtr addMPPGatherTaskSet(const MPPGatherId & gather_id);
@@ -110,7 +110,7 @@ private:
     size_t capacity;
 
 public:
-    AbortedMPPGatherCache(size_t capacity_)
+    explicit AbortedMPPGatherCache(size_t capacity_)
         : capacity(capacity_)
     {}
     /// return aborted_reason if the mpp gather is aborted, otherwise, return empty string
@@ -141,7 +141,7 @@ public:
     }
 };
 
-/// a map from the mpp query id to mpp query task set, we use
+/// a map from the mpp query id to mpp query, we use
 /// the query_ts + local_query_id + serverID as the query id, because TiDB can't guarantee
 /// the uniqueness of the start ts when stale read or set snapshot
 using MPPQueryMap = std::unordered_map<MPPQueryId, MPPQueryPtr, MPPQueryIdHash>;

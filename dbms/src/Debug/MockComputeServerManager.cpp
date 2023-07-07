@@ -134,11 +134,6 @@ void MockComputeServerManager::cancelGather(const MPPGatherId & gather_id)
         server.second->flashService()->cancelMPPTaskForTest(&req, &response);
 }
 
-void MockComputeServerManager::cancelQuery(const MPPQueryId & query_id)
-{
-    cancelGather(MPPGatherId(0, query_id));
-}
-
 String MockComputeServerManager::queryInfo()
 {
     FmtBuffer buf;

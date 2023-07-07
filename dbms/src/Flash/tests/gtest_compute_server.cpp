@@ -567,27 +567,27 @@ try
     {
         /// case 1, cancel after dispatch MPPTasks
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto res = prepareMPPStreams(context
                                          .scan("test_db", "test_table_1")
                                          .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                                          .project({"max(s1)"}),
                                      properties);
-        EXPECT_TRUE(assertQueryActive(query_id));
-        MockComputeServerManager::instance().cancelQuery(query_id);
-        EXPECT_TRUE(assertQueryCancelled(query_id));
+        EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id);
+        EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     {
         /// case 2, cancel before dispatch MPPTasks
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto tasks = prepareMPPTasks(context
                                          .scan("test_db", "test_table_1")
                                          .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                                          .project({"max(s1)"}),
                                      properties);
-        EXPECT_TRUE(!assertQueryActive(query_id));
-        MockComputeServerManager::instance().cancelQuery(query_id);
+        EXPECT_TRUE(!assertQueryActive(gather_id.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id);
         try
         {
             executeMPPTasks(tasks, properties);
@@ -595,7 +595,7 @@ try
         catch (...)
         {
         }
-        EXPECT_TRUE(assertQueryCancelled(query_id));
+        EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END
 }
@@ -609,14 +609,14 @@ try
     {
         setCancelTest();
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto res = prepareMPPStreams(context
                                          .scan("test_db", "l_table")
                                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                      properties);
-        EXPECT_TRUE(assertQueryActive(query_id));
-        MockComputeServerManager::instance().cancelQuery(query_id);
-        EXPECT_TRUE(assertQueryCancelled(query_id));
+        EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id);
+        EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END
 }
@@ -630,16 +630,16 @@ try
     {
         setCancelTest();
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+        MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
         auto stream = prepareMPPStreams(context
                                             .scan("test_db", "l_table")
                                             .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                                             .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                                             .project({col("max(l_table.s)"), col("l_table.s")}),
                                         properties);
-        EXPECT_TRUE(assertQueryActive(query_id));
-        MockComputeServerManager::instance().cancelQuery(query_id);
-        EXPECT_TRUE(assertQueryCancelled(query_id));
+        EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id);
+        EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
     }
     WRAP_FOR_SERVER_TEST_END
 }
@@ -653,13 +653,13 @@ try
     setCancelTest();
     {
         auto properties1 = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id1(properties1.query_ts, properties1.local_query_id, properties1.server_id, properties1.start_ts);
+        MPPGatherId gather_id1(properties1.gather_id, properties1.query_ts, properties1.local_query_id, properties1.server_id, properties1.start_ts);
         auto res1 = prepareMPPStreams(context
                                           .scan("test_db", "l_table")
                                           .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                       properties1);
         auto properties2 = DB::tests::getDAGPropertiesForTest(serverNum());
-        MPPQueryId query_id2(properties2.query_ts, properties2.local_query_id, properties2.server_id, properties2.start_ts);
+        MPPGatherId gather_id2(properties2.gather_id, properties2.query_ts, properties2.local_query_id, properties2.server_id, properties2.start_ts);
         auto res2 = prepareMPPStreams(context
                                           .scan("test_db", "l_table")
                                           .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -667,30 +667,30 @@ try
                                           .project({col("max(l_table.s)"), col("l_table.s")}),
                                       properties2);
 
-        EXPECT_TRUE(assertQueryActive(query_id1));
-        MockComputeServerManager::instance().cancelQuery(query_id1);
-        EXPECT_TRUE(assertQueryCancelled(query_id1));
+        EXPECT_TRUE(assertQueryActive(gather_id1.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id1);
+        EXPECT_TRUE(assertQueryCancelled(gather_id1.query_id));
 
-        EXPECT_TRUE(assertQueryActive(query_id2));
-        MockComputeServerManager::instance().cancelQuery(query_id2);
-        EXPECT_TRUE(assertQueryCancelled(query_id2));
+        EXPECT_TRUE(assertQueryActive(gather_id2.query_id));
+        MockComputeServerManager::instance().cancelGather(gather_id2);
+        EXPECT_TRUE(assertQueryCancelled(gather_id2.query_id));
     }
 
     // start 10 queries
     {
-        std::vector<std::tuple<MPPQueryId, BlockInputStreamPtr>> queries;
+        std::vector<std::tuple<MPPGatherId, BlockInputStreamPtr>> queries;
         for (size_t i = 0; i < 10; ++i)
         {
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-            MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
-            queries.push_back(std::make_tuple(query_id, prepareMPPStreams(context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}), properties)));
+            MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+            queries.push_back(std::make_tuple(gather_id, prepareMPPStreams(context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}), properties)));
         }
         for (size_t i = 0; i < 10; ++i)
         {
-            auto query_id = std::get<0>(queries[i]);
-            EXPECT_TRUE(assertQueryActive(query_id));
-            MockComputeServerManager::instance().cancelQuery(query_id);
-            EXPECT_TRUE(assertQueryCancelled(query_id));
+            auto gather_id = std::get<0>(queries[i]);
+            EXPECT_TRUE(assertQueryActive(gather_id.query_id));
+            MockComputeServerManager::instance().cancelGather(gather_id);
+            EXPECT_TRUE(assertQueryCancelled(gather_id.query_id));
         }
     }
     WRAP_FOR_SERVER_TEST_END
@@ -851,7 +851,7 @@ try
         for (size_t i = 0; i < 5; ++i)
         {
             auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), query_index, i);
-            MPPQueryId query_id(properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
+            MPPGatherId gather_id(properties.gather_id, properties.query_ts, properties.local_query_id, properties.server_id, properties.start_ts);
             /// currently all the failpoints are automatically disabled after triggered once, so have to enable it before every run
             FailPointHelper::enableFailPoint(failpoint);
             try
@@ -867,8 +867,8 @@ try
             {
                 auto error_message = getCurrentExceptionMessage(false);
                 ASSERT_TRUE(error_message.find(failpoint) != std::string::npos) << " error message is " << error_message << " failpoint is " << failpoint;
-                MockComputeServerManager::instance().cancelQuery(query_id);
-                EXPECT_TRUE(assertQueryCancelled(query_id)) << "fail in " << failpoint;
+                MockComputeServerManager::instance().cancelGather(gather_id);
+                EXPECT_TRUE(assertQueryCancelled(gather_id.query_id)) << "fail in " << failpoint;
                 FailPointHelper::disableFailPoint(failpoint);
                 continue;
             }

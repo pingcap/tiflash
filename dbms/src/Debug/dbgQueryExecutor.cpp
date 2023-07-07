@@ -27,7 +27,7 @@ namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;
 
-void fillTaskMetaUsingDAGProperties(mpp::TaskMeta & meta, const DAGProperties & properties)
+void fillTaskMetaWithDAGProperties(mpp::TaskMeta & meta, const DAGProperties & properties)
 {
     meta.set_start_ts(properties.start_ts);
     meta.set_gather_id(properties.gather_id);
@@ -59,7 +59,7 @@ BlockInputStreamPtr constructRootExchangeReceiverStream(Context & context, tipb:
     }
 
     mpp::TaskMeta root_tm;
-    fillTaskMetaUsingDAGProperties(root_tm, properties);
+    fillTaskMetaWithDAGProperties(root_tm, properties);
     root_tm.set_address(root_addr);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
@@ -89,7 +89,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     for (const auto root_task_id : root_task_ids)
     {
         mpp::TaskMeta tm;
-        fillTaskMetaUsingDAGProperties(tm, properties);
+        fillTaskMetaWithDAGProperties(tm, properties);
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
@@ -102,7 +102,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
 void prepareExchangeReceiverMetaWithMultipleContext(tipb::ExchangeReceiver & tipb_exchange_receiver, const DAGProperties & properties, Int64 task_id, String & addr)
 {
     mpp::TaskMeta tm;
-    fillTaskMetaUsingDAGProperties(tm, properties);
+    fillTaskMetaWithDAGProperties(tm, properties);
     tm.set_address(addr);
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
@@ -127,7 +127,7 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
-    fillTaskMetaUsingDAGProperties(*tm, properties);
+    fillTaskMetaWithDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
@@ -146,7 +146,7 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
-    fillTaskMetaUsingDAGProperties(*tm, properties);
+    fillTaskMetaWithDAGProperties(*tm, properties);
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
