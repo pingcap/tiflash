@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -182,6 +183,12 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
+        break;
+    }
+    case tipb::ExecType::TypeExpand2:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
     }
     default:
