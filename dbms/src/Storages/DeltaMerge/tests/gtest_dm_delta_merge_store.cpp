@@ -185,7 +185,7 @@ public:
         return s;
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, std::vector<ExternalDTFileInfo>> genDMFile(DMContext & context, const Block & block)
     {
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -204,12 +204,13 @@ public:
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
-        auto & pk_column = block.getByPosition(0).column;
+        const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);
         auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
-
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
+        auto handle_range = RowKeyRange::fromHandleRange(range);
+        auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
+        return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
     }
 
 protected:
@@ -1349,10 +1350,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, {}, /*clear_data_in_range*/ true);
     }
 
 

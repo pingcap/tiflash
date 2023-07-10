@@ -326,14 +326,14 @@ struct PreHandledSnapshotWithBlock
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<UInt64> && ids_)
+    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<DM::ExternalDTFileInfo> && external_files_)
         : region(region_)
-        , ingest_ids(std::move(ids_))
+        , external_files(std::move(external_files_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
     RegionPtr region;
-    std::vector<UInt64> ingest_ids; // The file_ids storing pre-handled files
+    std::vector<DM::ExternalDTFileInfo> external_files; // The file_ids storing pre-handled files
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -404,7 +404,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
         }
         else if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
         {
-            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->tmt);
+            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)}, *server->tmt);
         }
     }
     catch (...)

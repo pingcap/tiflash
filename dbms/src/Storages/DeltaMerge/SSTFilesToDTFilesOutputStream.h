@@ -16,6 +16,7 @@
 
 #include <Common/Stopwatch.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/Page/PageDefines.h>
 
@@ -62,25 +63,43 @@ enum class FileConvertJobType
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
-                                  StorageDeltaMergePtr storage_,
-                                  DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-                                  TiDB::SnapshotApplyMethod method_,
-                                  FileConvertJobType job_type_,
-                                  TMTContext & tmt_);
+    SSTFilesToDTFilesOutputStream(
+        BoundedSSTFilesToBlockInputStreamPtr child_,
+        StorageDeltaMergePtr storage_,
+        DecodingStorageSchemaSnapshotConstPtr schema_snap_,
+        TiDB::SnapshotApplyMethod method_,
+        FileConvertJobType job_type_,
+        UInt64 split_after_rows_,
+        UInt64 split_after_size_,
+        TMTContext & tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
     void writeSuffix();
     void write();
 
-    PageIds ingestIds() const;
+    /**
+     * The DTFiles that can be ingested. The returned vector is ensured to be sorted by the file range in ascending order.
+     */
+    std::vector<ExternalDTFileInfo> outputFiles() const;
 
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
 private:
+    /**
+     * Generate a DMFilePtr and its DMFileBlockOutputStream.
+     */
     bool newDTFileStream();
+    /**
+     * Close the current DMFile stream.
+     */
+    bool finalizeDTFileStream();
+
+    /**
+     * Update the range for the current DTFile.
+     */
+    void updateRangeFromNonEmptyBlock(Block & block);
 
     // Stop the process for decoding committed data into DTFiles
     void stop();
@@ -91,15 +110,28 @@ private:
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
+    const UInt64 split_after_rows;
+    const UInt64 split_after_size;
     TMTContext & tmt;
     Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
+    std::vector<std::optional<RowKeyRange>> ingest_files_range;
 
-    size_t schema_sync_trigger_count = 0;
-    size_t commit_rows = 0;
+    /**
+     * How many rows has been committed to the current DTFile.
+     */
+    size_t committed_rows_this_dt_file = 0;
+    size_t committed_bytes_this_dt_file = 0;
+
+    /**
+     * How many rows has been committed so far.
+     */
+    size_t total_committed_rows = 0;
+    size_t total_committed_bytes = 0;
+
     Stopwatch watch;
 };
 

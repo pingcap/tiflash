@@ -33,7 +33,8 @@ extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, 
 namespace DM
 {
 enum class FileConvertJobType;
-}
+struct ExternalDTFileInfo;
+} // namespace DM
 
 namespace tests
 {
@@ -115,7 +116,7 @@ public:
         uint64_t index,
         uint64_t term,
         TMTContext & tmt);
-    std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
@@ -190,7 +191,7 @@ private:
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
 
-    std::vector<UInt64> preHandleSSTsToDTFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSSTsToDTFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,

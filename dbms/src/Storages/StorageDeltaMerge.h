@@ -39,6 +39,7 @@ namespace DM
 struct RowKeyRange;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+struct ExternalDTFileInfo;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -91,7 +92,7 @@ public:
 
     void ingestFiles(
         const DM::RowKeyRange & range,
-        const std::vector<UInt64> & file_ids,
+        const std::vector<DM::ExternalDTFileInfo> & external_files,
         bool clear_data_in_range,
         const Settings & settings);
 

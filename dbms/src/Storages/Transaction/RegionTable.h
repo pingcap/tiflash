@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
@@ -259,9 +260,11 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {})
+    RegionPtrWithSnapshotFiles(
+        const Base & base_,
+        std::vector<DM::ExternalDTFileInfo> && external_files_ = {})
         : base(base_)
-        , ingest_ids(std::move(ids_))
+        , external_files(std::move(external_files_))
     {}
 
     /// to be compatible with usage as RegionPtr.
@@ -272,7 +275,7 @@ struct RegionPtrWithSnapshotFiles
     operator const Base &() const { return base; }
 
     const Base & base;
-    const std::vector<UInt64> ingest_ids;
+    const std::vector<DM::ExternalDTFileInfo> external_files;
 };
 
 } // namespace DB

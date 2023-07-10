@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
@@ -731,7 +732,7 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
 void DeltaMergeStore::ingestFiles(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
-    const PageIds & file_ids,
+    const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
@@ -739,6 +740,26 @@ void DeltaMergeStore::ingestFiles(
         const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
         LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
+    }
+
+    // Check whether all external files are contained by the range.
+    if (dm_context->db_context.getSettingsRef().dt_enable_ingest_check)
+    {
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(
+                compare(range.getStart(), ext_file.range.getStart()) <= 0,
+                DB::Exception,
+                fmt::format("Check compare(range.getStart(), ext_file.range.getStart()) <= 0 failed, range={} ext_file.range={}",
+                            range.toDebugString(),
+                            ext_file.range.toDebugString()));
+            RUNTIME_CHECK(
+                compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                DB::Exception,
+                fmt::format("Check compare(range.getEnd(), ext_file.range.getEnd()) >= 0 failed, range={} ext_file.range={}",
+                            range.toDebugString(),
+                            ext_file.range.toDebugString()));
+        }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
@@ -751,8 +772,9 @@ void DeltaMergeStore::ingestFiles(
     size_t bytes_on_disk = 0;
 
     DMFiles files;
-    for (auto file_id : file_ids)
+    for (const auto & external_file : external_files)
     {
+        auto file_id = external_file.id;
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
         // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
@@ -880,36 +902,31 @@ void DeltaMergeStore::ingestFiles(
 
     {
         // Add some logging about the ingested file ids and updated segments
-        // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
-        //          "ingest <empty> into segment [1,3]"
-        FmtBuffer fmt_buf;
-        if (file_ids.empty())
-        {
-            fmt_buf.append("ingest <empty>");
-        }
-        else
-        {
-            fmt_buf.append("ingest dmf_");
+        // Example: "ingested_files=[<file=dmf_1001 range=..>,<file=dmf_1002 range=..>] updated_segments=[<segment_id=1 ...>,<segment_id=3 ...>]"
+        //          "ingested_files=[] updated_segments=[<segment_id=1 ...>,<segment_id=3 ...>]"
+        auto get_ingest_info = [&] {
+            FmtBuffer fmt_buf;
+            fmt_buf.append("ingested_files=[");
             fmt_buf.joinStr(
-                file_ids.begin(),
-                file_ids.end(),
-                [](const PageId id, FmtBuffer & fb) { fb.fmtAppend("{}", id); },
+                external_files.begin(),
+                external_files.end(),
+                [](const ExternalDTFileInfo & external_file, FmtBuffer & fb) { fb.append(external_file.toString()); },
                 ",");
-        }
-        fmt_buf.append(" into segment [");
-        fmt_buf.joinStr(
-            updated_segments.begin(),
-            updated_segments.end(),
-            [](const auto & segment, FmtBuffer & fb) { fb.fmtAppend("{}", segment->segmentId()); },
-            ",");
-        fmt_buf.append("]");
+            fmt_buf.append("] updated_segments=[");
+            fmt_buf.joinStr(
+                updated_segments.begin(),
+                updated_segments.end(),
+                [](const auto & segment, FmtBuffer & fb) { fb.append(segment->simpleInfo()); },
+                ",");
+            fmt_buf.append("]");
+            return fmt_buf.toString();
+        };
+
         LOG_FMT_INFO(
             log,
-            "table: {}.{}, clear_data: {}, {}",
-            db_name,
-            table_name,
-            clear_data_in_range,
-            fmt_buf.toString());
+            "Table ingest files - finished ingested files into segments, {} clear={}",
+            get_ingest_info(),
+            clear_data_in_range);
     }
 
     GET_METRIC(tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
