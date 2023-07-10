@@ -27,7 +27,12 @@ public:
         const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
-        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        : EventTask(
+            std::move(mem_tracker_),
+            req_id,
+            exec_status_,
+            event_,
+            is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }
 
