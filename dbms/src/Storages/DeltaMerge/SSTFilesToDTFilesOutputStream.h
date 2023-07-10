@@ -60,18 +60,30 @@ enum class FileConvertJobType
 
 // This class is tightly coupling with BoundedSSTFilesToBlockInputStream
 // to get some info of the decoding process.
+template <typename ChildStream>
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
+    /**
+      * When `split_after_rows` or `split_after_size` are > 0, multiple DTFiles will be produced.
+      * When `0` is specified for both parameters, only one DTFile will be produced.
+      *
+      * As the stream is processed by blocks, each DTFile is not ensured truncated at the specified
+      * rows or size: it is possible that one DTFile is significantly large, if a large Block
+      * is produced by the `child`.
+      *
+      * @param split_after_rows_ Split for a new DTFile when reaching specified rows.
+      * @param split_after_size_ Split for a new DTFile when reaching specified bytes.
+      */
     SSTFilesToDTFilesOutputStream(
-        BoundedSSTFilesToBlockInputStreamPtr child_,
+        ChildStream child_,
         StorageDeltaMergePtr storage_,
         DecodingStorageSchemaSnapshotConstPtr schema_snap_,
         TiDB::SnapshotApplyMethod method_,
         FileConvertJobType job_type_,
         UInt64 split_after_rows_,
         UInt64 split_after_size_,
-        TMTContext & tmt_);
+        Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -105,14 +117,14 @@ private:
     void stop();
 
 private:
-    BoundedSSTFilesToBlockInputStreamPtr child;
+    ChildStream child;
     StorageDeltaMergePtr storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
-    TMTContext & tmt;
+    Context & context;
     Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
@@ -134,6 +146,52 @@ private:
 
     Stopwatch watch;
 };
+
+class MockSSTFilesToDTFilesOutputStreamChild : private boost::noncopyable
+{
+public:
+    MockSSTFilesToDTFilesOutputStreamChild(BlockInputStreamPtr mock_data_, RegionPtr mock_region_) //
+        : mock_data(mock_data_)
+        , mock_region(mock_region_)
+    {}
+
+    void readPrefix()
+    {
+        mock_data->readPrefix();
+    }
+
+    void readSuffix()
+    {
+        mock_data->readSuffix();
+    }
+
+    RegionPtr getRegion() const
+    {
+        return mock_region;
+    }
+
+    Block read()
+    {
+        return mock_data->read();
+    }
+
+    std::tuple<size_t, size_t, UInt64> getMvccStatistics() const
+    {
+        return {};
+    }
+
+    SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const
+    {
+        return {};
+    }
+
+protected:
+    BlockInputStreamPtr mock_data;
+    RegionPtr mock_region;
+};
+
+using MockSSTFilesToDTFilesOutputStreamChildPtr = std::shared_ptr<MockSSTFilesToDTFilesOutputStreamChild>;
+
 
 } // namespace DM
 } // namespace DB
