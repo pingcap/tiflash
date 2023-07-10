@@ -355,8 +355,8 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     const auto * build_side_root_executor = query_block.children[build_side_index]->root;
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_root_executor->executor_id();
-    join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    join_execute_info.join_profile_info = join_ptr->profile_info;
+    assert(join_execute_info.join_profile_info);
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
