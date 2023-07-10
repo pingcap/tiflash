@@ -212,7 +212,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         snap_log_files.emplace(*iter);
     }
     return WALStore::FilesSnapshot{
-        .persisted_log_files = std::move(persisted_log_files),
+        .persisted_log_files = std::move(snap_log_files),
     };
 }
 
