@@ -224,7 +224,7 @@ DMFileReader::Stream::Stream(
             String temp_data;
             temp_data.resize(size);
 
-            auto read_size = buffer->read(reinterpret_cast<char *>(temp_data.data()), size);
+            buffer->read(reinterpret_cast<char *>(temp_data.data()), size);
 
             buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
                 reader.file_provider,
