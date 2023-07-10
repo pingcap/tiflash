@@ -29,6 +29,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
     // So only non fine grained shuffle is considered here.
     RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
+    assert(aggregate_context);
     if (aggregate_context->hasSpilledData())
     {
         auto restorers = aggregate_context->buildSharedRestorer(exec_context);
@@ -57,5 +58,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
     }
 
     executeExpression(exec_context, group_builder, expr_after_agg, log);
+
+    aggregate_context.reset();
 }
 } // namespace DB

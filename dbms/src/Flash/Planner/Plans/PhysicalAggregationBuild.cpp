@@ -57,6 +57,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
         aggregate_descriptions,
         is_final_agg,
         spill_config);
+    assert(aggregate_context);
     aggregate_context->initBuild(params, concurrency, /*hook=*/[&]() { return exec_context.isCancelled(); });
 
     size_t build_index = 0;
@@ -70,8 +71,12 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
 
 EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec_context)
 {
+    assert(aggregate_context);
     if (!aggregate_context->hasSpilledData())
+    {
+        aggregate_context.reset();
         return nullptr;
+    }
 
     /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
     /// so a new event is added here to execute the final spill.
@@ -88,8 +93,11 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
     }
     if (!indexes.empty())
     {
-        return std::make_shared<AggregateFinalSpillEvent>(exec_context, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
+        auto final_spill_event = std::make_shared<AggregateFinalSpillEvent>(exec_context, log->identifier(), aggregate_context, std::move(indexes), std::move(profile_infos));
+        aggregate_context.reset();
+        return final_spill_event;
     }
+    aggregate_context.reset();
     return nullptr;
 }
 } // namespace DB

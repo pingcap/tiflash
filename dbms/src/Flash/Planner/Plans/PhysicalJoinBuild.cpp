@@ -30,6 +30,7 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     executeExpression(exec_context, group_builder, prepare_actions, log);
 
     size_t build_index = 0;
+    assert(join_ptr);
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
     });
@@ -37,5 +38,6 @@ void PhysicalJoinBuild::buildPipelineExecGroupImpl(
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();
     join_ptr->initBuild(group_builder.getCurrentHeader(), group_builder.concurrency());
     join_ptr->setInitActiveBuildThreads();
+    join_ptr.reset();
 }
 } // namespace DB
