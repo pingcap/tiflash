@@ -234,6 +234,7 @@ struct Settings
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
     \
     M(SettingInt64, remote_checkpoint_interval_seconds, 30, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
+    M(SettingBool, remote_checkpoint_only_upload_manifest, true, "Only upload manifest data when uploading checkpoint")                                                                                                                 \
     M(SettingInt64, remote_gc_method, 1, "The method of running GC task on the remote store. 1 - lifecycle, 2 - scan.")                                                                                                                 \
     M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
     M(SettingInt64, remote_gc_verify_consistency, 0, "Verify the consistenct of valid locks when doing GC")                                                                                                                             \
