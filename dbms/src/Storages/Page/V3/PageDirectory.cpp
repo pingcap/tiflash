@@ -1823,7 +1823,7 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
     auto files_snap = wal->tryGetFilesSnapshot(
         max_persisted_log_files,
         snap->sequence,
-        details::getMaxSequenceFromLogReader<Trait>,
+        details::getMaxSequenceForRecord<Trait>,
         force);
     if (!files_snap.isValid())
         return false;

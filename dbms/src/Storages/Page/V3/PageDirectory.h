@@ -627,7 +627,7 @@ private:
 namespace details
 {
 template <typename Trait>
-UInt64 getMaxSequenceFromLogReader(const String & record)
+UInt64 getMaxSequenceForRecord(const String & record)
 {
     auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
     const auto & records = edit.getRecords();
