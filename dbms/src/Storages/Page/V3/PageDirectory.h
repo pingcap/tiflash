@@ -623,6 +623,19 @@ private:
     LoggerPtr log;
 };
 
+
+namespace details
+{
+template <typename Trait>
+UInt64 getMaxSequenceFromLogReader(const String & record)
+{
+    auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
+    const auto & records = edit.getRecords();
+    RUNTIME_CHECK(!records.empty());
+    return records.back().version.sequence;
+}
+} // namespace details
+
 namespace u128
 {
 struct PageDirectoryTrait

@@ -92,7 +92,7 @@ public:
         }
     };
 
-    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, bool force);
+    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, UInt64 snap_sequence, std::function<UInt64(const String & record)> max_sequence_getter, bool force);
 
     bool saveSnapshot(
         FilesSnapshot && files_snap,
@@ -103,8 +103,11 @@ public:
 
     friend class tests::WALStoreTest; // for testing
 
+    ~WALStore();
+
 private:
     WALStore(String storage_name,
+             WALStoreReaderPtr wal_store_reader_,
              const PSDiskDelegatorPtr & delegator_,
              const FileProviderPtr & provider_,
              Format::LogNumberType last_log_num_,
@@ -119,8 +122,13 @@ private:
 
     void updateDiskUsage(const LogFilenameSet & log_filenames);
 
+    void removeLogFiles(const LogFilenameSet & log_filenames);
+
+    UInt64 getLogFileMaxSequence(const LogFilename & log_filename, std::function<UInt64(const String & record)> max_sequence_getter);
+
 private:
     const String storage_name;
+    WALStoreReaderPtr wal_store_reader;
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;
@@ -128,6 +136,9 @@ private:
     // select next path for creating new logfile
     UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
+
+    mutable std::mutex log_file_max_sequences_cache_mutex;
+    std::unordered_map<LogFilename, UInt64> log_file_max_sequences_cache;
 
     // Cached values when `tryGetFilesSnapshot` is called
     mutable std::mutex mtx_disk_usage;

@@ -1815,8 +1815,15 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
+    auto identifier = fmt::format("{}.dump", wal->name());
+    auto snap = createSnapshot(identifier);
+
     // Only apply compact logs when files snapshot is valid
-    auto files_snap = wal->tryGetFilesSnapshot(max_persisted_log_files, force);
+    auto files_snap = wal->tryGetFilesSnapshot(
+        max_persisted_log_files,
+        snap->sequence,
+        details::getMaxSequenceFromLogReader<Trait>,
+        force);
     if (!files_snap.isValid())
         return false;
 
@@ -1825,12 +1832,9 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
     // The main reason write affect dumping snapshot is that we can not get a read-only
     // `being_ref_count` by the function `createSnapshot()`.
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
-    auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
-    auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
 
     Stopwatch watch;
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
-    auto snap = createSnapshot(identifier);
     auto edit = dumpSnapshotToEdit(snap);
     files_snap.num_records = edit.size();
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();

@@ -34,6 +34,8 @@
 #include <mutex>
 #include <random>
 
+#include "common/types.h"
+
 namespace DB::PS::V3::tests
 {
 using u128::PageEntriesEdit;
@@ -854,7 +856,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
     ASSERT_NE(wal, nullptr);
 
     // running gc right before any writes is skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(1, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(1, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, false).isValid());
 
     // generate log_1_0, log_2_0, log_3_0
     rollToNewLogWriter(wal);
@@ -863,17 +865,17 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
     ASSERT_EQ(getNumLogFiles(), 3);
     // num of files not exceed 5, skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(5, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(5, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, false).isValid());
     // num of files not exceed 3, skip
-    ASSERT_FALSE(wal->tryGetFilesSnapshot(3, false).isValid());
+    ASSERT_FALSE(wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, false).isValid());
     // num of files not exceed 3, but still valid when `force` is true
-    ASSERT_TRUE(wal->tryGetFilesSnapshot(3, true).isValid());
+    ASSERT_TRUE(wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, true).isValid());
 
     rollToNewLogWriter(wal);
     // num of files exceed 3, return
     {
         ASSERT_EQ(getNumLogFiles(), 4);
-        auto files = wal->tryGetFilesSnapshot(3, false);
+        auto files = wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, false);
         ASSERT_TRUE(files.isValid());
         ASSERT_EQ(files.persisted_log_files.size(), 4);
         ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
@@ -890,7 +892,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
     {
         ASSERT_EQ(getNumLogFiles(), 5);
-        auto files = wal->tryGetFilesSnapshot(3, false);
+        auto files = wal->tryGetFilesSnapshot(3, std::numeric_limits<UInt64>::max(), details::getMaxSequenceFromLogReader<u128::PageDirectoryTrait>, false);
         ASSERT_TRUE(files.isValid());
         ASSERT_EQ(files.persisted_log_files.size(), 5);
         ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);

@@ -153,6 +153,29 @@ WALStoreReaderPtr WALStoreReader::create(
     return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
+LogReaderPtr WALStoreReader::createLogReader(const LogFilename & filename)
+{
+    const auto log_num = filename.log_num;
+    const auto fullname = filename.fullname(filename.stage);
+    LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
+
+    auto read_buf = createReadBufferFromFileBaseByFileProvider(
+        provider,
+        fullname,
+        EncryptionPath{fullname, ""},
+        /*estimated_size*/ Format::BLOCK_SIZE,
+        /*aio_threshold*/ 0,
+        /*read_limiter*/ read_limiter,
+        /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+    );
+    return std::make_unique<LogReader>(
+        std::move(read_buf),
+        &reporter,
+        /*verify_checksum*/ true,
+        log_num,
+        recovery_mode);
+}
+
 WALStoreReader::WALStoreReader(String storage_name,
                                FileProviderPtr & provider_,
                                std::optional<LogFilename> checkpoint,
@@ -209,37 +232,14 @@ bool WALStoreReader::openNextFile()
         return false;
     }
 
-    auto do_open = [this](const LogFilename & next_file) {
-        const auto log_num = next_file.log_num;
-        const auto filename = next_file.filename(next_file.stage);
-        const auto fullname = next_file.fullname(next_file.stage);
-        LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
-
-        auto read_buf = createReadBufferFromFileBaseByFileProvider(
-            provider,
-            fullname,
-            EncryptionPath{fullname, ""},
-            /*estimated_size*/ Format::BLOCK_SIZE,
-            /*aio_threshold*/ 0,
-            /*read_limiter*/ read_limiter,
-            /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
-        );
-        reader = std::make_unique<LogReader>(
-            std::move(read_buf),
-            &reporter,
-            /*verify_checksum*/ true,
-            log_num,
-            recovery_mode);
-    };
-
     if (!checkpoint_read_done)
     {
-        do_open(*checkpoint_file);
+        reader = createLogReader(*checkpoint_file);
         checkpoint_read_done = true;
     }
     else
     {
-        do_open(*next_reading_file);
+        reader = createLogReader(*next_reading_file);
         ++next_reading_file;
     }
     return true;
