@@ -40,6 +40,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     , write_limiter(write_limiter_)
     // Create a new file is necessarily here. Because it will create encryption info for the whole DMFile.
     , meta_file(createMetaFile())
+    , mixture_file(createMixtureFile())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -74,6 +75,17 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
         /*create_new_encryption_info*/ true,
         write_limiter,
         DMFile::meta_buffer_size);
+}
+
+DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMixtureFile()
+{
+    return createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                            dmfile->mixturePath(),
+                                            dmfile->encryptionMixturePath(),
+                                            false,
+                                            write_limiter,
+                                            dmfile->configuration->getChecksumAlgorithm(),
+                                            dmfile->configuration->getChecksumFrameLength());
 }
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
@@ -160,6 +172,8 @@ void DMFileWriter::finalize()
         if (S3::ClientFactory::instance().isEnabled())
         {
             dmfile->finalizeSmallColumnDataFiles(file_provider, write_limiter);
+        } else {
+            dmfile->finalizeSmallFiles(file_provider, mixture_file, mixture_file_size);
         }
         // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
         finalizeMetaV2();
@@ -193,7 +207,7 @@ void DMFileWriter::finalizeMetaV2()
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     size_t rows = column.size();
-
+    LOG_INFO(Logger::get("hyy"), "writeColumn with rows {} with typy is {}", rows, type.getName());
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {
             const auto name = DMFile::getFileNameBase(col_id, substream);
@@ -211,9 +225,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 stream->compressed_buf->next();
 
             auto offset_in_compressed_block = stream->compressed_buf->offset();
-
-            writeIntBinary(stream->plain_file->count(), *stream->mark_file);
-            writeIntBinary(offset_in_compressed_block, *stream->mark_file);
+            // 把 mark 的信息先存在 stream 里面
+            stream->marks.emplace_back(MarkInCompressedFile{stream->compressed_buf->count(), offset_in_compressed_block});
         },
         {});
 
@@ -234,6 +247,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             const auto name = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
             stream->compressed_buf->nextIfAtEnd();
+            LOG_INFO(Logger::get("hyy"), "count when write column name {} is {}, pos {}, offset() {}", name, stream->compressed_buf->count(), stream->compressed_buf->position(), stream->compressed_buf->offset());
         },
         {});
 
@@ -243,23 +257,24 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
+    LOG_INFO(Logger::get("hyy"), "finalizeColumn when is_empty_file is {} ", is_empty_file);
     size_t bytes_written = 0;
     size_t data_bytes = 0;
-    size_t mark_bytes = 0;
+    //size_t mark_bytes = 0;
     size_t nullmap_data_bytes = 0;
-    size_t nullmap_mark_bytes = 0;
+    // size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
-#ifndef NDEBUG
-    auto examine_buffer_size = [](auto & buf, auto & fp) {
-        if (!fp.isEncryptionEnabled())
-        {
-            auto fd = buf.getFD();
-            struct stat file_stat = {};
-            ::fstat(fd, &file_stat);
-            assert(buf.getMaterializedBytes() == file_stat.st_size);
-        }
-    };
-#endif
+// #ifndef NDEBUG
+//     auto examine_buffer_size = [](auto & buf, auto & fp) {
+//         if (!fp.isEncryptionEnabled())
+//         {
+//             auto fd = buf.getFD();
+//             struct stat file_stat = {};
+//             ::fstat(fd, &file_stat);
+//             assert(buf.getMaterializedBytes() == file_stat.st_size);
+//         }
+//     };
+// #endif
     auto is_nullmap_stream = [](const IDataType::SubstreamPath & substream) {
         for (const auto & s : substream)
         {
@@ -273,63 +288,65 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
-        stream->flush();
-#ifndef NDEBUG
-        examine_buffer_size(*stream->mark_file, *this->file_provider);
-        examine_buffer_size(*stream->plain_file, *this->file_provider);
-#endif
-        bytes_written += stream->getWrittenBytes();
+        stream->compressed_buf->next();
+        bytes_written += stream->plain_file->getMaterializedBytesWithHeader();
+        
+// #ifndef NDEBUG
+//         examine_buffer_size(*stream->plain_file, *this->file_provider);
+// #endif
+        LOG_INFO(Logger::get("hyy"), "before second getMaterializedBytes");
         if (is_nullmap_stream(substream))
         {
-            nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
-            nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+            nullmap_data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
         }
         else
         {
-            data_bytes = stream->plain_file->getMaterializedBytes();
-            mark_bytes = stream->mark_file->getMaterializedBytes();
+            data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
         }
-        if (stream->minmaxes)
+        
+        LOG_INFO(Logger::get("hyy"), "before sync plain_file");
+        // stream->flush();
+        stream->plain_file->next();
+
+        stream->plain_file->sync();
+        LOG_INFO(Logger::get("hyy"), "after sync plain_file");
+        // 写 index 文件
+        if (stream->minmaxes and !is_empty_file)
         {
-            if (!dmfile->configuration)
-            {
-                WriteBufferFromFileProvider buf(
-                    file_provider,
-                    dmfile->colIndexPath(stream_name),
-                    dmfile->encryptionIndexPath(stream_name),
-                    false,
-                    write_limiter);
-                stream->minmaxes->write(*type, buf);
-                buf.sync();
-                // Ignore data written in index file when the dmfile is empty.
-                // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                index_bytes = buf.getMaterializedBytes();
-                bytes_written += is_empty_file ? 0 : index_bytes;
-            }
-            else
-            {
-                auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                       dmfile->colIndexPath(stream_name),
-                                                                       dmfile->encryptionIndexPath(stream_name),
-                                                                       false,
-                                                                       write_limiter,
-                                                                       dmfile->configuration->getChecksumAlgorithm(),
-                                                                       dmfile->configuration->getChecksumFrameLength());
-                stream->minmaxes->write(*type, *buf);
-                buf->sync();
-                // Ignore data written in index file when the dmfile is empty.
-                // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
-                // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
-                // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                index_bytes = buf->getMaterializedBytes();
-                bytes_written += is_empty_file ? 0 : index_bytes;
-#ifndef NDEBUG
-                examine_buffer_size(*buf, *this->file_provider);
-#endif
-            }
+            auto fname = dmfile->colIndexFileName(stream_name); // 是这个还是 encryp 的？，应该就是这个
+
+            stream->minmaxes->write(*type, *mixture_file);
+
+            auto number = 0; // 先让 mixture = 0， 做特殊处理，后面改成0/1/2/3... 也可以
+            auto offset = mixture_file_size;
+            auto size = mixture_file->getMaterializedBytes() - mixture_file_size; // 我们用 checksum 的 buffer 模式合会有问题么
+            index_bytes = size;
+            MergedSubFileInfo info{fname, static_cast<UInt64>(number), offset, size};
+            dmfile->merged_sub_file_infos[fname] = info;
+            
+            mixture_file_size = mixture_file->getMaterializedBytes();
         }
+
+        // 写 mrk 文件
+        if (!is_empty_file)
+        {
+            auto fname = dmfile->colMarkFileName(stream_name);
+            
+            auto number = 0; // 先让 mixture = 0， 做特殊处理，后面改成0/1/2/3... 也可以
+            auto offset = mixture_file_size;
+            for (const auto & mark : stream->marks){
+                writeIntBinary(mark.offset_in_compressed_file, *mixture_file);
+                writeIntBinary(mark.offset_in_decompressed_block, *mixture_file);
+            }
+            auto size = mixture_file->getMaterializedBytes() - mixture_file_size; // 我们用 checksum 的 buffer 模式合会有问题么
+            LOG_INFO(Logger::get("hyy"), "fname for mark is {} with mark size is {} with write size is {}", fname, stream->marks.size(), size);
+            MergedSubFileInfo info{fname, static_cast<UInt64>(number), offset, size};
+            dmfile->merged_sub_file_infos[fname] = info;
+            
+            mixture_file_size = mixture_file->getMaterializedBytes();
+        }
+
+        LOG_INFO(Logger::get("hyy"), "finalize mixture_file->getMaterializedBytes is {}", mixture_file->getMaterializedBytes());
     };
     type->enumerateStreams(callback, {});
 
@@ -337,10 +354,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     auto & col_stat = dmfile->column_stats.at(col_id);
     col_stat.serialized_bytes = bytes_written;
     col_stat.data_bytes = data_bytes;
-    col_stat.mark_bytes = mark_bytes;
     col_stat.nullmap_data_bytes = nullmap_data_bytes;
-    col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
     col_stat.index_bytes = index_bytes;
+
+    LOG_INFO(Logger::get("hyy"), "col_stat for col_id {} with serialized_bytes:{}, data_type:{}, nullmap_data_bytes:{}, index_bytes:{}", col_id, col_stat.serialized_bytes, col_stat.data_bytes, col_stat.nullmap_data_bytes, col_stat.index_bytes);
 }
 
 } // namespace DM

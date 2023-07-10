@@ -32,7 +32,7 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
 
-
+#include <IO/CompressedReadBuffer.h>
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -63,20 +63,37 @@ DMFileReader::Stream::Stream(
     // load mark data
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
         auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
+        LOG_INFO(Logger::get("hyy"), "pack number is {} in dmfile {}, whose res->empty() is {}, res->size() is {}", reader.dmfile->getPacks(), reader.dmfile->colMarkFileName(file_name_base), res->empty(), res->size());
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
         auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
         if (reader.dmfile->configuration)
         {
+            auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
+            if (info == reader.dmfile->merged_sub_file_infos.end()) {
+                throw Exception(fmt::format("Unknown mark file {}", reader.dmfile->colMarkFileName(file_name_base)),  ErrorCodes::LOGICAL_ERROR);
+            }
+
+            auto file_path = reader.dmfile->mixturePath();
+            auto encryp_path = reader.dmfile->encryptionMixturePath();
+            auto offset = info->second.offset;
+            auto size = info->second.size;
+
+            if (size == 0)
+                return res;
+
+            LOG_INFO(Logger::get("hyy"), " file {} seek offset {}", reader.dmfile->colMarkFileName(file_name_base), offset);
+
             auto buffer = createReadBufferFromFileBaseByFileProvider(
                 reader.file_provider,
-                reader.dmfile->colMarkPath(file_name_base),
-                reader.dmfile->encryptionMarkPath(file_name_base),
+                file_path,
+                encryp_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                 read_limiter,
                 reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
                 reader.dmfile->getConfiguration()->getChecksumFrameLength());
+            buffer->seek(offset);
             buffer->readBig(reinterpret_cast<char *>(res->data()), size);
         }
         else
@@ -153,23 +170,63 @@ DMFileReader::Stream::Stream(
     if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
-                                                                           reader.dmfile->colDataPath(file_name_base),
-                                                                           reader.dmfile->encryptionDataPath(file_name_base),
-                                                                           estimated_size,
-                                                                           aio_threshold,
-                                                                           read_limiter,
-                                                                           buffer_size);
+                                                        reader.dmfile->colDataPath(file_name_base),
+                                                        reader.dmfile->encryptionDataPath(file_name_base),
+                                                        estimated_size,
+                                                        aio_threshold,
+                                                        read_limiter,
+                                                        buffer_size);
     }
     else
     {
-        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
-            reader.file_provider,
-            reader.dmfile->colDataPath(file_name_base),
-            reader.dmfile->encryptionDataPath(file_name_base),
-            estimated_size,
-            read_limiter,
-            reader.dmfile->configuration->getChecksumAlgorithm(),
-            reader.dmfile->configuration->getChecksumFrameLength());
+        LOG_INFO(Logger::get("hyy"), "init read stream with dmfile_id is {}", reader.dmfile->file_id);
+        auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
+        if (info == reader.dmfile->merged_sub_file_infos.end()) {
+            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+                reader.file_provider,
+                reader.dmfile->colDataPath(file_name_base),
+                reader.dmfile->encryptionDataPath(file_name_base),
+                estimated_size,
+                read_limiter,
+                reader.dmfile->configuration->getChecksumAlgorithm(),
+                reader.dmfile->configuration->getChecksumFrameLength());
+        } else {
+            LOG_INFO(Logger::get("hyy"), "stream for col {} use merged file", reader.dmfile->colDataFileName(file_name_base));
+            auto file_path = reader.dmfile->mixturePath();
+            auto encryp_path = reader.dmfile->encryptionMixturePath();
+            auto offset = info->second.offset;
+            auto size = info->second.size;
+
+
+            // 这边先把 memory 读取出来
+            auto buffer = createReadBufferFromFileBaseByFileProvider(
+                reader.file_provider,
+                file_path,
+                encryp_path,
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                read_limiter,
+                reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+                reader.dmfile->getConfiguration()->getChecksumFrameLength());
+            buffer->seek(offset);
+
+            String temp_data(size, 0);
+            // std::vector<char> temp_data(size);
+            auto read_size = buffer->read(reinterpret_cast<char *>(temp_data.data()), size);
+
+            LOG_INFO(Logger::get("hyy"), "buffer read with size {} and get size {}, offset is {}, read_size is {}", size, temp_data.size(), offset, read_size);
+
+            buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+                reader.file_provider,
+                reader.dmfile->colDataPath(file_name_base),
+                reader.dmfile->encryptionDataPath(file_name_base),
+                estimated_size,
+                read_limiter,
+                reader.dmfile->configuration->getChecksumAlgorithm(),
+                reader.dmfile->configuration->getChecksumFrameLength(),
+                temp_data,
+                file_path);
+        }
+        
     }
 }
 
@@ -433,6 +490,7 @@ Block DMFileReader::read()
     getSkippedRows(skip_rows);
 
     const auto & use_packs = pack_filter.getUsePacksConst();
+    LOG_INFO(Logger::get("hyy"), "use_pack in read: {}", use_packs);
     if (next_pack_id >= use_packs.size())
         return {};
     // Find max continuing rows we can read.
@@ -475,6 +533,7 @@ Block DMFileReader::read()
     }
     next_row_offset += read_rows;
 
+    LOG_INFO(Logger::get("hyy"), "read rows is {}", read_rows);
     if (read_rows == 0)
         return {};
 
@@ -500,6 +559,8 @@ Block DMFileReader::read()
         do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
 
+    LOG_INFO(Logger::get("hyy"), "read_packs is {}, read_columns size is {}, read_rows is {}", read_packs, read_columns.size(), read_rows);
+    LOG_INFO(Logger::get("hyy"), "read_columns is {}, {}, do_clean_read_on_normal_mode:{}", read_columns[0].name, read_columns[1].name, do_clean_read_on_normal_mode);
     for (size_t i = 0; i < read_columns.size(); ++i)
     {
         try
@@ -564,11 +625,14 @@ Block DMFileReader::read()
             }
             else
             {
+                LOG_INFO(Logger::get("hyy"), "into read column, column name is {}", cd.name);
                 const auto stream_name = DMFile::getFileNameBase(cd.id);
                 if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
                 {
+                    LOG_INFO(Logger::get("hyy"), "get column_stream");
                     if (enable_column_cache && isCacheableColumn(cd))
                     {
+                        LOG_INFO(Logger::get("hyy"), "into enable_column_cache");
                         auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
                         auto data_type = dmfile->getColumnStat(cd.id).type;
@@ -619,6 +683,7 @@ Block DMFileReader::read()
                     }
                     else
                     {
+                        LOG_INFO(Logger::get("hyy"), "not into enable_column_cache");
                         auto data_type = dmfile->getColumnStat(cd.id).type;
                         ColumnPtr column;
                         readColumn(cd, column, start_pack_id, read_packs, read_rows, skip_packs_by_column[i]);
@@ -651,6 +716,7 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
+    LOG_INFO(Logger::get("hyy"), "res size is {}", res.rows());
     return res;
 }
 
@@ -662,12 +728,13 @@ void DMFileReader::readFromDisk(
     size_t skip_packs,
     bool force_seek)
 {
+    LOG_INFO(Logger::get("hyy"), "into readFromDisk with read_rows is {}", read_rows);
     const auto stream_name = DMFile::getFileNameBase(column_define.id);
     if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
     {
         auto & top_stream = iter->second;
         bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
-
+        LOG_INFO(Logger::get("hyy"), "should_seek is {}", should_seek);
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         data_type->deserializeBinaryBulkWithMultipleStreams( //
             *column,
@@ -683,6 +750,7 @@ void DMFileReader::readFromDisk(
                 }
                 return sub_stream->buf.get();
             },
+
             read_rows,
             top_stream->avg_size_hint,
             true,

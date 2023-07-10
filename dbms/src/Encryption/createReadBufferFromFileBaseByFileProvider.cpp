@@ -68,9 +68,11 @@ createReadBufferFromFileBaseByFileProvider(
     const ReadLimiterPtr & read_limiter,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size,
-    int flags_)
+    int flags_,
+    std::optional<String> data,
+    std::optional<String> file_name)
 {
-    auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
+    auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_, data, file_name);
     auto allocation_size = std::min(estimated_size, checksum_frame_size);
     switch (checksum_algorithm)
     {

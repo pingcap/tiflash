@@ -130,7 +130,16 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
     .identifier = 5,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V4;
+inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
+    .segment = SegmentFormat::V2,
+    .dm_file = DMFileFormat::V3,
+    .stable = StableFormat::V1,
+    .delta = DeltaFormat::V3,
+    .page = PageFormat::V3, // diff
+    .identifier = 5,
+};
+
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

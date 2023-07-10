@@ -35,6 +35,11 @@ public:
     {
         return getPositionInFile();
     }
+
+    virtual off_t getMaterializedBytesWithHeader()
+    {
+        throw Exception("getMaterializedBytesWithHeader() is not supported for this WriteBufferFromFileBase", ErrorCodes::LOGICAL_ERROR);
+    }
     virtual void sync() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;

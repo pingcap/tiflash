@@ -27,6 +27,7 @@
 #include <Storages/S3/S3WritableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <common/likely.h>
+#include <Storages/S3/MemoryRandomAccessFile.h>
 
 namespace DB
 {
@@ -34,10 +35,18 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     const String & file_path_,
     const EncryptionPath & encryption_path_,
     const ReadLimiterPtr & read_limiter,
-    int flags) const
+    int flags,
+    std::optional<String> data,
+    std::optional<String> file_name) const
 {
     RandomAccessFilePtr file;
-    if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
+    if (data.has_value()){
+        LOG_INFO(Logger::get("hyy"),"into newRandomAccessFile create MemoryRandomAccessFile");
+        const String file_name_base = file_name.value();
+        String data_inner = data.value();
+        LOG_INFO(Logger::get("hyy"), "data_inner is size {}", data_inner.size());
+        file = std::make_shared<MemoryRandomAccessFile>(file_name_base, std::move(data_inner));
+    } else if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
     {
         file = S3::S3RandomAccessFile::create(view.toFullKey());
     }

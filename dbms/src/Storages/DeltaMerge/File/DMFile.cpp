@@ -294,6 +294,11 @@ EncryptionPath DMFile::encryptionMetav2Path() const
     return EncryptionPath(encryptionBasePath(), metav2FileName());
 }
 
+EncryptionPath DMFile::encryptionMixturePath() const
+{
+    return EncryptionPath(encryptionBasePath(), "mixture");
+}
+
 EncryptionPath DMFile::encryptionMergedPath(UInt32 number) const
 {
     return EncryptionPath(encryptionBasePath(), mergedFilename(number));
@@ -763,8 +768,10 @@ bool DMFile::canGC() const
 void DMFile::enableGC() const
 {
     Poco::File ngc_file(ngcPath());
-    if (ngc_file.exists())
+    if (ngc_file.exists()){ 
         ngc_file.remove();
+    }
+        
 }
 
 void DMFile::remove(const FileProviderPtr & file_provider)
@@ -852,6 +859,11 @@ DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
 
 DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer)
 {
+    for (auto & [fname, info] : merged_sub_file_infos)
+    {
+        LOG_INFO(Logger::get("hyy"), "fname, offset, size in merged_sub_file_infos is: {} {} {}", fname, info.offset, info.size);
+    }
+
     auto offset = buffer.count();
 
     writeIntBinary(merged_files.size(), buffer);
@@ -1112,6 +1124,59 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
 
     // Remove local directory.
     std::filesystem::remove_all(local_path);
+}
+
+void DMFile::finalizeSmallFiles(FileProviderPtr & file_provider, std::unique_ptr<WriteBufferFromFileBase> & cur_write_file, UInt64 size){
+
+    MergedFile cur_merged_file{0, size};
+
+    LOG_INFO(Logger::get("hyy"), "finalizeSmallFiles in file id is {}", file_id);
+    auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
+        auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
+        std::vector<char> read_buf(fsize);
+        auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
+        RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
+        LOG_INFO(Logger::get("hyy"), "write before copy_file_to_cur with getMaterializedBytes is {}", cur_write_file->getMaterializedBytes());
+        cur_write_file->write(read_buf.data(), read_buf.size());
+        LOG_INFO(Logger::get("hyy"), "write copy_file_to_cur with read_buf.size() is {}", read_buf.size());
+        LOG_INFO(Logger::get("hyy"), "write after copy_file_to_cur with getMaterializedBytes is {}", cur_write_file->getMaterializedBytes());
+        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, 0, /*offset*/ cur_merged_file.size, /*size*/ read_buf.size()));
+        cur_merged_file.size += read_buf.size();
+    };
+
+    std::vector<String> delete_file_name;
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        // .data 文件判断
+        if (stat.data_bytes <= small_file_size_threshold_for_op.load(std::memory_order_relaxed))
+        {
+            auto fname = colDataFileName(getFileNameBase(col_id, {}));
+            auto fsize = stat.data_bytes;
+            copy_file_to_cur(fname, fsize);
+            delete_file_name.push_back(fname);
+        }
+
+        // .null.data 文件判断
+        if (stat.type->isNullable()) {
+            if (stat.nullmap_data_bytes <= small_file_size_threshold_for_op.load(std::memory_order_relaxed))
+            {
+                auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
+                auto fsize = stat.nullmap_data_bytes;
+                copy_file_to_cur(fname, fsize);
+                delete_file_name.push_back(fname);
+            }
+        }
+    }
+
+    LOG_INFO(Logger::get("hyy"), "before cur_write_file sync");
+
+    cur_write_file->sync();
+    merged_files.push_back(cur_merged_file);
+
+    for (auto & fname : delete_file_name)
+    {
+        std::filesystem::remove(subFilePath(fname));
+    }
 }
 
 void DMFile::finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)

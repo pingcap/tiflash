@@ -21,7 +21,7 @@
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/WritableFile.h>
 #include <Encryption/WriteReadableFile.h>
-
+#include <Storages/DeltaMerge/File/MergedFile.h>
 #include <string>
 
 namespace DB
@@ -45,7 +45,9 @@ public:
         const String & file_path_,
         const EncryptionPath & encryption_path_,
         const ReadLimiterPtr & read_limiter = nullptr,
-        int flags = -1) const;
+        int flags = -1,
+        std::optional<String> data = std::nullopt,
+        std::optional<String> file_name = std::nullopt) const;
 
     WritableFilePtr newWritableFile(
         const String & file_path_,

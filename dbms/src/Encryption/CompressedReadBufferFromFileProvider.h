@@ -19,7 +19,6 @@
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <time.h>
-
 #include <memory>
 
 
@@ -81,7 +80,9 @@ public:
         size_t estimated_size,
         const ReadLimiterPtr & read_limiter,
         ChecksumAlgo checksum_algorithm,
-        size_t checksum_frame_size);
+        size_t checksum_frame_size,
+        std::optional<String> data = std::nullopt,
+        std::optional<String> filename = std::nullopt);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
 

@@ -17,7 +17,7 @@
 #include <Common/Checksum.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
-
+#include <Storages/DeltaMerge/File/MergedFile.h>
 #include <memory>
 #include <string>
 
@@ -58,5 +58,7 @@ createReadBufferFromFileBaseByFileProvider(
     const ReadLimiterPtr & read_limiter,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size,
-    int flags_ = -1);
+    int flags_ = -1,
+    std::optional<String> data = std::nullopt,
+    std::optional<String> file_name = std::nullopt);
 } // namespace DB

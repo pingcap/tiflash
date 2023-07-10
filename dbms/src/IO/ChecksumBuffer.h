@@ -83,12 +83,13 @@ private:
 #endif
     void nextImpl() override
     {
-#ifndef NDEBUG
-        if (offset() != this->working_buffer.size())
-        {
-            has_incomplete_frame = true;
-        }
-#endif
+        LOG_INFO(Logger::get("hyy"), "into FramedChecksumWriteBuffer nextImpl");
+// #ifndef NDEBUG
+//         if (offset() != this->working_buffer.size())
+//         {
+//             has_incomplete_frame = true;
+//         }
+// #endif
         size_t len = this->offset();
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
@@ -134,24 +135,35 @@ private:
     // generate a frame without a full length.
     off_t getPositionInFile() override
     {
+        
 #ifndef NDEBUG
         assert(has_incomplete_frame == false);
 #endif
+        LOG_INFO(Logger::get("hyy"), "into getPositionInFile with frame_count:{}, frame_size:{}, offset():{}", frame_count, frame_size, offset());
         return frame_count * frame_size + offset();
     }
 
-    // For checksum buffer, this is the real bytes to be materialized to disk.
-    // We normally have `materialized bytes != position in file` in the sense that,
-    // materialized bytes are referring to the real files on disk whereas position
-    // in file are to make the underlying checksum implementation opaque to above layers
-    // so that above buffers can do seek/read without knowing the existence of frame headers
-    off_t getMaterializedBytes() override
+    // // For checksum buffer, this is the real bytes to be materialized to disk.
+    // // We normally have `materialized bytes != position in file` in the sense that,
+    // // materialized bytes are referring to the real files on disk whereas position
+    // // in file are to make the underlying checksum implementation opaque to above layers
+    // // so that above buffers can do seek/read without knowing the existence of frame headers
+    off_t getMaterializedBytesWithHeader() override
     {
         return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
     }
 
     void sync() override
     {
+        LOG_INFO(Logger::get("hyy"), "into sync");
+        // StackTrace stack_trace;
+        // LOG_INFO(Logger::get("hyy"), "stack trace in sync is {}", stack_trace.toString());
+#ifndef NDEBUG
+        if (offset() != this->working_buffer.size())
+        {
+            has_incomplete_frame = true;
+        }
+#endif
         next();
 
         ProfileEvents::increment(ProfileEvents::FileFSync);
@@ -236,6 +248,7 @@ public:
 
     size_t readBig(char * buffer, size_t size) override
     {
+        LOG_INFO(Logger::get("hyy"), "readBig with size:{}", size);
         const auto expected = size;
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
@@ -268,6 +281,7 @@ public:
         // we need to flush them to the destination
         if (working_buffer.end() - position() != 0)
         {
+            LOG_INFO(Logger::get("hyy"), "readBig into memcpy first");
             auto amount = std::min(size, static_cast<size_t>(working_buffer.end() - position()));
             std::memcpy(buffer, position(), amount);
             size -= amount;
@@ -278,6 +292,7 @@ public:
         // now, we are at the beginning of the next frame
         while (size >= frame_size)
         {
+            LOG_INFO(Logger::get("hyy"), "readBig into read header and body");
             // read the header to our own memory area
             // if read_header returns false, then we are at the end of file
             if (!read_header())
@@ -376,6 +391,9 @@ private:
 
     bool nextImpl() override
     {
+        // StackTrace stack_trace;
+        // LOG_INFO(Logger::get("RA"), "stack_trace in nextImpl is {}", stack_trace.toString());
+
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
@@ -403,6 +421,9 @@ private:
 
     off_t doSeek(off_t offset, int whence) override
     {
+        // StackTrace stack_trace;
+        // LOG_INFO(Logger::get("RA"), "stack_trace in doseek is {}", stack_trace.toString());
+
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
@@ -417,6 +438,8 @@ private:
         auto target_frame = offset / frame_size;
         auto target_offset = offset % frame_size;
 
+        LOG_INFO(Logger::get("hyy"), "doSeek with (target_frame is {}, target_offset is {}, current_frame is {}, frame_size is {}, frame.bytes is {})",
+                 target_frame, target_offset, current_frame, frame_size, frame.bytes);
         if (target_frame == current_frame)
         {
             pos = working_buffer.begin() + target_offset;
