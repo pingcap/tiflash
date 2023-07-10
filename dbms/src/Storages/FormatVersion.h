@@ -126,20 +126,21 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
     .dm_file = DMFileFormat::V3, // diff
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V3,
-    .page = PageFormat::V4, // diff
+    .page = PageFormat::V3,
     .identifier = 5,
 };
 
-inline static const StorageFormatVersion STORAGE_FORMAT_V6 = StorageFormatVersion{
+
+inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
     .dm_file = DMFileFormat::V3,
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V3,
-    .page = PageFormat::V3, // diff
-    .identifier = 5,
+    .page = PageFormat::V4, // diff
+    .identifier = 100,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V6;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V4;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
@@ -155,6 +156,8 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
         return STORAGE_FORMAT_V4;
     case 5:
         return STORAGE_FORMAT_V5;
+    case 100:
+        return STORAGE_FORMAT_V100;
     default:
         throw Exception("Illegal setting value: " + DB::toString(setting));
     }

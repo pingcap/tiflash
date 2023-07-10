@@ -232,7 +232,6 @@ private:
                           ColId col_id,
                           const ReadLimiterPtr & read_limiter)
     {
-        LOG_INFO(Logger::get("hyy"), "load index for col_id {}", col_id);
         const auto & type = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
@@ -241,9 +240,8 @@ private:
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
             auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
-            if (!dmfile->configuration)
+            if (!dmfile->configuration) // v1
             {
-                // v1 版本直接读就可以了
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
@@ -252,15 +250,16 @@ private:
                     read_limiter);
                 return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
-            else
+            else if (dmfile->useMetaV2()) // v3
             {
                 auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
-                if (info == dmfile->merged_sub_file_infos.end()) {
-                    throw Exception(fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)),  ErrorCodes::LOGICAL_ERROR);
+                if (info == dmfile->merged_sub_file_infos.end())
+                {
+                    throw Exception(fmt::format("Unknown index file {}", dmfile->colIndexPath(file_name_base)), ErrorCodes::LOGICAL_ERROR);
                 }
 
-                auto file_path = dmfile->mixturePath();
-                auto encryp_path = dmfile->encryptionMixturePath();
+                auto file_path = dmfile->mergedPath(info->second.number);
+                auto encryp_path = dmfile->encryptionMergedPath(info->second.number);
                 auto offset = info->second.offset;
                 //auto size = info->second.size;
 
@@ -274,10 +273,20 @@ private:
 
                 index_buf->seek(offset);
                 return MinMaxIndex::read(*type, *index_buf, index_file_size);
-                // auto header_size = dmfile->configuration->getChecksumHeaderLength();
-                // auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
-                // auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
-                // return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count); // 这个居然还要减？？？
+            }
+            else
+            { // v2
+                auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
+                                                                            dmfile->colIndexPath(file_name_base),
+                                                                            dmfile->encryptionIndexPath(file_name_base),
+                                                                            index_file_size,
+                                                                            read_limiter,
+                                                                            dmfile->configuration->getChecksumAlgorithm(),
+                                                                            dmfile->configuration->getChecksumFrameLength());
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
             }
         };
         MinMaxIndexPtr minmax_index;

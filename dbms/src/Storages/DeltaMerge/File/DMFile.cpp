@@ -39,6 +39,8 @@
 #include <filesystem>
 #include <utility>
 
+#include "Encryption/createWriteBufferFromFileBaseByFileProvider.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -292,11 +294,6 @@ EncryptionPath DMFile::encryptionConfigurationPath() const
 EncryptionPath DMFile::encryptionMetav2Path() const
 {
     return EncryptionPath(encryptionBasePath(), metav2FileName());
-}
-
-EncryptionPath DMFile::encryptionMixturePath() const
-{
-    return EncryptionPath(encryptionBasePath(), "mixture");
 }
 
 EncryptionPath DMFile::encryptionMergedPath(UInt32 number) const
@@ -768,10 +765,8 @@ bool DMFile::canGC() const
 void DMFile::enableGC() const
 {
     Poco::File ngc_file(ngcPath());
-    if (ngc_file.exists()){ 
+    if (ngc_file.exists())
         ngc_file.remove();
-    }
-        
 }
 
 void DMFile::remove(const FileProviderPtr & file_provider)
@@ -1126,29 +1121,54 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
     std::filesystem::remove_all(local_path);
 }
 
-void DMFile::finalizeSmallFiles(FileProviderPtr & file_provider, std::unique_ptr<WriteBufferFromFileBase> & cur_write_file, UInt64 size){
 
-    MergedFile cur_merged_file{0, size};
+void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+{
+    if (writer.file_info.size >= merged_file_max_size.load(std::memory_order_relaxed))
+    {
+        // finialize cur merged file
+        writer.buffer->sync();
+        merged_files.push_back(writer.file_info);
+        auto cur_number = writer.file_info.number;
 
+        // create a new merge file
+        writer.file_info.number = cur_number + 1;
+        writer.file_info.size = 0;
+        writer.buffer.reset();
+
+        writer.buffer = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                    mergedPath(writer.file_info.number),
+                                                                    encryptionMergedPath(writer.file_info.number),
+                                                                    false,
+                                                                    write_limiter,
+                                                                    configuration->getChecksumAlgorithm(),
+                                                                    configuration->getChecksumFrameLength());
+    }
+}
+
+void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+{
     LOG_INFO(Logger::get("hyy"), "finalizeSmallFiles in file id is {}", file_id);
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
+        checkMergedFile(writer, file_provider, write_limiter);
+
         auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
         std::vector<char> read_buf(fsize);
         auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
-        LOG_INFO(Logger::get("hyy"), "write before copy_file_to_cur with getMaterializedBytes is {}", cur_write_file->getMaterializedBytes());
-        cur_write_file->write(read_buf.data(), read_buf.size());
+        LOG_INFO(Logger::get("hyy"), "write before copy_file_to_cur with getMaterializedBytes is {}", writer.buffer->getMaterializedBytes());
+        writer.buffer->write(read_buf.data(), read_buf.size());
         LOG_INFO(Logger::get("hyy"), "write copy_file_to_cur with read_buf.size() is {}", read_buf.size());
-        LOG_INFO(Logger::get("hyy"), "write after copy_file_to_cur with getMaterializedBytes is {}", cur_write_file->getMaterializedBytes());
-        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, 0, /*offset*/ cur_merged_file.size, /*size*/ read_buf.size()));
-        cur_merged_file.size += read_buf.size();
+        LOG_INFO(Logger::get("hyy"), "write after copy_file_to_cur with getMaterializedBytes is {}", writer.buffer->getMaterializedBytes());
+        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, 0, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
+        writer.file_info.size += read_buf.size();
     };
 
     std::vector<String> delete_file_name;
     for (const auto & [col_id, stat] : column_stats)
     {
-        // .data 文件判断
-        if (stat.data_bytes <= small_file_size_threshold_for_op.load(std::memory_order_relaxed))
+        // check .data
+        if (stat.data_bytes <= small_file_size_threshold.load(std::memory_order_relaxed))
         {
             auto fname = colDataFileName(getFileNameBase(col_id, {}));
             auto fsize = stat.data_bytes;
@@ -1156,9 +1176,10 @@ void DMFile::finalizeSmallFiles(FileProviderPtr & file_provider, std::unique_ptr
             delete_file_name.push_back(fname);
         }
 
-        // .null.data 文件判断
-        if (stat.type->isNullable()) {
-            if (stat.nullmap_data_bytes <= small_file_size_threshold_for_op.load(std::memory_order_relaxed))
+        // check .null.data
+        if (stat.type->isNullable())
+        {
+            if (stat.nullmap_data_bytes <= small_file_size_threshold.load(std::memory_order_relaxed))
             {
                 auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
                 auto fsize = stat.nullmap_data_bytes;
@@ -1170,88 +1191,12 @@ void DMFile::finalizeSmallFiles(FileProviderPtr & file_provider, std::unique_ptr
 
     LOG_INFO(Logger::get("hyy"), "before cur_write_file sync");
 
-    cur_write_file->sync();
-    merged_files.push_back(cur_merged_file);
+    writer.buffer->sync();
+    merged_files.push_back(writer.file_info);
 
     for (auto & fname : delete_file_name)
     {
         std::filesystem::remove(subFilePath(fname));
-    }
-}
-
-void DMFile::finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
-{
-    std::unique_ptr<WriteBufferFromFileBase> cur_write_file;
-    MergedFile cur_merged_file;
-
-    auto create_write_file = [&](UInt64 number) {
-        return std::make_unique<WriteBufferFromFileProvider>(
-            file_provider,
-            mergedPath(number),
-            encryptionMergedPath(number),
-            /*create_new_encryption_info*/ false,
-            write_limiter);
-    };
-
-    auto init_cur = [&]() {
-        cur_merged_file.number = merged_files.size();
-        cur_write_file = create_write_file(cur_merged_file.number);
-    };
-
-    auto finalize_cur = [&]() {
-        cur_write_file->sync();
-        merged_files.push_back(cur_merged_file);
-        cur_write_file.reset();
-        cur_merged_file.size = 0;
-    };
-
-    auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
-        auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
-        std::vector<char> read_buf(fsize);
-        auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
-        RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
-        cur_write_file->write(read_buf.data(), read_buf.size());
-        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, cur_merged_file.number, /*offset*/ cur_merged_file.size, /*size*/ read_buf.size()));
-        cur_merged_file.size += read_buf.size();
-    };
-
-    auto copy_files_to_cur = [&](const std::vector<std::pair<String, UInt64>> & fnames) {
-        for (const auto & [fname, fsize] : fnames)
-        {
-            copy_file_to_cur(fname, fsize);
-        }
-    };
-
-    for (const auto & [col_id, stat] : column_stats)
-    {
-        std::vector<std::pair<String, UInt64>> fnames;
-        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
-            if (fsize <= small_file_size_threshold.load(std::memory_order_relaxed))
-            {
-                fnames.emplace_back(std::move(fname), fsize);
-            }
-        });
-        if (fnames.empty())
-        {
-            continue;
-        }
-
-        if (cur_merged_file.size >= merged_file_max_size.load(std::memory_order_relaxed))
-        {
-            finalize_cur();
-        }
-
-        if (cur_write_file == nullptr)
-        {
-            init_cur();
-        }
-
-        copy_files_to_cur(fnames);
-    }
-
-    if (cur_write_file != nullptr)
-    {
-        finalize_cur();
     }
 }
 

@@ -22,6 +22,7 @@
 #include <Encryption/WritableFile.h>
 #include <Encryption/WriteReadableFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+
 #include <string>
 
 namespace DB

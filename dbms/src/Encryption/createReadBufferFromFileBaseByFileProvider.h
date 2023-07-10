@@ -18,6 +18,7 @@
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+
 #include <memory>
 #include <string>
 

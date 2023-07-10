@@ -71,21 +71,21 @@ public:
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
+            if (!dmfile->useMetaV2())
+            {
+                mark_file = WriteBufferByFileProviderBuilder( // will not used in DMFileFormat::V3, could be removed when v3 is default
+                                dmfile->configuration.has_value(),
+                                file_provider,
+                                dmfile->colMarkPath(file_base_name),
+                                dmfile->encryptionMarkPath(file_base_name),
+                                false,
+                                write_limiter_)
+                                .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                                .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                                .build();
+            }
         }
 
-        void flush()
-        {
-            // Note that this method won't flush minmaxes.
-            compressed_buf->next();
-            plain_file->next();
-
-            plain_file->sync();
-        }
-
-        // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
-        // Note that this class don't take responsible for serializing `minmaxes`,
-        // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() const { return plain_file->getMaterializedBytes(); }
 
         // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;
@@ -94,6 +94,8 @@ public:
         MinMaxIndexPtr minmaxes;
 
         MarksInCompressedFile marks; // 后面记的check一下他 initial size 的点和写入到底写了多少的问题 ; 看看要不要改成 ptr
+
+        WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
@@ -151,7 +153,6 @@ private:
 
     WriteBufferFromFileBasePtr createMetaFile();
     WriteBufferFromFileBasePtr createMetaV2File();
-    WriteBufferFromFileBasePtr createMixtureFile();
     WriteBufferFromFileBasePtr createPackStatsFile();
     void finalizeMetaV1();
     void finalizeMetaV2();
@@ -170,11 +171,7 @@ private:
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
 
-    WriteBufferFromFileBasePtr mixture_file;
-    UInt64 mixture_file_size = 0;
-
-    //std::unordered_map<String, MergedSubFileInfo> mixture_sub_file_infos; // 只是存 mixture 的 sub file 的映射关系
-    
+    DMFile::MergedFileWriter merged_file_writer; // 名字太拉了，重新取一个
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;

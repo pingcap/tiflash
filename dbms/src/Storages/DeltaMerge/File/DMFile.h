@@ -379,7 +379,6 @@ public:
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
     String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
     String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
-    String mixturePath() const {return subFilePath("mixture");}
 
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
@@ -395,7 +394,6 @@ public:
     EncryptionPath encryptionPackPropertyPath() const;
     EncryptionPath encryptionConfigurationPath() const;
     EncryptionPath encryptionMetav2Path() const;
-    EncryptionPath encryptionMixturePath() const;
     EncryptionPath encryptionMergedPath(UInt32 number) const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
@@ -470,8 +468,6 @@ public:
     std::vector<std::pair<String, UInt64>> listColumnFilesWithSize();
     static void listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle);
 
-    void finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
-    void finalizeSmallFiles(FileProviderPtr & file_provider, std::unique_ptr<WriteBufferFromFileBase> & cur_write_file, UInt64 size);
     UInt64 getFileSize(ColId col_id, const String & filename) const;
     S3::S3RandomAccessFile::ReadFileInfo getReadFileInfo(ColId col_id, const String & filename) const;
     S3::S3RandomAccessFile::ReadFileInfo getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const;
@@ -499,13 +495,21 @@ public:
         UInt64 number = 0;
         UInt64 size = 0;
     };
+
+    struct MergedFileWriter
+    {
+        MergedFile file_info;
+        std::unique_ptr<WriteBufferFromFileBase> buffer;
+    };
     PaddedPODArray<MergedFile> merged_files;
     // Filename -> MergedSubFileInfo
     std::unordered_map<String, MergedSubFileInfo> merged_sub_file_infos;
 
-    inline static std::atomic<UInt64> small_file_size_threshold_for_op = 16 * 1024; // 16KB
-    inline static std::atomic<UInt64> small_file_size_threshold = 128 * 1024; // 128KB
-    inline static std::atomic<UInt64> merged_file_max_size = 1 * 1024 * 1024; // 1MB
+    inline static std::atomic<UInt64> small_file_size_threshold = 16 * 1024; // 16KB
+    inline static std::atomic<UInt64> merged_file_max_size = 16 * 1024 * 1024; // 16MB
+
+    void finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
+    void checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
 
     friend class DMFileWriter;
     friend class DMFileWriterRemote;
