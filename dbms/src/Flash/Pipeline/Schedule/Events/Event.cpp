@@ -183,27 +183,29 @@ void Event::finish()
 {
     switchStatus(EventStatus::SCHEDULED, EventStatus::FINISHED);
     finish_duration = stopwatch.elapsed();
-    MemoryTrackerSetter setter{true, mem_tracker.get()};
-    try
     {
-        finishImpl();
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_finish_failpoint);
-    }
-    CATCH
-    // If query has already been cancelled, it will not trigger outputs.
-    if (likely(!exec_context.isCancelled()))
-    {
-        // finished processing the event, now we can schedule output events.
-        for (auto & output : outputs)
+        MemoryTrackerSetter setter{true, mem_tracker.get()};
+        try
         {
-            RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
-            output->onInputFinish();
-            output.reset();
+            finishImpl();
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_finish_failpoint);
         }
+        CATCH
+        // If query has already been cancelled, it will not trigger outputs.
+        if (likely(!exec_context.isCancelled()))
+        {
+            // finished processing the event, now we can schedule output events.
+            for (auto & output : outputs)
+            {
+                RUNTIME_ASSERT(output, log, "output event cannot be nullptr");
+                output->onInputFinish();
+                output.reset();
+            }
+        }
+        // Release all output, so that the event that did not call `finishImpl`
+        // because of `exec_context.isCancelled()` will be destructured before the end of `exec_context.wait`.
+        outputs.clear();
     }
-    // Release all output, so that the event that did not call `finishImpl`
-    // because of `exec_context.isCancelled()` will be destructured before the end of `exec_context.wait`.
-    outputs.clear();
     // In order to ensure that `exec_context.wait()` doesn't finish when there is an active event,
     // we have to call `exec_context.decActiveRefCount()` here,
     // since `exec_context.incActiveRefCount()` will have been called by outputs.
