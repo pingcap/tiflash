@@ -76,10 +76,10 @@ MPPTaskManager::~MPPTaskManager()
     monitor->cv.notify_all();
 }
 
-MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPGatherId & gather_id)
+MPPQueryPtr MPPTaskManager::addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id)
 {
-    auto ptr = std::make_shared<MPPQuery>(gather_id.hasMeaningfulGatherId());
-    mpp_query_map.insert({gather_id.query_id, ptr});
+    auto ptr = std::make_shared<MPPQuery>(has_meaningful_gather_id);
+    mpp_query_map.insert({query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
 }
@@ -119,8 +119,8 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
     auto [query, gather_set, error_msg] = getMPPQueryAndGatherTaskSet(id.gather_id);
     if (!error_msg.empty())
     {
-        /// if the query is aborted, return the error message
-        LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.gather_id.query_id.toString()));
+        /// if the gather is aborted, return the error message
+        LOG_WARNING(log, fmt::format("{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString()));
         /// meet error
         return {nullptr, error_msg};
     }
@@ -133,7 +133,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         {
             /// if call_data is in new_request state, put it to waiting tunnel state
             if (query == nullptr)
-                query = addMPPQuery(id.gather_id);
+                query = addMPPQuery(id.gather_id.query_id, id.gather_id.hasMeaningfulGatherId());
             if (gather_set == nullptr)
                 gather_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_set->alarms[sender_task_id][receiver_task_id];
@@ -183,8 +183,8 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
         auto [gather_set, error_msg] = getGatherTaskSetWithoutLock(id.gather_id);
         if (!error_msg.empty())
         {
-            /// if the query is aborted, return true to stop waiting timeout.
-            LOG_WARNING(log, fmt::format("{}: Query {} is aborted, all its tasks are invalid.", req_info, id.gather_id.query_id.toString()));
+            /// if the gather is aborted, return true to stop waiting timeout.
+            LOG_WARNING(log, fmt::format("{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString()));
             cancelled = true;
             error_message = error_msg;
             return true;
@@ -266,7 +266,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
     {
         std::lock_guard lock(mu);
         auto [query, gather, _] = getMPPQueryAndGatherTaskSet(gather_id);
-        RUNTIME_ASSERT(gather != nullptr, log, "MPPTaskQuerySet {} should remaining in MPPTaskManager", gather_id.toString());
+        RUNTIME_ASSERT(gather != nullptr, log, "MPPGatherTaskSet {} should remaining in MPPTaskManager", gather_id.toString());
         gather->state = MPPGatherTaskSet::Aborted;
         cv.notify_all();
     }
@@ -289,7 +289,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTask * task)
     auto & context = task->context;
 
     if (query == nullptr)
-        query = addMPPQuery(task->id.gather_id);
+        query = addMPPQuery(task->id.gather_id.query_id, task->id.gather_id.hasMeaningfulGatherId());
     if (query->process_list_entry == nullptr)
     {
         query->process_list_entry = setProcessListElement(
@@ -321,7 +321,7 @@ std::pair<bool, String> MPPTaskManager::makeTaskActive(MPPTaskPtr task)
     auto [query, gather_set, error_msg] = getMPPQueryAndGatherTaskSet(task->id.gather_id);
     if (!error_msg.empty())
     {
-        return {false, fmt::format("query is being aborted, error message = {}", error_msg)};
+        return {false, fmt::format("Gather {} is being aborted, error message = {}", task->id.gather_id.toString(), error_msg)};
     }
     /// gather_set must not be nullptr if the current query is not aborted since MPPTaskManager::registerTask
     /// always create the gather_set

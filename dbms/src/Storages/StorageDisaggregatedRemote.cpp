@@ -410,7 +410,6 @@ StorageDisaggregated::buildEstablishDisaggTaskReq(
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
-        // todo check if gather_id is needed in disaggregated::DisaggTaskMeta
         disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
         meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
         meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);

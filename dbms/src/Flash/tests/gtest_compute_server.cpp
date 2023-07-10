@@ -139,7 +139,7 @@ public:
             }
         });
     }
-    void addOneGather(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPGatherId> & gather_ids)
+    void addOneQuery(size_t query_ts, std::vector<std::thread> & running_queries, std::vector<MPPGatherId> & gather_ids)
     {
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum(), 1, 1, query_ts);
         addOneGather(running_queries, gather_ids, properties);
@@ -895,13 +895,13 @@ try
         /// case 1, min tso can be added
         for (size_t i = 0; i < active_set_soft_limit; ++i)
         {
-            addOneGather(i + 10, running_queries, gather_ids);
+            addOneQuery(i + 10, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        addOneGather(1, running_queries, gather_ids);
+        addOneQuery(1, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 3);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
@@ -914,13 +914,13 @@ try
         /// case 2, non-min tso can't be added
         for (size_t i = 0; i < active_set_soft_limit; ++i)
         {
-            addOneGather((i + 1) * 20, running_queries, gather_ids);
+            addOneQuery((i + 1) * 20, running_queries, gather_ids);
         }
         using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 0);
-        addOneGather(30, running_queries, gather_ids);
+        addOneQuery(30, running_queries, gather_ids);
         std::this_thread::sleep_for(2s);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_active_queries_count).Value() == 2);
         ASSERT_TRUE(TiFlashMetrics::instance().tiflash_task_scheduler.get(tiflash_task_scheduler_metrics::type_waiting_queries_count).Value() == 1);

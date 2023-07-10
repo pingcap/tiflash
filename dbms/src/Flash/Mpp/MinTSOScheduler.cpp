@@ -137,6 +137,10 @@ void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & 
             scheduleWaitingQueries(task_manager);
         }
     }
+    else
+    {
+        LOG_DEBUG(log, "{} gather {} of query {}, and there are still some other gathers remain", is_cancelled ? "Cancelled" : "Finished", gather_id, query_id.toString());
+    }
 }
 
 /// NOTE: should not throw exceptions due to being called when destruction.

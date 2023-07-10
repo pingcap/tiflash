@@ -246,7 +246,7 @@ public:
     MPPQueryPtr getMPPQuery(const MPPQueryId & query_id);
 
 private:
-    MPPQueryPtr addMPPQuery(const MPPGatherId & gather_id);
+    MPPQueryPtr addMPPQuery(const MPPQueryId & query_id, bool has_meaningful_gather_id);
     void removeMPPGatherTaskSet(MPPQueryPtr & mpp_query, const MPPGatherId & gather_id, bool on_abort);
     std::tuple<MPPQueryPtr, MPPGatherTaskSetPtr, String> getMPPQueryAndGatherTaskSet(const MPPGatherId & gather_id);
 };
