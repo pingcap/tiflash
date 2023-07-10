@@ -43,15 +43,19 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
 {
     dmfile->setStatus(DMFile::Status::WRITING);
 
-    merged_file_writer.buffer = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                            dmfile->mergedPath(0),
-                                                                            dmfile->encryptionMergedPath(0),
-                                                                            false,
-                                                                            write_limiter,
-                                                                            dmfile->configuration->getChecksumAlgorithm(),
-                                                                            dmfile->configuration->getChecksumFrameLength());
+    if (dmfile->useMetaV2())
+    {
+        merged_file.buffer = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                         dmfile->mergedPath(0),
+                                                                         dmfile->encryptionMergedPath(0),
+                                                                         false,
+                                                                         write_limiter,
+                                                                         dmfile->configuration->getChecksumAlgorithm(),
+                                                                         dmfile->configuration->getChecksumFrameLength());
 
-    merged_file_writer.file_info = DMFile::MergedFile({0, 0});
+        merged_file.file_info = DMFile::MergedFile({0, 0});
+    }
+
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
@@ -167,7 +171,7 @@ void DMFileWriter::finalize()
     }
     if (dmfile->useMetaV2())
     {
-        dmfile->finalizeSmallFiles(merged_file_writer, file_provider, write_limiter);
+        dmfile->finalizeSmallFiles(merged_file, file_provider, write_limiter);
         // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
         finalizeMetaV2();
     }
@@ -312,37 +316,37 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             // write index info into merged_file_writer
             if (stream->minmaxes and !is_empty_file)
             {
-                dmfile->checkMergedFile(merged_file_writer, file_provider, write_limiter);
+                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
 
                 auto fname = dmfile->colIndexFileName(stream_name);
 
-                stream->minmaxes->write(*type, *merged_file_writer.buffer);
+                stream->minmaxes->write(*type, *merged_file.buffer);
 
-                auto size = merged_file_writer.buffer->getMaterializedBytes() - merged_file_writer.file_info.size;
+                auto size = merged_file.buffer->getMaterializedBytes() - merged_file.file_info.size;
                 index_bytes = size;
-                MergedSubFileInfo info{fname, merged_file_writer.file_info.number, merged_file_writer.file_info.size, size};
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, size};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file_writer.file_info.size = merged_file_writer.buffer->getMaterializedBytes();
+                merged_file.file_info.size = merged_file.buffer->getMaterializedBytes();
             }
 
             // write mark into merged_file_writer
             if (!is_empty_file)
             {
-                dmfile->checkMergedFile(merged_file_writer, file_provider, write_limiter);
+                dmfile->checkMergedFile(merged_file, file_provider, write_limiter);
 
                 auto fname = dmfile->colMarkFileName(stream_name);
 
                 for (const auto & mark : stream->marks)
                 {
-                    writeIntBinary(mark.offset_in_compressed_file, *merged_file_writer.buffer);
-                    writeIntBinary(mark.offset_in_decompressed_block, *merged_file_writer.buffer);
+                    writeIntBinary(mark.offset_in_compressed_file, *merged_file.buffer);
+                    writeIntBinary(mark.offset_in_decompressed_block, *merged_file.buffer);
                 }
-                auto size = merged_file_writer.buffer->getMaterializedBytes() - merged_file_writer.file_info.size;
-                MergedSubFileInfo info{fname, merged_file_writer.file_info.number, merged_file_writer.file_info.size, size};
+                auto size = merged_file.buffer->getMaterializedBytes() - merged_file.file_info.size;
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, size};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file_writer.file_info.size = merged_file_writer.buffer->getMaterializedBytes();
+                merged_file.file_info.size = merged_file.buffer->getMaterializedBytes();
             }
         }
         else

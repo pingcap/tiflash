@@ -171,7 +171,7 @@ private:
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
 
-    DMFile::MergedFileWriter merged_file_writer; // 名字太拉了，重新取一个
+    DMFile::MergedFileWriter merged_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;
