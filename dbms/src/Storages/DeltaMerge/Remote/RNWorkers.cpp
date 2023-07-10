@@ -12,22 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
-
 namespace DB::DM::Remote
 {
 
-RNWorkers::RNWorkers(const Options & options)
+RNWorkers::RNWorkers(const Context & context, const Options & options, size_t num_streams)
 {
+    RUNTIME_CHECK(num_streams > 0, num_streams);
     size_t n = options.read_task->segment_read_tasks.size();
     RUNTIME_CHECK(n > 0, n);
+
+    auto fetch_pages_concurrency = n;
+    auto prepare_streams_concurrency = n;
+    const auto & settings = context.getSettingsRef();
+    if (settings.dt_fetch_page_concurrency_scale > 0.0)
+    {
+        fetch_pages_concurrency = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
+    }
+    if (settings.dt_prepare_stream_concurrency_scale > 0.0)
+    {
+        prepare_streams_concurrency = std::min(std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale), prepare_streams_concurrency);
+    }
 
     worker_fetch_pages = RNWorkerFetchPages::create({
         .source_queue = std::make_shared<Channel>(n),
         .result_queue = std::make_shared<Channel>(n),
         .log = options.log,
-        .concurrency = n,
+        .concurrency = fetch_pages_concurrency,
         .cluster = options.cluster,
     });
 
@@ -35,7 +48,7 @@ RNWorkers::RNWorkers(const Options & options)
         .source_queue = worker_fetch_pages->result_queue,
         .result_queue = std::make_shared<Channel>(n),
         .log = options.log,
-        .concurrency = n,
+        .concurrency = prepare_streams_concurrency,
         .columns_to_read = options.columns_to_read,
         .read_tso = options.read_tso,
         .push_down_filter = options.push_down_filter,
