@@ -24,7 +24,7 @@ class LimitTransformOp : public TransformOp
 {
 public:
     LimitTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const LimitActionPtr & action_)
         : TransformOp(exec_status_, req_id)

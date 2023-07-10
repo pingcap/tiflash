@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/logger_useful.h>
@@ -70,7 +70,7 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTaskStatus init_status)
+Task::Task(PipelineExecutorContext & exec_status_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
     , exec_status(exec_status_)
     , mem_tracker_holder(exec_status_.getMemoryTracker())
@@ -84,7 +84,7 @@ Task::Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTas
     exec_status.incActiveRefCount();
 }
 
-Task::Task(PipelineExecutorStatus & exec_status_)
+Task::Task(PipelineExecutorContext & exec_status_)
     : Task(exec_status_, "")
 {
 }
@@ -99,7 +99,7 @@ Task::~Task()
             magic_enum::enum_name(task_status));
     }
 
-    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `Task` is destructed.
+    // In order to ensure that `PipelineExecutorContext` will not be destructed before `Task` is destructed.
     exec_status.decActiveRefCount();
 }
 

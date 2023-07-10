@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -29,7 +29,7 @@ class RFWaitTask : public Task
 {
 public:
     RFWaitTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         int max_wait_time_ms,

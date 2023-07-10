@@ -43,15 +43,15 @@ enum class ExecTaskStatus
     CANCELLED,
 };
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Task
 {
 public:
-    Task(PipelineExecutorStatus & exec_status_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    Task(PipelineExecutorContext & exec_status_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     // Only used for unit test.
-    explicit Task(PipelineExecutorStatus & exec_status_);
+    explicit Task(PipelineExecutorContext & exec_status_);
 
     virtual ~Task();
 
@@ -103,7 +103,7 @@ public:
     size_t mlfq_level{0};
 
 private:
-    PipelineExecutorStatus & exec_status;
+    PipelineExecutorContext & exec_status;
 
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;

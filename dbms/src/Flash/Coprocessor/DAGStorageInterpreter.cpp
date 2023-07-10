@@ -293,14 +293,14 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     executeImpl(pipeline);
 }
 
-void DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+void DAGStorageInterpreter::execute(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder)
 {
     prepare(); // learner read
 
     return executeImpl(exec_status, group_builder);
 }
 
-void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder)
 {
     auto & dag_context = dagContext();
 
@@ -563,7 +563,7 @@ void DAGStorageInterpreter::prepare()
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     size_t remote_read_start_index)
 {
@@ -676,7 +676,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
 }
 
 void DAGStorageInterpreter::buildRemoteExec(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RemoteRequest> & remote_requests)
 {
@@ -998,7 +998,7 @@ DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
 DAGStorageInterpreter::buildLocalExecForPhysicalTable(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const TableID & table_id,
     const SelectQueryInfo & query_info,
@@ -1137,7 +1137,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
 }
 
 void DAGStorageInterpreter::buildLocalExec(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     size_t max_block_size)
 {

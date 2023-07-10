@@ -166,7 +166,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 }
 
 void PhysicalAggregation::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
@@ -209,7 +209,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
 void PhysicalAggregation::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
+    PipelineExecutorContext & exec_status)
 {
     auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
     if (fine_grained_shuffle.enable())

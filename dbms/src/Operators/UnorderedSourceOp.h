@@ -30,7 +30,7 @@ class UnorderedSourceOp : public SourceOp
 {
 public:
     UnorderedSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         const DM::ColumnDefines & columns_to_read_,
         int extra_table_id_index_,

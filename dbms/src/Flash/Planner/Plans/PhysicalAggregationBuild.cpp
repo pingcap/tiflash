@@ -14,7 +14,7 @@
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/AggregateFinalSpillEvent.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
@@ -24,7 +24,7 @@
 namespace DB
 {
 void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
@@ -68,7 +68,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroupImpl(
     profile_infos = group_builder.getCurProfileInfos();
 }
 
-EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorStatus & exec_status)
+EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec_status)
 {
     if (!aggregate_context->hasSpilledData())
         return nullptr;

@@ -62,7 +62,7 @@ BlockInputStreams StorageDisaggregated::read(
 }
 
 void StorageDisaggregated::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
@@ -111,7 +111,7 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
 }
 
 void StorageDisaggregated::readThroughExchange(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     unsigned num_streams)
 {
@@ -345,7 +345,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 }
 
 void StorageDisaggregated::buildReceiverSources(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RequestAndRegionIDs> & dispatch_reqs,
     unsigned num_streams)
@@ -379,7 +379,7 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
 }
 
 void StorageDisaggregated::filterConditions(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     DAGExpressionAnalyzer & analyzer)
 {
@@ -429,7 +429,7 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
     }
 }
 
-void StorageDisaggregated::extraCast(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {

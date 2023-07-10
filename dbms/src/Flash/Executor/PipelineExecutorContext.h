@@ -27,18 +27,18 @@
 
 namespace DB
 {
-class PipelineExecutorStatus : private boost::noncopyable
+class PipelineExecutorContext : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
     // Only used for unit test.
-    PipelineExecutorStatus()
+    PipelineExecutorContext()
         : log(Logger::get())
         , mem_tracker(nullptr)
     {}
 
-    PipelineExecutorStatus(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
+    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
         : query_id(query_id_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)

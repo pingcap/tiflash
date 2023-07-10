@@ -959,7 +959,7 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
 }
 
 void StorageDeltaMerge::read(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,

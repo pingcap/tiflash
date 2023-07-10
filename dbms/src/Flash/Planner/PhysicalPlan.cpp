@@ -276,7 +276,7 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorStatus & exec_status, Context & context)
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_status, Context & context)
 {
     RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};

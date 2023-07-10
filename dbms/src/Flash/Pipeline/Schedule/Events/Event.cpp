@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
@@ -38,7 +38,7 @@ extern const char random_pipeline_model_event_finish_failpoint[];
         exec_status.onErrorOccurred(std::current_exception());   \
     }
 
-Event::Event(PipelineExecutorStatus & exec_status_, const String & req_id)
+Event::Event(PipelineExecutorContext & exec_status_, const String & req_id)
     : exec_status(exec_status_)
     , mem_tracker(exec_status_.getMemoryTracker())
     , log(Logger::get(req_id))

@@ -27,7 +27,7 @@ class PlainPipelineEvent : public Event
 {
 public:
     PlainPipelineEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_,

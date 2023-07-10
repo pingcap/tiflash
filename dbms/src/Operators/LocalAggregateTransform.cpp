@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/LocalAggregateTransform.h>
 
 #include <magic_enum.hpp>
@@ -29,7 +29,7 @@ constexpr size_t task_index = 0;
 } // namespace
 
 LocalAggregateTransform::LocalAggregateTransform(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const String & req_id,
     const Aggregator::Params & params_)
     : TransformOp(exec_status_, req_id)

@@ -25,7 +25,7 @@ class ExchangeReceiverSourceOp : public SourceOp
 {
 public:
     ExchangeReceiverSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
         size_t stream_id_)

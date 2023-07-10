@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
@@ -28,7 +28,7 @@ class BaseTask : public EventTask
 {
 public:
     BaseTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const EventPtr & event_,
         std::atomic_int64_t & counter_)
         : EventTask(exec_status_, event_)
@@ -50,7 +50,7 @@ class BaseEvent : public Event
 {
 public:
     BaseEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         std::atomic_int64_t & counter_)
         : Event(exec_status_)
         , counter(counter_)
@@ -78,7 +78,7 @@ class RunTask : public EventTask
 {
 public:
     RunTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
     {}
@@ -99,7 +99,7 @@ class RunEvent : public Event
 {
 public:
     RunEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         bool with_tasks_)
         : Event(exec_status_)
         , with_tasks(with_tasks_)
@@ -123,7 +123,7 @@ class DeadLoopTask : public EventTask
 {
 public:
     DeadLoopTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
     {}
@@ -140,7 +140,7 @@ class DeadLoopEvent : public Event
 {
 public:
     DeadLoopEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         bool with_tasks_)
         : Event(exec_status_)
         , with_tasks(with_tasks_)
@@ -167,7 +167,7 @@ private:
 class OnErrEvent : public Event
 {
 public:
-    explicit OnErrEvent(PipelineExecutorStatus & exec_status_)
+    explicit OnErrEvent(PipelineExecutorContext & exec_status_)
         : Event(exec_status_)
     {}
 
@@ -183,7 +183,7 @@ protected:
 class AssertMemoryTraceEvent : public Event
 {
 public:
-    explicit AssertMemoryTraceEvent(PipelineExecutorStatus & exec_status_)
+    explicit AssertMemoryTraceEvent(PipelineExecutorContext & exec_status_)
         : Event(exec_status_)
     {
         assert(mem_tracker != nullptr);
@@ -205,7 +205,7 @@ class ThrowExceptionTask : public EventTask
 {
 public:
     ThrowExceptionTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
     {}
@@ -221,7 +221,7 @@ class ThrowExceptionEvent : public Event
 {
 public:
     ThrowExceptionEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         bool with_task_)
         : Event(exec_status_)
         , with_task(with_task_)
@@ -251,7 +251,7 @@ class ManyTasksEvent : public Event
 {
 public:
     ManyTasksEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         size_t task_num_)
         : Event(exec_status_)
         , task_num(task_num_)
@@ -275,7 +275,7 @@ class DoInsertEvent : public Event
 {
 public:
     DoInsertEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         int16_t & counter_)
         : Event(exec_status_)
         , counter(counter_)
@@ -303,7 +303,7 @@ private:
 class CreateTaskFailEvent : public Event
 {
 public:
-    explicit CreateTaskFailEvent(PipelineExecutorStatus & exec_status_)
+    explicit CreateTaskFailEvent(PipelineExecutorContext & exec_status_)
         : Event(exec_status_)
     {
     }
@@ -325,7 +325,7 @@ public:
     static constexpr size_t per_execute_time = 10'000'000L; // 10ms
 
     TestPorfileTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const EventPtr & event_)
         : EventTask(exec_status_, event_)
     {}
@@ -372,7 +372,7 @@ private:
 class TestPorfileEvent : public Event
 {
 public:
-    explicit TestPorfileEvent(PipelineExecutorStatus & exec_status_, size_t task_num_)
+    explicit TestPorfileEvent(PipelineExecutorContext & exec_status_, size_t task_num_)
         : Event(exec_status_)
         , task_num(task_num_)
     {}
@@ -408,13 +408,13 @@ public:
         }
     }
 
-    static void wait(PipelineExecutorStatus & exec_status)
+    static void wait(PipelineExecutorContext & exec_status)
     {
         std::chrono::seconds timeout(15);
         exec_status.waitFor(timeout);
     }
 
-    static void assertNoErr(PipelineExecutorStatus & exec_status)
+    static void assertNoErr(PipelineExecutorContext & exec_status)
     {
         auto exception_ptr = exec_status.getExceptionPtr();
         auto exception_msg = exec_status.getExceptionMsg();
@@ -444,7 +444,7 @@ try
     auto do_test = [&](size_t group_num, size_t event_num) {
         // group_num * (event_num * (`BaseEvent::finishImpl + BaseEvent::task_num * ~BaseTask()`))
         std::atomic_int64_t counter{static_cast<int64_t>(group_num * (event_num * (1 + BaseEvent::task_num)))};
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         {
             std::vector<EventPtr> all_events;
             for (size_t i = 0; i < group_num; ++i)
@@ -478,7 +478,7 @@ TEST_F(EventTestRunner, run)
 try
 {
     auto do_test = [&](bool with_tasks, size_t event_num) {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         {
             std::vector<EventPtr> events;
             for (size_t i = 0; i < event_num; ++i)
@@ -500,7 +500,7 @@ TEST_F(EventTestRunner, cancel)
 try
 {
     auto do_test = [&](bool with_tasks, size_t event_batch_num) {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         auto thread_manager = newThreadManager();
         {
             std::vector<EventPtr> events;
@@ -532,7 +532,7 @@ TEST_F(EventTestRunner, err)
 try
 {
     auto do_test = [&](bool with_tasks, size_t dead_loop_event_num) {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         auto thread_manager = newThreadManager();
         {
             std::vector<EventPtr> events;
@@ -561,7 +561,7 @@ CATCH
 TEST_F(EventTestRunner, memoryTrace)
 try
 {
-    PipelineExecutorStatus exec_status{"", "", MemoryTracker::create()};
+    PipelineExecutorContext exec_status{"", "", MemoryTracker::create()};
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status);
     if (event->prepare())
         event->schedule();
@@ -576,7 +576,7 @@ try
     std::vector<bool> with_tasks{false, true};
     for (auto with_task : with_tasks)
     {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         std::vector<EventPtr> events;
         // throw_exception_event <-- run_event should run first,
         // otherwise the thread pool will be filled up by DeadLoopEvent/DeadLoopTask,
@@ -603,7 +603,7 @@ try
 {
     for (size_t i = 0; i < 200; i += 7)
     {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
         if (event->prepare())
             event->schedule();
@@ -616,7 +616,7 @@ CATCH
 TEST_F(EventTestRunner, insertEvents)
 try
 {
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_status;
     std::vector<int16_t> counters;
     for (size_t i = 0; i < 10; ++i)
         counters.push_back(99);
@@ -642,7 +642,7 @@ CATCH
 TEST_F(EventTestRunner, createTaskFail)
 try
 {
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_status;
     auto event = std::make_shared<CreateTaskFailEvent>(exec_status);
     if (event->prepare())
         event->schedule();
@@ -657,7 +657,7 @@ try
 {
     for (size_t task_num = 0; task_num < 2 * thread_num; task_num += 2)
     {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         auto event = std::make_shared<TestPorfileEvent>(exec_status, task_num);
         if (event->prepare())
             event->schedule();

@@ -24,7 +24,7 @@ class LoadBucketTask : public InputIOEventTask
 {
 public:
     LoadBucketTask(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const EventPtr & event_,
         SpilledBucketInput & input_)

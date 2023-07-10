@@ -19,7 +19,7 @@
 namespace DB
 {
 CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const String & req_id,
     CoprocessorReaderPtr coprocessor_reader_)
     : SourceOp(exec_status_, req_id)

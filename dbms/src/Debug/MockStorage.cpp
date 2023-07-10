@@ -225,7 +225,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
 }
 
 void MockStorage::buildExecFromDeltaMerge(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     Int64 table_id,

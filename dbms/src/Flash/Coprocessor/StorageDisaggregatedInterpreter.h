@@ -47,7 +47,7 @@ public:
         analyzer = std::move(storage->analyzer);
     }
 
-    void execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+    void execute(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder)
     {
         storage->read(exec_status, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
         analyzer = std::move(storage->analyzer);

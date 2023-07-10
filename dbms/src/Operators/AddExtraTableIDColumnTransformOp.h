@@ -24,7 +24,7 @@ class AddExtraTableIDColumnTransformOp : public TransformOp
 {
 public:
     AddExtraTableIDColumnTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const DM::ColumnDefines & columns_to_read,
         int extra_table_id_index,

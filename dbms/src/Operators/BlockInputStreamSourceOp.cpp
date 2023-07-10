@@ -18,7 +18,7 @@
 namespace DB
 {
 BlockInputStreamSourceOp::BlockInputStreamSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const String & req_id,
     const BlockInputStreamPtr & impl_)
     : SourceOp(exec_status_, req_id)

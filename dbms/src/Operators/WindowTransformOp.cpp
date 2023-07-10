@@ -17,7 +17,7 @@
 namespace DB
 {
 WindowTransformOp::WindowTransformOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const String & req_id_,
     const WindowDescription & window_description_)
     : TransformOp(exec_status_, req_id_)

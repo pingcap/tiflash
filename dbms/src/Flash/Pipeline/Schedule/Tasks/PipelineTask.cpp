@@ -20,7 +20,7 @@
 namespace DB
 {
 PipelineTask::PipelineTask(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const String & req_id,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)

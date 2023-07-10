@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -26,7 +26,7 @@ namespace
 class PlainTask : public Task
 {
 public:
-    explicit PlainTask(PipelineExecutorStatus & exec_status_)
+    explicit PlainTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -42,7 +42,7 @@ class TestMLFQTaskQueue : public ::testing::Test
 TEST_F(TestMLFQTaskQueue, init)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -74,7 +74,7 @@ CATCH
 TEST_F(TestMLFQTaskQueue, random)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -120,7 +120,7 @@ CATCH
 TEST_F(TestMLFQTaskQueue, level)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -156,7 +156,7 @@ CATCH
 TEST_F(TestMLFQTaskQueue, feedback)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -240,14 +240,14 @@ CATCH
 TEST_F(TestMLFQTaskQueue, cancel)
 try
 {
-    PipelineExecutorStatus status1("id1", "", nullptr);
+    PipelineExecutorContext status1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     status1.incActiveRefCount();
     SCOPE_EXIT({
         status1.decActiveRefCount();
     });
 
-    PipelineExecutorStatus status2("id2", "", nullptr);
+    PipelineExecutorContext status2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     status2.incActiveRefCount();
     SCOPE_EXIT({

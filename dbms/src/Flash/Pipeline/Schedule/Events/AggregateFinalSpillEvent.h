@@ -26,7 +26,7 @@ class AggregateFinalSpillEvent : public Event
 {
 public:
     AggregateFinalSpillEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         AggregateContextPtr agg_context_,
         std::vector<size_t> indexes_,

@@ -24,7 +24,7 @@ extern const char pause_when_reading_from_dt_stream[];
 } // namespace FailPoints
 
 DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const DM::DMContextPtr & dm_context_,
     const DM::SegmentReadTaskPoolPtr & task_pool_,
     DM::AfterSegmentRead after_segment_read_,

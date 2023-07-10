@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/LoadBucketEvent.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
@@ -20,7 +20,7 @@
 namespace DB
 {
 SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const BlockInputStreams & bucket_streams,
     const String & req_id,
     size_t max_queue_size_)
@@ -39,7 +39,7 @@ SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
 {
     bucket_data_queue = {};
     bucket_inputs.clear();
-    // In order to ensure that `PipelineExecutorStatus` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
+    // In order to ensure that `PipelineExecutorContext` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
     exec_status.decActiveRefCount();
 }
 

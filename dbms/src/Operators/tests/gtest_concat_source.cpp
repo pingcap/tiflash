@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/ConcatSourceOp.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
@@ -28,7 +28,7 @@ class MockSourceOp : public SourceOp
 {
 public:
     MockSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const Block & output_)
         : SourceOp(exec_status_, "mock")
         , output(output_)
@@ -62,7 +62,7 @@ TEST_F(TestConcatSource, setBlockSink)
     Block res;
     ASSERT_FALSE(res);
 
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_status;
     SetBlockSinkOp set_block_sink{exec_status, "test", res};
     Block header{ColumnGenerator::instance().generate({0, "Int32", DataDistribution::RANDOM})};
     set_block_sink.setHeader(header);
@@ -77,7 +77,7 @@ TEST_F(TestConcatSource, concatSink)
 {
     size_t block_cnt = 10;
     std::vector<PipelineExecBuilder> builders;
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_status;
     for (size_t i = 0; i < block_cnt; ++i)
     {
         PipelineExecBuilder builder;

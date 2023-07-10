@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -26,7 +26,7 @@ namespace
 class PlainTask : public Task
 {
 public:
-    explicit PlainTask(PipelineExecutorStatus & exec_status_)
+    explicit PlainTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -41,7 +41,7 @@ class TestWaitingTaskList : public ::testing::Test
 TEST_F(TestWaitingTaskList, base)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({

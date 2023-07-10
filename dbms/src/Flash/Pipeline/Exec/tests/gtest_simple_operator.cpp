@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -30,7 +30,7 @@ class SimpleGetResultSinkOp : public SinkOp
 {
 public:
     SimpleGetResultSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         ResultHandler result_handler_)
         : SinkOp(exec_status_, req_id)
@@ -87,7 +87,7 @@ public:
     PipelineExecPtr build(
         const std::shared_ptr<tipb::DAGRequest> & request,
         ResultHandler result_handler,
-        PipelineExecutorStatus & exec_status)
+        PipelineExecutorContext & exec_status)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
         context.context->setDAGContext(&dag_context);
@@ -119,7 +119,7 @@ public:
         ResultHandler result_handler{[&blocks](const Block & block) {
             blocks.push_back(block);
         }};
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         auto op_pipeline = build(request, result_handler, exec_status);
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
@@ -139,7 +139,7 @@ try
 
     ResultHandler result_handler{[](const Block &) {
     }};
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_status;
     auto op_pipeline = build(request, result_handler, exec_status);
     exec_status.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);

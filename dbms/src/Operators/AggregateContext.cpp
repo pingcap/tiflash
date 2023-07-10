@@ -79,7 +79,7 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
-std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorStatus & exec_status)
+std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorContext & exec_status)
 {
     assert(status.load() == AggStatus::build);
     aggregator->finishSpill();

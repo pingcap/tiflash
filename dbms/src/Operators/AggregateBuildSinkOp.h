@@ -25,7 +25,7 @@ class AggregateBuildSinkOp : public SinkOp
 {
 public:
     AggregateBuildSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         size_t index_,
         AggregateContextPtr agg_context_,
         const String & req_id)

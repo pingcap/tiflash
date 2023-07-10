@@ -1067,7 +1067,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 void DeltaMergeStore::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,

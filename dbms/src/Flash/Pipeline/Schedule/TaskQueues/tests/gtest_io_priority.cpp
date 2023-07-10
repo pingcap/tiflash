@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -26,7 +26,7 @@ namespace
 class MockIOTask : public Task
 {
 public:
-    MockIOTask(PipelineExecutorStatus & exec_status_, bool is_io_in)
+    MockIOTask(PipelineExecutorContext & exec_status_, bool is_io_in)
         : Task(exec_status_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }
@@ -44,7 +44,7 @@ public:
 TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -93,7 +93,7 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, priority)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     // To avoid the active ref count being returned to 0 in advance.
     status.incActiveRefCount();
     SCOPE_EXIT({
@@ -175,14 +175,14 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, cancel)
 try
 {
-    PipelineExecutorStatus status1("id1", "", nullptr);
+    PipelineExecutorContext status1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     status1.incActiveRefCount();
     SCOPE_EXIT({
         status1.decActiveRefCount();
     });
 
-    PipelineExecutorStatus status2("id2", "", nullptr);
+    PipelineExecutorContext status2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     status2.incActiveRefCount();
     SCOPE_EXIT({

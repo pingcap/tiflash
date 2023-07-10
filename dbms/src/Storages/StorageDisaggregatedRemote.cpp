@@ -101,7 +101,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 }
 
 void StorageDisaggregated::readThroughS3(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     unsigned num_streams)
@@ -558,7 +558,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 }
 
 void StorageDisaggregated::buildRemoteSegmentSourceOps(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DM::Remote::RNReadTaskPtr & read_task,

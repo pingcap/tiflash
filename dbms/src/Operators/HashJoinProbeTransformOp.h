@@ -23,7 +23,7 @@ class HashJoinProbeTransformOp : public TransformOp
 {
 public:
     HashJoinProbeTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const JoinPtr & join_,
         size_t scan_hash_map_after_probe_stream_index_,

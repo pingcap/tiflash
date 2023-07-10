@@ -24,7 +24,7 @@ class FilterTransformOp : public TransformOp
 {
 public:
     FilterTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         const Block & input_header,
         const ExpressionActionsPtr & expression,

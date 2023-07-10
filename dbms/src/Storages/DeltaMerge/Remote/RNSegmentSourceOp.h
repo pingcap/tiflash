@@ -30,7 +30,7 @@ public:
     struct Options
     {
         std::string_view debug_tag;
-        PipelineExecutorStatus & exec_status;
+        PipelineExecutorContext & exec_status;
         const RNWorkersPtr & workers;
         const ColumnDefines & columns_to_read;
         int extra_table_id_index;

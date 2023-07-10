@@ -23,7 +23,7 @@ class FineGrainedPipelineEvent : public Event
 {
 public:
     FineGrainedPipelineEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         PipelineExecPtr && pipeline_exec_)
         : Event(exec_status_, req_id)

@@ -75,7 +75,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 void PhysicalTableScan::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
+    PipelineExecutorContext & exec_status)
 {
     // For building PipelineExec in compile time.
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
@@ -95,7 +95,7 @@ void PhysicalTableScan::buildPipeline(
 }
 
 void PhysicalTableScan::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & /*exec_status*/,
+    PipelineExecutorContext & /*exec_status*/,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
@@ -114,7 +114,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
 }
 
 void PhysicalTableScan::buildProjection(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const NamesAndTypes & storage_schema)
 {

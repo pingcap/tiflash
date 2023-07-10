@@ -47,12 +47,12 @@ enum class OperatorStatus
     HAS_OUTPUT,
 };
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Operator
 {
 public:
-    Operator(PipelineExecutorStatus & exec_status_, const String & req_id)
+    Operator(PipelineExecutorContext & exec_status_, const String & req_id)
         : exec_status(exec_status_)
         , log(Logger::get(req_id))
     {}
@@ -98,7 +98,7 @@ protected:
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
 protected:
-    PipelineExecutorStatus & exec_status;
+    PipelineExecutorContext & exec_status;
     const LoggerPtr log;
     Block header;
 
@@ -111,7 +111,7 @@ protected:
 class SourceOp : public Operator
 {
 public:
-    SourceOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+    SourceOp(PipelineExecutorContext & exec_status_, const String & req_id)
         : Operator(exec_status_, req_id)
     {}
     // read will inplace the block when return status is HAS_OUTPUT;
@@ -126,7 +126,7 @@ using SourceOps = std::vector<SourceOpPtr>;
 class TransformOp : public Operator
 {
 public:
-    TransformOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+    TransformOp(PipelineExecutorContext & exec_status_, const String & req_id)
         : Operator(exec_status_, req_id)
     {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
@@ -155,7 +155,7 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    SinkOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+    SinkOp(PipelineExecutorContext & exec_status_, const String & req_id)
         : Operator(exec_status_, req_id)
     {}
     OperatorStatus prepare();

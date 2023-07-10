@@ -27,7 +27,7 @@ class SetBlockSinkOp : public SinkOp
 {
 public:
     SetBlockSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         Block & res_)
         : SinkOp(exec_status_, req_id)
@@ -60,7 +60,7 @@ class ConcatSourceOp : public SourceOp
 {
 public:
     ConcatSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         std::vector<PipelineExecBuilder> & exec_builder_pool)
         : SourceOp(exec_status_, req_id)
@@ -202,7 +202,7 @@ public:
         }
     }
 
-    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorStatus & exec_status, const String & req_id)
+    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorContext & exec_status, const String & req_id)
     {
         RUNTIME_CHECK(result_builder.empty());
         for (auto & builders : pool)

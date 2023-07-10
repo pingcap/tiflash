@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -26,7 +26,7 @@ namespace
 class SimpleTask : public Task
 {
 public:
-    explicit SimpleTask(PipelineExecutorStatus & exec_status_)
+    explicit SimpleTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -45,7 +45,7 @@ private:
 class SimpleWaitingTask : public Task
 {
 public:
-    explicit SimpleWaitingTask(PipelineExecutorStatus & exec_status_)
+    explicit SimpleWaitingTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -87,7 +87,7 @@ private:
 class SimpleBlockedTask : public Task
 {
 public:
-    explicit SimpleBlockedTask(PipelineExecutorStatus & exec_status_)
+    explicit SimpleBlockedTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -129,7 +129,7 @@ private:
 class MemoryTraceTask : public Task
 {
 public:
-    explicit MemoryTraceTask(PipelineExecutorStatus & exec_status_)
+    explicit MemoryTraceTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {
         assert(exec_status_.getMemoryTracker() != nullptr);
@@ -161,7 +161,7 @@ protected:
 class DeadLoopTask : public Task
 {
 public:
-    explicit DeadLoopTask(PipelineExecutorStatus & exec_status_)
+    explicit DeadLoopTask(PipelineExecutorContext & exec_status_)
         : Task(exec_status_)
     {}
 
@@ -188,7 +188,7 @@ class TaskSchedulerTestRunner : public ::testing::Test
 public:
     static constexpr size_t thread_num = 5;
 
-    static void submitAndWait(std::vector<TaskPtr> & tasks, PipelineExecutorStatus & exec_status)
+    static void submitAndWait(std::vector<TaskPtr> & tasks, PipelineExecutorContext & exec_status)
     {
         TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
@@ -203,7 +203,7 @@ try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleTask>(exec_status));
@@ -217,7 +217,7 @@ try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<SimpleWaitingTask>(exec_status));
@@ -231,7 +231,7 @@ try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        PipelineExecutorStatus exec_status{"", "", MemoryTracker::create()};
+        PipelineExecutorContext exec_status{"", "", MemoryTracker::create()};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<MemoryTraceTask>(exec_status));
@@ -245,7 +245,7 @@ TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
     auto do_test = [&](size_t task_thread_pool_size, size_t task_num) {
-        PipelineExecutorStatus exec_status;
+        PipelineExecutorContext exec_status;
         {
             TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
             TaskScheduler task_scheduler{config};

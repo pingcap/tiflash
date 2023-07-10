@@ -18,7 +18,7 @@
 namespace DB
 {
 AggregateRestoreSourceOp::AggregateRestoreSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_status_,
     const AggregateContextPtr & agg_context_,
     SharedAggregateRestorerPtr && restorer_,
     const String & req_id)

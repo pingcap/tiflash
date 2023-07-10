@@ -14,20 +14,20 @@
 
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
 {
-class PipelineExecutorStatusTestRunner : public ::testing::Test
+class PipelineExecutorContextTestRunner : public ::testing::Test
 {
 };
 
-TEST_F(PipelineExecutorStatusTestRunner, waitTimeout)
+TEST_F(PipelineExecutorContextTestRunner, waitTimeout)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     try
     {
         status.incActiveRefCount();
@@ -37,17 +37,17 @@ try
     }
     catch (DB::Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), PipelineExecutorStatus::timeout_err_msg);
+        GTEST_ASSERT_EQ(e.message(), PipelineExecutorContext::timeout_err_msg);
         auto err_msg = status.getExceptionMsg();
-        ASSERT_EQ(err_msg, PipelineExecutorStatus::timeout_err_msg);
+        ASSERT_EQ(err_msg, PipelineExecutorContext::timeout_err_msg);
     }
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, popTimeout)
+TEST_F(PipelineExecutorContextTestRunner, popTimeout)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     status.toConsumeMode(1);
     try
     {
@@ -60,17 +60,17 @@ try
     }
     catch (DB::Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), PipelineExecutorStatus::timeout_err_msg);
+        GTEST_ASSERT_EQ(e.message(), PipelineExecutorContext::timeout_err_msg);
         auto err_msg = status.getExceptionMsg();
-        ASSERT_EQ(err_msg, PipelineExecutorStatus::timeout_err_msg);
+        ASSERT_EQ(err_msg, PipelineExecutorContext::timeout_err_msg);
     }
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, run)
+TEST_F(PipelineExecutorContextTestRunner, run)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     status.incActiveRefCount();
     auto thread_manager = newThreadManager();
     thread_manager->schedule(false, "run", [&status]() mutable { status.decActiveRefCount(); });
@@ -82,12 +82,12 @@ try
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, toErr)
+TEST_F(PipelineExecutorContextTestRunner, toErr)
 try
 {
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg;
-        PipelineExecutorStatus status;
+        PipelineExecutorContext status;
         status.incActiveRefCount();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
@@ -106,10 +106,10 @@ try
 }
 CATCH
 
-TEST_F(PipelineExecutorStatusTestRunner, consumeThrowError)
+TEST_F(PipelineExecutorContextTestRunner, consumeThrowError)
 try
 {
-    PipelineExecutorStatus status;
+    PipelineExecutorContext status;
     auto ret_queue = status.toConsumeMode(1);
     ret_queue->push(Block{});
     ResultHandler handler{[](const Block &) {

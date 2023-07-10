@@ -14,7 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
@@ -167,7 +167,7 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_status, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
@@ -198,7 +198,7 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
-EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
+EventPtr Pipeline::complete(PipelineExecutorContext & exec_status)
 {
     assert(!isFineGrainedMode());
     if unlikely (exec_status.isCancelled())
@@ -207,7 +207,7 @@ EventPtr Pipeline::complete(PipelineExecutorStatus & exec_status)
     return plan_nodes.back()->sinkComplete(exec_status);
 }
 
-Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
+Events Pipeline::toEvents(PipelineExecutorContext & status, Context & context, size_t concurrency)
 {
     Events all_events;
     doToEvents(status, context, concurrency, all_events);
@@ -215,7 +215,7 @@ Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, si
     return all_events;
 }
 
-PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & status, Context & context, size_t concurrency)
 {
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());
@@ -234,7 +234,7 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context &
     return {std::move(self_events), isFineGrainedMode()};
 }
 
-PipelineEvents Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & status, Context & context, size_t concurrency, Events & all_events)
 {
     auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)

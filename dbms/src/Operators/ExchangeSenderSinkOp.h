@@ -24,7 +24,7 @@ class ExchangeSenderSinkOp : public SinkOp
 {
 public:
     ExchangeSenderSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         std::unique_ptr<DAGResponseWriter> && writer)
         : SinkOp(exec_status_, req_id)

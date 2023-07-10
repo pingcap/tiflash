@@ -54,7 +54,7 @@ public:
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
-        PipelineExecutorStatus & exec_status) override;
+        PipelineExecutorContext & exec_status) override;
 
     void finalize(const Names & parent_require) override;
 

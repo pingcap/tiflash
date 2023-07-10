@@ -25,7 +25,7 @@ class LoadBucketEvent : public Event
 {
 public:
     LoadBucketEvent(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_status_,
         const String & req_id,
         SharedSpilledBucketDataLoaderPtr loader_)
         : Event(exec_status_, req_id)
