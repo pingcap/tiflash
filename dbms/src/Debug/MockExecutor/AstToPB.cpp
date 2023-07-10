@@ -304,7 +304,11 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
         }
         return;
     case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::PlusReal:
+    case tipb::ScalarFuncSig::PlusDecimal:
     case tipb::ScalarFuncSig::MinusInt:
+    case tipb::ScalarFuncSig::MinusReal:
+    case tipb::ScalarFuncSig::MinusDecimal:
     {
         for (const auto & child_ast : func->arguments->children)
         {

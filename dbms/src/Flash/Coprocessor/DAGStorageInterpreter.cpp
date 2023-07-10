@@ -35,6 +35,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/BlockInputStreamSourceOp.h>
+#include <Operators/ConcatSourceOp.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
@@ -1146,10 +1147,10 @@ void DAGStorageInterpreter::buildLocalExec(
         return;
     mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
+    bool has_multiple_partitions = table_query_infos.size() > 1;
+    ConcatBuilderPool builder_pool{max_streams};
 
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
-    // TODO Improve the performance of partition table in extreme case.
-    // ref https://github.com/pingcap/tiflash/issues/4474
     for (const auto & table_query_info : table_query_infos)
     {
         PipelineExecGroupBuilder builder;
@@ -1161,7 +1162,10 @@ void DAGStorageInterpreter::buildLocalExec(
             disaggregated_snap->addTask(table_id, std::move(table_snap));
         }
 
-        group_builder.merge(std::move(builder));
+        if (has_multiple_partitions)
+            builder_pool.add(builder);
+        else
+            group_builder.merge(std::move(builder));
     }
 
     LOG_DEBUG(
@@ -1178,6 +1182,11 @@ void DAGStorageInterpreter::buildLocalExec(
         auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
         bool register_snapshot_ok = snaps->registerSnapshot(snap_id, disaggregated_snap, expired_at);
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
+    }
+
+    if (has_multiple_partitions)
+    {
+        builder_pool.generate(group_builder, exec_status, log->identifier());
     }
 }
 

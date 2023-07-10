@@ -25,7 +25,7 @@ PipelineTask::PipelineTask(
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_, ExecTaskStatus::RUNNING)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {
