@@ -15,8 +15,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
-
-#include "TestUtils/mockExecutor.h"
+#include <TestUtils/mockExecutor.h>
 
 namespace DB::tests
 {

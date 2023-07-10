@@ -172,6 +172,7 @@ public:
 
     // expand
     DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
+    DAGRequestBuilder & expand2(std::vector<MockAstVec> level_projection_expressions, std::vector<String> output_names, std::vector<tipb::FieldType> fps);
 
     // runtime filter
     DAGRequestBuilder & appendRuntimeFilter(mock::MockRuntimeFilter & rf);
