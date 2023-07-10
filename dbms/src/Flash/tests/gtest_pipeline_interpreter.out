@@ -316,3 +316,9 @@ pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> TopN|to
 pipeline#0: AggregationConvergent|aggregation_1 -> Expand|expand_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|project_6 -> TopN|topn_7 -> Projection|NonTiDBOperator
  |- pipeline#1: MockTableScan|table_scan_3 -> Projection|project_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator |- pipeline#2: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|NonTiDBOperator
 @
+~test_suite_name: Expand2Plan
+~result_index: 0
+~result:
+pipeline#0: AggregationConvergent|aggregation_1 -> Filter|expand_2 -> Projection|NonTiDBOperator -> JoinProbe|Join_5 -> Projection|project_6 -> TopN|topn_7 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_3 -> Projection|project_4 -> Projection|NonTiDBOperator -> JoinBuild|NonTiDBOperator |- pipeline#2: MockExchangeReceiver|exchange_receiver_0 -> AggregationBuild|NonTiDBOperator
+@
