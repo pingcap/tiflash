@@ -1163,6 +1163,53 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
     }
 }
 
+TEST_F(PageDirectoryGCTest, DumpSnapshotDuringWrite)
+{
+    // write some data and roll the log file
+    for (size_t i = 0; i < 100; ++i)
+    {
+        INSERT_ENTRY(i + 50, i);
+    }
+    ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+
+    // write a few more data
+    for (size_t i = 100; i < 110; ++i)
+    {
+        INSERT_ENTRY(i + 50, i);
+    }
+
+    auto sp_before_apply_memory = SyncPointCtl::enableInScope("before_PageDirectory::apply_to_memory");
+    auto th_write1 = std::async([&]() {
+        PageEntriesEdit edit;
+        PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5352), entry_1_v1);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 5353), buildV3Id(TEST_NAMESPACE_ID, 5352));
+        dir->apply(std::move(edit));
+    });
+    sp_before_apply_memory.waitAndPause();
+
+    // dump snapshot during write
+    ASSERT_TRUE(dir->tryDumpSnapshot(nullptr, true));
+
+    sp_before_apply_memory.next();
+    th_write1.get();
+
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 5353, snap);
+        EXPECT_EQ(normal_id, 5352);
+    }
+
+    dir.reset();
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 5353, snap);
+        EXPECT_EQ(normal_id, 5352);
+    }
+}
+
 TEST_F(PageDirectoryTest, RestoreWithRefToDeletedPage)
 try
 {

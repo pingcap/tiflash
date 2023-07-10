@@ -1558,6 +1558,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
