@@ -62,7 +62,7 @@ BlockInputStreams StorageDisaggregated::read(
 }
 
 void StorageDisaggregated::read(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
@@ -72,10 +72,10 @@ void StorageDisaggregated::read(
 {
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readThroughS3(exec_status, group_builder, db_context, num_streams);
+        return readThroughS3(exec_context, group_builder, db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
-    readThroughExchange(exec_status, group_builder, num_streams);
+    readThroughExchange(exec_context, group_builder, num_streams);
 }
 
 std::vector<RequestAndRegionIDs> StorageDisaggregated::buildDispatchRequests()
@@ -111,20 +111,20 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
 }
 
 void StorageDisaggregated::readThroughExchange(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     unsigned num_streams)
 {
     std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
-    buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
+    buildReceiverSources(exec_context, group_builder, dispatch_reqs, num_streams);
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // TODO: push down filter conditions to write node
-    filterConditions(exec_status, group_builder, *analyzer);
+    filterConditions(exec_context, group_builder, *analyzer);
 }
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
@@ -345,7 +345,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 }
 
 void StorageDisaggregated::buildReceiverSources(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RequestAndRegionIDs> & dispatch_reqs,
     unsigned num_streams)
@@ -356,7 +356,7 @@ void StorageDisaggregated::buildReceiverSources(
     {
         group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 exchange_receiver,
                 /*stream_id=*/0));
@@ -379,13 +379,13 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
 }
 
 void StorageDisaggregated::filterConditions(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     DAGExpressionAnalyzer & analyzer)
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        ::DB::executePushedDownFilter(exec_context, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
         context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
@@ -429,12 +429,12 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
     }
 }
 
-void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
 {
     if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         });
     }
 }

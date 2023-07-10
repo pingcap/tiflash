@@ -81,7 +81,7 @@ void executeUnion(
 }
 
 void restoreConcurrency(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t concurrency,
     Int64 max_buffered_bytes,
@@ -92,17 +92,17 @@ void restoreConcurrency(
         auto shared_queue = SharedQueue::build(1, concurrency, max_buffered_bytes);
         // sink op of builder must be empty.
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue));
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
         for (size_t i = 0; i < concurrency; ++i)
-            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
+            group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
     }
 }
 
 void executeUnion(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Int64 max_buffered_bytes,
     const LoggerPtr & log)
@@ -111,11 +111,11 @@ void executeUnion(
     {
         auto shared_queue = SharedQueue::build(group_builder.concurrency(), 1, max_buffered_bytes);
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_status, log->identifier(), shared_queue));
+            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue));
         });
         auto cur_header = group_builder.getCurrentHeader();
         group_builder.addGroup();
-        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_status, log->identifier(), cur_header, shared_queue));
+        group_builder.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, log->identifier(), cur_header, shared_queue));
     }
 }
 
@@ -147,7 +147,7 @@ void executeExpression(
 }
 
 void executeExpression(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log)
@@ -155,7 +155,7 @@ void executeExpression(
     if (expr_actions && !expr_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), expr_actions));
         });
     }
 }
@@ -212,7 +212,7 @@ void orderStreams(
 }
 
 void executeLocalSort(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
@@ -227,7 +227,7 @@ void executeLocalSort(
         {
             group_builder.transform([&](auto & builder) {
                 auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
-                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_context, log->identifier(), local_limit));
             });
         }
         // For order by const and doesn't has limit, do nothing here.
@@ -236,7 +236,7 @@ void executeLocalSort(
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 order_descr,
                 limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
@@ -252,7 +252,7 @@ void executeLocalSort(
             context.getFileProvider()};
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
@@ -264,7 +264,7 @@ void executeLocalSort(
 }
 
 void executeFinalSort(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
@@ -279,7 +279,7 @@ void executeFinalSort(
         {
             auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
             group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_status, log->identifier(), global_limit));
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
             });
         }
         // For order by const and doesn't has limit, do nothing here.
@@ -288,14 +288,14 @@ void executeFinalSort(
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<PartialSortTransformOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 order_descr,
                 limit.value_or(0))); // 0 means that no limit in PartialSortTransformOp.
         });
 
         const Settings & settings = context.getSettingsRef();
-        executeUnion(exec_status, group_builder, settings.max_buffered_bytes_in_executor, log);
+        executeUnion(exec_context, group_builder, settings.max_buffered_bytes_in_executor, log);
 
         size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, 1);
         SpillConfig spill_config{
@@ -307,7 +307,7 @@ void executeFinalSort(
             context.getFileProvider()};
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<MergeSortTransformOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 order_descr,
                 limit.value_or(0), // 0 means that no limit in MergeSortTransformOp.
@@ -395,7 +395,7 @@ void executePushedDownFilter(
 }
 
 void executePushedDownFilter(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
@@ -411,9 +411,9 @@ void executePushedDownFilter(
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
         auto & builder = group_builder.getCurBuilder(i);
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context, log->identifier(), input_header, before_where, filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), project_after_where));
     }
 }
 
@@ -457,7 +457,7 @@ NamesWithAliases buildTableScanProjectionCols(const NamesAndTypes & schema,
 }
 
 void executeGeneratedColumnPlaceholder(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t remote_read_sources_start_index,
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
@@ -470,7 +470,7 @@ void executeGeneratedColumnPlaceholder(
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
         auto & builder = group_builder.getCurBuilder(i);
-        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_status, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
     }
 }
 

@@ -70,10 +70,10 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
 }
 } // namespace
 
-Task::Task(PipelineExecutorContext & exec_status_, const String & req_id, ExecTaskStatus init_status)
+Task::Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
-    , exec_status(exec_status_)
-    , mem_tracker_holder(exec_status_.getMemoryTracker())
+    , exec_context(exec_context_)
+    , mem_tracker_holder(exec_context_.getMemoryTracker())
     , mem_tracker_ptr(mem_tracker_holder.get())
     , task_status(init_status)
 {
@@ -81,11 +81,11 @@ Task::Task(PipelineExecutorContext & exec_status_, const String & req_id, ExecTa
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     addToStatusMetrics(task_status);
 
-    exec_status.incActiveRefCount();
+    exec_context.incActiveRefCount();
 }
 
-Task::Task(PipelineExecutorContext & exec_status_)
-    : Task(exec_status_, "")
+Task::Task(PipelineExecutorContext & exec_context_)
+    : Task(exec_context_, "")
 {
 }
 
@@ -100,12 +100,12 @@ Task::~Task()
     }
 
     // In order to ensure that `PipelineExecutorContext` will not be destructed before `Task` is destructed.
-    exec_status.decActiveRefCount();
+    exec_context.decActiveRefCount();
 }
 
 #define EXECUTE(function)                                                                   \
-    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel());    \
-    if unlikely (exec_status.isCancelled())                                                 \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_context.cancel());   \
+    if unlikely (exec_context.isCancelled())                                                \
     {                                                                                       \
         switchStatus(ExecTaskStatus::CANCELLED);                                            \
         return task_status;                                                                 \
@@ -121,7 +121,7 @@ Task::~Task()
     catch (...)                                                                             \
     {                                                                                       \
         LOG_WARNING(log, "error occurred and cancel the query");                            \
-        exec_status.onErrorOccurred(std::current_exception());                              \
+        exec_context.onErrorOccurred(std::current_exception());                             \
         switchStatus(ExecTaskStatus::ERROR);                                                \
         return task_status;                                                                 \
     }
@@ -166,7 +166,7 @@ void Task::finalize()
     }
     catch (...)
     {
-        exec_status.onErrorOccurred(std::current_exception());
+        exec_context.onErrorOccurred(std::current_exception());
     }
 
     profile_info.reportMetrics();
@@ -189,6 +189,6 @@ void Task::switchStatus(ExecTaskStatus to)
 
 const String & Task::getQueryId() const
 {
-    return exec_status.getQueryId();
+    return exec_context.getQueryId();
 }
 } // namespace DB

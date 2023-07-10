@@ -53,7 +53,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    void execute(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder);
+    void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
@@ -84,7 +84,7 @@ private:
 
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     buildLocalExecForPhysicalTable(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
@@ -93,7 +93,7 @@ private:
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     void buildLocalExec(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         size_t max_block_size);
 
@@ -115,7 +115,7 @@ private:
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void buildRemoteExec(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const std::vector<RemoteRequest> & remote_requests);
 
@@ -124,7 +124,7 @@ private:
         DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         size_t remote_read_start_index);
 
@@ -132,7 +132,7 @@ private:
 
     void executeImpl(DAGPipeline & pipeline);
 
-    void executeImpl(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder);
+    void executeImpl(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder);
 
 private:
     /// Normally, time and timestamp(when timezone is not UTC) type columns need to be casted after table scan.

@@ -70,9 +70,9 @@ public:
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
 
-    PipelineExecGroup buildExecGroup(PipelineExecutorContext & exec_status, Context & context, size_t concurrency);
+    PipelineExecGroup buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
 
-    Events toEvents(PipelineExecutorContext & status, Context & context, size_t concurrency);
+    Events toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request, const Settings & settings);
 
@@ -88,13 +88,13 @@ public:
     ///     task2──┼──►─┼──►task2
     ///     ...    │    │   ...
     ///     taskn──┘    └──►taskm
-    EventPtr complete(PipelineExecutorContext & exec_status);
+    EventPtr complete(PipelineExecutorContext & exec_context);
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    PipelineEvents toSelfEvents(PipelineExecutorContext & status, Context & context, size_t concurrency);
-    PipelineEvents doToEvents(PipelineExecutorContext & status, Context & context, size_t concurrency, Events & all_events);
+    PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
+    PipelineEvents doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events);
 
 private:
     const UInt32 id;

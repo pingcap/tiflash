@@ -27,18 +27,18 @@ class PipelineExecutorContextTestRunner : public ::testing::Test
 TEST_F(PipelineExecutorContextTestRunner, waitTimeout)
 try
 {
-    PipelineExecutorContext status;
+    PipelineExecutorContext context;
     try
     {
-        status.incActiveRefCount();
+        context.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
-        status.waitFor(timeout);
+        context.waitFor(timeout);
         GTEST_FAIL();
     }
     catch (DB::Exception & e)
     {
         GTEST_ASSERT_EQ(e.message(), PipelineExecutorContext::timeout_err_msg);
-        auto err_msg = status.getExceptionMsg();
+        auto err_msg = context.getExceptionMsg();
         ASSERT_EQ(err_msg, PipelineExecutorContext::timeout_err_msg);
     }
 }
@@ -47,21 +47,21 @@ CATCH
 TEST_F(PipelineExecutorContextTestRunner, popTimeout)
 try
 {
-    PipelineExecutorContext status;
-    status.toConsumeMode(1);
+    PipelineExecutorContext context;
+    context.toConsumeMode(1);
     try
     {
-        status.incActiveRefCount();
+        context.incActiveRefCount();
         std::chrono::milliseconds timeout(10);
         ResultHandler result_handler{[](const Block &) {
         }};
-        status.consumeFor(result_handler, timeout);
+        context.consumeFor(result_handler, timeout);
         GTEST_FAIL();
     }
     catch (DB::Exception & e)
     {
         GTEST_ASSERT_EQ(e.message(), PipelineExecutorContext::timeout_err_msg);
-        auto err_msg = status.getExceptionMsg();
+        auto err_msg = context.getExceptionMsg();
         ASSERT_EQ(err_msg, PipelineExecutorContext::timeout_err_msg);
     }
 }
@@ -70,13 +70,13 @@ CATCH
 TEST_F(PipelineExecutorContextTestRunner, run)
 try
 {
-    PipelineExecutorContext status;
-    status.incActiveRefCount();
+    PipelineExecutorContext context;
+    context.incActiveRefCount();
     auto thread_manager = newThreadManager();
-    thread_manager->schedule(false, "run", [&status]() mutable { status.decActiveRefCount(); });
-    status.wait();
-    auto exception_ptr = status.getExceptionPtr();
-    auto err_msg = status.getExceptionMsg();
+    thread_manager->schedule(false, "run", [&context]() mutable { context.decActiveRefCount(); });
+    context.wait();
+    auto exception_ptr = context.getExceptionPtr();
+    auto err_msg = context.getExceptionMsg();
     ASSERT_TRUE(!exception_ptr) << err_msg;
     thread_manager->wait();
 }
@@ -87,17 +87,17 @@ try
 {
     auto test = [](std::string && err_msg) {
         auto expect_err_msg = err_msg;
-        PipelineExecutorContext status;
-        status.incActiveRefCount();
+        PipelineExecutorContext context;
+        context.incActiveRefCount();
         auto thread_manager = newThreadManager();
-        thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
-            status.onErrorOccurred(err_msg);
-            status.decActiveRefCount();
+        thread_manager->schedule(false, "err", [&context, &err_msg]() mutable {
+            context.onErrorOccurred(err_msg);
+            context.decActiveRefCount();
         });
-        status.wait();
-        status.onErrorOccurred("unexpect exception");
-        ASSERT_TRUE(status.getExceptionPtr());
-        auto actual_err_msg = status.getExceptionMsg();
+        context.wait();
+        context.onErrorOccurred("unexpect exception");
+        ASSERT_TRUE(context.getExceptionPtr());
+        auto actual_err_msg = context.getExceptionMsg();
         ASSERT_EQ(actual_err_msg, expect_err_msg);
         thread_manager->wait();
     };
@@ -109,15 +109,15 @@ CATCH
 TEST_F(PipelineExecutorContextTestRunner, consumeThrowError)
 try
 {
-    PipelineExecutorContext status;
-    auto ret_queue = status.toConsumeMode(1);
+    PipelineExecutorContext context;
+    auto ret_queue = context.toConsumeMode(1);
     ret_queue->push(Block{});
     ResultHandler handler{[](const Block &) {
         throw Exception("for test");
     }};
-    status.consume(handler);
-    ASSERT_TRUE(status.getExceptionPtr());
-    auto actual_err_msg = status.getExceptionMsg();
+    context.consume(handler);
+    ASSERT_TRUE(context.getExceptionPtr());
+    auto actual_err_msg = context.getExceptionMsg();
     ASSERT_EQ(actual_err_msg, "for test");
 }
 CATCH

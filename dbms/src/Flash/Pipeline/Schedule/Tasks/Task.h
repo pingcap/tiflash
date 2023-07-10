@@ -48,10 +48,10 @@ class PipelineExecutorContext;
 class Task
 {
 public:
-    Task(PipelineExecutorContext & exec_status_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
+    Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     // Only used for unit test.
-    explicit Task(PipelineExecutorContext & exec_status_);
+    explicit Task(PipelineExecutorContext & exec_context_);
 
     virtual ~Task();
 
@@ -103,7 +103,7 @@ public:
     size_t mlfq_level{0};
 
 private:
-    PipelineExecutorContext & exec_status;
+    PipelineExecutorContext & exec_context;
 
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;

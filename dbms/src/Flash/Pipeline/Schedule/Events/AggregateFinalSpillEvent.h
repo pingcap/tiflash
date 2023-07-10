@@ -26,12 +26,12 @@ class AggregateFinalSpillEvent : public Event
 {
 public:
     AggregateFinalSpillEvent(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         AggregateContextPtr agg_context_,
         std::vector<size_t> indexes_,
         OperatorProfileInfos profile_infos_)
-        : Event(exec_status_, req_id)
+        : Event(exec_context_, req_id)
         , agg_context(std::move(agg_context_))
         , indexes(std::move(indexes_))
         , profile_infos(std::move(profile_infos_))

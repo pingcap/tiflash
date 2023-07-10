@@ -167,13 +167,13 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     addPlanNode(get_result_sink);
 }
 
-PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_status, Context & context, size_t concurrency)
+PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
     PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
     {
-        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
+        plan_node->buildPipelineExecGroup(exec_context, builder, context, concurrency);
     }
     return builder.build();
 }
@@ -198,47 +198,47 @@ bool Pipeline::isFineGrainedMode() const
     return is_fine_grained_mode;
 }
 
-EventPtr Pipeline::complete(PipelineExecutorContext & exec_status)
+EventPtr Pipeline::complete(PipelineExecutorContext & exec_context)
 {
     assert(!isFineGrainedMode());
-    if unlikely (exec_status.isCancelled())
+    if unlikely (exec_context.isCancelled())
         return nullptr;
     assert(!plan_nodes.empty());
-    return plan_nodes.back()->sinkComplete(exec_status);
+    return plan_nodes.back()->sinkComplete(exec_context);
 }
 
-Events Pipeline::toEvents(PipelineExecutorContext & status, Context & context, size_t concurrency)
+Events Pipeline::toEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     Events all_events;
-    doToEvents(status, context, concurrency, all_events);
+    doToEvents(exec_context, context, concurrency, all_events);
     RUNTIME_CHECK(!all_events.empty());
     return all_events;
 }
 
-PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & status, Context & context, size_t concurrency)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     Events self_events;
     RUNTIME_CHECK(!plan_nodes.empty());
     if (isFineGrainedMode())
     {
-        auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
+        auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, log->identifier(), std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
-        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, log->identifier(), context, shared_from_this(), concurrency));
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(exec_context, log->identifier(), context, shared_from_this(), concurrency));
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
     }
     return {std::move(self_events), isFineGrainedMode()};
 }
 
-PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & status, Context & context, size_t concurrency, Events & all_events)
+PipelineEvents Pipeline::doToEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency, Events & all_events)
 {
-    auto self_events = toSelfEvents(status, context, concurrency);
+    auto self_events = toSelfEvents(exec_context, context, concurrency);
     for (const auto & child : children)
-        self_events.mapInputs(child->doToEvents(status, context, concurrency, all_events));
+        self_events.mapInputs(child->doToEvents(exec_context, context, concurrency, all_events));
     all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }

@@ -27,12 +27,12 @@ class PlainPipelineEvent : public Event
 {
 public:
     PlainPipelineEvent(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_,
         size_t concurrency_)
-        : Event(exec_status_, req_id)
+        : Event(exec_context_, req_id)
         , context(context_)
         , pipeline(pipeline_)
         , concurrency(concurrency_)

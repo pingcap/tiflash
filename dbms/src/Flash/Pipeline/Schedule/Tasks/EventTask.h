@@ -25,11 +25,11 @@ class EventTask : public Task
 public:
     // Only used for unit test.
     EventTask(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const EventPtr & event_);
 
     EventTask(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
         ExecTaskStatus init_status = ExecTaskStatus::RUNNING);

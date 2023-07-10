@@ -61,7 +61,7 @@ public:
 
     LocalAggregateRestorerPtr buildLocalRestorer();
 
-    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorContext & exec_status);
+    std::vector<SharedAggregateRestorerPtr> buildSharedRestorer(PipelineExecutorContext & exec_context);
 
     void initConvergent();
 

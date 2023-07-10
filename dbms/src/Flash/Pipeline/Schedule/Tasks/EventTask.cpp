@@ -18,20 +18,20 @@
 namespace DB
 {
 EventTask::EventTask(
-    PipelineExecutorContext & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const EventPtr & event_)
-    : Task(exec_status_)
+    : Task(exec_context_)
     , event(event_)
 {
     RUNTIME_CHECK(event);
 }
 
 EventTask::EventTask(
-    PipelineExecutorContext & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     const EventPtr & event_,
     ExecTaskStatus init_status)
-    : Task(exec_status_, req_id, init_status)
+    : Task(exec_context_, req_id, init_status)
     , event(event_)
 {
     RUNTIME_CHECK(event);

@@ -26,8 +26,8 @@ namespace
 class MockIOTask : public Task
 {
 public:
-    MockIOTask(PipelineExecutorContext & exec_status_, bool is_io_in)
-        : Task(exec_status_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
+    MockIOTask(PipelineExecutorContext & exec_context_, bool is_io_in)
+        : Task(exec_context_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }
 
@@ -44,11 +44,11 @@ public:
 TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
-    PipelineExecutorContext status;
+    PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
-    status.incActiveRefCount();
+    context.incActiveRefCount();
     SCOPE_EXIT({
-        status.decActiveRefCount();
+        context.decActiveRefCount();
     });
 
     IOPriorityQueue queue;
@@ -72,11 +72,11 @@ try
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(status, true));
+            queue.submit(std::make_unique<MockIOTask>(context, true));
         }
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(status, false));
+            queue.submit(std::make_unique<MockIOTask>(context, false));
         }
         queue.finish();
     });
@@ -84,7 +84,7 @@ try
     thread_manager->wait();
 
     // No tasks can be submitted after the queue is finished.
-    queue.submit(std::make_unique<MockIOTask>(status, false));
+    queue.submit(std::make_unique<MockIOTask>(context, false));
     TaskPtr task;
     ASSERT_FALSE(queue.take(task));
 }
@@ -93,18 +93,18 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, priority)
 try
 {
-    PipelineExecutorContext status;
+    PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
-    status.incActiveRefCount();
+    context.incActiveRefCount();
     SCOPE_EXIT({
-        status.decActiveRefCount();
+        context.decActiveRefCount();
     });
 
     // in 0 : out 0
     {
         IOPriorityQueue queue;
-        queue.submit(std::make_unique<MockIOTask>(status, true));
-        queue.submit(std::make_unique<MockIOTask>(status, false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -121,8 +121,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_out_to_in);
-        queue.submit(std::make_unique<MockIOTask>(status, true));
-        queue.submit(std::make_unique<MockIOTask>(status, false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -139,8 +139,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
-        queue.submit(std::make_unique<MockIOTask>(status, true));
-        queue.submit(std::make_unique<MockIOTask>(status, false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -157,8 +157,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
-        queue.submit(std::make_unique<MockIOTask>(status, true));
-        queue.submit(std::make_unique<MockIOTask>(status, false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -175,25 +175,25 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, cancel)
 try
 {
-    PipelineExecutorContext status1("id1", "", nullptr);
+    PipelineExecutorContext context1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
-    status1.incActiveRefCount();
+    context1.incActiveRefCount();
     SCOPE_EXIT({
-        status1.decActiveRefCount();
+        context1.decActiveRefCount();
     });
 
-    PipelineExecutorContext status2("id2", "", nullptr);
+    PipelineExecutorContext context2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
-    status2.incActiveRefCount();
+    context2.incActiveRefCount();
     SCOPE_EXIT({
-        status2.decActiveRefCount();
+        context2.decActiveRefCount();
     });
 
     // case1 submit first.
     {
         IOPriorityQueue queue;
-        queue.submit(std::make_unique<MockIOTask>(status1, false));
-        queue.submit(std::make_unique<MockIOTask>(status2, true));
+        queue.submit(std::make_unique<MockIOTask>(context1, false));
+        queue.submit(std::make_unique<MockIOTask>(context2, true));
         queue.cancel("id2");
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
@@ -210,8 +210,8 @@ try
     {
         IOPriorityQueue queue;
         queue.cancel("id2");
-        queue.submit(std::make_unique<MockIOTask>(status1, false));
-        queue.submit(std::make_unique<MockIOTask>(status2, true));
+        queue.submit(std::make_unique<MockIOTask>(context1, false));
+        queue.submit(std::make_unique<MockIOTask>(context2, true));
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);

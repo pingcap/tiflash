@@ -58,7 +58,7 @@ class SharedSpilledBucketDataLoader : public std::enable_shared_from_this<Shared
 {
 public:
     SharedSpilledBucketDataLoader(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const BlockInputStreams & bucket_streams,
         const String & req_id,
         size_t max_queue_size_);
@@ -79,7 +79,7 @@ private:
     bool switchStatus(SharedLoaderStatus from, SharedLoaderStatus to);
 
 private:
-    PipelineExecutorContext & exec_status;
+    PipelineExecutorContext & exec_context;
 
     LoggerPtr log;
 

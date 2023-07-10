@@ -79,14 +79,14 @@ LocalAggregateRestorerPtr AggregateContext::buildLocalRestorer()
     return std::make_unique<LocalAggregateRestorer>(input_streams, *aggregator, is_cancelled, log->identifier());
 }
 
-std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorContext & exec_status)
+std::vector<SharedAggregateRestorerPtr> AggregateContext::buildSharedRestorer(PipelineExecutorContext & exec_context)
 {
     assert(status.load() == AggStatus::build);
     aggregator->finishSpill();
     LOG_INFO(log, "Begin restore data from disk for shared aggregation.");
     auto input_streams = aggregator->restoreSpilledData();
     RUNTIME_CHECK_MSG(!input_streams.empty(), "There will be at least one spilled file.");
-    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_status, input_streams, log->identifier(), max_threads);
+    auto loader = std::make_shared<SharedSpilledBucketDataLoader>(exec_context, input_streams, log->identifier(), max_threads);
     std::vector<SharedAggregateRestorerPtr> ret;
     for (size_t i = 0; i < max_threads; ++i)
         ret.push_back(std::make_unique<SharedAggregateRestorer>(*aggregator, loader));

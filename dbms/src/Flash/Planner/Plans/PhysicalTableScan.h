@@ -51,7 +51,7 @@ public:
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
-        PipelineExecutorContext & exec_status) override;
+        PipelineExecutorContext & exec_context) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
@@ -64,7 +64,7 @@ private:
 
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
     void buildProjection(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const NamesAndTypes & storage_schema);
 

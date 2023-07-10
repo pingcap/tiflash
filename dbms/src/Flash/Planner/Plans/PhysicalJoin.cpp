@@ -249,7 +249,7 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
 void PhysicalJoin::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorContext & exec_status)
+    PipelineExecutorContext & exec_context)
 {
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
@@ -262,11 +262,11 @@ void PhysicalJoin::buildPipeline(
         build_side_prepare_actions);
     auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder, context, exec_status);
+    build()->buildPipeline(join_build_builder, context, exec_context);
     join_build_builder.build();
 
     // Join probe pipeline.
-    probe()->buildPipeline(builder, context, exec_status);
+    probe()->buildPipeline(builder, context, exec_context);
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         schema,

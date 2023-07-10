@@ -23,7 +23,7 @@ class PipelineTask : public EventTask
 {
 public:
     PipelineTask(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
         PipelineExecPtr && pipeline_exec_);

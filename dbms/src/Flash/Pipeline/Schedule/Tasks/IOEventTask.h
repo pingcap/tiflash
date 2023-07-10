@@ -23,11 +23,11 @@ class IOEventTask : public EventTask
 {
 public:
     IOEventTask(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_)
         : EventTask(
-            exec_status_,
+            exec_context_,
             req_id,
             event_,
             is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)

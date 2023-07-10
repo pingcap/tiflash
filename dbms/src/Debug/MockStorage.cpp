@@ -225,7 +225,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
 }
 
 void MockStorage::buildExecFromDeltaMerge(
-    PipelineExecutorContext & exec_status_,
+    PipelineExecutorContext & exec_context_,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     Int64 table_id,
@@ -250,7 +250,7 @@ void MockStorage::buildExecFromDeltaMerge(
         // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
         auto build_ret = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         storage->read(
-            exec_status_,
+            exec_context_,
             group_builder,
             column_names,
             query_info,
@@ -260,9 +260,9 @@ void MockStorage::buildExecFromDeltaMerge(
         auto log = Logger::get("test for late materialization");
         auto input_header = group_builder.getCurrentHeader();
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status_, log->identifier(), input_header, std::get<0>(build_ret), std::get<1>(build_ret)));
+            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context_, log->identifier(), input_header, std::get<0>(build_ret), std::get<1>(build_ret)));
         });
-        executeExpression(exec_status_, group_builder, std::get<2>(build_ret), log);
+        executeExpression(exec_context_, group_builder, std::get<2>(build_ret), log);
     }
     else
     {
@@ -275,7 +275,7 @@ void MockStorage::buildExecFromDeltaMerge(
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
         storage->read(
-            exec_status_,
+            exec_context_,
             group_builder,
             column_names,
             query_info,

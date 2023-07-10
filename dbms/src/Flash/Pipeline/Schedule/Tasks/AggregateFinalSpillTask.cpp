@@ -18,12 +18,12 @@
 namespace DB
 {
 AggregateFinalSpillTask::AggregateFinalSpillTask(
-    PipelineExecutorContext & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
     size_t index_)
-    : OutputIOEventTask(exec_status_, req_id, event_)
+    : OutputIOEventTask(exec_context_, req_id, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {

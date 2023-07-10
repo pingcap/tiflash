@@ -106,7 +106,7 @@ public:
         int rf_max_wait_time_ms = 0);
 
     void buildExecFromDeltaMerge(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         Int64 table_id,

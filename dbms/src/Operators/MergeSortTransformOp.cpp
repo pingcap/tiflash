@@ -110,7 +110,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
-        [&]() { return exec_status.isCancelled(); });
+        [&]() { return exec_context.isCancelled(); });
     // fallback to partial phase.
     if (!cached_handler->batchRead())
         return fromSpillToPartial();

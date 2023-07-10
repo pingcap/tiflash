@@ -26,7 +26,7 @@ PipelineExecutor::PipelineExecutor(
     Context & context_,
     const String & req_id)
     : QueryExecutor(memory_tracker_, context_, req_id)
-    , status(
+    , exec_context(
           context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
           req_id,
           memory_tracker_)
@@ -34,13 +34,13 @@ PipelineExecutor::PipelineExecutor(
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
-    root_pipeline = physical_plan.toPipeline(status, context);
+    root_pipeline = physical_plan.toPipeline(exec_context, context);
 }
 
 void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
-    auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams());
     Events sources;
     for (const auto & event : events)
     {
@@ -57,11 +57,11 @@ void PipelineExecutor::wait()
     {
         // In test mode, a single query should take no more than 5 minutes to execute.
         static std::chrono::minutes timeout(5);
-        status.waitFor(timeout);
+        exec_context.waitFor(timeout);
     }
     else
     {
-        status.wait();
+        exec_context.wait();
     }
 }
 
@@ -72,11 +72,11 @@ void PipelineExecutor::consume(ResultHandler & result_handler)
     {
         // In test mode, a single query should take no more than 5 minutes to execute.
         static std::chrono::minutes timeout(5);
-        status.consumeFor(result_handler, timeout);
+        exec_context.consumeFor(result_handler, timeout);
     }
     else
     {
-        status.consume(result_handler);
+        exec_context.consume(result_handler);
     }
 }
 
@@ -90,7 +90,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
         assert(root_pipeline);
-        root_pipeline->addGetResultSink(status.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
+        root_pipeline->addGetResultSink(exec_context.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
         scheduleEvents();
         consume(result_handler);
     }
@@ -99,13 +99,13 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         scheduleEvents();
         wait();
     }
-    LOG_TRACE(log, "query finish with {}", status.getQueryProfileInfo().toJson());
-    return status.toExecutionResult();
+    LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
+    return exec_context.toExecutionResult();
 }
 
 void PipelineExecutor::cancel()
 {
-    status.cancel();
+    exec_context.cancel();
 }
 
 String PipelineExecutor::toString() const
@@ -130,7 +130,7 @@ RU PipelineExecutor::collectRequestUnit()
     // Therefore, `query_profile_info.getCPUExecuteTimeNs()` is approximately equal to the actual CPU time of the query.
     // However, once these two assumptions are broken, it will lead to inaccurate acquisition of CPU time.
     // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
-    const auto & query_profile_info = status.getQueryProfileInfo();
+    const auto & query_profile_info = exec_context.getQueryProfileInfo();
     auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
     return toRU(ceil(cpu_time_ns));
 }

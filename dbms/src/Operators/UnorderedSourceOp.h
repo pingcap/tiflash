@@ -30,14 +30,14 @@ class UnorderedSourceOp : public SourceOp
 {
 public:
     UnorderedSourceOp(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         const DM::ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
         const String & req_id,
         const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
         int max_wait_time_ms_ = 0)
-        : SourceOp(exec_status_, req_id)
+        : SourceOp(exec_context_, req_id)
         , task_pool(task_pool_)
         , ref_no(0)
         , waiting_rf_list(runtime_filter_list_)

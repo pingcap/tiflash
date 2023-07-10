@@ -41,7 +41,7 @@ class PipelineExecutorContext;
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    explicit Event(PipelineExecutorContext & exec_status_, const String & req_id = "");
+    explicit Event(PipelineExecutorContext & exec_context_, const String & req_id = "");
 
     virtual ~Event() = default;
 
@@ -86,7 +86,7 @@ private:
     void assertStatus(EventStatus expect) const;
 
 protected:
-    PipelineExecutorContext & exec_status;
+    PipelineExecutorContext & exec_context;
 
     MemoryTrackerPtr mem_tracker;
 

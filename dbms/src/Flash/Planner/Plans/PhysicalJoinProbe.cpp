@@ -21,12 +21,12 @@
 namespace DB
 {
 void PhysicalJoinProbe::buildPipelineExecGroupImpl(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_status, group_builder, prepare_actions, log);
+    executeExpression(exec_context, group_builder, prepare_actions, log);
 
     auto input_header = group_builder.getCurrentHeader();
     join_ptr->initProbe(input_header, group_builder.concurrency());
@@ -34,7 +34,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     const auto & max_block_size = context.getSettingsRef().max_block_size;
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
-            exec_status,
+            exec_context,
             log->identifier(),
             join_ptr,
             probe_index++,

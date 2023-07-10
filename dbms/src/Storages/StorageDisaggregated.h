@@ -78,7 +78,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,
@@ -99,7 +99,7 @@ private:
         const Context & db_context,
         unsigned num_streams);
     void readThroughS3(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         unsigned num_streams);
@@ -144,7 +144,7 @@ private:
         size_t num_streams,
         DAGPipeline & pipeline);
     void buildRemoteSegmentSourceOps(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
@@ -159,16 +159,16 @@ private:
 
     /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
     BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
+    void readThroughExchange(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
     std::vector<RequestAndRegionIDs> buildDispatchRequests();
     void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void buildReceiverSources(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
+    void buildReceiverSources(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void filterConditions(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void filterConditions(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

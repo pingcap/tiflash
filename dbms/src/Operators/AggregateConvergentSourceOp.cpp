@@ -18,11 +18,11 @@
 namespace DB
 {
 AggregateConvergentSourceOp::AggregateConvergentSourceOp(
-    PipelineExecutorContext & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const AggregateContextPtr & agg_context_,
     size_t index_,
     const String & req_id)
-    : SourceOp(exec_status_, req_id)
+    : SourceOp(exec_context_, req_id)
     , agg_context(agg_context_)
     , index(index_)
 {

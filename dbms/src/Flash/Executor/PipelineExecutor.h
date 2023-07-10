@@ -82,6 +82,6 @@ private:
 private:
     PipelinePtr root_pipeline;
 
-    PipelineExecutorContext status;
+    PipelineExecutorContext exec_context;
 };
 } // namespace DB

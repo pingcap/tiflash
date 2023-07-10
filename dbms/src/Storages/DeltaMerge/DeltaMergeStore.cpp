@@ -1067,7 +1067,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 void DeltaMergeStore::read(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
@@ -1134,7 +1134,7 @@ void DeltaMergeStore::read(
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
-                    exec_status,
+                    exec_context,
                     read_task_pool,
                     columns_to_read,
                     extra_table_id_index,
@@ -1148,7 +1148,7 @@ void DeltaMergeStore::read(
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
-                exec_status,
+                exec_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1161,7 +1161,7 @@ void DeltaMergeStore::read(
         }
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
-                exec_status,
+                exec_context,
                 log_tracing_id,
                 columns_to_read,
                 extra_table_id_index,

@@ -23,10 +23,10 @@ class FineGrainedPipelineEvent : public Event
 {
 public:
     FineGrainedPipelineEvent(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         PipelineExecPtr && pipeline_exec_)
-        : Event(exec_status_, req_id)
+        : Event(exec_context_, req_id)
         , pipeline_exec(std::move(pipeline_exec_))
     {
         RUNTIME_CHECK(pipeline_exec);

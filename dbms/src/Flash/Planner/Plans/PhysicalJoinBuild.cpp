@@ -22,16 +22,16 @@
 namespace DB
 {
 void PhysicalJoinBuild::buildPipelineExecGroupImpl(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_status, group_builder, prepare_actions, log);
+    executeExpression(exec_context, group_builder, prepare_actions, log);
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_status, log->identifier(), join_ptr, build_index++));
+        builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
     });
     auto & join_execute_info = context.getDAGContext()->getJoinExecuteInfoMap()[execId()];
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();

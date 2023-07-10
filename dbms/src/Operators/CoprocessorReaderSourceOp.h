@@ -27,7 +27,7 @@ class CoprocessorReaderSourceOp : public SourceOp
 {
 public:
     CoprocessorReaderSourceOp(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         CoprocessorReaderPtr coprocessor_reader_);
 

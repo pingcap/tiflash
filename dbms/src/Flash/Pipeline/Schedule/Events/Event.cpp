@@ -35,12 +35,12 @@ extern const char random_pipeline_model_event_finish_failpoint[];
     catch (...)                                                  \
     {                                                            \
         LOG_WARNING(log, "error occurred and cancel the query"); \
-        exec_status.onErrorOccurred(std::current_exception());   \
+        exec_context.onErrorOccurred(std::current_exception());  \
     }
 
-Event::Event(PipelineExecutorContext & exec_status_, const String & req_id)
-    : exec_status(exec_status_)
-    , mem_tracker(exec_status_.getMemoryTracker())
+Event::Event(PipelineExecutorContext & exec_context_, const String & req_id)
+    : exec_context(exec_context_)
+    , mem_tracker(exec_context_.getMemoryTracker())
     , log(Logger::get(req_id))
 {}
 
@@ -91,13 +91,13 @@ bool Event::prepare()
     assertStatus(EventStatus::INIT);
     if (is_source)
     {
-        // For source event, `exec_status.incActiveRefCount()` needs to be called before schedule.
+        // For source event, `exec_context.incActiveRefCount()` needs to be called before schedule.
         // Suppose there are two source events, A and B, a possible sequence of calls is:
         // `A.prepareForSource --> B.prepareForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
-        // if `exec_status.incActiveRefCount()` be called in schedule just like non-source event,
-        // `exec_status.wait` and `result_queue.pop` may return early.
+        // if `exec_context.incActiveRefCount()` be called in schedule just like non-source event,
+        // `exec_context.wait` and `result_queue.pop` may return early.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.incActiveRefCount();
+        exec_context.incActiveRefCount();
         return true;
     }
     else
@@ -126,9 +126,9 @@ void Event::schedule()
     }
     else
     {
-        // for is_source == true, `exec_status.incActiveRefCount()` has been called in `prepare`.
+        // for is_source == true, `exec_context.incActiveRefCount()` has been called in `prepare`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
-        exec_status.incActiveRefCount();
+        exec_context.incActiveRefCount();
     }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     try
@@ -165,7 +165,7 @@ void Event::scheduleTasks()
 void Event::onTaskFinish(const TaskProfileInfo & task_profile_info)
 {
     assertStatus(EventStatus::SCHEDULED);
-    exec_status.update(task_profile_info);
+    exec_context.update(task_profile_info);
     int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
     RUNTIME_ASSERT(
         remaining_tasks >= 0,
@@ -191,7 +191,7 @@ void Event::finish()
     }
     CATCH
     // If query has already been cancelled, it will not trigger outputs.
-    if (likely(!exec_status.isCancelled()))
+    if (likely(!exec_context.isCancelled()))
     {
         // finished processing the event, now we can schedule output events.
         for (auto & output : outputs)
@@ -202,13 +202,13 @@ void Event::finish()
         }
     }
     // Release all output, so that the event that did not call `finishImpl`
-    // because of `exec_status.isCancelled()` will be destructured before the end of `exec_status.wait`.
+    // because of `exec_context.isCancelled()` will be destructured before the end of `exec_context.wait`.
     outputs.clear();
-    // In order to ensure that `exec_status.wait()` doesn't finish when there is an active event,
-    // we have to call `exec_status.decActiveRefCount()` here,
-    // since `exec_status.incActiveRefCount()` will have been called by outputs.
-    // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_status.await finished`.
-    exec_status.decActiveRefCount();
+    // In order to ensure that `exec_context.wait()` doesn't finish when there is an active event,
+    // we have to call `exec_context.decActiveRefCount()` here,
+    // since `exec_context.incActiveRefCount()` will have been called by outputs.
+    // The call order will be `eventA++ ───► eventB++ ───► eventA-- ───► eventB-- ───► exec_context.await finished`.
+    exec_context.decActiveRefCount();
 }
 
 UInt64 Event::getScheduleDuration() const

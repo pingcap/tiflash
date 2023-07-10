@@ -120,7 +120,7 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
 }
 
 void PhysicalMockTableScan::buildPipelineExecGroupImpl(
-    PipelineExecutorContext & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t)
@@ -128,7 +128,7 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
     if (context.mockStorage()->useDeltaMerge())
     {
         context.mockStorage()->buildExecFromDeltaMerge(
-            exec_status,
+            exec_context,
             group_builder,
             context,
             table_id,
@@ -153,7 +153,7 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
         {
             group_builder.addConcurrency(
                 std::make_unique<BlockInputStreamSourceOp>(
-                    exec_status,
+                    exec_context,
                     log->identifier(),
                     stream));
         }

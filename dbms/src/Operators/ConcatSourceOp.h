@@ -27,10 +27,10 @@ class SetBlockSinkOp : public SinkOp
 {
 public:
     SetBlockSinkOp(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         Block & res_)
-        : SinkOp(exec_status_, req_id)
+        : SinkOp(exec_context_, req_id)
         , res(res_)
     {
     }
@@ -60,16 +60,16 @@ class ConcatSourceOp : public SourceOp
 {
 public:
     ConcatSourceOp(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         std::vector<PipelineExecBuilder> & exec_builder_pool)
-        : SourceOp(exec_status_, req_id)
+        : SourceOp(exec_context_, req_id)
     {
         RUNTIME_CHECK(!exec_builder_pool.empty());
         setHeader(exec_builder_pool.back().getCurrentHeader());
         for (auto & exec_builder : exec_builder_pool)
         {
-            exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_status_, req_id, res));
+            exec_builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_context_, req_id, res));
             exec_pool.push_back(exec_builder.build());
         }
     }
@@ -202,7 +202,7 @@ public:
         }
     }
 
-    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorContext & exec_status, const String & req_id)
+    void generate(PipelineExecGroupBuilder & result_builder, PipelineExecutorContext & exec_context, const String & req_id)
     {
         RUNTIME_CHECK(result_builder.empty());
         for (auto & builders : pool)
@@ -217,7 +217,7 @@ public:
             }
             else
             {
-                result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_status, req_id, builders));
+                result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_context, req_id, builders));
             }
         }
     }

@@ -276,11 +276,11 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_status, Context & context)
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Context & context)
 {
     RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};
-    root_node->buildPipeline(builder, context, exec_status);
+    root_node->buildPipeline(builder, context, exec_context);
     root_node.reset();
     auto pipeline = builder.build();
     auto to_string = [&]() -> String {

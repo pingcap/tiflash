@@ -26,8 +26,8 @@ namespace
 class PlainTask : public Task
 {
 public:
-    explicit PlainTask(PipelineExecutorContext & exec_status_)
-        : Task(exec_status_)
+    explicit PlainTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
     {}
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
@@ -41,11 +41,11 @@ class TestWaitingTaskList : public ::testing::Test
 TEST_F(TestWaitingTaskList, base)
 try
 {
-    PipelineExecutorContext status;
+    PipelineExecutorContext context;
     // To avoid the active ref count being returned to 0 in advance.
-    status.incActiveRefCount();
+    context.incActiveRefCount();
     SCOPE_EXIT({
-        status.decActiveRefCount();
+        context.decActiveRefCount();
     });
 
     WaitingTaskList list;
@@ -74,9 +74,9 @@ try
     // submit valid task
     for (size_t i = 0; i < round; ++i)
     {
-        list.submit(std::make_unique<PlainTask>(status));
+        list.submit(std::make_unique<PlainTask>(context));
         std::list<TaskPtr> local_list;
-        local_list.push_back(std::make_unique<PlainTask>(status));
+        local_list.push_back(std::make_unique<PlainTask>(context));
         list.submit(local_list);
     }
     list.finish();
@@ -85,7 +85,7 @@ try
     ASSERT_EQ(taken_task_num, valid_task_num);
 
     // No tasks are submitted after the list is finished.
-    list.submit(std::make_unique<PlainTask>(status));
+    list.submit(std::make_unique<PlainTask>(context));
     {
         std::list<TaskPtr> local_list;
         ASSERT_FALSE(list.take(local_list));

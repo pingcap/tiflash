@@ -68,7 +68,7 @@ public:
     void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
     void buildPipelineExecGroup(
-        PipelineExecutorContext & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t concurrency);
@@ -78,7 +78,7 @@ public:
         Context & /*context*/,
         PipelineExecutorContext & /*exec_status*/);
 
-    EventPtr sinkComplete(PipelineExecutorContext & exec_status);
+    EventPtr sinkComplete(PipelineExecutorContext & exec_context);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();

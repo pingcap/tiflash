@@ -24,11 +24,11 @@ class LoadBucketTask : public InputIOEventTask
 {
 public:
     LoadBucketTask(
-        PipelineExecutorContext & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const EventPtr & event_,
         SpilledBucketInput & input_)
-        : IOEventTask(exec_status_, req_id, event_)
+        : IOEventTask(exec_context_, req_id, event_)
         , input(input_)
     {
     }
