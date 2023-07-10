@@ -201,7 +201,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
     // we don't need to check the max sequence for the rest log files.
     bool found_log_file_smaller_than_snap_sequence = false;
     LogFilenameSet snap_log_files;
-    for (auto iter = persisted_log_files.rbegin(); iter != persisted_log_files.rend(); ++iter)
+    for (auto iter = persisted_log_files.rbegin(); iter != persisted_log_files.rend(); ++iter) // NOLINT
     {
         if (iter->log_num >= current_writing_log_num)
             continue;
@@ -212,7 +212,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         snap_log_files.emplace(*iter);
     }
     return WALStore::FilesSnapshot{
-        .persisted_log_files = std::move(snap_log_files),
+        .persisted_log_files = std::move(persisted_log_files),
     };
 }
 
