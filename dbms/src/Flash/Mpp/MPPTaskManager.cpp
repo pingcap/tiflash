@@ -217,7 +217,6 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         /// set a flag, so we can abort task one by
         /// one without holding the lock
         std::lock_guard lock(mu);
-        /// gather_id is not set by TiDB, so use 0 instead
         aborted_query_gather_cache.add(gather_id, reason);
         auto [query, gather_task_set_local, _] = getMPPQueryAndGatherTaskSet(gather_id);
         if (query == nullptr || gather_task_set_local == nullptr)
