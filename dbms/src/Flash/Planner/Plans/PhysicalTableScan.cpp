@@ -32,35 +32,41 @@ namespace DB
 namespace
 {
 NamesWithAliases buildTableScanProjectionCols(
+    Int64 logical_table_id,
     const NamesAndTypes & schema,
     const NamesAndTypes & storage_schema)
 {
     if unlikely (schema.size() != storage_schema.size())
         throw TiFlashException(
             fmt::format(
-                "The scan schema size ({}) from tidb is difference from the storage schema size ({}) from tiflash",
+                "The tidb table scan schema size {} is difference from the tiflash storage schema size {}, table id is {}",
                 schema.size(),
-                storage_schema.size()),
+                storage_schema.size(),
+                logical_table_id),
             Errors::Planner::BadRequest);
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
-        const auto & scan_col_name = schema[i].name;
-        const auto & scan_col_type = schema[i].type;
+        const auto & table_scan_col_name = schema[i].name;
+        const auto & table_scan_col_type = schema[i].type;
         const auto & storage_col_name = storage_schema[i].name;
         const auto & storage_col_type = storage_schema[i].type;
-        if unlikely (!scan_col_type->equals(*storage_col_type))
+        if unlikely (!table_scan_col_type->equals(*storage_col_type))
             throw TiFlashException(
                 fmt::format(
-                    "The data type({}) from tidb scan schema cols[{}]({}) is difference from the data type({}) from tiflash storage schema cols[{}]({})",
-                    scan_col_type->getName(),
-                    i,
-                    scan_col_name,
+                    R"(The data type {} from tidb table scan schema is difference from the data type {} from tiflash storage schema, 
+                    table id is {}, 
+                    column index is {}, 
+                    column name from tidb table scan is {}, 
+                    column name from tiflash storage is {})",
+                    table_scan_col_type->getName(),
                     storage_col_type->getName(),
+                    logical_table_id,
                     i,
+                    table_scan_col_name,
                     storage_col_name),
                 Errors::Planner::BadRequest);
-        schema_project_cols.emplace_back(storage_col_name, scan_col_name);
+        schema_project_cols.emplace_back(storage_col_name, table_scan_col_name);
     }
     return schema_project_cols;
 }
@@ -144,7 +150,7 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, storage_schema);
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
@@ -156,7 +162,7 @@ void PhysicalTableScan::buildProjection(
     PipelineExecGroupBuilder & group_builder,
     const NamesAndTypes & storage_schema)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, storage_schema);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
