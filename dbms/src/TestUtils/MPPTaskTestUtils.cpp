@@ -192,7 +192,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
         while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getGatherTaskSet(gather_id).first != nullptr)
         {
             std::this_thread::sleep_for(seconds);
-            retry_times++;
+            ++retry_times;
             // Currenly we wait for 20 times to ensure all tasks are cancelled.
             if (retry_times > 20)
             {

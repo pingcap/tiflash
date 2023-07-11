@@ -120,7 +120,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
     if (!error_msg.empty())
     {
         /// if the gather is aborted, return the error message
-        LOG_WARNING(log, fmt::format("{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString()));
+        LOG_WARNING(log, "{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString());
         /// meet error
         return {nullptr, error_msg};
     }
@@ -184,7 +184,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
         if (!error_msg.empty())
         {
             /// if the gather is aborted, return true to stop waiting timeout.
-            LOG_WARNING(log, fmt::format("{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString()));
+            LOG_WARNING(log, "{}: Gather {} is aborted, all its tasks are invalid.", req_info, id.gather_id.toString());
             cancelled = true;
             error_message = error_msg;
             return true;
@@ -210,7 +210,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
 
 void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, fmt::format("Begin to abort gather: {}, abort type: {}, reason: {}", gather_id.toString(), magic_enum::enum_name(abort_type), reason));
+    LOG_WARNING(log, "Begin to abort gather: {}, abort type: {}, reason: {}", gather_id.toString(), magic_enum::enum_name(abort_type), reason);
     MPPGatherTaskSetPtr gather_task_set;
     {
         /// abort task may take a long time, so first
@@ -222,13 +222,13 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         auto [query, gather_task_set_local, _] = getMPPQueryAndGatherTaskSet(gather_id);
         if (query == nullptr || gather_task_set_local == nullptr)
         {
-            LOG_WARNING(log, fmt::format("{} does not found in task manager, skip abort", gather_id.toString()));
+            LOG_WARNING(log, "{} does not found in task manager, skip abort", gather_id.toString());
             return;
         }
         gather_task_set = gather_task_set_local;
         if (!gather_task_set->isInNormalState())
         {
-            LOG_WARNING(log, fmt::format("{} already in abort process, skip abort", gather_id.toString()));
+            LOG_WARNING(log, "{} already in abort process, skip abort", gather_id.toString());
             return;
         }
         gather_task_set->state = MPPGatherTaskSet::Aborting;
@@ -242,7 +242,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         gather_task_set->alarms.clear();
         if (!gather_task_set->hasMPPTask())
         {
-            LOG_INFO(log, fmt::format("There is no mpp task for {}, finish abort", gather_id.toString()));
+            LOG_INFO(log, "There is no mpp task for {}, finish abort", gather_id.toString());
             removeMPPGatherTaskSet(query, gather_id, true);
             cv.notify_all();
             return;
