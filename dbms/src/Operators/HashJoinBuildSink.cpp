@@ -15,7 +15,6 @@
 #include <Interpreters/Join.h>
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/JoinSpillContext.h>
-#include "Operators/Operator.h"
 
 namespace DB
 {
