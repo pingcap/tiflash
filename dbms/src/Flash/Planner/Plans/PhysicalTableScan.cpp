@@ -51,7 +51,7 @@ NamesWithAliases buildTableScanProjectionCols(
         const auto & table_scan_col_type = schema[i].type;
         const auto & storage_col_name = storage_schema[i].name;
         const auto & storage_col_type = storage_schema[i].type;
-        if unlikely (!table_scan_col_type->equals(*storage_col_type))
+        if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
             throw TiFlashException(
                 fmt::format(
                     R"(The data type {} from tidb table scan schema is difference from the data type {} from tiflash storage schema, 
