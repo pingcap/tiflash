@@ -49,6 +49,6 @@ public:
 private:
     std::deque<String> fifo;
     std::unordered_set<String> set;
-    size_t capacity{1000};
+    size_t capacity{10000};
 };
 } // namespace DB
