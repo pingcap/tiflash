@@ -171,7 +171,6 @@ void IOPriorityQueue::cancel(const String & query_id)
     if unlikely (query_id.empty())
         return;
 
-
     std::lock_guard lock(mu);
     if (cancel_query_id_cache.add(query_id))
     {
