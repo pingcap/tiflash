@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <common/shift10.h>
-#include <common/likely.h>
+
 #include <limits>
 
 
@@ -23,6 +23,7 @@ static T shift10Impl(T x, int exponent)
     static constexpr ssize_t MIN_EXPONENT = -323;
     static constexpr ssize_t MAX_EXPONENT = 308;
 
+    // clang-format off
     static const long double powers10[] =
     {
         1e-323L, 1e-322L, 1e-321L, 1e-320L, 1e-319L, 1e-318L, 1e-317L, 1e-316L, 1e-315L, 1e-314L, 1e-313L, 1e-312L, 1e-311L,
@@ -58,11 +59,12 @@ static T shift10Impl(T x, int exponent)
         1e271L,1e272L,1e273L,1e274L,1e275L,1e276L,1e277L,1e278L,1e279L,1e280L,1e281L,1e282L,1e283L,1e284L,1e285L,1e286L,1e287L,1e288L,1e289L,1e290,
         1e291L,1e292L,1e293L,1e294L,1e295L,1e296L,1e297L,1e298L,1e299L,1e300L,1e301L,1e302L,1e303L,1e304L,1e305L,1e306L,1e307L,1e308L
     };
+    // clang-format on
 
-    if (unlikely(exponent < MIN_EXPONENT))  /// Note: there are some values below MIN_EXPONENT that is greater than zero.
-        x *= 0;     /// Multiplying to keep the sign of zero.
+    if (unlikely(exponent < MIN_EXPONENT)) /// Note: there are some values below MIN_EXPONENT that is greater than zero.
+        x *= 0; /// Multiplying to keep the sign of zero.
     else if (unlikely(exponent > MAX_EXPONENT))
-        x *= std::numeric_limits<T>::infinity();  /// Multiplying to keep the sign of infinity.
+        x *= std::numeric_limits<T>::infinity(); /// Multiplying to keep the sign of infinity.
     else
         x *= powers10[exponent - MIN_EXPONENT];
 

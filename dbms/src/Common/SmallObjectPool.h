@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Arena.h>
-#include <common/likely.h>
 
 #include <cstdlib>
 #include <ext/bit_cast.h>

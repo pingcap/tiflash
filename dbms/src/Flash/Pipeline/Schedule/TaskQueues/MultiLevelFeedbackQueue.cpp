@@ -15,7 +15,7 @@
 #include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
-#include <common/likely.h>
+
 
 namespace DB
 {

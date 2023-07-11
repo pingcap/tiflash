@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
-#include <common/likely.h>
+
 
 namespace DB
 {

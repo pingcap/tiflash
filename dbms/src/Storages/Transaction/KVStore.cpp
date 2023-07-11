@@ -29,7 +29,7 @@
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/likely.h>
+
 
 namespace DB
 {

@@ -16,7 +16,6 @@
 
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
-#include <common/likely.h>
 
 #include <limits>
 #include <type_traits>

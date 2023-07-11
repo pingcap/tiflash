@@ -64,7 +64,6 @@ add_library (common ${SPLIT_SHARED}
     include/common/shift10.h
     include/common/intExp.h
     include/common/mremap.h
-    include/common/likely.h
     include/common/logger_useful.h
     include/common/MultiVersion.h
     include/common/strong_typedef.h

@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <common/likely.h>
 
 #include <limits>
 namespace DB

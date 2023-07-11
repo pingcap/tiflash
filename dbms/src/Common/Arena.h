@@ -17,7 +17,6 @@
 #include <Common/Allocator.h>
 #include <Common/ProfileEvents.h>
 #include <Core/Defines.h>
-#include <common/likely.h>
 #include <string.h>
 
 #include <boost/noncopyable.hpp>
