@@ -274,6 +274,15 @@ public:
         records.emplace_back(rec);
     }
 
+    void merge(PageEntriesEdit && other)
+    {
+        records.insert(
+            records.end(),
+            std::make_move_iterator(other.records.begin()),
+            std::make_move_iterator(other.records.end()));
+        other.records.clear();
+    }
+
     EditRecords & getMutRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
 

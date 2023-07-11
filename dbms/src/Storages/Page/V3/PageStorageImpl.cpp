@@ -180,6 +180,7 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
 
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -212,6 +213,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
 
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
