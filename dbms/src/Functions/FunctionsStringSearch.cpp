@@ -34,10 +34,6 @@
 #include <memory>
 #include <mutex>
 
-#include "Columns/IColumn.h"
-#include "Common/Exception.h"
-#include "common/defines.h"
-
 #if USE_RE2_ST
 #include <re2_st/re2.h>
 #else

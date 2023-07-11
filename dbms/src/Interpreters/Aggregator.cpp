@@ -285,8 +285,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
         /// init spiller if needed
         auto header = getHeader(false);
         bool is_convertible_to_two_level = AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen);
-        bool is_input_support_spill = Spiller::supportSpill(header);
-        if (is_convertible_to_two_level && is_input_support_spill)
+        if (is_convertible_to_two_level)
         {
             /// for aggregation, the input block is sorted by bucket number
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
@@ -295,7 +294,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
         else
         {
             params.setMaxBytesBeforeExternalGroupBy(0);
-            LOG_WARNING(log, "Aggregation does not support spill, reason: {}", is_convertible_to_two_level ? "aggregator hash table does not support two level" : "input data contains only constant columns");
+            LOG_WARNING(log, "Aggregation does not support spill because aggregator hash table does not support two level");
         }
     }
 }
