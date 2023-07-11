@@ -557,6 +557,7 @@ void DeltaMergeStore::ingestFiles(
         // Check whether all external files are contained by the range.
         for (const auto & ext_file : external_files)
         {
+<<<<<<< HEAD
             RUNTIME_CHECK(
                 compare(range.getStart(), ext_file.range.getStart()) <= 0,
                 range.toDebugString(),
@@ -565,6 +566,19 @@ void DeltaMergeStore::ingestFiles(
                 compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
                 range.toDebugString(),
                 ext_file.range.toDebugString());
+=======
+            for (const auto & ext_file : external_files)
+            {
+                RUNTIME_CHECK_MSG(
+                    compare(range.getStart(), ext_file.range.getStart()) <= 0 && compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                    "Detected illegal region boundary: range={} file_range={} . "
+                    "TiFlash will exit to prevent data inconsistency. "
+                    "If you accept data inconsistency and want to continue the service, "
+                    "set profiles.default.dt_enable_ingest_check=false .",
+                    range.toDebugString(),
+                    ext_file.range.toDebugString());
+            }
+>>>>>>> a1a6c477de (Fix a typo in ingest range check (#7789))
         }
     }
 
