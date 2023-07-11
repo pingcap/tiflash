@@ -54,7 +54,7 @@ NamesWithAliases buildTableScanProjectionCols(
         if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
             throw TiFlashException(
                 fmt::format(
-                    R"(The data type {} from tidb table scan schema is difference from the data type {} from tiflash storage schema, 
+                    R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema, 
                     table id is {}, 
                     column index is {}, 
                     column name from tidb table scan is {}, 
