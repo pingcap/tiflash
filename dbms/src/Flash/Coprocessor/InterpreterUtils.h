@@ -72,4 +72,14 @@ void executeGeneratedColumnPlaceholder(
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline);
+<<<<<<< HEAD
+=======
+
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log);
+>>>>>>> 54fb7c1bbc (Improve error message for tidb TableScan schema check (#7637))
 } // namespace DB
