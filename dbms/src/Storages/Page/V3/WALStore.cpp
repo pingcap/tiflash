@@ -300,26 +300,22 @@ UInt64 WALStore::getLogFileMaxSequence(const LogFilename & log_filename, std::fu
     auto iter = log_file_max_sequences_cache.find(log_filename);
     if (iter != log_file_max_sequences_cache.end())
         return iter->second;
-    else
-    {
-        auto log_reader = wal_store_reader->createLogReader(log_filename);
-        String last_record;
-        while (true)
-        {
-            auto [ok, record] = log_reader->readRecord();
-            if (!ok)
-                break;
 
-            last_record = std::move(record);
-        }
-        if (last_record.empty())
-            return 0; // empty log file
-        else
-        {
-            UInt64 max_sequence = max_sequence_getter(last_record);
-            log_file_max_sequences_cache.emplace(log_filename, max_sequence);
-            return max_sequence;
-        };
+    auto log_reader = wal_store_reader->createLogReader(log_filename);
+    String last_record;
+    while (true)
+    {
+        auto [ok, record] = log_reader->readRecord();
+        if (!ok)
+            break;
+
+        last_record = std::move(record);
     }
+    if (last_record.empty())
+        return 0; // empty log file
+
+    UInt64 max_sequence = max_sequence_getter(last_record);
+    log_file_max_sequences_cache.emplace(log_filename, max_sequence);
+    return max_sequence;
 }
 } // namespace DB::PS::V3

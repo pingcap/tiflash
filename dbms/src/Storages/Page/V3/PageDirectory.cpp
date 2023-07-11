@@ -1828,14 +1828,9 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter
     if (!files_snap.isValid())
         return false;
 
-    // To prevent writes from affecting dumping snapshot (and vice versa), old log files
-    // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
-    // The main reason write affect dumping snapshot is that we can not get a read-only
-    // `being_ref_count` by the function `createSnapshot()`.
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
 
     Stopwatch watch;
-    // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit = dumpSnapshotToEdit(snap);
     files_snap.num_records = edit.size();
     files_snap.dump_elapsed_ms = watch.elapsedMilliseconds();
