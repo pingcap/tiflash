@@ -26,7 +26,7 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_,
-        size_t scan_hash_map_after_probe_stream_index_,
+        size_t op_index_,
         size_t max_block_size,
         const Block & input_header);
 
@@ -60,7 +60,7 @@ private:
 
     ProbeProcessInfo probe_process_info;
 
-    size_t scan_hash_map_after_probe_stream_index;
+    size_t op_index;
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     size_t joined_rows = 0;

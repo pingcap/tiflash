@@ -34,9 +34,9 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if unlikely (!block)
     {
-        join_ptr->finishOneBuild();
+        join_ptr->finishOneBuild(concurrency_build_index);
         is_finish_status = true;
-        return spill_context.isSpilling<true>()
+        return spill_context.isSpilling<true>(concurrency_build_index)
             ? OperatorStatus::WAITING
             : OperatorStatus::FINISHED;
     }
@@ -51,7 +51,7 @@ OperatorStatus HashJoinBuildSink::awaitImpl()
 {
     if (is_finish_status)
     {
-        return spill_context.isSpilling<true>()
+        return spill_context.isSpilling<true>(concurrency_build_index)
             ? OperatorStatus::WAITING
             : OperatorStatus::FINISHED;
     }

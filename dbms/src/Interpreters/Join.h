@@ -199,7 +199,7 @@ public:
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
@@ -248,10 +248,10 @@ public:
         }
     }
 
-    void finishOneBuild();
+    void finishOneBuild(size_t stream_index);
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe();
+    void finishOneProbe(size_t stream_index);
     void waitUntilAllProbeFinished() const;
     bool isAllProbeFinished() const;
 
@@ -442,22 +442,22 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillAllBuildPartitions();
-    void spillAllProbePartitions();
+    void spillAllBuildPartitions(size_t stream_index);
+    void spillAllProbePartitions(size_t stream_index);
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
 
 
-    void spillMostMemoryUsedPartitionIfNeed();
+    void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
-    void workAfterBuildFinish();
-    void workAfterProbeFinish();
+    void workAfterBuildFinish(size_t stream_index);
+    void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const;
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const;
 };
 
 } // namespace DB

@@ -23,19 +23,19 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
     const JoinPtr & join_,
-    size_t scan_hash_map_after_probe_stream_index_,
+    size_t op_index_,
     size_t max_block_size,
     const Block & input_header)
     : TransformOp(exec_context_, req_id)
     , join(join_)
     , probe_process_info(max_block_size)
-    , scan_hash_map_after_probe_stream_index(scan_hash_map_after_probe_stream_index_)
+    , op_index(op_index_)
 {
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
     if (needScanHashMapAfterProbe(join->getKind()))
-        scan_hash_map_after_probe_stream = join->createScanHashMapAfterProbeStream(input_header, scan_hash_map_after_probe_stream_index, join->getProbeConcurrency(), max_block_size);
+        scan_hash_map_after_probe_stream = join->createScanHashMapAfterProbeStream(input_header, op_index, join->getProbeConcurrency(), max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
@@ -65,7 +65,7 @@ void HashJoinProbeTransformOp::probeOnTransform(Block & block)
 OperatorStatus HashJoinProbeTransformOp::onProbeFinish(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
-    join->finishOneProbe();
+    join->finishOneProbe(op_index);
     if (scan_hash_map_after_probe_stream)
     {
         if (!join->isAllProbeFinished())

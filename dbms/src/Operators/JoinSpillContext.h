@@ -14,10 +14,11 @@
 
 #pragma once
 
-#include <Interpreters/Join.h>
+#include <Common/Exception.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Interpreters/Join.h>
+
 #include <mutex>
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -40,7 +41,7 @@ public:
         exec_context.decActiveRefCount();
     }
 
-    template<bool is_build_side>
+    template <bool is_build_side>
     void init(size_t concurrency_)
     {
         RUNTIME_CHECK(concurrency_ > 0);
@@ -57,8 +58,8 @@ public:
         }
     }
 
-    template<bool is_build_side>
-    bool isSpilling(size_t op_index = default_op_index)
+    template <bool is_build_side>
+    bool isSpilling(size_t op_index)
     {
         std::lock_guard lock(mu);
         if constexpr (is_build_side)
@@ -77,8 +78,8 @@ public:
         }
     }
 
-    template<bool is_build_side>
-    void spillBlocks(UInt64 part_id, Blocks && blocks, size_t op_index = default_op_index)
+    template <bool is_build_side>
+    void spillBlocks(UInt64 part_id, Blocks && blocks, size_t op_index)
     {
         startSpilling<is_build_side>(op_index);
         RUNTIME_CHECK(join->build_spiller);
@@ -94,8 +95,8 @@ public:
     }
 
 private:
-    template<bool is_build_side>
-    void startSpilling(size_t op_index = default_op_index)
+    template <bool is_build_side>
+    void startSpilling(size_t op_index)
     {
         std::lock_guard lock(mu);
         if constexpr (is_build_side)
@@ -110,8 +111,8 @@ private:
         }
     }
 
-    template<bool is_build_side>
-    void finishSpilling(size_t op_index = default_op_index)
+    template <bool is_build_side>
+    void finishSpilling(size_t op_index)
     {
         std::lock_guard lock(mu);
         RUNTIME_CHECK(op_index < build_side_spilling_tasks.size());
@@ -135,8 +136,6 @@ private:
     JoinPtr join;
 
     std::mutex mu;
-
-    static constexpr auto default_op_index = 0;
 
     std::vector<UInt64> build_side_spilling_tasks;
     std::vector<UInt64> probe_side_spilling_tasks;

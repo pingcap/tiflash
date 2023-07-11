@@ -32,7 +32,7 @@ public:
     static HashJoinProbeExecPtr build(
         const JoinPtr & join,
         const BlockInputStreamPtr & probe_stream,
-        size_t scan_hash_map_after_probe_stream_index,
+        size_t stream_index,
         size_t max_block_size);
 
     using CancellationHook = std::function<bool()>;
@@ -42,7 +42,7 @@ public:
         const BlockInputStreamPtr & restore_build_stream_,
         const BlockInputStreamPtr & probe_stream_,
         bool need_scan_hash_map_after_probe_,
-        size_t scan_hash_map_after_probe_stream_index,
+        size_t stream_index_,
         const BlockInputStreamPtr & scan_hash_map_after_probe_stream_,
         size_t max_block_size_);
 
@@ -65,7 +65,7 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onProbeFinish();
 
-    bool needScanHashMap() { return need_scan_hash_map_after_probe; }
+    bool needScanHashMap() const { return need_scan_hash_map_after_probe; }
     void onScanHashMapAfterProbeStart();
     Block fetchScanHashMapData();
     // Returns true if the probe_exec ends.
@@ -90,7 +90,7 @@ private:
     const BlockInputStreamPtr probe_stream;
 
     const bool need_scan_hash_map_after_probe;
-    const size_t scan_hash_map_after_probe_stream_index;
+    const size_t stream_index;
     const BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     const size_t max_block_size;
