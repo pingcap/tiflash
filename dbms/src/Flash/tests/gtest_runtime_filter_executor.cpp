@@ -59,6 +59,8 @@ try
                                 {{"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}},
                                 {toNullableVec<Int32>("k1", {2, 2, 3, 4}),
                                  toNullableVec<Int32>("k2", {2, 2, 3, 4})});
+    context.addExchangeReceiver("right_empty_table",
+                                {{"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}});
 
     WRAP_FOR_RF_TEST_BEGIN
     {
@@ -79,6 +81,18 @@ try
                            .join(context.receive("right_exchange_table"), tipb::JoinType::TypeInnerJoin, {col("k1")}, rf)
                            .build(context);
         Expect expect{{"table_scan_0", {2, enable_pipeline ? concurrency : 1}}, {"exchange_receiver_1", {4, concurrency}}, {"Join_2", {3, concurrency}}};
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        // issue #45300
+        // test empty build side, with runtime filter, table_scan_0 return 0 rows
+        mock::MockRuntimeFilter rf(1, col("k1"), col("k1"), "exchange_receiver_1", "table_scan_0");
+        auto request = context
+                .scan("test_db", "left_table", std::vector<int>{1})
+                .join(context.receive("right_empty_table"), tipb::JoinType::TypeInnerJoin, {col("k1")}, rf)
+                .build(context);
+        Expect expect{{"table_scan_0", {0, enable_pipeline ? concurrency : 1}}, {"exchange_receiver_1", {0, concurrency}}, {"Join_2", {0, concurrency}}};
         testForExecutionSummary(request, expect);
     }
     WRAP_FOR_RF_TEST_END

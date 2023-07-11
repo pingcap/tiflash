@@ -30,8 +30,6 @@ public:
         : attr(attr_)
         , values(values_)
     {
-        if (unlikely(values.empty()))
-            throw Exception("Unexpected empty values");
     }
 
     String name() override { return "in"; }
@@ -41,15 +39,22 @@ public:
     String toDebugString() override
     {
         String s = R"({"op":")" + name() + R"(","col":")" + attr.col_name + R"(","value":"[)";
-        for (auto & v : values)
-            s += "\"" + applyVisitor(FieldVisitorToDebugString(), v) + "\",";
-        s.pop_back();
+        if (!values.empty()) {
+            for (auto &v: values)
+                s += "\"" + applyVisitor(FieldVisitorToDebugString(), v) + "\",";
+            s.pop_back();
+        }
         return s + "]}";
     };
 
 
     RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
     {
+        // If values is empty (for example where a in ()), all packs will not match.
+        // So return none directly.
+        if (values.empty()) {
+            return RSResult::None;
+        }
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
         // TODO optimize for IN
         RSResult res = rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
