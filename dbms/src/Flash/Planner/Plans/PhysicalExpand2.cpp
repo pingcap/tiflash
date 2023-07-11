@@ -137,7 +137,7 @@ void PhysicalExpand2::expandTransform(DAGPipeline & child_pipeline)
 
 // Pipeline execution transform.
 void PhysicalExpand2::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
@@ -146,7 +146,7 @@ void PhysicalExpand2::buildPipelineExecGroupImpl(
     // make the header ahead
     shared_expand->getBeforeExpandActions()->execute(input_header);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<Expand2TransformOp>(exec_status, log->identifier(), input_header, shared_expand));
+        builder.appendTransformOp(std::make_unique<Expand2TransformOp>(exec_context, log->identifier(), input_header, shared_expand));
     });
 }
 
