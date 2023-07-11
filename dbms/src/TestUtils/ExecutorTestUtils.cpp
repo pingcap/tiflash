@@ -53,6 +53,11 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type)
         return TiDB::TP::TypeFloat;
     case TypeIndex::Float64:
         return TiDB::TP::TypeDouble;
+    case TypeIndex::Decimal32:
+    case TypeIndex::Decimal64:
+    case TypeIndex::Decimal128:
+    case TypeIndex::Decimal256:
+        return TiDB::TP::TypeDecimal;
     default:
         throw Exception("Unsupport type");
     }

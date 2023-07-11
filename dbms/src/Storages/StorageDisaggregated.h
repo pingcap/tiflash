@@ -137,7 +137,8 @@ private:
     DM::Remote::RNWorkersPtr buildRNWorkers(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
-        const DM::ColumnDefinesPtr & column_defines);
+        const DM::ColumnDefinesPtr & column_defines,
+        size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,

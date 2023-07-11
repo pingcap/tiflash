@@ -388,7 +388,7 @@ try
                            .build(context, DAGRequestType::list);
         String expected = R"(
 Limit | 10
- Selection | equals(<1, String>, <-5692549928996306944, String>)}
+ Selection | equals(<1, String>, <'1', String>)}
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
    Selection | equals(<0, String>, <1, String>)}
     TableScan | {<0, String>, <1, String>})";
@@ -405,7 +405,7 @@ Limit | 10
                            .build(context, DAGRequestType::list);
         String expected = R"(
 TopN | order_by: {(<1, String>, desc: false)}, limit: 10
- Selection | equals(<1, String>, <-5692549928996306944, String>)}
+ Selection | equals(<1, String>, <'1', String>)}
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
    Selection | equals(<0, String>, <1, String>)}
     TableScan | {<0, String>, <1, String>})";
