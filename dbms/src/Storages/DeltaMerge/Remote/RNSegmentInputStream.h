@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>

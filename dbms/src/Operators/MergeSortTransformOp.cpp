@@ -33,17 +33,7 @@ void MergeSortTransformOp::operatePrefixImpl()
     assert(!order_desc.empty());
 
     if (max_bytes_before_external_sort > 0)
-    {
-        if (Spiller::supportSpill(header_without_constants))
-        {
-            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
-        }
-        else
-        {
-            max_bytes_before_external_sort = 0;
-            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
-        }
-    }
+        spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
 void MergeSortTransformOp::operateSuffixImpl()
@@ -106,7 +96,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToRestore()
     /// merge the spilled data and memory data.
     merge_impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, order_desc, max_block_size, limit);
     merge_impl->readPrefix();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_IN;
 }
 
 OperatorStatus MergeSortTransformOp::fromPartialToSpill()
@@ -124,7 +114,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // fallback to partial phase.
     if (!cached_handler->batchRead())
         return fromSpillToPartial();
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_OUT;
 }
 
 OperatorStatus MergeSortTransformOp::fromSpillToPartial()
@@ -176,7 +166,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
     {
         assert(cached_handler);
         return cached_handler->batchRead()
-            ? OperatorStatus::IO
+            ? OperatorStatus::IO_OUT
             : fromSpillToPartial();
     }
     case MergeSortStatus::MERGE:
@@ -192,7 +182,7 @@ OperatorStatus MergeSortTransformOp::tryOutputImpl(Block & block)
             block = restored_result.output();
             return OperatorStatus::HAS_OUTPUT;
         }
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
     default:
         throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));

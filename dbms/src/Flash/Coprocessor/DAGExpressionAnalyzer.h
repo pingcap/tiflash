@@ -206,6 +206,10 @@ public:
         const std::vector<UInt8> & may_need_add_cast_column,
         const ColumnInfos & table_scan_columns);
 
+    void addNullableActionForColumnRef(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions) const;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

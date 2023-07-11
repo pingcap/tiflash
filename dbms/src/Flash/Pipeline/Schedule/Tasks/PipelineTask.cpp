@@ -25,7 +25,7 @@ PipelineTask::PipelineTask(
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_, ExecTaskStatus::RUNNING)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {
@@ -51,9 +51,13 @@ void PipelineTask::doFinalizeImpl()
     {                                     \
         return ExecTaskStatus::CANCELLED; \
     }                                     \
-    case OperatorStatus::IO:              \
+    case OperatorStatus::IO_IN:           \
     {                                     \
-        return ExecTaskStatus::IO;        \
+        return ExecTaskStatus::IO_IN;     \
+    }                                     \
+    case OperatorStatus::IO_OUT:          \
+    {                                     \
+        return ExecTaskStatus::IO_OUT;    \
     }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \

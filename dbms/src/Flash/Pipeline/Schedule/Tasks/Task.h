@@ -25,19 +25,19 @@ namespace DB
  *           CANCELLED/ERROR/FINISHED
  *                      ▲
  *                      │
- *         ┌────────────────────────┐
- *         │     ┌──►RUNNING◄──┐    │
- * INIT───►│     │             │    │
- *         │     ▼             ▼    │
- *         │ WATITING◄────────►IO   │
- *         └────────────────────────┘
+ *         ┌───────────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐           │
+ * INIT───►│     │             │           │
+ *         │     ▼             ▼           │
+ *         │ WATITING◄────────►IO_IN/OUT   │
+ *         └───────────────────────────────┘
  */
 enum class ExecTaskStatus
 {
-    INIT,
     WAITING,
     RUNNING,
-    IO,
+    IO_IN,
+    IO_OUT,
     FINISHED,
     ERROR,
     CANCELLED,
@@ -46,11 +46,14 @@ enum class ExecTaskStatus
 class Task
 {
 public:
+    // Only used for unit test.
     Task();
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
     virtual ~Task();
+
+    ExecTaskStatus getStatus() const { return task_status; }
 
     ExecTaskStatus execute();
 
@@ -101,7 +104,7 @@ protected:
     // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
 
-    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status;
 
     bool is_finalized = false;
 };

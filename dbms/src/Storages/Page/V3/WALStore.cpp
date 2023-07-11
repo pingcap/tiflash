@@ -258,8 +258,8 @@ bool WALStore::saveSnapshot(
                 fb.append(arg.filename(arg.stage));
             },
             ", ");
-        fmt_buf.fmtAppend("] [read_cost={}] [num_records={}] [file={}] [size={}].",
-                          files_snap.read_elapsed_ms,
+        fmt_buf.fmtAppend("] [dump_cost={}] [num_records={}] [file={}] [size={}].",
+                          files_snap.dump_elapsed_ms,
                           files_snap.num_records,
                           normal_fullname,
                           serialized_snap.size());

@@ -48,12 +48,12 @@ ALWAYS_INLINE void addToStatusMetrics(ExecTaskStatus to)
     }
 #endif
 
-    // It is impossible for any task to change to init status.
     switch (to)
     {
         M(ExecTaskStatus::WAITING, type_to_waiting)
         M(ExecTaskStatus::RUNNING, type_to_running)
-        M(ExecTaskStatus::IO, type_to_io)
+        M(ExecTaskStatus::IO_IN, type_to_io)
+        M(ExecTaskStatus::IO_OUT, type_to_io)
         M(ExecTaskStatus::FINISHED, type_to_finished)
         M(ExecTaskStatus::ERROR, type_to_error)
         M(ExecTaskStatus::CANCELLED, type_to_cancelled)
@@ -69,19 +69,21 @@ Task::Task()
     : log(Logger::get())
     , mem_tracker_holder(nullptr)
     , mem_tracker_ptr(nullptr)
+    , task_status(ExecTaskStatus::RUNNING)
 {
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+    addToStatusMetrics(task_status);
 }
 
-Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
+Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id, ExecTaskStatus init_status)
     : log(Logger::get(req_id))
     , mem_tracker_holder(std::move(mem_tracker_))
     , mem_tracker_ptr(mem_tracker_holder.get())
+    , task_status(init_status)
 {
     assert(mem_tracker_holder.get() == mem_tracker_ptr);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+    addToStatusMetrics(task_status);
 }
 
 Task::~Task()
@@ -98,7 +100,7 @@ Task::~Task()
 ExecTaskStatus Task::execute()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::RUNNING || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::RUNNING);
     switchStatus(executeImpl());
     return task_status;
 }
@@ -106,7 +108,7 @@ ExecTaskStatus Task::execute()
 ExecTaskStatus Task::executeIO()
 {
     assert(mem_tracker_ptr == current_memory_tracker);
-    assert(task_status == ExecTaskStatus::IO || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::IO_IN || task_status == ExecTaskStatus::IO_OUT);
     switchStatus(executeIOImpl());
     return task_status;
 }
@@ -116,7 +118,7 @@ ExecTaskStatus Task::await()
     // Because await only performs polling checks and does not involve computing/memory tracker memory allocation,
     // await will not invoke MemoryTracker, so current_memory_tracker must be nullptr here.
     assert(current_memory_tracker == nullptr);
-    assert(task_status == ExecTaskStatus::WAITING || task_status == ExecTaskStatus::INIT);
+    assert(task_status == ExecTaskStatus::WAITING);
     switchStatus(awaitImpl());
     return task_status;
 }

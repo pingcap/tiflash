@@ -202,6 +202,7 @@ public:
         std::string_view data,
         const PageFieldSizes & field_sizes = {});
 
+    void write(UniversalWriteBatch && wb);
     /**
      * Read a page from the cache.
      *
@@ -211,7 +212,6 @@ public:
      */
     Page getPage(const PageOID & oid, const std::vector<size_t> & indices);
 
-private:
     static UniversalPageId buildCacheId(const PageOID & oid)
     {
         if (oid.ks_table_id.first == NullspaceID)
