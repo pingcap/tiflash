@@ -89,9 +89,9 @@ try
         // test empty build side, with runtime filter, table_scan_0 return 0 rows
         mock::MockRuntimeFilter rf(1, col("k1"), col("k1"), "exchange_receiver_1", "table_scan_0");
         auto request = context
-                .scan("test_db", "left_table", std::vector<int>{1})
-                .join(context.receive("right_empty_table"), tipb::JoinType::TypeInnerJoin, {col("k1")}, rf)
-                .build(context);
+                           .scan("test_db", "left_table", std::vector<int>{1})
+                           .join(context.receive("right_empty_table"), tipb::JoinType::TypeInnerJoin, {col("k1")}, rf)
+                           .build(context);
         Expect expect{{"table_scan_0", {0, enable_pipeline ? concurrency : 1}}, {"exchange_receiver_1", {0, concurrency}}, {"Join_2", {0, concurrency}}};
         testForExecutionSummary(request, expect);
     }
