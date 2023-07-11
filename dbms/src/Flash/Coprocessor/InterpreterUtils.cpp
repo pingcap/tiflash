@@ -303,4 +303,25 @@ void executeGeneratedColumnPlaceholder(
     }
 }
 
+<<<<<<< HEAD
+=======
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_sources_start_index <= group_builder.concurrency());
+
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & builder = group_builder.getCurBuilder(i);
+        builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(exec_context, log->identifier(), group_builder.getCurrentHeader(), generated_column_infos));
+    }
+}
+
+>>>>>>> 54fb7c1bbc (Improve error message for tidb TableScan schema check (#7637))
 } // namespace DB
