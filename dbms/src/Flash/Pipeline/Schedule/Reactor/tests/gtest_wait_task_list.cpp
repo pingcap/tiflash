@@ -13,12 +13,11 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitingTaskList.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
-
-#include <thread>
 
 namespace DB::tests
 {
@@ -27,6 +26,10 @@ namespace
 class PlainTask : public Task
 {
 public:
+    explicit PlainTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
+    {}
+
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 };
 } // namespace
@@ -38,6 +41,13 @@ class TestWaitingTaskList : public ::testing::Test
 TEST_F(TestWaitingTaskList, base)
 try
 {
+    PipelineExecutorContext context;
+    // To avoid the active ref count being returned to 0 in advance.
+    context.incActiveRefCount();
+    SCOPE_EXIT({
+        context.decActiveRefCount();
+    });
+
     WaitingTaskList list;
 
     auto thread_manager = newThreadManager();
@@ -64,9 +74,9 @@ try
     // submit valid task
     for (size_t i = 0; i < round; ++i)
     {
-        list.submit(std::make_unique<PlainTask>());
+        list.submit(std::make_unique<PlainTask>(context));
         std::list<TaskPtr> local_list;
-        local_list.push_back(std::make_unique<PlainTask>());
+        local_list.push_back(std::make_unique<PlainTask>(context));
         list.submit(local_list);
     }
     list.finish();
@@ -75,7 +85,7 @@ try
     ASSERT_EQ(taken_task_num, valid_task_num);
 
     // No tasks are submitted after the list is finished.
-    list.submit(std::make_unique<PlainTask>());
+    list.submit(std::make_unique<PlainTask>(context));
     {
         std::list<TaskPtr> local_list;
         ASSERT_FALSE(list.take(local_list));

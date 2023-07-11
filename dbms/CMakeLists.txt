@@ -254,6 +254,11 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+if (USE_QPL)
+    target_link_libraries (dbms ${QPL_LIBRARY})
+    target_include_directories (dbms PRIVATE ${QPL_INCLUDE_DIR})
+endif ()
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (tiflash_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (tiflash_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})

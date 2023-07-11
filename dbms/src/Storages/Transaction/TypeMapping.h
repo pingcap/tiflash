@@ -28,6 +28,7 @@ namespace DB
 using ColumnInfo = TiDB::ColumnInfo;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
+using ASTPtrVec = std::vector<ASTPtr>;
 
 // Because for compatible issues, we need to deal with the duration type separately for computing layer.
 // TODO: Need a better implement.

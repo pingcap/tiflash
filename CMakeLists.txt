@@ -302,6 +302,18 @@ include (cmake/find_prometheus.cmake)
 include (cmake/find_tiflash_proxy.cmake)
 include (cmake/find_xxhash.cmake)
 
+if (OS_LINUX AND ARCH_AMD64 AND TIFLASH_ENABLE_AVX512_SUPPORT)
+    option (ENABLE_QPL "Enable Intel Query Processing Library" OFF)
+endif()
+
+if (ENABLE_QPL)
+    if (OS_LINUX AND ARCH_AMD64 AND TIFLASH_ENABLE_AVX512_SUPPORT)
+        include (cmake/find_qpl.cmake)
+    else ()
+        message (FATAL_ERROR "`ENABLE_QPL` is not supported on this platform")
+    endif ()
+endif ()
+
 include (cmake/find_contrib_lib.cmake)
 find_contrib_lib(cityhash)
 find_contrib_lib(farmhash)
