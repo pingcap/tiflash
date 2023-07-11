@@ -103,11 +103,8 @@ public:
 
     friend class tests::WALStoreTest; // for testing
 
-    ~WALStore();
-
 private:
     WALStore(String storage_name,
-             WALStoreReaderPtr wal_store_reader_,
              const PSDiskDelegatorPtr & delegator_,
              const FileProviderPtr & provider_,
              Format::LogNumberType last_log_num_,
@@ -128,7 +125,6 @@ private:
 
 private:
     const String storage_name;
-    WALStoreReaderPtr wal_store_reader;
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;

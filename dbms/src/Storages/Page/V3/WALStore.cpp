@@ -52,7 +52,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), reader, delegator, provider, last_log_num, std::move(config))),
+        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num, std::move(config))),
         reader};
 }
 
@@ -63,13 +63,11 @@ WALStoreReaderPtr WALStore::createReaderForFiles(const String & identifier, cons
 
 WALStore::WALStore(
     String storage_name_,
-    WALStoreReaderPtr wal_store_reader_,
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
     const WALConfig & config_)
     : storage_name(std::move(storage_name_))
-    , wal_store_reader(std::move(wal_store_reader_))
     , delegator(delegator_)
     , provider(provider_)
     , last_log_num(last_log_num_)
@@ -80,8 +78,6 @@ WALStore::WALStore(
     , config(config_)
 {
 }
-
-WALStore::~WALStore() = default;
 
 void WALStore::apply(String && serialized_edit, const WriteLimiterPtr & write_limiter)
 {
@@ -301,16 +297,7 @@ UInt64 WALStore::getLogFileMaxSequence(const LogFilename & log_filename, std::fu
     if (iter != log_file_max_sequences_cache.end())
         return iter->second;
 
-    auto log_reader = wal_store_reader->createLogReader(log_filename);
-    String last_record;
-    while (true)
-    {
-        auto [ok, record] = log_reader->readRecord();
-        if (!ok)
-            break;
-
-        last_record = std::move(record);
-    }
+    auto last_record = WALStoreReader::getLastRecordInLogFile(log_filename, provider, config.getRecoverMode(), /*read_limiter*/ nullptr, logger);
     if (last_record.empty())
         return 0; // empty log file
 

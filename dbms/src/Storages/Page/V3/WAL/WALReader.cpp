@@ -153,7 +153,13 @@ WALStoreReaderPtr WALStoreReader::create(
     return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-LogReaderPtr WALStoreReader::createLogReader(const LogFilename & filename)
+LogReaderPtr WALStoreReader::createLogReader(
+    const LogFilename & filename,
+    FileProviderPtr & provider,
+    ReportCollector * reporter,
+    WALRecoveryMode recovery_mode,
+    const ReadLimiterPtr & read_limiter,
+    LoggerPtr logger)
 {
     const auto log_num = filename.log_num;
     const auto fullname = filename.fullname(filename.stage);
@@ -170,10 +176,31 @@ LogReaderPtr WALStoreReader::createLogReader(const LogFilename & filename)
     );
     return std::make_unique<LogReader>(
         std::move(read_buf),
-        &reporter,
+        reporter,
         /*verify_checksum*/ true,
         log_num,
         recovery_mode);
+}
+
+String WALStoreReader::getLastRecordInLogFile(
+    const LogFilename & filename,
+    FileProviderPtr & provider,
+    WALRecoveryMode recovery_mode,
+    const ReadLimiterPtr & read_limiter,
+    LoggerPtr logger)
+{
+    ReportCollector reporter;
+    auto log_reader = createLogReader(filename, provider, &reporter, recovery_mode, read_limiter, logger);
+    String last_record;
+    while (true)
+    {
+        auto [ok, record] = log_reader->readRecord();
+        if (!ok)
+            break;
+
+        last_record = std::move(record);
+    }
+    return last_record;
 }
 
 WALStoreReader::WALStoreReader(String storage_name,
@@ -234,12 +261,12 @@ bool WALStoreReader::openNextFile()
 
     if (!checkpoint_read_done)
     {
-        reader = createLogReader(*checkpoint_file);
+        reader = createLogReader(*checkpoint_file, provider, &reporter, recovery_mode, read_limiter, logger);
         checkpoint_read_done = true;
     }
     else
     {
-        reader = createLogReader(*next_reading_file);
+        reader = createLogReader(*next_reading_file, provider, &reporter, recovery_mode, read_limiter, logger);
         ++next_reading_file;
     }
     return true;

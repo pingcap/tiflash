@@ -29,12 +29,11 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/types.h>
 
 #include <future>
 #include <mutex>
 #include <random>
-
-#include "common/types.h"
 
 namespace DB::PS::V3::tests
 {
