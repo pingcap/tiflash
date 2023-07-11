@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/ConcatSourceOp.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
@@ -28,9 +28,9 @@ class MockSourceOp : public SourceOp
 {
 public:
     MockSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const Block & output_)
-        : SourceOp(exec_status_, "mock")
+        : SourceOp(exec_context_, "mock")
         , output(output_)
     {
         setHeader(output.cloneEmpty());
@@ -62,8 +62,8 @@ TEST_F(TestConcatSource, setBlockSink)
     Block res;
     ASSERT_FALSE(res);
 
-    PipelineExecutorStatus exec_status;
-    SetBlockSinkOp set_block_sink{exec_status, "test", res};
+    PipelineExecutorContext exec_context;
+    SetBlockSinkOp set_block_sink{exec_context, "test", res};
     Block header{ColumnGenerator::instance().generate({0, "Int32", DataDistribution::RANDOM})};
     set_block_sink.setHeader(header);
     Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};
@@ -77,16 +77,16 @@ TEST_F(TestConcatSource, concatSink)
 {
     size_t block_cnt = 10;
     std::vector<PipelineExecBuilder> builders;
-    PipelineExecutorStatus exec_status;
+    PipelineExecutorContext exec_context;
     for (size_t i = 0; i < block_cnt; ++i)
     {
         PipelineExecBuilder builder;
         Block block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})};
-        builder.setSourceOp(std::make_unique<MockSourceOp>(exec_status, block));
+        builder.setSourceOp(std::make_unique<MockSourceOp>(exec_context, block));
         builders.push_back(std::move(builder));
     }
 
-    ConcatSourceOp concat_source{exec_status, "test", builders};
+    ConcatSourceOp concat_source{exec_context, "test", builders};
     size_t actual_block_cnt = 0;
     concat_source.operatePrefix();
     while (true)

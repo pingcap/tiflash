@@ -25,14 +25,14 @@ class MergeSortTransformOp : public TransformOp
 {
 public:
     MergeSortTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id_,
         const SortDescription & order_desc_,
         size_t limit_,
         size_t max_block_size_,
         size_t max_bytes_before_external_sort_,
         const SpillConfig & spill_config_)
-        : TransformOp(exec_status_, req_id_)
+        : TransformOp(exec_context_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)

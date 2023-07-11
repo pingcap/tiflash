@@ -101,7 +101,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 }
 
 void StorageDisaggregated::readThroughS3(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     unsigned num_streams)
@@ -109,7 +109,7 @@ void StorageDisaggregated::readThroughS3(
     auto read_task = buildReadTaskWithBackoff(db_context);
 
     buildRemoteSegmentSourceOps(
-        exec_status,
+        exec_context,
         group_builder,
         db_context,
         read_task,
@@ -123,9 +123,9 @@ void StorageDisaggregated::readThroughS3(
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
-    extraCast(exec_status, group_builder, *analyzer);
+    extraCast(exec_context, group_builder, *analyzer);
     // Handle filter
-    filterConditions(exec_status, group_builder, *analyzer);
+    filterConditions(exec_context, group_builder, *analyzer);
 }
 
 DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
@@ -569,7 +569,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 }
 
 void StorageDisaggregated::buildRemoteSegmentSourceOps(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DM::Remote::RNReadTaskPtr & read_task,
@@ -584,7 +584,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     {
         group_builder.addConcurrency(DM::Remote::RNSegmentSourceOp::create({
             .debug_tag = log->identifier(),
-            .exec_status = exec_status,
+            .exec_context = exec_context,
             // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
             // because we want to extend the lifetime of the WorkerPtr until read is finished.
             // Also, we want to start the Worker after the read.
