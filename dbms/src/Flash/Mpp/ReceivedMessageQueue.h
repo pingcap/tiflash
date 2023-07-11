@@ -70,15 +70,15 @@ public:
     MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
-    bool pushFromLocal(size_t source_index,
-                       const String & req_info,
-                       const TrackedMppDataPacketPtr & tracked_packet,
-                       ReceiverMode mode);
+    bool pushLocalPacket(size_t source_index,
+                         const String & req_info,
+                         const TrackedMppDataPacketPtr & tracked_packet,
+                         ReceiverMode mode);
 
-    MPMCQueueResult pushFromGRPC(size_t source_index,
-                                 const String & req_info,
-                                 const TrackedMppDataPacketPtr & tracked_packet,
-                                 GRPCKickTag * new_tag);
+    MPMCQueueResult pushGRPCPacket(size_t source_index,
+                                   const String & req_info,
+                                   const TrackedMppDataPacketPtr & tracked_packet,
+                                   GRPCKickTag * new_tag);
 
     void finish()
     {
@@ -107,7 +107,7 @@ private:
     const LoggerPtr log;
     std::atomic<Int64> * data_size_in_queue;
     const size_t fine_grained_channel_size;
-    /// msg_channel is a bounded queue that saves the received messages
+    /// grpc_recv_queue is a bounded queue that saves the received messages
     /// msg_channels_for_fine_grained_shuffle is unbounded queues that saves fine grained received messages
     /// all the received messages in msg_channels_for_fine_grained_shuffle must be saved in msg_channel first, so the
     /// total size of `ReceivedMessageQueue` is still under control even if msg_channels_for_fine_grained_shuffle

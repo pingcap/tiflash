@@ -161,7 +161,7 @@ private:
         }
 
         stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
-        auto res = message_queue->pushFromGRPC(request.source_index, req_info, packet, asGRPCKickTag());
+        auto res = message_queue->pushGRPCPacket(request.source_index, req_info, packet, asGRPCKickTag());
         switch (res)
         {
         case MPMCQueueResult::OK:

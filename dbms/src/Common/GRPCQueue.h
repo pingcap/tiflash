@@ -106,7 +106,7 @@ public:
         if (res == MPMCQueueResult::EMPTY)
         {
             // Add lock and double check if this queue is empty.
-            std::unique_lock lock(mu);
+            std::lock_guard<std::mutex> lock(mu);
             res = send_queue.tryPop(data);
             if (res == MPMCQueueResult::EMPTY)
             {
@@ -275,7 +275,7 @@ public:
         if (res == MPMCQueueResult::FULL)
         {
             // Add lock and double check if this queue is full.
-            std::unique_lock lock(mu);
+            std::lock_guard<std::mutex> lock(mu);
             res = recv_queue.tryPush(data);
             if (res == MPMCQueueResult::FULL)
                 data_tags.push_back(std::make_pair(std::move(data), new_tag));

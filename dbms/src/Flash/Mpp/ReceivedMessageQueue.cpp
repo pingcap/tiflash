@@ -165,10 +165,10 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 }
 
 template <bool is_force>
-bool ReceivedMessageQueue::pushFromLocal(size_t source_index,
-                                         const String & req_info,
-                                         const TrackedMppDataPacketPtr & tracked_packet,
-                                         ReceiverMode mode)
+bool ReceivedMessageQueue::pushLocalPacket(size_t source_index,
+                                           const String & req_info,
+                                           const TrackedMppDataPacketPtr & tracked_packet,
+                                           ReceiverMode mode)
 {
     auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
     if (!received_message->containUsefulMessage())
@@ -187,10 +187,10 @@ bool ReceivedMessageQueue::pushFromLocal(size_t source_index,
     return success;
 }
 
-MPMCQueueResult ReceivedMessageQueue::pushFromGRPC(size_t source_index,
-                                                   const String & req_info,
-                                                   const TrackedMppDataPacketPtr & tracked_packet,
-                                                   GRPCKickTag * new_tag)
+MPMCQueueResult ReceivedMessageQueue::pushGRPCPacket(size_t source_index,
+                                                     const String & req_info,
+                                                     const TrackedMppDataPacketPtr & tracked_packet,
+                                                     GRPCKickTag * new_tag)
 {
     auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
     if (!received_message->containUsefulMessage())
@@ -206,13 +206,13 @@ MPMCQueueResult ReceivedMessageQueue::pushFromGRPC(size_t source_index,
 
 template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
-template bool ReceivedMessageQueue::pushFromLocal<true>(size_t source_index,
-                                                        const String & req_info,
-                                                        const TrackedMppDataPacketPtr & tracked_packet,
-                                                        ReceiverMode mode);
-template bool ReceivedMessageQueue::pushFromLocal<false>(size_t source_index,
-                                                         const String & req_info,
-                                                         const TrackedMppDataPacketPtr & tracked_packet,
-                                                         ReceiverMode mode);
+template bool ReceivedMessageQueue::pushLocalPacket<true>(size_t source_index,
+                                                          const String & req_info,
+                                                          const TrackedMppDataPacketPtr & tracked_packet,
+                                                          ReceiverMode mode);
+template bool ReceivedMessageQueue::pushLocalPacket<false>(size_t source_index,
+                                                           const String & req_info,
+                                                           const TrackedMppDataPacketPtr & tracked_packet,
+                                                           ReceiverMode mode);
 
 } // namespace DB

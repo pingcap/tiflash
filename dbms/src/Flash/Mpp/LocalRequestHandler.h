@@ -37,7 +37,7 @@ struct LocalRequestHandler
     template <bool is_force>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
     {
-        return msg_queue->pushFromLocal<is_force>(source_index, req_info, tracked_packet, ReceiverMode::Local);
+        return msg_queue->pushLocalPacket<is_force>(source_index, req_info, tracked_packet, ReceiverMode::Local);
     }
 
     bool isWritable() const
