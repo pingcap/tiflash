@@ -854,11 +854,6 @@ DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
 
 DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer)
 {
-    for (auto & [fname, info] : merged_sub_file_infos)
-    {
-        LOG_INFO(Logger::get("hyy"), "fname, offset, size in merged_sub_file_infos is: {} {} {}", fname, info.offset, info.size);
-    }
-
     auto offset = buffer.count();
 
     writeIntBinary(merged_files.size(), buffer);
@@ -1148,7 +1143,6 @@ void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_p
 
 void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
 {
-    LOG_INFO(Logger::get("hyy"), "finalizeSmallFiles in file id is {}", file_id);
     auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
         checkMergedFile(writer, file_provider, write_limiter);
 
@@ -1156,10 +1150,8 @@ void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & fil
         std::vector<char> read_buf(fsize);
         auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
-        LOG_INFO(Logger::get("hyy"), "write before copy_file_to_cur with getMaterializedBytes is {}", writer.buffer->getMaterializedBytes());
+
         writer.buffer->write(read_buf.data(), read_buf.size());
-        LOG_INFO(Logger::get("hyy"), "write copy_file_to_cur with read_buf.size() is {}", read_buf.size());
-        LOG_INFO(Logger::get("hyy"), "write after copy_file_to_cur with getMaterializedBytes is {}", writer.buffer->getMaterializedBytes());
         merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, 0, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
         writer.file_info.size += read_buf.size();
     };
@@ -1188,8 +1180,6 @@ void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & fil
             }
         }
     }
-
-    LOG_INFO(Logger::get("hyy"), "before cur_write_file sync");
 
     writer.buffer->sync();
     merged_files.push_back(writer.file_info);

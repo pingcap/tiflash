@@ -114,6 +114,7 @@ DMFileReader::Stream::Stream(
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
             PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
         }
+
         return res;
     };
 
@@ -198,7 +199,7 @@ DMFileReader::Stream::Stream(
                 reader.file_provider,
                 reader.dmfile->colDataPath(file_name_base),
                 reader.dmfile->encryptionDataPath(file_name_base),
-                estimated_size,
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                 read_limiter,
                 reader.dmfile->configuration->getChecksumAlgorithm(),
                 reader.dmfile->configuration->getChecksumFrameLength());
@@ -230,7 +231,7 @@ DMFileReader::Stream::Stream(
                 reader.file_provider,
                 reader.dmfile->colDataPath(file_name_base),
                 reader.dmfile->encryptionDataPath(file_name_base),
-                estimated_size,
+                reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                 read_limiter,
                 reader.dmfile->configuration->getChecksumAlgorithm(),
                 reader.dmfile->configuration->getChecksumFrameLength(),
@@ -244,7 +245,7 @@ DMFileReader::Stream::Stream(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
-            estimated_size,
+            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
             read_limiter,
             reader.dmfile->configuration->getChecksumAlgorithm(),
             reader.dmfile->configuration->getChecksumFrameLength());

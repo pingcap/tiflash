@@ -224,7 +224,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
             if (dmfile->useMetaV2())
             {
-                stream->marks.emplace_back(MarkInCompressedFile{stream->compressed_buf->count(), offset_in_compressed_block});
+                stream->marks.emplace_back(MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
             }
             else
             {
@@ -267,13 +267,20 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     size_t nullmap_mark_bytes = 0;
     size_t index_bytes = 0;
 #ifndef NDEBUG
-    auto examine_buffer_size = [](auto & buf, auto & fp) {
+    auto examine_buffer_size = [&](auto & buf, auto & fp) {
         if (!fp.isEncryptionEnabled())
         {
             auto fd = buf.getFD();
             struct stat file_stat = {};
             ::fstat(fd, &file_stat);
-            assert(buf.getMaterializedBytesWithHeader() == file_stat.st_size);
+            if (!dmfile->configuration)
+            {
+                assert(buf.getMaterializedBytes() == file_stat.st_size);
+            }
+            else
+            {
+                assert(buf.getMaterializedBytesWithHeader() == file_stat.st_size);
+            }
         }
     };
 #endif
@@ -361,18 +368,35 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             examine_buffer_size(*stream->mark_file, *this->file_provider);
             examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
-
-            bytes_written += stream->plain_file->getMaterializedBytesWithHeader() + stream->mark_file->getMaterializedBytesWithHeader();
-            if (is_nullmap_stream(substream))
-            {
-                nullmap_data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
-                nullmap_mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+            if (!dmfile->configuration)
+            { // v1
+                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
+                else
+                {
+                    data_bytes = stream->plain_file->getMaterializedBytes();
+                    mark_bytes = stream->mark_file->getMaterializedBytes();
+                }
             }
             else
-            {
-                data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
-                mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+            { // v2
+                bytes_written += stream->plain_file->getMaterializedBytesWithHeader() + stream->mark_file->getMaterializedBytesWithHeader();
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
+                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+                }
+                else
+                {
+                    data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
+                    mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+                }
             }
+
 
             if (stream->minmaxes)
             {
@@ -390,7 +414,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                     // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                     // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                    index_bytes = buf.getMaterializedBytesWithHeader();
+                    index_bytes = buf.getMaterializedBytes();
                     bytes_written += is_empty_file ? 0 : index_bytes;
                 }
                 else

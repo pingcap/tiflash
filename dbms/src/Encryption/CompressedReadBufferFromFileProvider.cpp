@@ -115,14 +115,11 @@ void CompressedReadBufferFromFileProvider<has_checksum>::seek(size_t offset_in_c
 template <bool has_checksum>
 size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, size_t n)
 {
-    LOG_INFO(Logger::get("hyy"), "into CompressedReadBufferFromFileProvider readBig with n {}", n);
     size_t bytes_read = 0;
 
     /// If there are unread bytes in the buffer, then we copy needed to `to`.
     if (pos < working_buffer.end())
         bytes_read += read(to, std::min(static_cast<size_t>(working_buffer.end() - pos), n));
-
-    LOG_INFO(Logger::get("hyy"), "into CompressedReadBufferFromFileProvider bytes_read is {}", bytes_read);
 
     /// If you need to read more - we will, if possible, decompress at once to `to`.
     while (bytes_read < n)
@@ -131,7 +128,6 @@ size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, si
         size_t size_compressed_without_checksum = 0;
 
         size_t new_size_compressed = this->readCompressedData(size_decompressed, size_compressed_without_checksum);
-        LOG_INFO(Logger::get("hyy"), "size_decompressed is {}, size_compressed_without_checksum is {}, new_size_compressed is {}", size_decompressed, size_compressed_without_checksum, new_size_compressed);
         size_compressed = 0; /// file_in no longer points to the end of the block in working_buffer.
         if (!new_size_compressed)
             return bytes_read;
