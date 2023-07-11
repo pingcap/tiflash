@@ -14,9 +14,9 @@
 
 #include "CompressionSettings.h"
 
+#include <Common/config.h>
 #include <Interpreters/Settings.h>
 #include <lz4hc.h>
-
 
 namespace DB
 {
@@ -43,6 +43,10 @@ int CompressionSettings::getDefaultLevel(CompressionMethod method)
         return LZ4HC_CLEVEL_DEFAULT;
     case CompressionMethod::ZSTD:
         return 1;
+#if USE_QPL
+    case CompressionMethod::QPL:
+        return 1;
+#endif
     default:
         return -1;
     }
