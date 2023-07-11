@@ -251,6 +251,8 @@ void PhysicalJoin::buildPipeline(
     Context & context,
     PipelineExecutorContext & exec_context)
 {
+    join_ptr->initSpillCtxForPipeline(exec_context);
+
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
         executor_id,

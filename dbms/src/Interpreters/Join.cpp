@@ -29,6 +29,7 @@
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
+#include <Operators/JoinSpillContext.h>
 
 #include <exception>
 #include <magic_enum.hpp>
@@ -362,7 +363,11 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
             LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
         if (max_bytes_before_external_join > 0)
+        {
             build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
+            if (spill_ctx_for_pipeline)
+                spill_ctx_for_pipeline->init<true>(build_concurrency);
+        }
     }
     setSampleBlock(sample_block);
 }
@@ -373,7 +378,11 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
+    {
         probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+        if (spill_ctx_for_pipeline)
+            spill_ctx_for_pipeline->init<false>(probe_concurrency);
+    }
 }
 
 /// the block should be valid.
@@ -1743,14 +1752,26 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
+void Join::initSpillCtxForPipeline(PipelineExecutorContext & exec_context)
+{
+    RUNTIME_CHECK(!spill_ctx_for_pipeline);
+    spill_ctx_for_pipeline = std::make_shared<JoinSpillContext>(exec_context, shared_from_this());
+}
+
 void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && blocks)
 {
-    build_spiller->spillBlocks(std::move(blocks), part_id);
+    if (spill_ctx_for_pipeline)
+        spill_ctx_for_pipeline->spillBlocks<true>(part_id, std::move(blocks));
+    else
+        build_spiller->spillBlocks(std::move(blocks), part_id);
 }
 
 void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
 {
-    probe_spiller->spillBlocks(std::move(blocks), part_id);
+    if (spill_ctx_for_pipeline)
+        spill_ctx_for_pipeline->spillBlocks<false>(part_id, std::move(blocks));
+    else
+        probe_spiller->spillBlocks(std::move(blocks), part_id);
 }
 
 void Join::spillMostMemoryUsedPartitionIfNeed()

@@ -21,6 +21,8 @@ namespace DB
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
+class JoinSpillContext;
+
 class HashJoinBuildSink : public SinkOp
 {
 public:
@@ -28,12 +30,7 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_ptr_,
-        size_t concurrency_build_index_)
-        : SinkOp(exec_context_, req_id)
-        , join_ptr(join_ptr_)
-        , concurrency_build_index(concurrency_build_index_)
-    {
-    }
+        size_t concurrency_build_index_);
 
     String getName() const override
     {
@@ -43,8 +40,14 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus awaitImpl() override;
+
 private:
     JoinPtr join_ptr;
     size_t concurrency_build_index;
+
+    JoinSpillContext & spill_context;
+
+    bool is_finish_status = false;
 };
 } // namespace DB

@@ -35,6 +35,10 @@
 
 namespace DB
 {
+class PipelineExecutorContext;
+class JoinSpillContext;
+using JoinSpillContextPtr = std::shared_ptr<JoinSpillContext>;
+
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -132,7 +136,7 @@ using PartitionBlocks = std::list<PartitionBlock>;
   *  as in standard SQL.
   */
 
-class Join
+class Join : public std::enable_shared_from_this<Join>
 {
 public:
     Join(const Names & key_names_left_,
@@ -263,8 +267,7 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    void initSpillCtxForPipeline(PipelineExecutorContext & exec_context);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -276,6 +279,11 @@ public:
     // only use for right semi, right anti joins with other conditions,
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
+
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
+
+    JoinSpillContextPtr spill_ctx_for_pipeline;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -332,9 +340,6 @@ private:
     bool is_spilled = false;
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
-
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
 
     std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
@@ -450,6 +455,9 @@ private:
     void workAfterProbeFinish();
 
     void generateRuntimeFilterValues(const Block & block);
+
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
 };
 
 } // namespace DB
