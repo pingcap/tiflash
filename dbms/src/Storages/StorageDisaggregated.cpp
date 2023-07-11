@@ -190,10 +190,11 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
-    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
-    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
+    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+    dispatch_req_meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
     dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
 
