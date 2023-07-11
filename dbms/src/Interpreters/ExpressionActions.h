@@ -33,6 +33,7 @@ extern const int LOGICAL_ERROR;
 
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
+using NamesWithAliasesVec = std::vector<NamesWithAliases>;
 
 class Join;
 class Expand;
@@ -69,6 +70,8 @@ public:
         PROJECT,
 
         EXPAND,
+
+        CONVERT_TO_NULLABLE,
     };
 
     Type type;
@@ -77,6 +80,9 @@ public:
     std::string source_name;
     std::string result_name;
     DataTypePtr result_type;
+
+    /// For CONVERT_TO_NULLABLE
+    std::string col_need_to_nullable;
 
     /// For ADD_COLUMN.
     ColumnPtr added_column;
@@ -111,6 +117,7 @@ public:
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
     static ExpressionAction expandSource(GroupingSets grouping_sets);
+    static ExpressionAction convertToNullable(const std::string & col_name);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;
@@ -210,6 +217,7 @@ private:
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+using ExpressionActionsPtrVec = std::vector<ExpressionActionsPtr>;
 
 
 /** The sequence of transformations over the block.

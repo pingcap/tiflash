@@ -90,26 +90,26 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 }
 
 void PhysicalWindow::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t concurrency)
 {
-    executeExpression(exec_status, group_builder, window_description.before_window, log);
+    executeExpression(exec_context, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
 
     if (!fine_grained_shuffle.enable())
-        executeUnion(exec_status, group_builder, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        executeUnion(exec_context, group_builder, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
+        builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_context, log->identifier(), window_description));
     });
 
     if (!fine_grained_shuffle.enable() && is_restore_concurrency)
-        restoreConcurrency(exec_status, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
+        restoreConcurrency(exec_context, group_builder, concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
 
-    executeExpression(exec_status, group_builder, window_description.after_window, log);
+    executeExpression(exec_context, group_builder, window_description.after_window, log);
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

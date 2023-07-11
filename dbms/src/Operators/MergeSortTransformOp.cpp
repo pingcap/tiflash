@@ -17,7 +17,7 @@
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/SortHelper.h>
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/MergeSortTransformOp.h>
 
 #include <magic_enum.hpp>
@@ -33,17 +33,7 @@ void MergeSortTransformOp::operatePrefixImpl()
     assert(!order_desc.empty());
 
     if (max_bytes_before_external_sort > 0)
-    {
-        if (Spiller::supportSpill(header_without_constants))
-        {
-            spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
-        }
-        else
-        {
-            max_bytes_before_external_sort = 0;
-            LOG_WARNING(log, "Sort/TopN does not support spill, reason: input data contains only constant columns");
-        }
-    }
+        spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
 void MergeSortTransformOp::operateSuffixImpl()
@@ -120,7 +110,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
-        [&]() { return exec_status.isCancelled(); });
+        [&]() { return exec_context.isCancelled(); });
     // fallback to partial phase.
     if (!cached_handler->batchRead())
         return fromSpillToPartial();

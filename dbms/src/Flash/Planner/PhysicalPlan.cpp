@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -184,6 +185,12 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeExpand2:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -276,11 +283,11 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorStatus & exec_status, Context & context)
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Context & context)
 {
     RUNTIME_CHECK(root_node);
     PipelineBuilder builder{log->identifier()};
-    root_node->buildPipeline(builder, context, exec_status);
+    root_node->buildPipeline(builder, context, exec_context);
     root_node.reset();
     auto pipeline = builder.build();
     auto to_string = [&]() -> String {

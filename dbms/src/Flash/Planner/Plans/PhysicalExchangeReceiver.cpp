@@ -94,7 +94,7 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 }
 
 void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t concurrency)
@@ -106,7 +106,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroupImpl(
     {
         group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 mpp_exchange_receiver,
                 /*stream_id=*/fine_grained_shuffle.enable() ? partition_id : 0));

@@ -59,15 +59,15 @@ void PhysicalWindowSort::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
 }
 
 void PhysicalWindowSort::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
 {
     if (fine_grained_shuffle.enable())
-        executeLocalSort(exec_status, group_builder, order_descr, {}, context, log);
+        executeLocalSort(exec_context, group_builder, order_descr, {}, context, log);
     else
-        executeFinalSort(exec_status, group_builder, order_descr, {}, context, log);
+        executeFinalSort(exec_context, group_builder, order_descr, {}, context, log);
 }
 
 void PhysicalWindowSort::finalize(const Names & parent_require)
