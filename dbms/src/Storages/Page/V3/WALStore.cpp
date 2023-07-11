@@ -197,7 +197,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
     }
 
     // traverse in reverse order,
-    // so that after find the first log file whose max sequence is smaller or equal than snap_sequence,
+    // so that once the first log file whose max sequence is smaller or equal to snap_sequence is found,
     // we don't need to check the max sequence for the rest log files.
     bool found_log_file_smaller_than_snap_sequence = false;
     LogFilenameSet snap_log_files;
