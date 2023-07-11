@@ -82,6 +82,18 @@ struct PartitionBlock
 };
 using PartitionBlocks = std::list<PartitionBlock>;
 
+struct PartitionBlockVec
+{
+    size_t partition_index;
+    Blocks blocks;
+
+    PartitionBlockVec(size_t partition_index_, Blocks && blocks_)
+        : partition_index(partition_index_)
+        , blocks(std::move(blocks_))
+    {}
+};
+using PartitionBlockVecs = std::vector<PartitionBlockVec>;
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -456,8 +468,8 @@ private:
 
     void generateRuntimeFilterValues(const Block & block);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const;
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const;
+    void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const;
+    void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const;
 };
 
 } // namespace DB

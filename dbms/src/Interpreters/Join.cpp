@@ -439,6 +439,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             }
         }
 
+        PartitionBlockVecs partition_block_vecs;
         for (size_t j = stream_index; j < build_concurrency + stream_index; ++j)
         {
             stored_block = nullptr;
@@ -468,8 +469,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            spillBuildSideBlocks(i, std::move(blocks_to_spill), stream_index);
+            if (!blocks_to_spill.empty())
+                partition_block_vecs.emplace_back(i, blocks_to_spill);
         }
+        spillBuildSideBlocks(std::move(partition_block_vecs), stream_index);
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
         if (restore_round == 2)
@@ -1758,20 +1761,34 @@ void Join::initSpillCtxForPipeline(PipelineExecutorContext & exec_context)
     spill_ctx_for_pipeline = std::make_shared<JoinSpillContext>(exec_context, shared_from_this());
 }
 
-void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const
+void Join::spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const
 {
+    if (partition_block_vecs.empty())
+         return;
     if (spill_ctx_for_pipeline)
         spill_ctx_for_pipeline->spillBlocks<true>(part_id, std::move(blocks), stream_index);
     else
-        build_spiller->spillBlocks(std::move(blocks), part_id);
+    {
+        for (auto & partition_block_vec : partition_block_vecs)
+        {
+            build_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
+        }
+    }
 }
 
-void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks, size_t stream_index) const
+void Join::spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const
 {
+    if (partition_block_vecs.empty())
+         return;
     if (spill_ctx_for_pipeline)
         spill_ctx_for_pipeline->spillBlocks<false>(part_id, std::move(blocks), stream_index);
     else
-        probe_spiller->spillBlocks(std::move(blocks), part_id);
+    {
+        for (auto & partition_block_vec : partition_block_vecs)
+        {
+            probe_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
+        }
+    }
 }
 
 void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
@@ -1821,7 +1838,12 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
     }
-    spillBuildSideBlocks(target_partition_index, std::move(blocks_to_spill), stream_index);
+    if (!blocks_to_spill.empty())
+    {
+        PartitionBlockVecs partition_block_vecs;
+        partition_block_vecs.emplace_back(target_partition_index, std::move(blocks_to_spill));
+        spillBuildSideBlocks(std::move(partition_block_vecs), stream_index);
+    }
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
@@ -1912,6 +1934,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
 void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index)
 {
     Blocks partition_blocks = dispatchBlock(key_names_left, block);
+    PartitionBlockVecs spilled_partition_block_vecs;
     for (size_t i = 0; i < partition_blocks.size(); ++i)
     {
         if (partition_blocks[i].rows() == 0)
@@ -1929,29 +1952,39 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
         }
         if (need_spill)
         {
-            spillProbeSideBlocks(i, std::move(blocks_to_spill), stream_index);
+            if (!blocks_to_spill.empty())
+                spilled_partition_block_vecs.emplace_back(i, std::move(blocks_to_spill));
         }
         else
         {
             partition_blocks_list.emplace_back(i, std::move(partition_blocks[i]));
         }
     }
+    spillProbeSideBlocks(std::move(spilled_partition_block_vecs), stream_index);
 }
 
 void Join::spillAllBuildPartitions(size_t stream_index)
 {
+    PartitionBlockVecs partition_block_vecs;
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        spillBuildSideBlocks(i, partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller), stream_index);
+        auto blocks = partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller);
+        if (!blocks.empty())
+            partition_block_vecs.emplace_back(i, std::move(blocks));
     }
+    spillBuildSideBlocks(std::move(partition_block_vecs), stream_index);
 }
 
 void Join::spillAllProbePartitions(size_t stream_index)
 {
+    PartitionBlockVecs partition_block_vecs;
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        spillProbeSideBlocks(i, partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller), stream_index);
+        auto blocks = partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller);
+        if (!blocks.empty())
+            partition_block_vecs.emplace_back(i, std::move(blocks));
     }
+    spillProbeSideBlocks(std::move(partition_block_vecs), stream_index);
 }
 
 void Join::releaseAllPartitions()
