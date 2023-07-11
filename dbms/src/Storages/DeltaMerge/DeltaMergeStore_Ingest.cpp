@@ -538,6 +538,7 @@ void DeltaMergeStore::ingestFiles(
         }
 
         // Check whether all external files are contained by the range.
+<<<<<<< HEAD
         // Currently this check is disabled, see https://github.com/pingcap/tiflash/pull/6519
         // for (const auto & ext_file : external_files)
         // {
@@ -550,6 +551,22 @@ void DeltaMergeStore::ingestFiles(
         //         range.toDebugString(),
         //         ext_file.range.toDebugString());
         // }
+=======
+        if (dm_context->db_context.getSettingsRef().dt_enable_ingest_check)
+        {
+            for (const auto & ext_file : external_files)
+            {
+                RUNTIME_CHECK_MSG(
+                    compare(range.getStart(), ext_file.range.getStart()) <= 0 || compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                    "Detected illegal region boundary: range={} file_range={} . "
+                    "TiFlash will exit to prevent data inconsistency. "
+                    "If you accept data inconsistency and want to continue the service, "
+                    "set profiles.default.dt_enable_ingest_check=false .",
+                    range.toDebugString(),
+                    ext_file.range.toDebugString());
+            }
+        }
+>>>>>>> b4cfc67982 (Add flag for ingest range check (#7767))
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);

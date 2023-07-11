@@ -324,6 +324,23 @@ struct Settings
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
+<<<<<<< HEAD
+=======
+    M(SettingBool, dt_enable_ingest_check, true, "Check for illegal ranges when ingesting SST files.")                                                                                                                                  \
+    \
+    M(SettingInt64, remote_checkpoint_interval_seconds, 30, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
+    M(SettingBool, remote_checkpoint_only_upload_manifest, true, "Only upload manifest data when uploading checkpoint")                                                                                                                 \
+    M(SettingInt64, remote_gc_method, 1, "The method of running GC task on the remote store. 1 - lifecycle, 2 - scan.")                                                                                                                 \
+    M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
+    M(SettingInt64, remote_gc_verify_consistency, 0, "Verify the consistenct of valid locks when doing GC")                                                                                                                             \
+    M(SettingInt64, remote_gc_min_age_seconds, 3600, "The file will NOT be compacted when the time difference between the last modification is less than this threshold")                                                               \
+    M(SettingDouble, remote_gc_ratio, 0.5, "The files with valid rate less than this threshold will be compacted")                                                                                                                      \
+    M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
+    M(SettingDouble, disagg_read_concurrency_scale, 20.0, "Scale * logical cpu cores = disaggregated read IO concurrency.")                                                                                                             \
+    \
+    M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 60, "The max time wait for a usable checkpoint for FAP. Unit is second.")                                                                                                      \
+    \
+>>>>>>> b4cfc67982 (Add flag for ingest range check (#7767))
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.")                                                                                               \
     M(SettingOverflowMode<false>, set_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.")                                                                                                                     \
