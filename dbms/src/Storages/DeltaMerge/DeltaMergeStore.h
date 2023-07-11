@@ -46,7 +46,7 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 class StoragePathPool;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
 namespace DM
@@ -373,7 +373,7 @@ public:
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         const DB::Settings & db_settings,

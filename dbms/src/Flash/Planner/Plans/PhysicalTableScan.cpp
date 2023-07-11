@@ -75,27 +75,27 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 void PhysicalTableScan::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
+    PipelineExecutorContext & exec_context)
 {
     // For building PipelineExec in compile time.
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
-        disaggregated_tiflash_interpreter.execute(exec_status, pipeline_exec_builder);
-        buildProjection(exec_status, pipeline_exec_builder, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
+        disaggregated_tiflash_interpreter.execute(exec_context, pipeline_exec_builder);
+        buildProjection(exec_context, pipeline_exec_builder, disaggregated_tiflash_interpreter.analyzer->getCurrentInputColumns());
     }
     else
     {
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
-        storage_interpreter.execute(exec_status, pipeline_exec_builder);
-        buildProjection(exec_status, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
+        storage_interpreter.execute(exec_context, pipeline_exec_builder);
+        buildProjection(exec_context, pipeline_exec_builder, storage_interpreter.analyzer->getCurrentInputColumns());
     }
 
-    PhysicalPlanNode::buildPipeline(builder, context, exec_status);
+    PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }
 
 void PhysicalTableScan::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & /*exec_status*/,
+    PipelineExecutorContext & /*exec_status*/,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
@@ -114,7 +114,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTy
 }
 
 void PhysicalTableScan::buildProjection(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const NamesAndTypes & storage_schema)
 {
@@ -124,7 +124,7 @@ void PhysicalTableScan::buildProjection(
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(group_builder.getCurrentHeader());
     schema_actions->add(ExpressionAction::project(schema_project_cols));
-    executeExpression(exec_status, group_builder, schema_actions, log);
+    executeExpression(exec_context, group_builder, schema_actions, log);
 }
 
 void PhysicalTableScan::finalize(const Names & parent_require)

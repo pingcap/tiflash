@@ -17,7 +17,7 @@
 
 namespace DB
 {
-ExecTaskStatus LoadBucketTask::doExecuteIOImpl()
+ExecTaskStatus LoadBucketTask::executeIOImpl()
 {
     input.load();
     return ExecTaskStatus::FINISHED;
