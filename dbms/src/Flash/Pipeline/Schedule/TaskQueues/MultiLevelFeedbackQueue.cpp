@@ -254,15 +254,13 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const String & query_id)
     if unlikely (query_id.empty())
         return;
 
+    std::lock_guard lock(mu);
+    if (cancel_query_id_cache.add(query_id))
     {
-        std::lock_guard lock(mu);
-        if (cancel_query_id_cache.add(query_id))
-        {
-            for (const auto & queue : level_queues)
-                moveCancelledTasks(*queue, cancel_task_queue, query_id);
-        }
+        for (const auto & queue : level_queues)
+            moveCancelledTasks(*queue, cancel_task_queue, query_id);
+        cv.notify_all();
     }
-    cv.notify_all();
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;
