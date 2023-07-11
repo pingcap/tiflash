@@ -141,7 +141,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
                 if likely (original_msg != nullptr)
                     RUNTIME_CHECK_MSG(*original_msg->getRemainingConsumers() == 0, "Fine grained receiver pop a message that is not full consumed, remaining consumer: {}", *original_msg->getRemainingConsumers());
 #else
-                grpc_recv_queue.dequeue();
+                grpc_recv_queue.tryDequeue();
 #endif
             }
         }
@@ -196,7 +196,7 @@ MPMCQueueResult ReceivedMessageQueue::pushFromGRPC(size_t source_index,
     if (!received_message->containUsefulMessage())
         return MPMCQueueResult::OK;
 
-    auto res = grpc_recv_queue.push(std::move(received_message), new_tag);
+    auto res = grpc_recv_queue.pushWithTag(std::move(received_message), new_tag);
     if likely (res == MPMCQueueResult::OK || res == MPMCQueueResult::FULL)
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
 

@@ -96,7 +96,7 @@ public:
         while (true)
         {
             TrackedMppDataPacketPtr packet;
-            auto res = async_tunnel_sender->pop(packet, this);
+            auto res = async_tunnel_sender->popWithTag(packet, this);
             switch (res)
             {
             case MPMCQueueResult::OK:

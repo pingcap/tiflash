@@ -241,12 +241,12 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        return queue.push(std::move(data));
+        return queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
     bool forcePush(TrackedMppDataPacketPtr && data) override
     {
-        return queue.forcePush(std::move(data));
+        return queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     bool finish() override
@@ -269,9 +269,9 @@ public:
         return queue.getCancelReason();
     }
 
-    MPMCQueueResult pop(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
+    MPMCQueueResult popWithTag(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
     {
-        return queue.pop(data, new_tag);
+        return queue.popWithTag(data, new_tag);
     }
 
     void subDataSizeMetric(size_t size)

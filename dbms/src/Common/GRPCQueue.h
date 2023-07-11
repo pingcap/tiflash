@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,20 +29,21 @@ namespace DB
 namespace tests
 {
 class TestGRPCSendQueue;
+class TestGRPCRecvQueue;
 } // namespace tests
 
 /// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
 ///
-/// In streaming rpc, a client/server may send messages continuous.
-/// However, async grpc is only allowed to have one outstanding write on the
-/// same side of the same stream without waiting for the completion queue.
-/// Further more, the message usually is generated from another thread which
-/// introduce a race between this thread and grpc threads.
-/// The grpc cpp framework provides a tool named `Alarm` can be used to push a tag into
-/// completion queue thus the write can be done in grpc threads. But `Alarm` must need
-/// a timeout and it uses a timer to trigger the notification, which is wasteful if we want
-/// to trigger it immediately. So we can say `kickOneTag` function is a
-/// immediately-triggered `Alarm`.
+/// In streaming rpc, a client/server may send(write) messages continuous.
+/// However, async grpc is only allowed to have one outstanding write on the same side
+/// of the same stream. Furthermore, when queue is empty, the process of writing messages
+/// is stopped in grpc thread and the next message generated from compute thread should
+/// be writen by itself in the previous implementation.
+/// The synchronization between grpc thread and compute thread is pretty error-prone.
+///
+/// GRPCSendQueue solves this issue and makes all write happen in grpc thread by
+/// 1. for pop function calling in grpc thread, save the tag when queue is empty.
+/// 2. for push function calling in compute thread, push the tag into completion queue if any.
 template <typename T>
 class GRPCSendQueue
 {
@@ -58,35 +59,33 @@ public:
         RUNTIME_ASSERT(tag == nullptr, log, "tag is not nullptr");
     }
 
-    // For test usage only.
+    /// For test usage only.
     void setKickFuncForTest(GRPCKickFunc && func)
     {
         test_kick_func = std::move(func);
     }
 
-    /// Push the data from the local node and kick the grpc completion queue.
-    ///
-    /// Return true if push succeed.
-    /// Else return false.
-    bool push(T && data)
+    /// Blocking push the data from the local node and kick the grpc completion queue.
+    MPMCQueueResult push(T && data)
     {
-        auto ret = send_queue.push(std::move(data)) == MPMCQueueResult::OK;
-        if (ret)
+        auto ret = send_queue.push(std::move(data));
+        if (ret == MPMCQueueResult::OK)
             kickOneTag(true);
 
         return ret;
     }
 
-    bool forcePush(T && data)
+    /// Non-blocking force to push data into queue.
+    MPMCQueueResult forcePush(T && data)
     {
-        auto ret = send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
-        if (ret)
+        auto ret = send_queue.forcePush(std::move(data));
+        if (ret == MPMCQueueResult::OK)
             kickOneTag(true);
 
         return ret;
     }
 
-    /// Pop the data from queue in grpc thread.
+    /// Non-blocking pop the data from queue in grpc thread.
     ///
     /// Return OK if pop is done.
     /// Return FINISHED if the queue is finished and empty.
@@ -98,7 +97,7 @@ public:
     /// returns EMPTY because this `new_tag` may be popped out in another
     /// grpc thread immediately. By the way, if this completion queue is only
     /// tied to one grpc thread, this data race will not happen.
-    MPMCQueueResult pop(T & data, GRPCKickTag * new_tag)
+    MPMCQueueResult popWithTag(T & data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
         RUNTIME_ASSERT(new_tag->getCall() != nullptr || test_kick_func, log, "call is null");
@@ -195,6 +194,18 @@ private:
     GRPCKickTag * tag = nullptr;
 };
 
+/// A multi-producer-multi-consumer queue dedicated to async grpc streaming receive work.
+///
+/// In streaming rpc, a client/server may receive(read) messages continuous.
+/// However, async grpc is only allowed to have one outstanding read on the same side
+/// of the same stream. Furthermore, when queue is full, the process of reading messages
+/// is stopped in grpc thread and compute thread should read new message by itself after
+/// handling messages in the previous implementation.
+/// The synchronization between grpc thread and compute thread is pretty error-prone.
+///
+/// GRPCRecvQueue solves this issue and makes all read happen in grpc thread by
+/// 1. for push function calling in grpc thread, save the tag(s) when queue is full.
+/// 2. for pop function calling in compute thread, push one tag into completion queue if any.
 template <typename T>
 class GRPCRecvQueue
 {
@@ -210,12 +221,13 @@ public:
         RUNTIME_ASSERT(data_tags.empty(), log, "data_tags is not empty");
     }
 
-    // For test usage only.
+    /// For test usage only.
     void setKickFuncForTest(GRPCKickFunc && func)
     {
         test_kick_func = std::move(func);
     }
 
+    /// Blocking pop the data from the queue.
     MPMCQueueResult pop(T & data)
     {
         auto ret = recv_queue.pop(data);
@@ -224,6 +236,7 @@ public:
         return ret;
     }
 
+    /// Non-blocking pop the data from the queue.
     MPMCQueueResult tryPop(T & data)
     {
         auto ret = recv_queue.tryPop(data);
@@ -232,15 +245,16 @@ public:
         return ret;
     }
 
-    MPMCQueueResult dequeue()
+    /// Non-blocking dequeue the queue.
+    MPMCQueueResult tryDequeue()
     {
-        auto ret = recv_queue.dequeue();
+        auto ret = recv_queue.tryDequeue();
         if (ret == MPMCQueueResult::OK)
             kickOneTagWithSuccess();
         return ret;
     }
 
-    /// Push the data from the remote node in grpc thread.
+    /// Non-blocking push the data from the remote node in grpc thread.
     ///
     /// Return OK if push is done.
     /// Return FINISHED if the queue is finished and empty.
@@ -252,7 +266,7 @@ public:
     /// returns FULL because this `new_tag` may be popped out in another
     /// grpc thread immediately. By the way, if this completion queue is only
     /// tied to one grpc thread, this data race will not happen.
-    MPMCQueueResult push(T && data, GRPCKickTag * new_tag)
+    MPMCQueueResult pushWithTag(T && data, GRPCKickTag * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
         RUNTIME_ASSERT(new_tag->getCall() != nullptr || test_kick_func, log, "call is null");
@@ -264,18 +278,18 @@ public:
             std::unique_lock lock(mu);
             res = recv_queue.tryPush(data);
             if (res == MPMCQueueResult::FULL)
-                data_tags.push(std::make_pair(std::move(data), new_tag));
+                data_tags.push_back(std::make_pair(std::move(data), new_tag));
         }
         return res;
     }
 
-    /// Push the data from the local node.
+    /// Blocking push the data from the local node.
     MPMCQueueResult push(T && data)
     {
         return recv_queue.push(std::move(data));
     }
 
-    /// Force push the data from the local node.
+    /// Non-blocking force to push the data from the local node.
     MPMCQueueResult forcePush(T && data)
     {
         return recv_queue.forcePush(std::move(data));
@@ -323,6 +337,8 @@ public:
     }
 
 private:
+    friend class tests::TestGRPCRecvQueue;
+
     void kickOneTagWithSuccess()
     {
         GRPCKickTag * t;
@@ -334,7 +350,7 @@ private:
             if (res != MPMCQueueResult::OK)
                 return;
             t = data_tags.front().second;
-            data_tags.pop();
+            data_tags.pop_front();
         }
 
         t->setStatus(true);
@@ -347,7 +363,7 @@ private:
         while (!data_tags.empty())
         {
             GRPCKickTag * t = data_tags.front().second;
-            data_tags.pop();
+            data_tags.pop_front();
             t->setStatus(false);
             t->kick(test_kick_func);
         }
@@ -361,16 +377,16 @@ private:
     ///
     /// Imagine this case:
     /// Thread 1: want to push the data but find the queue is full.
-    /// Thread 2: pop all of the data in queue.
+    /// Thread 2: pop all of the data from queue.
     /// Thread 2: do not kick the completion queue because data_tags is empty.
-    /// Thread 2: wait for popping the new data in queue.
+    /// Thread 2: wait for popping the new data from queue.
     /// Thread 1: push the data and tag into data_tags.
     ///
     /// Thread 1 and Thread 2 get stuck forever.
     std::mutex mu;
 
     GRPCKickFunc test_kick_func;
-    std::queue<std::pair<T, GRPCKickTag *>> data_tags;
+    std::deque<std::pair<T, GRPCKickTag *>> data_tags;
 };
 
 } // namespace DB

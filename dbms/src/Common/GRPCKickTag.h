@@ -26,6 +26,10 @@ using GRPCKickFunc = std::function<grpc_call_error(GRPCKickTag *)>;
 
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
+/// The grpc cpp framework provides a tool named `Alarm` can be used to push a tag into
+/// completion queue thus the next write/read can be done in grpc threads. But `Alarm` must need
+/// a timeout and it uses a timer to trigger the notification, which is wasteful if we want
+/// to trigger it immediately. So we can say `kick` function is a immediately-triggered `Alarm`.
 class GRPCKickTag : public grpc::internal::CompletionQueueTag
 {
 public:
@@ -74,6 +78,11 @@ public:
     void setStatus(bool status_)
     {
         status = status_;
+    }
+
+    bool getStatus() const
+    {
+        return status;
     }
 
     GRPCKickTag * asGRPCKickTag()

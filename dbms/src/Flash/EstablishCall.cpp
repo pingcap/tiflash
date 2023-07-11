@@ -265,7 +265,7 @@ void EstablishCallData::trySendOneMsg()
 {
     TrackedMppDataPacketPtr packet;
     state = WAIT_POP_FROM_QUEUE;
-    auto res = async_tunnel_sender->pop(packet, asGRPCKickTag());
+    auto res = async_tunnel_sender->popWithTag(packet, asGRPCKickTag());
     switch (res)
     {
     case MPMCQueueResult::OK:
