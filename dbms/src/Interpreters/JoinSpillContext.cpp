@@ -111,13 +111,13 @@ void PipelineJoinSpillContext::initProbe(size_t concurrency, size_t partitions, 
 bool PipelineJoinSpillContext::isBuildSideSpilling(size_t stream_index)
 {
     std::lock_guard lock(mu);
-    return 0 == build_spilling_tasks[stream_index];
+    return !build_spilling_tasks.empty() && 0 == build_spilling_tasks[stream_index];
 }
 
 bool PipelineJoinSpillContext::isProbeSideSpilling(size_t stream_index)
 {
     std::lock_guard lock(mu);
-    return 0 == probe_spilling_tasks[stream_index];
+    return !probe_spilling_tasks.empty() && 0 == probe_spilling_tasks[stream_index];
 }
 
 void PipelineJoinSpillContext::spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index)
