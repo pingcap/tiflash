@@ -104,8 +104,6 @@ public:
         const SpillConfig & probe_spill_config_,
         PipelineExecutorContext & exec_context_);
 
-    ~PipelineJoinSpillContext() override;
-
     void initBuild(size_t concurrency, size_t partitions, const Block & sample_block) override;
 
     void initProbe(size_t concurrency, size_t partitions, const Block & sample_block) override;

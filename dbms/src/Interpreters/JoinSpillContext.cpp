@@ -87,13 +87,6 @@ PipelineJoinSpillContext::PipelineJoinSpillContext(
     : JoinSpillContext(req_id, build_spill_config_, probe_spill_config_)
     , exec_context(exec_context_)
 {
-    exec_context.incActiveRefCount();
-}
-
-PipelineJoinSpillContext::~PipelineJoinSpillContext()
-{
-    // In order to ensure that `PipelineExecutorContext` will not be destructed before `PipelineJoinSpillContext` is destructed.
-    exec_context.decActiveRefCount();
 }
 
 void PipelineJoinSpillContext::initBuild(size_t concurrency, size_t partitions, const Block & sample_block)
