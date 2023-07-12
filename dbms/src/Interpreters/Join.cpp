@@ -362,7 +362,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
         }
         if (max_bytes_before_external_join > 0)
         {
-            spill_context->initBuild(build_concurrency, build_sample_block);
+            spill_context->initBuild(build_concurrency, partitions.size(), build_sample_block);
         }
     }
     setSampleBlock(sample_block);
@@ -375,7 +375,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
     {
-        spill_context->initProbe(build_concurrency, probe_sample_block);
+        spill_context->initProbe(probe_concurrency, partitions.size(), probe_sample_block);
     }
 }
 
@@ -1859,7 +1859,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
-            for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+            for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
             {
                 restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
             }

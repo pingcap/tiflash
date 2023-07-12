@@ -17,7 +17,6 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/Spiller.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <common/types.h>
 
 #include <memory>
@@ -62,75 +61,32 @@ public:
 
     virtual ~JoinSpillContext() = default;
 
-    void initBuild(size_t partitions, const Block & sample_block)
-    {
-        build_spiller = std::make_unique<Spiller>(build_spill_config, false, partitions, sample_block, log);
-    }
+    virtual void initBuild(size_t /*concurrency*/, size_t partitions, const Block & sample_block);
 
-    void initProbe(size_t partitions, const Block & sample_block)
-    {
-        probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, partitions, sample_block, log);
-    }
+    virtual void initProbe(size_t /*concurrency*/, size_t partitions, const Block & sample_block);
 
-    virtual void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/)
-    {
-        for (auto & partition_block_vec : partition_block_vecs)
-        {
-            build_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
-        }
-        if (is_last_spill)
-            build_spiller->finishSpill();
-    }
+    bool isBuildSideSpilling(size_t /*stream_index*/) { return false; }
 
-    virtual bool isBuildSideSpilling(size_t /*stream_index*/)
-    {
-        return false;
-    }
+    bool isProbeSideSpilling(size_t /*stream_index*/) { return false; }
 
-    virtual void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/)
-    {
-        for (auto & partition_block_vec : partition_block_vecs)
-        {
-            probe_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
-        }
-        if (is_last_spill)
-            probe_spiller->finishSpill();
-    }
+    virtual void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/);
 
-    virtual bool isProbeSideSpilling(size_t /*stream_index*/)
-    {
-        return false;
-    }
+    virtual void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/);
 
-    UInt64 maxBuildCacheBytes() const
-    {
-        return build_spill_config.max_cached_data_bytes_in_spiller;
-    }
+    UInt64 maxBuildCacheBytes() const;
 
-    UInt64 maxProbeCacheBytes() const
-    {
-        return probe_spill_config.max_cached_data_bytes_in_spiller;
-    }
+    UInt64 maxProbeCacheBytes() const;
 
-    virtual JoinSpillContextPtr cloneWithNewId(const String & new_build_spill_id, const String & new_probe_spill_id)
-    {
-        auto new_build_config = SpillConfig(build_spill_config.spill_dir, new_build_spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
-        auto new_probe_config = SpillConfig(probe_spill_config.spill_dir, new_probe_spill_id, probe_spill_config.max_cached_data_bytes_in_spiller, probe_spill_config.max_spilled_rows_per_file, probe_spill_config.max_spilled_bytes_per_file, probe_spill_config.file_provider);
-        return std::make_shared<JoinSpillContext>(log->identifier(), new_build_config, new_probe_config);
-    }
+    virtual JoinSpillContextPtr cloneWithNewId(const String & new_build_spill_id, const String & new_probe_spill_id);
 
-    BlockInputStreams restoreBuildSide(UInt64 partition_id, size_t concurrency)
-    {
-        return build_spiller->restoreBlocks(partition_id, concurrency, true);
-    }
+    BlockInputStreams restoreBuildSide(UInt64 partition_id, size_t concurrency);
 
-    BlockInputStreams restoreProbeSide(UInt64 partition_id, size_t concurrency)
-    {
-        return probe_spiller->restoreBlocks(partition_id, concurrency, true);
-    }
+    BlockInputStreams restoreProbeSide(UInt64 partition_id, size_t concurrency);
 
 protected:
     LoggerPtr log;
+
+    std::mutex mu;
 
     SpillConfig build_spill_config;
     SpillConfig probe_spill_config;
@@ -139,7 +95,10 @@ protected:
     SpillerPtr probe_spiller;
 };
 
-class PipelineJoinSpillContext : public std::enable_shared_from_this<PipelineJoinSpillContext>
+class PipelineExecutorContext;
+
+class PipelineJoinSpillContext
+    : public std::enable_shared_from_this<PipelineJoinSpillContext>
     , public JoinSpillContext
 {
 public:
@@ -147,45 +106,33 @@ public:
         const String & req_id,
         const SpillConfig & build_spill_config_,
         const SpillConfig & probe_spill_config_,
-        PipelineExecutorContext & exec_context_)
-        : JoinSpillContext(req_id, build_spill_config_, probe_spill_config_)
-        , exec_context(exec_context_)
-    {
-        exec_context.incActiveRefCount();
-    }
+        PipelineExecutorContext & exec_context_);
 
-    ~PipelineJoinSpillContext() override
-    {
-        // In order to ensure that `PipelineExecutorContext` will not be destructed before `PipelineJoinSpillContext` is destructed.
-        exec_context.decActiveRefCount();
-    }
+    ~PipelineJoinSpillContext() override;
 
-    // void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override
-    // {
-    // }
+    void initBuild(size_t concurrency, size_t partitions, const Block & sample_block) override;
 
-    // bool isBuildSideSpilling(size_t stream_index) override
-    // {
-    //     return false;
-    // }
+    void initProbe(size_t concurrency, size_t partitions, const Block & sample_block) override;
 
-    // void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override
-    // {
-    // }
+    bool isBuildSideSpilling(size_t stream_index);
 
-    // bool isProbeSideSpilling(size_t stream_index) override
-    // {
-    //     return false;
-    // }
+    bool isProbeSideSpilling(size_t stream_index);
 
-    JoinSpillContextPtr cloneWithNewId(const String & new_build_spill_id, const String & new_probe_spill_id) override
-    {
-        auto new_build_config = SpillConfig(build_spill_config.spill_dir, new_build_spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
-        auto new_probe_config = SpillConfig(probe_spill_config.spill_dir, new_probe_spill_id, probe_spill_config.max_cached_data_bytes_in_spiller, probe_spill_config.max_spilled_rows_per_file, probe_spill_config.max_spilled_bytes_per_file, probe_spill_config.file_provider);
-        return std::make_shared<PipelineJoinSpillContext>(log->identifier(), new_build_config, new_probe_config, exec_context);
-    }
+    void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override;
+
+    void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override;
+
+    JoinSpillContextPtr cloneWithNewId(const String & new_build_spill_id, const String & new_probe_spill_id) override;
 
 private:
+    friend class JoinSpillEvent;
+
     PipelineExecutorContext & exec_context;
+
+    std::mutex mu;
+    std::vector<UInt64> build_spilling_tasks;
+    std::vector<UInt64> probe_spilling_tasks;
 };
+using PipelineJoinSpillContextPtr = std::shared_ptr<PipelineJoinSpillContext>;
+
 } // namespace DB
