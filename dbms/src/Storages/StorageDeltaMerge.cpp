@@ -959,7 +959,7 @@ RuntimeFilteList StorageDeltaMerge::parseRuntimeFilterList(const SelectQueryInfo
 }
 
 void StorageDeltaMerge::read(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     PipelineExecGroupBuilder & group_builder,
     const Names & column_names,
     const SelectQueryInfo & query_info,
@@ -994,7 +994,7 @@ void StorageDeltaMerge::read(
     const auto & scan_context = mvcc_query_info.scan_context;
 
     store->read(
-        exec_status_,
+        exec_context_,
         group_builder,
         context,
         context.getSettingsRef(),

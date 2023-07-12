@@ -72,7 +72,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Names & column_names,
         const SelectQueryInfo & query_info,

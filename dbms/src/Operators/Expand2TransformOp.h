@@ -24,11 +24,11 @@ class Expand2TransformOp : public TransformOp
 {
 public:
     Expand2TransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Block & input_header,
         const Expand2Ptr & expand)
-        : TransformOp(exec_status_, req_id)
+        : TransformOp(exec_context_, req_id)
         , expand_transform_action(input_header, expand)
     {}
 

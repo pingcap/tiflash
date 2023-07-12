@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -30,10 +30,10 @@ class SimpleGetResultSinkOp : public SinkOp
 {
 public:
     SimpleGetResultSinkOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         ResultHandler result_handler_)
-        : SinkOp(exec_status_, req_id)
+        : SinkOp(exec_context_, req_id)
         , result_handler(std::move(result_handler_))
     {
         assert(result_handler);
@@ -87,7 +87,7 @@ public:
     PipelineExecPtr build(
         const std::shared_ptr<tipb::DAGRequest> & request,
         ResultHandler result_handler,
-        PipelineExecutorStatus & exec_status)
+        PipelineExecutorContext & exec_context)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
         context.context->setDAGContext(&dag_context);
@@ -100,11 +100,11 @@ public:
         PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
+            plan->buildPipelineExecGroup(exec_context, group_builder, *context.context, /*concurrency=*/1);
         });
         assert(group_builder.concurrency() == 1);
         group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_status, "", result_handler));
+            builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_context, "", result_handler));
         });
         auto result = group_builder.build();
         assert(result.size() == 1);
@@ -119,8 +119,8 @@ public:
         ResultHandler result_handler{[&blocks](const Block & block) {
             blocks.push_back(block);
         }};
-        PipelineExecutorStatus exec_status;
-        auto op_pipeline = build(request, result_handler, exec_status);
+        PipelineExecutorContext exec_context;
+        auto op_pipeline = build(request, result_handler, exec_context);
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
@@ -139,9 +139,9 @@ try
 
     ResultHandler result_handler{[](const Block &) {
     }};
-    PipelineExecutorStatus exec_status;
-    auto op_pipeline = build(request, result_handler, exec_status);
-    exec_status.cancel();
+    PipelineExecutorContext exec_context;
+    auto op_pipeline = build(request, result_handler, exec_context);
+    exec_context.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }
 CATCH

@@ -21,17 +21,18 @@ namespace DB
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
 
+class Context;
+
 class PlainPipelineEvent : public Event
 {
 public:
     PlainPipelineEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_,
         size_t concurrency_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        : Event(exec_context_, req_id)
         , context(context_)
         , pipeline(pipeline_)
         , concurrency(concurrency_)

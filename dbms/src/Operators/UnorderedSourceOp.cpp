@@ -79,7 +79,7 @@ void UnorderedSourceOp::operatePrefixImpl()
             else
             {
                 // Poll and check if the RuntimeFilters is ready in the WaitReactor.
-                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(log->identifier(), exec_status, task_pool, max_wait_time_ms, std::move(waiting_rf_list), std::move(ready_rf_list)));
+                TaskScheduler::instance->submitToWaitReactor(std::make_unique<RFWaitTask>(exec_context, log->identifier(), task_pool, max_wait_time_ms, std::move(waiting_rf_list), std::move(ready_rf_list)));
             }
         }
     });
