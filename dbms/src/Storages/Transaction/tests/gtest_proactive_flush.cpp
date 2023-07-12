@@ -19,6 +19,65 @@ namespace DB
 namespace tests
 {
 
+
+TEST_F(RegionKVStoreTest, KVStorePassivePersistence)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    // CompactLog and passive persistence
+    {
+        KVStore & kvs = getKVS();
+        UInt64 region_id = 1;
+        {
+            auto applied_index = 0;
+            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+            MockRaftStoreProxy::FailCond cond;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_NE(r1, nullptr);
+            ASSERT_NE(kvr1, nullptr);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto [index, term] = proxy_instance->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+
+            kvr1->markCompactLog();
+            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+            auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
+            auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));
+            // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
+            // Notice kvs is not tmt->getKVStore(), so we can't use the ProxyFFI version.
+            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term, 0, 0));
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
+        }
+        {
+            proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // There shall be data to flush.
+            ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
+            // If flush fails, and we don't insist a success.
+            FailPointHelper::enableFailPoint(FailPoints::force_fail_in_flush_region_data);
+            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), false);
+            FailPointHelper::disableFailPoint(FailPoints::force_fail_in_flush_region_data);
+            // Force flush until succeed only for testing.
+            ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), 0, 0, 0, 0), true);
+            // Non existing region.
+            // Flush and CompactLog will not panic.
+            ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0, 0, 0), true);
+            raft_cmdpb::AdminRequest request;
+            raft_cmdpb::AdminResponse response;
+            request.mutable_compact_log();
+            request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
+            ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+        }
+    }
+}
+CATCH
+
 std::tuple<uint64_t, uint64_t, uint64_t> RegionKVStoreTest::prepareForProactiveFlushTest()
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
@@ -58,6 +117,39 @@ std::tuple<uint64_t, uint64_t, uint64_t> RegionKVStoreTest::prepareForProactiveF
     }
     return std::make_tuple(table_id, region_id, region_id2);
 }
+
+TEST_F(RegionKVStoreTest, ProactiveFlushConsistency)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto tp = prepareForProactiveFlushTest();
+    // auto table_id = std::get<0>(tp);
+    auto region_id = std::get<1>(tp);
+    // auto region_id2 = std::get<2>(tp);
+    MockRaftStoreProxy::FailCond cond;
+    KVStore & kvs = getKVS();
+
+    std::shared_ptr<std::atomic<size_t>> ai = std::make_shared<std::atomic<size_t>>();
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::proactive_flush_force_set_type, ai);
+    ai->store(0b0000);
+
+    {
+        // Newer passive and older proactive.
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        uint64_t compact_index = 10;
+        auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, compact_index);
+        auto && [index1, term] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response), 11);
+        kvs.setRegionCompactLogConfig(0, 0, 0, 500);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index1);
+        UNUSED(term);
+        kvs.notifyCompactLog(region_id, 1, 5, false, false);
+        ASSERT_EQ(r1->getApply().truncated_state().index(), compact_index);
+    }
+
+    DB::FailPointHelper::disableFailPoint(DB::FailPoints::proactive_flush_force_set_type);
+}
+CATCH
 
 TEST_F(RegionKVStoreTest, ProactiveFlushLiveness)
 try
@@ -146,7 +238,8 @@ try
         ASSERT_EQ(proxy_instance->getRegion(region_id)->getApply().truncated_state().index(), proxy_instance->getRegion(region_id)->getLatestCommitIndex());
     }
     {
-        // Passive flush and fg proactive flush of the same region will not deadlock, since they must be executed by order in one thread.
+        // Passive flush and fg proactive flush of the same region will not deadlock,
+        // since they must be executed by order in one thread.
         // Passive flush and fg proactive flush will not deadlock.
         ai->store(0b1011); // Force fg
         DB::FailPointHelper::enableFailPoint(DB::FailPoints::pause_passive_flush_before_persist_region);

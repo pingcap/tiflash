@@ -1091,7 +1091,7 @@ try
 
             {
                 // A snapshot can set region to Tombstone.
-                proxy_instance->getRegion(22)->setSate(({
+                proxy_instance->getRegion(22)->setState(({
                     raft_serverpb::RegionLocalState s;
                     s.set_state(::raft_serverpb::PeerState::Tombstone);
                     s;

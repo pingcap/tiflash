@@ -30,13 +30,15 @@ struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
     raft_serverpb::RaftApplyState getApply();
+    void persistAppliedIndex();
     void updateAppliedIndex(uint64_t index);
+    uint64_t getPersistedAppliedIndex();
     uint64_t getLatestAppliedIndex();
     uint64_t getLatestCommitTerm();
     uint64_t getLatestCommitIndex();
     void updateCommitIndex(uint64_t index);
-    void updateTruncatedState(uint64_t index, uint64_t term);
-    void setSate(raft_serverpb::RegionLocalState);
+    void tryUpdateTruncatedState(uint64_t index, uint64_t term);
+    void setState(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
     void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);

@@ -166,7 +166,11 @@ namespace DB
         F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                           \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_compact_log_bg, {{"type", "compact_log_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-        F(type_compact_log_fg, {{"type", "compact_log_fg"}}, ExpBuckets{0.001, 2, 20}))                                                             \
+        F(type_compact_log_fg, {{"type", "compact_log_fg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_compact_log_fg_breakdown_kvs, {{"type", "compact_log_fg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
+        F(type_compact_log_fg_breakdown_dm, {{"type", "compact_log_fg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}),                                   \
+        F(type_compact_log_bg_breakdown_kvs, {{"type", "compact_log_bg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
+        F(type_compact_log_bg_breakdown_dm, {{"type", "compact_log_bg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}))                                   \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                              \
         F(type_write, {"type", "write"}),                                                                         /**/                              \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                              \
