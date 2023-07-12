@@ -17,10 +17,11 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/Spiller.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
+#include <common/types.h>
 
 #include <memory>
 #include <mutex>
-#include <common/types.h>
 
 namespace DB
 {
@@ -38,16 +39,16 @@ struct PartitionBlockVec
 
     static PartitionBlockVecs toVecs(size_t partition_index, Blocks && blocks)
     {
-      PartitionBlockVecs vecs;
-      vecs.emplace_back(partition_index, std::move(blocks));
-      return vecs;
+        PartitionBlockVecs vecs;
+        vecs.emplace_back(partition_index, std::move(blocks));
+        return vecs;
     }
 };
 
 class JoinSpillContext;
 using JoinSpillContextPtr = std::shared_ptr<JoinSpillContext>;
 
-class JoinSpillContext : public std::enable_shared_from_this<JoinSpillContext>
+class JoinSpillContext
 {
 public:
     JoinSpillContext(
@@ -138,4 +139,53 @@ protected:
     SpillerPtr probe_spiller;
 };
 
+class PipelineJoinSpillContext : public std::enable_shared_from_this<PipelineJoinSpillContext>
+    , public JoinSpillContext
+{
+public:
+    PipelineJoinSpillContext(
+        const String & req_id,
+        const SpillConfig & build_spill_config_,
+        const SpillConfig & probe_spill_config_,
+        PipelineExecutorContext & exec_context_)
+        : JoinSpillContext(req_id, build_spill_config_, probe_spill_config_)
+        , exec_context(exec_context_)
+    {
+        exec_context.incActiveRefCount();
+    }
+
+    ~PipelineJoinSpillContext() override
+    {
+        // In order to ensure that `PipelineExecutorContext` will not be destructed before `PipelineJoinSpillContext` is destructed.
+        exec_context.decActiveRefCount();
+    }
+
+    // void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override
+    // {
+    // }
+
+    // bool isBuildSideSpilling(size_t stream_index) override
+    // {
+    //     return false;
+    // }
+
+    // void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t stream_index) override
+    // {
+    // }
+
+    // bool isProbeSideSpilling(size_t stream_index) override
+    // {
+    //     return false;
+    // }
+
+    JoinSpillContextPtr cloneWithNewId(const String & new_build_spill_id, const String & new_probe_spill_id) override
+    {
+        auto new_build_config = SpillConfig(build_spill_config.spill_dir, new_build_spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
+        auto new_probe_config = SpillConfig(probe_spill_config.spill_dir, new_probe_spill_id, probe_spill_config.max_cached_data_bytes_in_spiller, probe_spill_config.max_spilled_rows_per_file, probe_spill_config.max_spilled_bytes_per_file, probe_spill_config.file_provider);
+        return std::make_shared<PipelineJoinSpillContext>(log->identifier(), new_build_config, new_probe_config, exec_context);
+    }
+
+private:
+    PipelineExecutorContext & exec_context;
+};
 } // namespace DB

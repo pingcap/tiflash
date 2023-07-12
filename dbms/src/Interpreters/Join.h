@@ -27,9 +27,9 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
+#include <Interpreters/JoinSpillContext.h>
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Interpreters/JoinSpillContext.h>
 
 #include <shared_mutex>
 
@@ -143,7 +143,6 @@ public:
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
          size_t max_bytes_before_external_join_,
-         const JoinSpillContextPtr & spill_context_,
          Int64 join_restore_concurrency_,
          const Names & tidb_output_column_names_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
@@ -157,6 +156,8 @@ public:
          const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
+
+    void initSpillContext(const JoinSpillContextPtr & spill_context_);
 
     /** Call `setBuildConcurrencyAndInitJoinPartition` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.

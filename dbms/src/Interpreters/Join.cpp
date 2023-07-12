@@ -121,7 +121,6 @@ Join::Join(
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
     size_t max_bytes_before_external_join_,
-    const JoinSpillContextPtr & spill_context_,
     Int64 join_restore_concurrency_,
     const Names & tidb_output_column_names_,
     const TiDB::TiDBCollators & collators_,
@@ -159,9 +158,6 @@ Join::Join(
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    assert(spill_context_);
-    spill_context = spill_context_;
-
     if (non_equal_conditions.other_cond_expr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -312,7 +308,7 @@ void Join::setSampleBlock(const Block & block)
 
 std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_join_)
 {
-    return std::make_shared<Join>(
+    auto restore_join = std::make_shared<Join>(
         key_names_left,
         key_names_right,
         kind,
@@ -321,7 +317,6 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         false,
         0,
         max_bytes_before_external_join_,
-        spill_context->cloneWithNewId(fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1), fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
         tidb_output_column_names,
         collators,
@@ -332,6 +327,15 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         flag_mapped_entry_helper_name,
         restore_round + 1,
         is_test);
+    restore_join->initSpillContext(spill_context->cloneWithNewId(fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1), fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)));
+    return restore_join;
+}
+
+void Join::initSpillContext(const JoinSpillContextPtr & spill_context_)
+{
+    assert(spill_context_);
+    std::unique_lock lock(rwlock);
+    spill_context = spill_context_;
 }
 
 void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
@@ -1922,7 +1926,7 @@ void Join::spillAllBuildPartitions(size_t stream_index)
         if (!blocks.empty())
             partition_block_vecs.emplace_back(i, std::move(blocks));
     }
-   spill_context->spillBuildSideBlocks(std::move(partition_block_vecs), true, stream_index);
+    spill_context->spillBuildSideBlocks(std::move(partition_block_vecs), true, stream_index);
 }
 
 void Join::spillAllProbePartitions(size_t stream_index)
