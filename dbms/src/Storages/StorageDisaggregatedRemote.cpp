@@ -65,7 +65,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
@@ -101,7 +100,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
 }
 
 void StorageDisaggregated::readThroughS3(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     unsigned num_streams)
@@ -109,7 +108,7 @@ void StorageDisaggregated::readThroughS3(
     auto read_task = buildReadTaskWithBackoff(db_context);
 
     buildRemoteSegmentSourceOps(
-        exec_status,
+        exec_context,
         group_builder,
         db_context,
         read_task,
@@ -123,9 +122,9 @@ void StorageDisaggregated::readThroughS3(
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
-    extraCast(exec_status, group_builder, *analyzer);
+    extraCast(exec_context, group_builder, *analyzer);
     // Handle filter
-    filterConditions(exec_status, group_builder, *analyzer);
+    filterConditions(exec_context, group_builder, *analyzer);
 }
 
 DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
@@ -296,7 +295,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             std::vector<kv::LockPtr> locks{};
             for (const auto & lock_info : error.locked())
                 locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
-            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
+            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.gather_id.query_id.start_ts, locks, pushed);
 
             // TODO: Use `pushed` to bypass large txn.
             LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
@@ -412,10 +411,11 @@ StorageDisaggregated::buildEstablishDisaggTaskReq(
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
         disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
-        meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-        meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-        meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
-        meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+        meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+        meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+        meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+        meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+        meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
         meta->set_executor_id(table_scan.getTableScanExecutorID());
@@ -507,7 +507,7 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
         db_context,
         log);
     const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
-    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
+    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     LOG_INFO(
         log,
         "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
@@ -569,7 +569,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 }
 
 void StorageDisaggregated::buildRemoteSegmentSourceOps(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DM::Remote::RNReadTaskPtr & read_task,
@@ -584,7 +584,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     {
         group_builder.addConcurrency(DM::Remote::RNSegmentSourceOp::create({
             .debug_tag = log->identifier(),
-            .exec_status = exec_status,
+            .exec_context = exec_context,
             // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
             // because we want to extend the lifetime of the WorkerPtr until read is finished.
             // Also, we want to start the Worker after the read.

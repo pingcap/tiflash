@@ -166,7 +166,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 }
 
 void PhysicalAggregation::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t /*concurrency*/)
@@ -175,7 +175,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     // So only fine grained shuffle is considered here.
     RUNTIME_CHECK(fine_grained_shuffle.enable());
 
-    executeExpression(exec_status, group_builder, before_agg_actions, log);
+    executeExpression(exec_context, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency();
@@ -200,22 +200,22 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
         is_final_agg,
         spill_config);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params));
+        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_context, log->identifier(), params));
     });
 
-    executeExpression(exec_status, group_builder, expr_after_agg, log);
+    executeExpression(exec_context, group_builder, expr_after_agg, log);
 }
 
 void PhysicalAggregation::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
+    PipelineExecutorContext & exec_context)
 {
     auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
     if (fine_grained_shuffle.enable())
     {
         // For fine grained shuffle, Aggregate wouldn't be broken.
-        child->buildPipeline(builder, context, exec_status);
+        child->buildPipeline(builder, context, exec_context);
         builder.addPlanNode(shared_from_this());
     }
     else
@@ -235,7 +235,7 @@ void PhysicalAggregation::buildPipeline(
         // Break the pipeline for agg_build.
         auto agg_build_builder = builder.breakPipeline(agg_build);
         // agg_build pipeline.
-        child->buildPipeline(agg_build_builder, context, exec_status);
+        child->buildPipeline(agg_build_builder, context, exec_context);
         agg_build_builder.build();
         // agg_convergent pipeline.
         auto agg_convergent = std::make_shared<PhysicalAggregationConvergent>(

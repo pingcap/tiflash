@@ -24,7 +24,7 @@ class LocalAggregateTransform : public TransformOp
 {
 public:
     LocalAggregateTransform(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Aggregator::Params & params_);
 
