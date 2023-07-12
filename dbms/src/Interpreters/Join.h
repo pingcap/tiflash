@@ -19,7 +19,6 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/Logger.h>
-#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RuntimeFilter.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
@@ -30,15 +29,12 @@
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
+#include <Interpreters/JoinSpillContext.h>
 
 #include <shared_mutex>
 
 namespace DB
 {
-class PipelineExecutorContext;
-class JoinSpillContext;
-using JoinSpillContextPtr = std::shared_ptr<JoinSpillContext>;
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -81,26 +77,6 @@ struct PartitionBlock
     bool operator!() const { return !block; }
 };
 using PartitionBlocks = std::list<PartitionBlock>;
-
-struct PartitionBlockVec;
-using PartitionBlockVecs = std::vector<PartitionBlockVec>;
-struct PartitionBlockVec
-{
-    size_t partition_index;
-    Blocks blocks;
-
-    PartitionBlockVec(size_t partition_index_, Blocks && blocks_)
-        : partition_index(partition_index_)
-        , blocks(std::move(blocks_))
-    {}
-
-    static PartitionBlockVecs toVecs(size_t partition_index, Blocks && blocks)
-    {
-      PartitionBlockVecs vecs;
-      vecs.emplace_back(partition_index, std::move(blocks));
-      return vecs;
-    }
-};
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -167,8 +143,7 @@ public:
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
          size_t max_bytes_before_external_join_,
-         const SpillConfig & build_spill_config_,
-         const SpillConfig & probe_spill_config_,
+         const JoinSpillContextPtr & spill_context_,
          Int64 join_restore_concurrency_,
          const Names & tidb_output_column_names_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
@@ -287,8 +262,6 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    void initSpillCtxForPipeline(PipelineExecutorContext & exec_context);
-
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -300,10 +273,7 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
-
-    JoinSpillContextPtr spill_ctx_for_pipeline;
+    JoinSpillContextPtr spill_context;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -354,8 +324,6 @@ private:
     std::list<size_t> spilled_partition_indexes;
 
     size_t max_bytes_before_external_join;
-    SpillConfig build_spill_config;
-    SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;
     bool is_spilled = false;
     bool disable_spill = false;
@@ -475,9 +443,6 @@ private:
     void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
-
-    void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const;
-    void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, size_t stream_index) const;
 };
 
 } // namespace DB

@@ -51,6 +51,7 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Interpreters/JoinSpillContext.h>
 
 namespace DB
 {
@@ -290,8 +291,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
         settings.max_bytes_before_external_join,
-        build_spill_config,
-        probe_spill_config,
+        std::make_shared<JoinSpillContext>(log->identifier(), build_spill_config, probe_spill_config),
         settings.join_restore_concurrency,
         join_output_column_names,
         tiflash_join.join_key_collators,

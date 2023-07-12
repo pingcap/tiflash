@@ -150,8 +150,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
         max_bytes_before_external_join,
-        build_spill_config,
-        probe_spill_config,
+        std::make_shared<JoinSpillContext>(log->identifier(), build_spill_config, probe_spill_config),
         settings.join_restore_concurrency,
         join_output_column_names,
         tiflash_join.join_key_collators,
@@ -251,8 +250,6 @@ void PhysicalJoin::buildPipeline(
     Context & context,
     PipelineExecutorContext & exec_context)
 {
-    join_ptr->initSpillCtxForPipeline(exec_context);
-
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
         executor_id,
