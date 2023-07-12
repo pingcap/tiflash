@@ -148,9 +148,12 @@ BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
     assert(root_pipeline);
     auto final_plan_exec_id = root_pipeline->getFinalPlanExecId();
     BaseRuntimeStatistics runtime_statistics;
-    const auto & final_profile_infos = context.getDAGContext()->getOperatorProfileInfosMap()[final_plan_exec_id];
-    for (const auto & profile_info : final_profile_infos)
-        runtime_statistics.append(*profile_info);
+    if (!final_plan_exec_id.empty())
+    {
+        const auto & final_profile_infos = context.getDAGContext()->getOperatorProfileInfosMap()[final_plan_exec_id];
+        for (const auto & profile_info : final_profile_infos)
+            runtime_statistics.append(*profile_info);
+    }
     return runtime_statistics;
 }
 } // namespace DB
