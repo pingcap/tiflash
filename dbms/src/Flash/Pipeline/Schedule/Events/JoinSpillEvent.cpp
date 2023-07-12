@@ -34,9 +34,12 @@ void JoinSpillEvent::finishImpl()
         auto & spiller = is_build_side ? *spill_context->build_spiller : *spill_context->probe_spiller;
         spiller.finishSpill();
     }
-    std::lock_guard lock(spill_context->mu);
-    auto & spilling_task_cnt = is_build_side ? spill_context->build_spilling_tasks[stream_index] : spill_context->probe_spilling_tasks[stream_index];
-    RUNTIME_CHECK(spilling_task_cnt > 0);
-    --spilling_task_cnt;
+    {
+        std::lock_guard lock(spill_context->mu);
+        auto & spilling_task_cnt = is_build_side ? spill_context->build_spilling_tasks[stream_index] : spill_context->probe_spilling_tasks[stream_index];
+        RUNTIME_CHECK(spilling_task_cnt > 0);
+        --spilling_task_cnt;
+    }
+    spill_context.reset();
 }
 } // namespace DB

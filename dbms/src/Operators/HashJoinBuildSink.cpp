@@ -25,7 +25,7 @@ HashJoinBuildSink::HashJoinBuildSink(
     : SinkOp(exec_context_, req_id)
     , join_ptr(join_ptr_)
     , concurrency_build_index(concurrency_build_index_)
-    , spill_context(*join_ptr_->spill_context)
+    , spill_context(*std::static_pointer_cast<PipelineJoinSpillContext>(join_ptr_->spill_context))
 {
 }
 

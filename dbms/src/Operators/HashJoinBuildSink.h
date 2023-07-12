@@ -21,7 +21,7 @@ namespace DB
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
-class JoinSpillContext;
+class PipelineJoinSpillContext;
 
 class HashJoinBuildSink : public SinkOp
 {
@@ -46,7 +46,7 @@ private:
     JoinPtr join_ptr;
     size_t concurrency_build_index;
 
-    JoinSpillContext & spill_context;
+    PipelineJoinSpillContext & spill_context;
 
     bool is_finish_status = false;
 };

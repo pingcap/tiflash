@@ -65,10 +65,6 @@ public:
 
     virtual void initProbe(size_t /*concurrency*/, size_t partitions, const Block & sample_block);
 
-    bool isBuildSideSpilling(size_t /*stream_index*/) { return false; }
-
-    bool isProbeSideSpilling(size_t /*stream_index*/) { return false; }
-
     virtual void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/);
 
     virtual void spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/);
