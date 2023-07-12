@@ -126,6 +126,7 @@ public:
 
 private:
     friend class JoinSpillEvent;
+    friend class JoinSpillTask;
 
     PipelineExecutorContext & exec_context;
 

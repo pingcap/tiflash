@@ -13,18 +13,17 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Events/JoinSpillEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/JoinSpillTask.h>
 
 namespace DB
 {
 void JoinSpillEvent::scheduleImpl()
 {
     assert(spill_context);
-    for (auto & partition_block_vec : partition_block_vecs)
+    for (auto & elem : partition_block_vecs)
     {
-        if (is_build_side)
-            spill_context->build_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
-        else
-            spill_context->probe_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
+        if (!elem.blocks.empty())
+            addTask(std::make_unique<JoinSpillTask>(exec_context, log->identifier(), shared_from_this(), spill_context, is_build_side, elem.partition_index, std::move(elem.blocks)));
     }
 }
 
@@ -32,10 +31,8 @@ void JoinSpillEvent::finishImpl()
 {
     if (is_last_spill)
     {
-        if (is_build_side)
-            spill_context->build_spiller->finishSpill();
-        else
-            spill_context->probe_spiller->finishSpill();
+        auto & spiller = is_build_side ? *spill_context->build_spiller : *spill_context->probe_spiller;
+        spiller.finishSpill();
     }
     std::lock_guard lock(spill_context->mu);
     auto & spilling_task_cnt = is_build_side ? spill_context->build_spilling_tasks[stream_index] : spill_context->probe_spilling_tasks[stream_index];
