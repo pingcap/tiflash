@@ -152,9 +152,16 @@ public:
                     new_versioned_ref_counts->emplace_back(ver, ref_count_delta);
                 }
             }
-            if (ref_count_delta_in_snap == 0 && new_versioned_ref_counts->empty())
+            if (ref_count_delta_in_snap == 0)
             {
-                versioned_ref_counts = nullptr;
+                if (new_versioned_ref_counts->empty())
+                {
+                    versioned_ref_counts = nullptr;
+                }
+                else
+                {
+                    versioned_ref_counts.swap(new_versioned_ref_counts);
+                }
                 return;
             }
             RUNTIME_CHECK(ref_count_delta_in_snap > 0, deref_count_delta, ref_count_delta_in_snap);

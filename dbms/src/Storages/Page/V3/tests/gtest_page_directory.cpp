@@ -2576,6 +2576,52 @@ try
 }
 CATCH
 
+
+TEST_F(PageDirectoryGCTest, IncrRefDuringGC2)
+try
+{
+    PageEntryV3 entry_1_v1{.file_id = 50, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+        dir->apply(std::move(edit));
+    }
+
+    auto after_get_gc_seq = SyncPointCtl::enableInScope("after_PageDirectory::doGC_getLowestSeq");
+    auto th_gc = std::async([&]() {
+        dir->gcInMemEntries({});
+    });
+    after_get_gc_seq.waitAndPause();
+
+    // add a ref during gcInMemEntries
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 5), buildV3Id(TEST_NAMESPACE_ID, 1));
+        dir->apply(std::move(edit));
+    }
+
+    after_get_gc_seq.next();
+    th_gc.get();
+
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = getNormalPageIdU64(dir, 5, snap);
+        EXPECT_EQ(normal_id, 1);
+        ASSERT_EQ(dir->numPages(), 2);
+    }
+}
+CATCH
+
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
 #undef INSERT_ENTRY_ACQ_SNAP
