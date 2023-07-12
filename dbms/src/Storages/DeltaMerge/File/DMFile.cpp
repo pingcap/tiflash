@@ -115,8 +115,14 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status);
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, UInt64 small_file_size_threshold, UInt64 merged_file_max_size, DMFileFormat::Version version)
 {
+    // if small_file_size_threshold we should use DMFileFormat::V2
+    if (version == DMFileFormat::V3 and small_file_size_threshold == 0)
+    {
+        version = DMFileFormat::V2;
+    }
+
     fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
         // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
         version = DMFileFormat::V3;
@@ -127,6 +133,8 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
                                     file_id,
                                     parent_path,
                                     Status::WRITABLE,
+                                    small_file_size_threshold,
+                                    merged_file_max_size,
                                     std::move(configuration),
                                     version));
 
@@ -1119,7 +1127,7 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
 
 void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
 {
-    if (writer.file_info.size >= merged_file_max_size.load(std::memory_order_relaxed))
+    if (writer.file_info.size >= merged_file_max_size)
     {
         // finialize cur merged file
         writer.buffer->sync();
@@ -1152,7 +1160,7 @@ void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & fil
         RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
 
         writer.buffer->write(read_buf.data(), read_buf.size());
-        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, 0, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
+        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, writer.file_info.number, /*offset*/ writer.file_info.size, /*size*/ read_buf.size()));
         writer.file_info.size += read_buf.size();
     };
 
@@ -1160,7 +1168,7 @@ void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & fil
     for (const auto & [col_id, stat] : column_stats)
     {
         // check .data
-        if (stat.data_bytes <= small_file_size_threshold.load(std::memory_order_relaxed))
+        if (stat.data_bytes <= small_file_size_threshold)
         {
             auto fname = colDataFileName(getFileNameBase(col_id, {}));
             auto fsize = stat.data_bytes;
@@ -1171,7 +1179,7 @@ void DMFile::finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & fil
         // check .null.data
         if (stat.type->isNullable())
         {
-            if (stat.nullmap_data_bytes <= small_file_size_threshold.load(std::memory_order_relaxed))
+            if (stat.nullmap_data_bytes <= small_file_size_threshold)
             {
                 auto fname = colDataFileName(getFileNameBase(col_id, {IDataType::Substream::NullMap}));
                 auto fsize = stat.nullmap_data_bytes;
@@ -1252,21 +1260,5 @@ S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const Mer
     read_file_info.size = itr->size;
     return read_file_info;
 }
-
-void DMFile::updateMergeFileConfig(const Settings & settings)
-{
-    if (settings.dt_small_file_size_threshold != small_file_size_threshold.load(std::memory_order_relaxed))
-    {
-        LOG_INFO(Logger::get(), "small_file_size_threshold {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_small_file_size_threshold.get());
-        small_file_size_threshold.store(settings.dt_small_file_size_threshold, std::memory_order_relaxed);
-    }
-
-    if (settings.dt_merged_file_max_size != merged_file_max_size.load(std::memory_order_relaxed))
-    {
-        LOG_INFO(Logger::get(), "merged_file_max_size {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_merged_file_max_size.get());
-        merged_file_max_size.store(settings.dt_merged_file_max_size, std::memory_order_relaxed);
-    }
-}
-
 } // namespace DM
 } // namespace DB

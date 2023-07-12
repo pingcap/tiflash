@@ -228,7 +228,7 @@ public:
 
     // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, UInt64 small_file_size_threshold = 16 * 1024, UInt64 merged_file_max_size = 16 * 1024 * 1024, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -338,8 +338,6 @@ public:
     std::vector<std::pair<String, UInt64>> listFilesForUpload();
     void switchToRemote(const S3::DMFileOID & oid);
 
-    static void updateMergeFileConfig(const Settings & settings);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -349,6 +347,8 @@ public:
            UInt64 page_id_,
            String parent_path_,
            Status status_,
+           UInt64 small_file_size_threshold_ = 16 * 1024,
+           UInt64 merged_file_max_size_ = 16 * 1024 * 1024,
            DMConfigurationOpt configuration_ = std::nullopt,
            DMFileFormat::Version version_ = STORAGE_FORMAT_CURRENT.dm_file)
         : file_id(file_id_)
@@ -358,6 +358,8 @@ public:
         , configuration(std::move(configuration_))
         , log(Logger::get())
         , version(version_)
+        , small_file_size_threshold(small_file_size_threshold_)
+        , merged_file_max_size(merged_file_max_size_)
     {
     }
 
@@ -505,8 +507,8 @@ public:
     // Filename -> MergedSubFileInfo
     std::unordered_map<String, MergedSubFileInfo> merged_sub_file_infos;
 
-    inline static std::atomic<UInt64> small_file_size_threshold = 16 * 1024; // 16KB
-    inline static std::atomic<UInt64> merged_file_max_size = 16 * 1024 * 1024; // 16MB
+    UInt64 small_file_size_threshold;
+    UInt64 merged_file_max_size;
 
     void finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
     void checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);

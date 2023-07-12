@@ -124,7 +124,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                              UInt64 file_id,
                              const String & parent_path)
 {
-    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig());
+    auto dmfile = DMFile::create(file_id, parent_path, dm_context.createChecksumConfig(), dm_context.db_context.getSettingsRef().dt_small_file_size_threshold, dm_context.db_context.getSettingsRef().dt_merged_file_max_size);
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
     const auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 

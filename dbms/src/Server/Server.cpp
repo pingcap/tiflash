@@ -1321,11 +1321,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 FileCache::instance()->updateConfig(global_context->getSettingsRef());
             }
-            if (S3::ClientFactory::instance().isEnabled())
-            {
-                DM::DMFile::updateMergeFileConfig(global_context->getSettingsRef());
-            }
-
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
                 bool updated = global_context->getSecurityConfig()->update(*config); // Whether the cert path or file is updated.

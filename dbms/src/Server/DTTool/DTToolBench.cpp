@@ -357,7 +357,7 @@ int benchEntry(const std::vector<std::string> & opts)
         for (size_t i = 0; i < repeat; ++i)
         {
             using namespace std::chrono;
-            dmfile = DB::DM::DMFile::create(1, workdir, opt);
+            dmfile = DB::DM::DMFile::create(1, workdir, opt); // todo  check
             auto start = high_resolution_clock::now();
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);

@@ -285,7 +285,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
+        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 16 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -406,7 +406,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
+        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 16 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
