@@ -14,11 +14,15 @@
 
 #pragma once
 
-#include <Interpreters/Join.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+
+class PipelineJoinSpillContext;
+
 class HashJoinProbeTransformOp : public TransformOp
 {
 public:
@@ -61,6 +65,9 @@ private:
     ProbeProcessInfo probe_process_info;
 
     size_t op_index;
+
+    PipelineJoinSpillContext & spill_context;
+
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     size_t joined_rows = 0;
@@ -68,8 +75,12 @@ private:
 
     enum class ProbeStatus
     {
+        WAIT_BUILD_FINISH, /// wait build finish
         PROBE, /// probe data
+        WAIT_PROBE_FINAL_SPILL, /// wait probe final spill
         WAIT_PROBE_FINISH, /// wait probe finish
+        GET_RESTORE_JOIN, /// try to get restore join
+        RESTORE_BUILD, /// build for restore join
         READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
         FINISHED, /// the final state
     };

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/HashJoinProbeTransformOp.h>
+#include <Interpreters/Join.h>
 
 #include <magic_enum.hpp>
 
@@ -30,6 +31,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     , join(join_)
     , probe_process_info(max_block_size)
     , op_index(op_index_)
+    , spill_context(*std::static_pointer_cast<PipelineJoinSpillContext>(join_->spill_context))
 {
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
@@ -66,24 +68,32 @@ OperatorStatus HashJoinProbeTransformOp::onProbeFinish(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     join->finishOneProbe(op_index);
-    if (scan_hash_map_after_probe_stream)
+    if (!spill_context->isProbeSideSpilling(op_index))
     {
-        if (!join->isAllProbeFinished())
+        if (scan_hash_map_after_probe_stream)
         {
-            status = ProbeStatus::WAIT_PROBE_FINISH;
-            return OperatorStatus::WAITING;
+            if (!join->isAllProbeFinished())
+            {
+                status = ProbeStatus::WAIT_PROBE_FINISH;
+                return OperatorStatus::WAITING;
+            }
+            else
+            {
+                status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                scan_hash_map_after_probe_stream->readPrefix();
+                return scanHashMapData(block);
+            }
         }
         else
         {
-            status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
-            scan_hash_map_after_probe_stream->readPrefix();
-            return scanHashMapData(block);
+            status = ProbeStatus::FINISHED;
+            return OperatorStatus::HAS_OUTPUT;
         }
     }
     else
     {
-        status = ProbeStatus::FINISHED;
-        return OperatorStatus::HAS_OUTPUT;
+        status = ProbeStatus::WAIT_PROBE_FINAL_SPILL;
+        return OperatorStatus::WAITING; 
     }
 }
 
@@ -111,7 +121,9 @@ OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(Block & block)
         return onProbeFinish(block);
 
     joined_rows += block.rows();
-    return OperatorStatus::HAS_OUTPUT;
+    return spill_context.isProbeSideSpilling(op_index)
+        ? OperatorStatus::WAITING
+        : OperatorStatus::HAS_OUTPUT;
 }
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
@@ -142,8 +154,40 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
-    if likely (status == ProbeStatus::WAIT_PROBE_FINISH)
+    switch (status)
     {
+    case ProbeStatus::PROBE:
+        return spill_context.isProbeSideSpilling(op_index)
+            ? OperatorStatus::WAITING
+            : OperatorStatus::HAS_OUTPUT;
+    case ProbeStatus::WAIT_PROBE_FINAL_SPILL:
+        if (!spill_context->isProbeSideSpilling(op_index))
+        {
+            if (scan_hash_map_after_probe_stream)
+            {
+                if (!join->isAllProbeFinished())
+                {
+                    status = ProbeStatus::WAIT_PROBE_FINISH;
+                    return OperatorStatus::WAITING;
+                }
+                else
+                {
+                    status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                    scan_hash_map_after_probe_stream->readPrefix();
+                    return OperatorStatus::HAS_OUTPUT;
+                }
+            }
+            else
+            {
+                status = ProbeStatus::FINISHED;
+                return OperatorStatus::HAS_OUTPUT;
+            }
+        }
+        else
+        {
+            return OperatorStatus::WAITING;
+        }
+    case ProbeStatus::WAIT_PROBE_FINISH:
         if (join->isAllProbeFinished())
         {
             status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
@@ -153,7 +197,8 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         {
             return OperatorStatus::WAITING;
         }
+    default:
+        return OperatorStatus::NEED_INPUT; 
     }
-    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB
