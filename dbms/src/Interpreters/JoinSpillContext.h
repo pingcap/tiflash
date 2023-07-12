@@ -81,6 +81,11 @@ public:
             build_spiller->finishSpill();
     }
 
+    virtual bool isBuildSideSpilling(size_t /*stream_index*/)
+    {
+        return false;
+    }
+
     virtual void spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, bool is_last_spill, size_t /*stream_index*/)
     {
         for (auto & partition_block_vec : partition_block_vecs)
@@ -89,6 +94,11 @@ public:
         }
         if (is_last_spill)
             probe_spiller->finishSpill();
+    }
+
+    virtual bool isProbeSideSpilling(size_t /*stream_index*/)
+    {
+        return false;
     }
 
     UInt64 maxBuildCacheBytes() const

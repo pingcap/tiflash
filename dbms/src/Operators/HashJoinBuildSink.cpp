@@ -25,6 +25,7 @@ HashJoinBuildSink::HashJoinBuildSink(
     : SinkOp(exec_context_, req_id)
     , join_ptr(join_ptr_)
     , concurrency_build_index(concurrency_build_index_)
+    , spill_context(*join_ptr_->spill_context)
 {
 }
 
@@ -33,10 +34,31 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
     if unlikely (!block)
     {
         join_ptr->finishOneBuild(concurrency_build_index);
-        return OperatorStatus::FINISHED;
+        is_finish_status = true;
+        return spill_context.isBuildSideSpilling(concurrency_build_index)
+            ? OperatorStatus::WAITING
+            : OperatorStatus::FINISHED;
     }
     join_ptr->insertFromBlock(block, concurrency_build_index);
     block.clear();
-    return OperatorStatus::NEED_INPUT;
+    return spill_context.isBuildSideSpilling(concurrency_build_index)
+        ? OperatorStatus::WAITING
+        : OperatorStatus::NEED_INPUT;
+}
+
+OperatorStatus HashJoinBuildSink::awaitImpl()
+{
+    if (is_finish_status)
+    {
+        return spill_context.isBuildSideSpilling(concurrency_build_index)
+            ? OperatorStatus::WAITING
+            : OperatorStatus::FINISHED;
+    }
+    else
+    {
+        return spill_context.isBuildSideSpilling(concurrency_build_index)
+            ? OperatorStatus::WAITING
+            : OperatorStatus::NEED_INPUT;
+    }
 }
 } // namespace DB
