@@ -31,16 +31,6 @@ SharedSpilledBucketDataLoader::SharedSpilledBucketDataLoader(
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
     RUNTIME_CHECK(!bucket_inputs.empty());
-
-    exec_context.incActiveRefCount();
-}
-
-SharedSpilledBucketDataLoader::~SharedSpilledBucketDataLoader()
-{
-    bucket_data_queue = {};
-    bucket_inputs.clear();
-    // In order to ensure that `PipelineExecutorContext` will not be destructed before `SharedSpilledBucketDataLoader` is destructed.
-    exec_context.decActiveRefCount();
 }
 
 bool SharedSpilledBucketDataLoader::switchStatus(SharedLoaderStatus from, SharedLoaderStatus to)

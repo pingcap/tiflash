@@ -63,8 +63,6 @@ public:
         const String & req_id,
         size_t max_queue_size_);
 
-    ~SharedSpilledBucketDataLoader();
-
     // return true if pop success
     // return false means that need to continue tryPop.
     bool tryPop(BlocksList & bucket_data);
