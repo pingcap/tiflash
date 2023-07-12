@@ -228,7 +228,9 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
 
-        tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
+        MPPTaskId task_id(task_meta);
+        RUNTIME_CHECK_MSG(id.gather_id.gather_id == task_id.gather_id.gather_id, "MPP query has different gather id, should be something wrong in TiDB side");
+        tunnel_set_local->registerTunnel(task_id, tunnel);
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
@@ -641,7 +643,7 @@ void MPPTask::reportStatus(const String & err_msg)
 void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
+    manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
     if (!is_public)
         // if the task is not public, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
