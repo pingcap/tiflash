@@ -27,28 +27,6 @@
 
 namespace DB
 {
-namespace Window
-{
-enum class ColumnType
-{
-    UnInitialized = 0,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Float32,
-    Float64,
-    Decimal32,
-    Decimal64,
-    Decimal128,
-    Decimal256
-};
-} // namespace Window
-
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
@@ -137,7 +115,7 @@ struct WindowDescription
 
     // Mark the order by column type to avoid type judge
     // each time we update the start/end frame position.
-    Window::ColumnType order_by_col_type = Window::ColumnType::UnInitialized;
+    TypeIndex order_by_col_type = TypeIndex::Nothing;
 
     // Sometimes, we may cast order by column or const column to the target type.
     // When the casted column is nullable, we need to check if there is null in
@@ -146,8 +124,8 @@ struct WindowDescription
     bool is_aux_begin_col_nullable = false;
     bool is_aux_end_col_nullable = false;
 
-    Window::ColumnType begin_aux_col_type = Window::ColumnType::UnInitialized;
-    Window::ColumnType end_aux_col_type = Window::ColumnType::UnInitialized;
+    TypeIndex begin_aux_col_type = TypeIndex::Nothing; // todo
+    TypeIndex end_aux_col_type = TypeIndex::Nothing;
 
     // ascending or descending for order by column
     // only used for range frame type

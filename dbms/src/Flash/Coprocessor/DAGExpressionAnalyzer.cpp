@@ -46,6 +46,8 @@
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
+#include "Core/Types.h"
+
 
 namespace DB
 {
@@ -199,39 +201,6 @@ void appendWindowDescription(
     source_columns.emplace_back(func_string, result_type);
 }
 
-Window::ColumnType getColumnType(const ColumnPtr & col_ptr)
-{
-    if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt8;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt16;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt32;
-    else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(col_ptr))))
-        return Window::ColumnType::UInt64;
-    else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int8;
-    else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int16;
-    else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int32;
-    else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(col_ptr))))
-        return Window::ColumnType::Int64;
-    else if (const auto * ptr = typeid_cast<const ColumnFloat32 *>(&(*(col_ptr))))
-        return Window::ColumnType::Float32;
-    else if (const auto * ptr = typeid_cast<const ColumnFloat64 *>(&(*(col_ptr))))
-        return Window::ColumnType::Float64;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal32> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal32;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal64> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal64;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal128> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal128;
-    else if (const auto * ptr = typeid_cast<const ColumnDecimal<Decimal256> *>(&(*(col_ptr))))
-        return Window::ColumnType::Decimal256;
-    throw Exception("Unexpected column type!");
-}
-
 void setAuxiliaryColumnInfoImpl(
     WindowDescription & window_desc,
     const String & aux_col_name,
@@ -242,7 +211,7 @@ void setAuxiliaryColumnInfoImpl(
     {
         // Prepare something
         Int32 & range_auxiliary_column_index = is_begin ? window_desc.frame.begin_range_auxiliary_column_index : window_desc.frame.end_range_auxiliary_column_index;
-        Window::ColumnType & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
+        TypeIndex & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
         bool & is_aux_col_nullable = is_begin ? window_desc.is_aux_begin_col_nullable : window_desc.is_aux_end_col_nullable;
 
         // Set auxiliary columns' indexes
@@ -256,13 +225,13 @@ void setAuxiliaryColumnInfoImpl(
         if (is_nullable)
         {
             if (const auto * const data_type_nullable = typeid_cast<const DataTypeNullable *>(data_type.get()))
-                aux_col_type = getColumnType(data_type_nullable->getNestedType()->createColumn()); // Set here
+                aux_col_type = data_type_nullable->getNestedType()->getTypeId(); // Set here
             else
                 throw Exception("Invalid data type");
             is_aux_col_nullable = true; // Set here
         }
         else
-            aux_col_type = getColumnType(col_and_name.type->createColumn()); // Set here
+            aux_col_type = col_and_name.type->getTypeId(); // Set here
     }
 }
 
@@ -298,7 +267,7 @@ void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const Exp
         const String & order_by_col_name = window_desc.order_by[0].column_name;
         const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
 
-        window_desc.order_by_col_type = getColumnType(order_by_col_type_and_name.column);
+        window_desc.order_by_col_type = order_by_col_type_and_name.type->getTypeId();
         window_desc.is_desc = (window_desc.order_by[0].direction == -1);
     }
 }

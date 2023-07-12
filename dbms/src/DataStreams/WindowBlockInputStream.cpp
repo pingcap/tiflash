@@ -545,33 +545,33 @@ RowNumber WindowTransformAction::stepToFrameStartForRange()
 {
     switch (window_description.begin_aux_col_type)
     {
-    case Window::ColumnType::UInt8:
+    case TypeIndex::UInt8:
         return stepToFrameStartForRangeImpl<UInt8, is_desc>();
-    case Window::ColumnType::UInt16:
+    case TypeIndex::UInt16:
         return stepToFrameStartForRangeImpl<UInt16, is_desc>();
-    case Window::ColumnType::UInt32:
+    case TypeIndex::UInt32:
         return stepToFrameStartForRangeImpl<UInt32, is_desc>();
-    case Window::ColumnType::UInt64:
+    case TypeIndex::UInt64:
         return stepToFrameStartForRangeImpl<UInt64, is_desc>();
-    case Window::ColumnType::Int8:
+    case TypeIndex::Int8:
         return stepToFrameStartForRangeImpl<Int8, is_desc>();
-    case Window::ColumnType::Int16:
+    case TypeIndex::Int16:
         return stepToFrameStartForRangeImpl<Int16, is_desc>();
-    case Window::ColumnType::Int32:
+    case TypeIndex::Int32:
         return stepToFrameStartForRangeImpl<Int32, is_desc>();
-    case Window::ColumnType::Int64:
+    case TypeIndex::Int64:
         return stepToFrameStartForRangeImpl<Int64, is_desc>();
-    case Window::ColumnType::Float32:
+    case TypeIndex::Float32:
         return stepToFrameStartForRangeImpl<Float32, is_desc>();
-    case Window::ColumnType::Float64:
+    case TypeIndex::Float64:
         return stepToFrameStartForRangeImpl<Float64, is_desc>();
-    case Window::ColumnType::Decimal32:
+    case TypeIndex::Decimal32:
         return stepToFrameStartForRangeImpl<Decimal32, is_desc>();
-    case Window::ColumnType::Decimal64:
+    case TypeIndex::Decimal64:
         return stepToFrameStartForRangeImpl<Decimal64, is_desc>();
-    case Window::ColumnType::Decimal128:
+    case TypeIndex::Decimal128:
         return stepToFrameStartForRangeImpl<Decimal128, is_desc>();
-    case Window::ColumnType::Decimal256:
+    case TypeIndex::Decimal256:
         return stepToFrameStartForRangeImpl<Decimal256, is_desc>();
     default:
         throw Exception("Unexpected column type!");
@@ -589,33 +589,33 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
 
     switch (window_description.end_aux_col_type)
     {
-    case Window::ColumnType::UInt8:
+    case TypeIndex::UInt8:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt8, is_desc>(), true);
-    case Window::ColumnType::UInt16:
+    case TypeIndex::UInt16:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt16, is_desc>(), true);
-    case Window::ColumnType::UInt32:
+    case TypeIndex::UInt32:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt32, is_desc>(), true);
-    case Window::ColumnType::UInt64:
+    case TypeIndex::UInt64:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt64, is_desc>(), true);
-    case Window::ColumnType::Int8:
+    case TypeIndex::Int8:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int8, is_desc>(), true);
-    case Window::ColumnType::Int16:
+    case TypeIndex::Int16:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int16, is_desc>(), true);
-    case Window::ColumnType::Int32:
+    case TypeIndex::Int32:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int32, is_desc>(), true);
-    case Window::ColumnType::Int64:
+    case TypeIndex::Int64:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int64, is_desc>(), true);
-    case Window::ColumnType::Float32:
+    case TypeIndex::Float32:
         return std::make_tuple(stepToFrameEndForRangeImpl<Float32, is_desc>(), true);
-    case Window::ColumnType::Float64:
+    case TypeIndex::Float64:
         return std::make_tuple(stepToFrameEndForRangeImpl<Float64, is_desc>(), true);
-    case Window::ColumnType::Decimal32:
+    case TypeIndex::Decimal32:
         return std::make_tuple(stepToFrameEndForRangeImpl<Decimal32, is_desc>(), true);
-    case Window::ColumnType::Decimal64:
+    case TypeIndex::Decimal64:
         return std::make_tuple(stepToFrameEndForRangeImpl<Decimal64, is_desc>(), true);
-    case Window::ColumnType::Decimal128:
+    case TypeIndex::Decimal128:
         return std::make_tuple(stepToFrameEndForRangeImpl<Decimal128, is_desc>(), true);
-    case Window::ColumnType::Decimal256:
+    case TypeIndex::Decimal256:
         return std::make_tuple(stepToFrameEndForRangeImpl<Decimal256, is_desc>(), true);
     default:
         throw Exception("Unexpected column type!");
@@ -673,33 +673,33 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameBoundary(RowNumber cursor
 {
     switch (window_description.order_by_col_type)
     {
-    case Window::ColumnType::UInt8:
+    case TypeIndex::UInt8:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt8, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::UInt16:
+    case TypeIndex::UInt16:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt16, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::UInt32:
+    case TypeIndex::UInt32:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt32, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::UInt64:
+    case TypeIndex::UInt64:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt64, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Int8:
+    case TypeIndex::Int8:
         return moveCursorAndFindFrameBoundary<AuxColType, Int8, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Int16:
+    case TypeIndex::Int16:
         return moveCursorAndFindFrameBoundary<AuxColType, Int16, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Int32:
+    case TypeIndex::Int32:
         return moveCursorAndFindFrameBoundary<AuxColType, Int32, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Int64:
+    case TypeIndex::Int64:
         return moveCursorAndFindFrameBoundary<AuxColType, Int64, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Float32:
+    case TypeIndex::Float32:
         return moveCursorAndFindFrameBoundary<AuxColType, Float32, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Float64:
+    case TypeIndex::Float64:
         return moveCursorAndFindFrameBoundary<AuxColType, Float64, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Decimal32:
+    case TypeIndex::Decimal32:
         return moveCursorAndFindFrameBoundary<AuxColType, Decimal32, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Decimal64:
+    case TypeIndex::Decimal64:
         return moveCursorAndFindFrameBoundary<AuxColType, Decimal64, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Decimal128:
+    case TypeIndex::Decimal128:
         return moveCursorAndFindFrameBoundary<AuxColType, Decimal128, is_begin, is_desc>(cursor, current_row_aux_value);
-    case Window::ColumnType::Decimal256:
+    case TypeIndex::Decimal256:
         return moveCursorAndFindFrameBoundary<AuxColType, Decimal256, is_begin, is_desc>(cursor, current_row_aux_value);
     default:
         throw Exception("Unexpected column type!");

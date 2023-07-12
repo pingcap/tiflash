@@ -123,8 +123,8 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
     if (from->isEnum() && to->isEnum())
     {
         /// support cast Enum to Enum if the from type is a subset of the target type
-        const auto *const from_enum8 = checkAndGetDataType<DataTypeEnum8>(from.get());
-        const auto *const to_enum8 = checkAndGetDataType<DataTypeEnum8>(to.get());
+        const auto * const from_enum8 = checkAndGetDataType<DataTypeEnum8>(from.get());
+        const auto * const to_enum8 = checkAndGetDataType<DataTypeEnum8>(to.get());
         if (from_enum8 && to_enum8)
         {
             for (const auto & value : from_enum8->getValues())
@@ -133,8 +133,8 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
                     return false;
             }
         }
-        const auto *const from_enum16 = checkAndGetDataType<DataTypeEnum16>(from.get());
-        const auto *const to_enum16 = checkAndGetDataType<DataTypeEnum16>(to.get());
+        const auto * const from_enum16 = checkAndGetDataType<DataTypeEnum16>(from.get());
+        const auto * const to_enum16 = checkAndGetDataType<DataTypeEnum16>(to.get());
         if (from_enum16 && to_enum16)
         {
             for (const auto & value : from_enum16->getValues())
