@@ -109,6 +109,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     return write_cf.getDataMut().erase(write_it);
 }
 
+/// This function is called by `ReadRegionCommitCache`.
 std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value, RegionID region_id, UInt64 applied, bool hard_error)
 {
     const auto & [key, value, decoded_val] = write_it->second;
@@ -126,6 +127,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
     if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
         return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
+    std::string orphan_key_debug_msg;
     if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
@@ -147,25 +149,33 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
                 else
                 {
                     // We can't delete this orphan key here, since it can be triggered from `onSnapshot`.
-                    if (orphan_keys_info.snapshot_index.has_value())
+                    // if (orphan_keys_info.snapshot_index.has_value())
+                    // {
+                    if (orphan_keys_info.containsExtraKey(*key))
                     {
-                        if (orphan_keys_info.containsExtraKey(*key))
-                        {
-                            return std::nullopt;
-                        }
-                    }
-                    else
-                    {
-                        // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
-                        // So we print out a log here, and neglect the error.
-                        LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
                         return std::nullopt;
                     }
+                    // }
+                    // else
+                    // {
+                    //     // After restart, we will lose all orphan key info. We we can't do orphan key checking for now.
+                    //     // So we print out a log here, and neglect the error.
+                    //     LOG_INFO(&Poco::Logger::get("RegionData"), "Orphan key info lost after restart, Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}", pk.toDebugString(), decoded_val.prewrite_ts, key->toDebugString(), region_id, applied);
+                    //     return std::nullopt;
+                    // }
+
                     // Otherwise, this is still a hard error.
                     // TODO We still need to check if there are remained orphan keys after we have applied after peer's flushed_index.
                     // Since the registered orphan write key may come from a raft log smaller than snapshot_index with its default key lost,
                     // thus this write key will not be replicated any more, which cause a slient data loss.
                 }
+            }
+            if (!hard_error)
+            {
+                orphan_key_debug_msg = fmt::format("{}, snapshot_index: {}, {}",
+                                                   hard_error ? "" : ", not orphan key",
+                                                   orphan_keys_info.snapshot_index.has_value() ? std::to_string(orphan_keys_info.snapshot_index.value()) : "",
+                                                   orphan_keys_info.removed_remained_keys.contains(*key) ? "duplicated write" : "missing default");
             }
             throw Exception(fmt::format("Raw TiDB PK: {}, Prewrite ts: {} can not found in default cf for key: {}, region_id: {}, applied: {}{}",
                                         pk.toDebugString(),
@@ -173,7 +183,7 @@ std::optional<RegionDataReadInfo> RegionData::readDataByWriteIt(const ConstWrite
                                         key->toDebugString(),
                                         region_id,
                                         applied,
-                                        hard_error ? "" : ", not orphan key"),
+                                        orphan_key_debug_msg),
                             ErrorCodes::ILLFORMAT_RAFT_ROW);
         }
     }
@@ -310,7 +320,13 @@ void RegionData::OrphanKeysInfo::observeExtraKey(TiKVKey && key)
 
 bool RegionData::OrphanKeysInfo::observeKeyFromNormalWrite(const TiKVKey & key)
 {
-    return remained_keys.erase(key);
+    bool res = remained_keys.erase(key);
+    if (res)
+    {
+        // If we erased something, log that.
+        removed_remained_keys.insert(TiKVKey::copyFromObj(key));
+    }
+    return res;
 }
 
 bool RegionData::OrphanKeysInfo::containsExtraKey(const TiKVKey & key)

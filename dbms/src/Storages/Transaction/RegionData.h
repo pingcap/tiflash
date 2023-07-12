@@ -98,6 +98,7 @@ public:
         // See `RegionData::readDataByWriteIt`.
         bool pre_handling = false;
         uint64_t region_id = 0;
+        std::unordered_set<TiKVKey> removed_remained_keys;
 
     private:
         // Stores orphan write cf keys while handling a raftstore v2 snapshot.
