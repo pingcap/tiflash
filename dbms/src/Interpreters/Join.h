@@ -82,6 +82,8 @@ struct PartitionBlock
 };
 using PartitionBlocks = std::list<PartitionBlock>;
 
+struct PartitionBlockVec;
+using PartitionBlockVecs = std::vector<PartitionBlockVec>;
 struct PartitionBlockVec
 {
     size_t partition_index;
@@ -91,8 +93,14 @@ struct PartitionBlockVec
         : partition_index(partition_index_)
         , blocks(std::move(blocks_))
     {}
+
+    static PartitionBlockVecs toVecs(size_t partition_index, Blocks && blocks)
+    {
+      PartitionBlockVecs vecs;
+      vecs.emplace_back(partition_index, std::move(blocks));
+      return vecs;
+    }
 };
-using PartitionBlockVecs = std::vector<PartitionBlockVec>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.

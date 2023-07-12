@@ -470,7 +470,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                 }
             }
             if (!blocks_to_spill.empty())
-                partition_block_vecs.emplace_back(i, blocks_to_spill);
+                partition_block_vecs.emplace_back(i, std::move(blocks_to_spill));
         }
         spillBuildSideBlocks(std::move(partition_block_vecs), stream_index);
 #ifdef DBMS_PUBLIC_GTEST
@@ -1766,7 +1766,7 @@ void Join::spillBuildSideBlocks(PartitionBlockVecs && partition_block_vecs, size
     if (partition_block_vecs.empty())
          return;
     if (spill_ctx_for_pipeline)
-        spill_ctx_for_pipeline->spillBlocks<true>(part_id, std::move(blocks), stream_index);
+        spill_ctx_for_pipeline->spillBlocks<true>(std::move(partition_block_vecs), stream_index);
     else
     {
         for (auto & partition_block_vec : partition_block_vecs)
@@ -1781,7 +1781,7 @@ void Join::spillProbeSideBlocks(PartitionBlockVecs && partition_block_vecs, size
     if (partition_block_vecs.empty())
          return;
     if (spill_ctx_for_pipeline)
-        spill_ctx_for_pipeline->spillBlocks<false>(part_id, std::move(blocks), stream_index);
+        spill_ctx_for_pipeline->spillBlocks<false>(std::move(partition_block_vecs), stream_index);
     else
     {
         for (auto & partition_block_vec : partition_block_vecs)
@@ -1840,9 +1840,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
     }
     if (!blocks_to_spill.empty())
     {
-        PartitionBlockVecs partition_block_vecs;
-        partition_block_vecs.emplace_back(target_partition_index, std::move(blocks_to_spill));
-        spillBuildSideBlocks(std::move(partition_block_vecs), stream_index);
+        spillBuildSideBlocks(PartitionBlockVec::toVecs(target_partition_index, std::move(blocks_to_spill)), stream_index);
     }
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }

@@ -79,17 +79,21 @@ public:
     }
 
     template <bool is_build_side>
-    void spillBlocks(UInt64 part_id, Blocks && blocks, size_t op_index)
+    void spillBlocks(PartitionBlockVecs && partition_block_vecs, size_t op_index)
     {
         startSpilling<is_build_side>(op_index);
-        RUNTIME_CHECK(join->build_spiller);
-        if constexpr (is_build_side)
+        for (auto & partition_block_vec : partition_block_vecs)
         {
-            join->build_spiller->spillBlocks(std::move(blocks), part_id);
-        }
-        else
-        {
-            join->probe_spiller->spillBlocks(std::move(blocks), part_id);
+            if constexpr (is_build_side)
+            {
+                RUNTIME_CHECK(join->build_spiller);
+                join->build_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
+            }
+            else
+            {
+                RUNTIME_CHECK(join->probe_spiller);
+                join->probe_spiller->spillBlocks(std::move(partition_block_vec.blocks), partition_block_vec.partition_index);
+            }
         }
         finishSpilling<is_build_side>(op_index);
     }
