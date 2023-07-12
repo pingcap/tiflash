@@ -434,28 +434,6 @@ void executeGeneratedColumnPlaceholder(
     }
 }
 
-NamesWithAliases buildTableScanProjectionCols(const NamesAndTypes & schema,
-                                              const NamesAndTypes & storage_schema)
-{
-    RUNTIME_CHECK(
-        storage_schema.size() == schema.size(),
-        storage_schema.size(),
-        schema.size());
-    NamesWithAliases schema_project_cols;
-    for (size_t i = 0; i < schema.size(); ++i)
-    {
-        RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type),
-            schema[i].name,
-            schema[i].type->getName(),
-            storage_schema[i].name,
-            storage_schema[i].type->getName());
-        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
-        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
-    }
-    return schema_project_cols;
-}
-
 void executeGeneratedColumnPlaceholder(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,

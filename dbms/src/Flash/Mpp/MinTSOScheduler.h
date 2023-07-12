@@ -25,8 +25,8 @@ using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
-struct MPPQueryTaskSet;
-using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
+struct MPPGatherTaskSet;
+using MPPGatherTaskSetPtr = std::shared_ptr<MPPGatherTaskSet>;
 
 /// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_query_id query to preempt threads under the hard limit of threads.
 /// The min_query_id query avoids the deadlock resulted from threads competition among nodes.
@@ -43,13 +43,13 @@ public:
 
     /// delete this to-be cancelled/finished query from scheduler and update min_query_id if needed, so that there aren't cancelled/finished queries in the scheduler.
     /// NOTE: call deleteQuery under the lock protection of MPPTaskManager
-    void deleteQuery(const MPPQueryId & query_id, MPPTaskManager & task_manager, const bool is_cancelled);
+    void deleteQuery(const MPPQueryId & query_id, MPPTaskManager & task_manager, const bool is_cancelled, Int64 gather_id);
 
     /// all scheduled tasks should finally call this function to release threads and schedule new tasks
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
-    bool scheduleImp(const MPPQueryId & query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
+    bool scheduleImp(const MPPQueryId & query_id, const MPPGatherTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
     bool updateMinQueryId(const MPPQueryId & query_id, const bool retired, const String & msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
     bool isDisabled()

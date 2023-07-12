@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -28,6 +29,49 @@
 
 namespace DB
 {
+namespace
+{
+NamesWithAliases buildTableScanProjectionCols(
+    Int64 logical_table_id,
+    const NamesAndTypes & schema,
+    const NamesAndTypes & storage_schema)
+{
+    if (unlikely(schema.size() != storage_schema.size()))
+        throw TiFlashException(
+            fmt::format(
+                "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table id is {}",
+                schema.size(),
+                storage_schema.size(),
+                logical_table_id),
+            Errors::Planner::BadRequest);
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        const auto & table_scan_col_name = schema[i].name;
+        const auto & table_scan_col_type = schema[i].type;
+        const auto & storage_col_name = storage_schema[i].name;
+        const auto & storage_col_type = storage_schema[i].type;
+        if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
+            throw TiFlashException(
+                fmt::format(
+                    R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema, 
+                    table id is {}, 
+                    column index is {}, 
+                    column name from tidb table scan is {}, 
+                    column name from tiflash storage is {})",
+                    table_scan_col_type->getName(),
+                    storage_col_type->getName(),
+                    logical_table_id,
+                    i,
+                    table_scan_col_name,
+                    storage_col_name),
+                Errors::Planner::BadRequest);
+        schema_project_cols.emplace_back(storage_col_name, table_scan_col_name);
+    }
+    return schema_project_cols;
+}
+} // namespace
+
 PhysicalTableScan::PhysicalTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
@@ -106,7 +150,7 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, storage_schema);
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
@@ -118,7 +162,7 @@ void PhysicalTableScan::buildProjection(
     PipelineExecGroupBuilder & group_builder,
     const NamesAndTypes & storage_schema)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+    const auto & schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, storage_schema);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
