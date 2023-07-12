@@ -121,17 +121,27 @@ bool WindowBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collat
         if (frame.start.has_value())
         {
             auto * start = mut_frame->mutable_start();
-            start->set_offset(std::get<2>(frame.start.value()));
-            start->set_unbounded(std::get<1>(frame.start.value()));
-            start->set_type(std::get<0>(frame.start.value()));
+            start->set_offset(frame.start->getOffset());
+            start->set_unbounded(frame.start->isUnbounded());
+            start->set_type(frame.start->getBoundType());
+            if (frame.start->isRangeFrame())
+            {
+                start->set_allocated_frame_range(frame.start->robRangeFrame());
+                start->set_cmp_data_type(frame.start->getCmpDataType());
+            }
         }
 
         if (frame.end.has_value())
         {
             auto * end = mut_frame->mutable_end();
-            end->set_offset(std::get<2>(frame.end.value()));
-            end->set_unbounded(std::get<1>(frame.end.value()));
-            end->set_type(std::get<0>(frame.end.value()));
+            end->set_offset(frame.end->getOffset());
+            end->set_unbounded(frame.end->isUnbounded());
+            end->set_type(frame.end->getBoundType());
+            if (frame.end->isRangeFrame())
+            {
+                end->set_allocated_frame_range(frame.end->robRangeFrame());
+                end->set_cmp_data_type(frame.end->getCmpDataType());
+            }
         }
     }
 
@@ -166,6 +176,14 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
             compileExpr(input->output_schema, elem->children[0]);
         }
     }
+
+    // Build range frame's auxiliary function
+    if (frame.start.has_value() && frame.start->isRangeFrame())
+        frame.start->buildRangeFrameAuxFunction(input->output_schema);
+
+    // Build range frame's auxiliary function
+    if (frame.end.has_value() && frame.end->isRangeFrame())
+        frame.end->buildRangeFrameAuxFunction(input->output_schema);
 
     DAGSchema output_schema;
     output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
@@ -231,7 +249,7 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
         std::move(window_exprs),
         std::move(partition_columns),
         std::move(order_columns),
-        frame,
+        std::move(frame),
         fine_grained_shuffle_stream_count);
     window->children.push_back(input);
     return window;

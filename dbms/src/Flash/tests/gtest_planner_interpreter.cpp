@@ -524,5 +524,31 @@ try
 }
 CATCH
 
+TEST_F(PlannerInterpreterExecuteTest, Expand2Plan)
+try
+{
+    std::vector<tipb::FieldType> fields(3);
+    fields[0].set_tp(TiDB::TypeString);
+    fields[1].set_tp(TiDB::TypeString);
+    fields[2].set_tp(TiDB::TypeLongLong);
+    fields[2].set_flag(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned);
+    {
+        auto request = context
+                           .receive("sender_1")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand2(std::vector<MockAstVec>{
+                                        {col("count(s1)"), lit(Field(Null())), lit(Field(static_cast<UInt64>(1)))},
+                                        {lit(Field(Null())), col("s2"), lit(Field(static_cast<UInt64>(2)))}},
+                                    std::vector<String>{"grouping_id"},
+                                    fields)
+                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .project({"count(s1)", "grouping_id"})
+                           .topN({{"grouping_id", true}}, 2)
+                           .build(context);
+        runAndAssert(request, 10);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

@@ -18,13 +18,12 @@
 namespace DB
 {
 AggregateFinalSpillTask::AggregateFinalSpillTask(
-    MemoryTrackerPtr mem_tracker_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id,
-    PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     AggregateContextPtr agg_context_,
     size_t index_)
-    : IOEventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+    : OutputIOEventTask(exec_context_, req_id, event_)
     , agg_context(std::move(agg_context_))
     , index(index_)
 {
@@ -36,7 +35,7 @@ void AggregateFinalSpillTask::doFinalizeImpl()
     agg_context.reset();
 }
 
-ExecTaskStatus AggregateFinalSpillTask::doExecuteIOImpl()
+ExecTaskStatus AggregateFinalSpillTask::executeIOImpl()
 {
     agg_context->spillData(index);
     return ExecTaskStatus::FINISHED;

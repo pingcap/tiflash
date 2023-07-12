@@ -14,34 +14,27 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
-
-#include <deque>
-#include <mutex>
+#include <Interpreters/Expand2.h>
 
 namespace DB
 {
-class FIFOTaskQueue : public TaskQueue
+
+struct ExpandTransformAction
 {
 public:
-    ~FIFOTaskQueue() override;
+    ExpandTransformAction(
+        const Block & header_,
+        const Expand2Ptr & expand_);
 
-    void submit(TaskPtr && task) override;
-
-    void submit(std::vector<TaskPtr> & tasks) override;
-
-    bool take(TaskPtr & task) override;
-
-    void updateStatistics(const TaskPtr &, size_t) override {}
-
-    bool empty() const override;
-
-    void finish() override;
+    void transform(Block & block);
+    bool tryOutput(Block & block);
+    Block getHeader() const;
 
 private:
-    mutable std::mutex mu;
-    std::condition_variable cv;
-    std::atomic_bool is_finished = false;
-    std::deque<TaskPtr> task_queue;
+    Block header;
+    Expand2Ptr expand;
+    Block block_cache;
+    size_t i_th_project;
 };
+
 } // namespace DB

@@ -35,6 +35,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/BlockInputStreamSourceOp.h>
+#include <Operators/ConcatSourceOp.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
@@ -292,14 +293,14 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     executeImpl(pipeline);
 }
 
-void DAGStorageInterpreter::execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+void DAGStorageInterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     prepare(); // learner read
 
-    return executeImpl(exec_status, group_builder);
+    return executeImpl(exec_context, group_builder);
 }
 
-void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder)
+void DAGStorageInterpreter::executeImpl(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     auto & dag_context = dagContext();
 
@@ -309,7 +310,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
 
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        buildLocalExec(exec_status, group_builder, context.getSettingsRef().max_block_size);
+        buildLocalExec(exec_context, group_builder, context.getSettingsRef().max_block_size);
     }
 
     // Should build `remote_requests` and `nullSourceOp` under protect of `table_structure_lock`.
@@ -344,14 +345,14 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     size_t remote_read_start_index = group_builder.concurrency();
 
     if (!remote_requests.empty())
-        buildRemoteExec(exec_status, group_builder, remote_requests);
+        buildRemoteExec(exec_context, group_builder, remote_requests);
 
     /// record profiles of local and remote io source
     dag_context.addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
 
     if (group_builder.empty())
     {
-        group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_status, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
+        group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_context, storage_for_logical_table->getSampleBlockForColumns(required_columns), log->identifier()));
         // reset remote_read_start_index for null_source_if_empty.
         remote_read_start_index = 1;
     }
@@ -363,7 +364,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle generated column if necessary.
-    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_start_index, generated_column_infos, log);
+    executeGeneratedColumnPlaceholder(exec_context, group_builder, remote_read_start_index, generated_column_infos, log);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
     const auto table_scan_output_header = group_builder.getCurrentHeader();
@@ -380,13 +381,13 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
         return;
     }
     /// handle timezone/duration cast for local table scan.
-    executeCastAfterTableScan(exec_status, group_builder, remote_read_start_index);
+    executeCastAfterTableScan(exec_context, group_builder, remote_read_start_index);
     dag_context.addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
+        ::DB::executePushedDownFilter(exec_context, group_builder, remote_read_start_index, filter_conditions, *analyzer, log);
         dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
@@ -562,7 +563,7 @@ void DAGStorageInterpreter::prepare()
 }
 
 void DAGStorageInterpreter::executeCastAfterTableScan(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t remote_read_start_index)
 {
@@ -576,7 +577,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         while (i < remote_read_start_index)
         {
             auto & builder = group_builder.getCurBuilder(i++);
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
         }
     }
 }
@@ -675,7 +676,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
 }
 
 void DAGStorageInterpreter::buildRemoteExec(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RemoteRequest> & remote_requests)
 {
@@ -700,7 +701,7 @@ void DAGStorageInterpreter::buildRemoteExec(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
-        group_builder.addConcurrency(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
+        group_builder.addConcurrency(std::make_unique<CoprocessorReaderSourceOp>(exec_context, log->identifier(), coprocessor_reader));
         task_start = task_end;
     }
 
@@ -997,7 +998,7 @@ DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
 DAGStorageInterpreter::buildLocalExecForPhysicalTable(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const TableID & table_id,
     const SelectQueryInfo & query_info,
@@ -1019,7 +1020,7 @@ DAGStorageInterpreter::buildLocalExecForPhysicalTable(
             if (!dag_context.is_disaggregated_task)
             {
                 storage->read(
-                    exec_status,
+                    exec_context,
                     group_builder,
                     required_columns,
                     query_info,
@@ -1136,7 +1137,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
 }
 
 void DAGStorageInterpreter::buildLocalExec(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     size_t max_block_size)
 {
@@ -1146,22 +1147,25 @@ void DAGStorageInterpreter::buildLocalExec(
         return;
     mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
+    bool has_multiple_partitions = table_query_infos.size() > 1;
+    ConcatBuilderPool builder_pool{max_streams};
 
     auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
-    // TODO Improve the performance of partition table in extreme case.
-    // ref https://github.com/pingcap/tiflash/issues/4474
     for (const auto & table_query_info : table_query_infos)
     {
         PipelineExecGroupBuilder builder;
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        auto table_snap = buildLocalExecForPhysicalTable(exec_status, builder, table_id, query_info, max_block_size);
+        auto table_snap = buildLocalExecForPhysicalTable(exec_context, builder, table_id, query_info, max_block_size);
         if (table_snap)
         {
             disaggregated_snap->addTask(table_id, std::move(table_snap));
         }
 
-        group_builder.merge(std::move(builder));
+        if (has_multiple_partitions)
+            builder_pool.add(builder);
+        else
+            group_builder.merge(std::move(builder));
     }
 
     LOG_DEBUG(
@@ -1178,6 +1182,11 @@ void DAGStorageInterpreter::buildLocalExec(
         auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
         bool register_snapshot_ok = snaps->registerSnapshot(snap_id, disaggregated_snap, expired_at);
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
+    }
+
+    if (has_multiple_partitions)
+    {
+        builder_pool.generate(group_builder, exec_context, log->identifier());
     }
 }
 

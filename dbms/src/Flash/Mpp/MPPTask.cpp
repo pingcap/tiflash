@@ -228,7 +228,9 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
 
-        tunnel_set_local->registerTunnel(MPPTaskId(task_meta), tunnel);
+        MPPTaskId task_id(task_meta);
+        RUNTIME_CHECK_MSG(id.gather_id.gather_id == task_id.gather_id.gather_id, "MPP query has different gather id, should be something wrong in TiDB side");
+        tunnel_set_local->registerTunnel(task_id, tunnel);
         injectFailPointDuringRegisterTunnel(dag_context->isRootMPPTask());
     }
     {
@@ -594,13 +596,18 @@ void MPPTask::reportStatus(const String & err_msg)
     if (!ReportStatusToCoordinator(meta.mpp_version(), meta.coordinator_address()))
         return;
 
+    bool report_execution_summary = dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary());
+    // Only report status when err happened or need to report execution summary
+    if (err_msg.empty() && !report_execution_summary)
+        return;
+
     try
     {
         std::shared_ptr<mpp::ReportTaskStatusRequest> req = std::make_shared<mpp::ReportTaskStatusRequest>();
         mpp::TaskMeta * req_meta = req->mutable_meta();
         req_meta->CopyFrom(meta);
 
-        if (dag_context->collect_execution_summaries && ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+        if (report_execution_summary)
         {
             tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
             if unlikely (!execution_info.SerializeToString(req->mutable_data()))
@@ -636,7 +643,7 @@ void MPPTask::reportStatus(const String & err_msg)
 void MPPTask::handleError(const String & error_msg)
 {
     auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-    manager->abortMPPQuery(id.query_id, updated_msg, AbortType::ONERROR);
+    manager->abortMPPGather(id.gather_id, updated_msg, AbortType::ONERROR);
     if (!is_public)
         // if the task is not public, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);

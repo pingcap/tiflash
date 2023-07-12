@@ -56,7 +56,7 @@ public:
     void buildPipeline(
         PipelineBuilder & builder,
         Context & context,
-        PipelineExecutorStatus & exec_status) override;
+        PipelineExecutorContext & exec_context) override;
 
     void finalize(const Names & parent_require) override;
 
@@ -66,7 +66,7 @@ private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     void buildPipelineExecGroupImpl(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;

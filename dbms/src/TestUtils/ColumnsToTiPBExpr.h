@@ -31,5 +31,9 @@ tipb::Expr columnsToTiPBExpr(
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator,
     const String & val);
+
+tipb::Expr columnToTiPBExpr(
+    const ColumnWithTypeAndName & column,
+    size_t index);
 } // namespace tests
 } // namespace DB
