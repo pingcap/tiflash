@@ -531,7 +531,8 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
 
     // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
     RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
-    RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
+    if (!edit.entry.checkpoint_info.has_value())
+        return;
 
     auto page_lock = acquireLock();
 
@@ -1853,14 +1854,6 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
     const auto & records = edit.getRecords();
     if (records.empty())
         return num_copied;
-
-    // Pre-check: All ENTRY edit record must contain checkpoint info.
-    // We do the pre-check before copying any remote info to avoid partial completion.
-    for (const auto & rec : records)
-    {
-        if (rec.type == EditRecordType::VAR_ENTRY)
-            RUNTIME_CHECK_MSG(rec.entry.checkpoint_info.has_value(), "try to copy checkpoint from an edit with invalid record: {}", rec);
-    }
 
     for (const auto & rec : records)
     {
