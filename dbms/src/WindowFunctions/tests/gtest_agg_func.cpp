@@ -14,93 +14,117 @@
 
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+
+#include "Common/Decimal.h"
 
 namespace DB::tests
 {
-class WindowAggFuncTest : public DB::tests::ExecutorTest
+class WindowAggFuncTest : public DB::tests::WindowTest
 {
-    static const size_t max_concurrency_level = 10;
-
 public:
-    static constexpr auto VALUE_COL_NAME = "window_agg";
     const ASTPtr value_col = col(VALUE_COL_NAME);
 
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
     }
+};
 
-    void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+TEST_F(WindowAggFuncTest, windowAggSumTests)
+try
+{
     {
-        std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
-        for (auto block_size : block_sizes)
+        // rows frame
+        MockWindowFrame frame;
+        frame.type = tipb::WindowFrameType::Rows;
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 3);
+        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
+
+        std::vector<std::vector<Int64>> res{
+            {0, 15, 14, 12, 8, 26, 41, 38, 28, 15, 18, 32, 49, 75, 66, 51, 31},
+            {0, 15, 15, 14, 12, 26, 41, 41, 38, 28, 18, 33, 52, 80, 75, 66, 51},
+            {0, 15, 15, 15, 15, 26, 41, 41, 41, 41, 18, 33, 53, 84, 83, 80, 75},
+            {0, 15, 15, 15, 15, 26, 41, 41, 41, 41, 18, 33, 53, 84, 84, 84, 84}};
+
+        for (size_t i = 0; i < frame_start_offset.size(); ++i)
         {
-            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
+            frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
+
+            executeFunctionAndAssert(
+                toVec<Int64>(res[i]),
+                Sum(value_col),
+                {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
+                 toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
+                 toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
+                frame);
         }
     }
 
-    void executeFunctionAndAssert(
-        const ColumnWithTypeAndName & result,
-        const ASTPtr & function,
-        const ColumnsWithTypeAndName & input,
-        MockWindowFrame mock_frame = MockWindowFrame())
-    {
-        ColumnsWithTypeAndName actual_input = input;
-        assert(actual_input.size() == 3);
-        TiDB::TP value_tp = dataTypeToTP(actual_input[2].type);
+    // TODO uncomment these test after range frame is merged
+    // {
+    //     // range frame
+    //     MockWindowFrame frame;
+    //     frame.type = tipb::WindowFrameType::Rows;
+    //     frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, 0);
+    //     frame.end = buildRangeFrameBound(tipb::WindowBoundType::Following, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, true, 3);
+    //     std::vector<Int64> frame_start_offset{0, 1, 3, 10};
 
-        actual_input[0].name = "partition";
-        actual_input[1].name = "order";
-        actual_input[2].name = VALUE_COL_NAME;
-        context.addMockTable(
-            {"test_db", "test_table_for_first_value"},
-            {{"partition", TiDB::TP::TypeLongLong, actual_input[0].type->isNullable()},
-             {"order", TiDB::TP::TypeLongLong, actual_input[1].type->isNullable()},
-             {VALUE_COL_NAME, value_tp, actual_input[2].type->isNullable()}},
-            actual_input);
+    //     std::vector<std::vector<Int64>> res_not_null{
+    //         {0, 7, 6, 4, 8, 3, 3, 23, 28, 15, 4, 8, 5, 9, 15, 20, 31},
+    //         {0, 7, 7, 4, 8, 3, 3, 23, 28, 15, 4, 8, 5, 9, 15, 20, 31},
+    //         {0, 7, 7, 7, 8, 3, 3, 23, 38, 28, 4, 9, 8, 9, 15, 20, 31},
+    //         {0, 7, 7, 7, 15, 3, 3, 26, 41, 38, 4, 9, 9, 18, 29, 35, 31}};
 
-        auto request = context
-                           .scan("test_db", "test_table_for_first_value")
-                           .sort({{"partition", false}, {"order", false}}, true)
-                           .window(function, {"order", false}, {"partition", false}, mock_frame)
-                           .build(context);
+    //     for (size_t i = 0; i < frame_start_offset.size(); ++i)
+    //     {
+    //         frame.start = buildRangeFrameBound(tipb::WindowBoundType::Preceding, tipb::RangeCmpDataType::Int, ORDER_COL_NAME, false, 0);
 
-        ColumnsWithTypeAndName expect = input;
-        expect.push_back(result);
-        executeWithConcurrencyAndBlockSize(request, expect);
-    }
-};
+    //         executeFunctionAndAssert(
+    //             toVec<Int64>(res_not_null[i]),
+    //             Sum(value_col),
+    //             {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
+    //             toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
+    //             toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
+    //             frame);
+    //     }
+    // }
+}
+CATCH
 
-TEST_F(WindowAggFuncTest, windowAggTests)
+TEST_F(WindowAggFuncTest, windowAggCountTests)
 try
 {
-    MockWindowFrame frame;
-    frame.type = tipb::WindowFrameType::Rows;
-    frame.start = std::make_tuple(tipb::WindowBoundType::Preceding, false, 0);
-    std::vector<Int64> frame_start_offset{0, 1, 3, 10};
-
-    std::vector<std::vector<Int64>> res_not_null{
-        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13},
-        {1, 2, 5, 7, 9, 6, 13, 15, 17, 19, 11, 23, 25},
-        {1, 2, 5, 9, 14, 6, 13, 21, 30, 34, 11, 23, 36},
-        {1, 2, 5, 9, 14, 6, 13, 21, 30, 40, 11, 23, 36}};
-
-    for (size_t i = 0; i < frame_start_offset.size(); ++i)
     {
-        frame.start = std::make_tuple(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
+        // rows frame
+        MockWindowFrame frame;
+        frame.type = tipb::WindowFrameType::Rows;
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, 0);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, false, 3);
+        std::vector<Int64> frame_start_offset{0, 1, 3, 10};
 
-        executeFunctionAndAssert(
-            toVec<Int64>(res_not_null[i]),
-            Sum(value_col),
-            {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3}),
-             toVec<Int64>(/*order*/ {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
-             toVec<Int64>(/*value*/ {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13})},
-            frame);
+        std::vector<std::vector<Int64>> res{
+            {1, 4, 3, 2, 1, 4, 4, 3, 2, 1, 4, 4, 4, 4, 3, 2, 1},
+            {1, 4, 4, 3, 2, 4, 5, 4, 3, 2, 4, 5, 5, 5, 4, 3, 2},
+            {1, 4, 4, 4, 4, 4, 5, 5, 5, 4, 4, 5, 6, 7, 6, 5, 4},
+            {1, 4, 4, 4, 4, 4, 5, 5, 5, 5, 4, 5, 6, 7, 7, 7, 7}};
+
+        for (size_t i = 0; i < frame_start_offset.size(); ++i)
+        {
+            frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, false, frame_start_offset[i]);
+
+            executeFunctionAndAssert(
+                toVec<Int64>(res[i]),
+                Count(value_col),
+                {toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3}),
+                 toVec<Int64>(/*order*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31}),
+                 toVec<Int64>(/*value*/ {0, 1, 2, 4, 8, 0, 3, 10, 13, 15, 1, 3, 5, 9, 15, 20, 31})},
+                frame);
+        }
     }
+    // TODO add range frame tests after that is merged
 }
 CATCH
 } // namespace DB::tests
