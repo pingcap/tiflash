@@ -529,8 +529,8 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     // (the checkpoint info) each page's data was dumped.
     // In this case, there is a living snapshot protecting the data.
 
-    // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
     RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
+    // The checkpoint_info from `edit` could be empty when we upload the manifest without any page data
     if (!edit.entry.checkpoint_info.has_value())
         return;
 
