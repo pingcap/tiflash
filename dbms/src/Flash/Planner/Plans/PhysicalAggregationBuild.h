@@ -56,12 +56,12 @@ public:
 
 private:
     void buildPipelineExecGroupImpl(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
 
-    EventPtr doSinkComplete(PipelineExecutorStatus & exec_status) override;
+    EventPtr doSinkComplete(PipelineExecutorContext & exec_context) override;
 
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 

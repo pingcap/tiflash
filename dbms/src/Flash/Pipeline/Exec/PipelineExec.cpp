@@ -33,7 +33,8 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     case (expect_status):                                                                              \
         break;                                                                                         \
     /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
-    case OperatorStatus::IO:                                                                           \
+    case OperatorStatus::IO_IN:                                                                        \
+    case OperatorStatus::IO_OUT:                                                                       \
         fillIOOp((op).get());                                                                          \
         return (op_status);                                                                            \
     /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
@@ -50,7 +51,8 @@ extern const char random_pipeline_model_execute_suffix_failpoint[];
     switch (op_status)                                                                                 \
     {                                                                                                  \
     /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */      \
-    case OperatorStatus::IO:                                                                           \
+    case OperatorStatus::IO_IN:                                                                        \
+    case OperatorStatus::IO_OUT:                                                                       \
         fillIOOp((op).get());                                                                          \
         return (op_status);                                                                            \
     /* For the waiting status, the operator needs to be filled in awaitable for later use in await. */ \
@@ -160,7 +162,7 @@ OperatorStatus PipelineExec::executeIOImpl()
     auto op_status = io_op->executeIO();
     if (op_status == OperatorStatus::WAITING)
         fillAwaitable(io_op);
-    if (op_status != OperatorStatus::IO)
+    if (op_status != OperatorStatus::IO_IN && op_status != OperatorStatus::IO_OUT)
         io_op = nullptr;
     return op_status;
 }
@@ -179,7 +181,7 @@ OperatorStatus PipelineExec::awaitImpl()
 {
     assert(awaitable);
     auto op_status = awaitable->await();
-    if (op_status == OperatorStatus::IO)
+    if (op_status == OperatorStatus::IO_IN || op_status == OperatorStatus::IO_OUT)
         fillIOOp(awaitable);
     if (op_status != OperatorStatus::WAITING)
         awaitable = nullptr;

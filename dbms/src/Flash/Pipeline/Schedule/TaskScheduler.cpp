@@ -40,12 +40,59 @@ TaskScheduler::~TaskScheduler()
     wait_reactor.waitForStop();
 }
 
+void TaskScheduler::submit(TaskPtr && task)
+{
+    auto task_status = task->getStatus();
+    switch (task_status)
+    {
+    case ExecTaskStatus::RUNNING:
+        submitToCPUTaskThreadPool(std::move(task));
+        break;
+    case ExecTaskStatus::IO_IN:
+    case ExecTaskStatus::IO_OUT:
+        submitToIOTaskThreadPool(std::move(task));
+        break;
+    case ExecTaskStatus::WAITING:
+        submitToWaitReactor(std::move(task));
+        break;
+    default:
+        throw Exception(fmt::format("Unexpected task status: {}", magic_enum::enum_name(task_status)));
+    }
+}
+
 void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
 {
     if (unlikely(tasks.empty()))
         return;
 
-    cpu_task_thread_pool.submit(tasks);
+    std::vector<TaskPtr> cpu_tasks;
+    std::vector<TaskPtr> io_tasks;
+    std::list<TaskPtr> await_tasks;
+    for (auto & task : tasks)
+    {
+        auto task_status = task->getStatus();
+        switch (task_status)
+        {
+        case ExecTaskStatus::RUNNING:
+            cpu_tasks.push_back(std::move(task));
+            break;
+        case ExecTaskStatus::IO_IN:
+        case ExecTaskStatus::IO_OUT:
+            io_tasks.push_back(std::move(task));
+            break;
+        case ExecTaskStatus::WAITING:
+            await_tasks.push_back(std::move(task));
+            break;
+        default:
+            throw Exception(fmt::format("Unexpected task status: {}", magic_enum::enum_name(task_status)));
+        }
+    }
+    if (!cpu_tasks.empty())
+        submitToCPUTaskThreadPool(cpu_tasks);
+    if (!io_tasks.empty())
+        submitToIOTaskThreadPool(io_tasks);
+    if (!await_tasks.empty())
+        wait_reactor.submit(await_tasks);
 }
 
 void TaskScheduler::submitToWaitReactor(TaskPtr && task)
@@ -71,6 +118,12 @@ void TaskScheduler::submitToIOTaskThreadPool(TaskPtr && task)
 void TaskScheduler::submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks)
 {
     io_task_thread_pool.submit(tasks);
+}
+
+void TaskScheduler::cancel(const String & query_id)
+{
+    cpu_task_thread_pool.cancel(query_id);
+    io_task_thread_pool.cancel(query_id);
 }
 
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;

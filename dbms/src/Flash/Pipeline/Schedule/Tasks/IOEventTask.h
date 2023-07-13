@@ -18,27 +18,41 @@
 
 namespace DB
 {
+template <bool is_input>
 class IOEventTask : public EventTask
 {
 public:
     IOEventTask(
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
-        PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
-        : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
+        : EventTask(
+            exec_context_,
+            req_id,
+            event_,
+            is_input ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
     }
 
 private:
-    ExecTaskStatus doExecuteImpl() override
+    ExecTaskStatus executeImpl() override
     {
-        return ExecTaskStatus::IO;
+        if constexpr (is_input)
+            return ExecTaskStatus::IO_IN;
+        else
+            return ExecTaskStatus::IO_OUT;
     }
 
-    ExecTaskStatus doAwaitImpl() override
+    ExecTaskStatus awaitImpl() override
     {
-        return ExecTaskStatus::IO;
+        if constexpr (is_input)
+            return ExecTaskStatus::IO_IN;
+        else
+            return ExecTaskStatus::IO_OUT;
     }
 };
+
+using InputIOEventTask = IOEventTask<true>;
+using OutputIOEventTask = IOEventTask<false>;
+
 } // namespace DB

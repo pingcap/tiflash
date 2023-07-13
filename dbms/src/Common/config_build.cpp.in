@@ -55,6 +55,8 @@ const char * auto_config_build[]{
     "@USE_LLVM_LIBUNWIND@",
     "USE_ICU",
     "@USE_ICU@",
+    "USE_QPL",
+    "@USE_QPL@",
     "USE_RE2_ST",
     "@USE_RE2_ST@",
     "USE_VECTORCLASS",
