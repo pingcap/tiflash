@@ -71,7 +71,7 @@ private:
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
-    bool hasSpilledData() const { return sort_spill_context->isSpilled(); }
+    bool hasSpilledData() const { return sort_spill_context->hasSpilledData(); }
     SortDescription order_desc;
     // 0 means no limit.
     size_t limit;

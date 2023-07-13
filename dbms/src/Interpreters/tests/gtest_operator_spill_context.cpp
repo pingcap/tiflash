@@ -83,11 +83,11 @@ try
 {
     auto spill_context = std::make_shared<AggSpillContext>(1, *spill_config_ptr, 1000, logger);
     spill_context->updatePerThreadRevocableMemory(100, 0);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 100);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 100);
     spill_context->finishSpillableStage();
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
     ASSERT_TRUE(spill_context->updatePerThreadRevocableMemory(2000, 0) == false);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
 }
 CATCH
 
@@ -115,11 +115,11 @@ try
 {
     auto spill_context = std::make_shared<SortSpillContext>(*spill_config_ptr, 1000, logger);
     spill_context->updateRevocableMemory(100);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 100);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 100);
     spill_context->finishSpillableStage();
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
     ASSERT_TRUE(spill_context->updateRevocableMemory(2000) == false);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
 }
 CATCH
 
@@ -155,9 +155,9 @@ try
     ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(600, 0) == false);
     ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(800, 1) == false);
     spill_context->finishSpillableStage();
-    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
     auto spill_partitions = spill_context->getPartitionsToSpill();
-    ASSERT_TRUE(spill_partitions.size() == 0);
+    ASSERT_TRUE(spill_partitions.empty());
 }
 CATCH
 } // namespace tests

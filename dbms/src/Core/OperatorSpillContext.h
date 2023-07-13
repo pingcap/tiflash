@@ -33,6 +33,8 @@ protected:
     bool enable_spill = true;
     LoggerPtr log;
 
+    virtual Int64 getTotalRevocableMemoryImpl() = 0;
+
 public:
     OperatorSpillContext(UInt64 operator_spill_threshold_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
@@ -49,7 +51,6 @@ public:
         else
             return 0;
     }
-    virtual Int64 getTotalRevocableMemoryImpl() = 0;
     UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
 };
 } // namespace DB

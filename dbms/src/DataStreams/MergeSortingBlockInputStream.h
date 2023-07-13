@@ -58,7 +58,7 @@ protected:
 private:
     bool hasSpilledData() const
     {
-        return sort_spill_context->isSpilled();
+        return sort_spill_context->hasSpilledData();
     }
     SortDescription description;
     size_t max_merged_block_size;

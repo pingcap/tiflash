@@ -1060,7 +1060,7 @@ public:
     void spill(AggregatedDataVariants & data_variants, size_t thread_num);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
-    bool hasSpilledData() const { return agg_spill_context->isSpilled(); }
+    bool hasSpilledData() const { return agg_spill_context->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
     AggSpillContextPtr & getAggSpillContext() { return agg_spill_context; }

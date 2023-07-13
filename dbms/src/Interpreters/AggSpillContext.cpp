@@ -45,7 +45,7 @@ void AggSpillContext::markSpill()
 
 bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
-    if (in_spillable_stage)
+    if (!in_spillable_stage)
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
     return enable_spill && per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold);
