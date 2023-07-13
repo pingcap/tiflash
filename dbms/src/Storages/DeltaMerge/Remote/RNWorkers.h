@@ -20,49 +20,59 @@
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 
 #include <boost/noncopyable.hpp>
-#include <memory>
+
+namespace DB
+{
+class Context;
+};
 
 namespace DB::DM::Remote
 {
 
+// Create an RNWorker object for each request.
+// The RNWorker object encapsulates the interfaces that submits segments to the thread pool and returns to each request.
 class RNWorkers : private boost::noncopyable
 {
 public:
     using Channel = MPMCQueue<RNReadSegmentTaskPtr>;
     using ChannelPtr = std::shared_ptr<Channel>;
 
-public:
-    /// Get the channel which outputs ready-for-read segment tasks.
+    // Get the channel which outputs ready-for-read segment tasks.
     ChannelPtr getReadyChannel() const;
 
+    // Submit segment read tasks and start background threads if shared workers is disabled.
     void startInBackground();
 
-    void wait();
+    RNWorkers(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams);
 
-    ~RNWorkers() { wait(); }
+    ~RNWorkers() { prepared_tasks->cancel(); }
 
-public:
-    struct Options
-    {
-        const LoggerPtr log;
-        const RNReadTaskPtr & read_task;
-        const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
-        const PushDownFilterPtr & push_down_filter;
-        const ReadMode read_mode;
-        const pingcap::kv::Cluster * cluster;
-    };
+    static RNWorkersPtr create(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams);
+    static void shutdown();
 
-    explicit RNWorkers(const Context & context, const Options & options, size_t num_streams);
-
-    static RNWorkersPtr create(const Context & context, const Options & options, size_t num_streams)
-    {
-        return std::make_shared<RNWorkers>(context, options, num_streams);
-    }
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
+    ChannelPtr getStartChannel() const;
+    void addTasks();
+
+    bool enable_shared_workers;
+    RNReadTaskPtr pending_tasks;
+    ChannelPtr prepared_tasks;
+    LoggerPtr log;
+
+    std::once_flag start_flag; // Prevent `startInBackground` from being called repeatly.
+
+    // Use when enable_shared_workers is false.
     RNWorkerFetchPagesPtr worker_fetch_pages;
     RNWorkerPrepareStreamsPtr worker_prepare_streams;
+
+    // Use when enable_shared_workers is true.
+    inline static std::once_flag shared_init_flag;
+    inline static RNWorkerFetchPagesPtr shared_fetch_pages;
+    inline static RNWorkerPrepareStreamsPtr shared_prepare_streams;
 };
 
 } // namespace DB::DM::Remote

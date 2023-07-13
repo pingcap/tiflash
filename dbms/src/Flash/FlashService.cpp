@@ -1034,7 +1034,8 @@ grpc::Status FlashService::FetchDisaggPages(
         auto stream_writer = WNFetchPagesStreamWriter::build(
             task,
             read_ids,
-            context->getSettingsRef().dt_fetch_pages_packet_limit_size);
+            context->getSettingsRef().dt_fetch_pages_packet_limit_size,
+            logger);
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 

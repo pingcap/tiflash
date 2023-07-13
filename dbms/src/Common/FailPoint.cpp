@@ -118,14 +118,15 @@ namespace DB
     M(pause_before_register_non_root_mpp_task) \
     M(pause_before_make_non_root_mpp_task_active)
 
-#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
-    M(pause_when_reading_from_dt_stream)  \
-    M(pause_when_writing_to_dt_store)     \
-    M(pause_when_ingesting_to_dt_store)   \
-    M(pause_when_altering_dt_store)       \
-    M(pause_after_copr_streams_acquired)  \
-    M(pause_query_init)                   \
-    M(pause_passive_flush_before_persist_region)
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M)        \
+    M(pause_when_reading_from_dt_stream)         \
+    M(pause_when_writing_to_dt_store)            \
+    M(pause_when_ingesting_to_dt_store)          \
+    M(pause_when_altering_dt_store)              \
+    M(pause_after_copr_streams_acquired)         \
+    M(pause_query_init)                          \
+    M(pause_passive_flush_before_persist_region) \
+    M(pause_when_fetch_page)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                       \
     M(random_tunnel_wait_timeout_failpoint)                  \

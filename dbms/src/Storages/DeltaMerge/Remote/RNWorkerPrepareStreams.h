@@ -14,11 +14,8 @@
 
 #pragma once
 
-#include <Common/ThreadedWorker.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <pingcap/kv/Cluster.h>
+#include <Storages/DeltaMerge/Remote/StorageThreadWorker.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -33,30 +30,21 @@ using RNWorkerPrepareStreamsPtr = std::shared_ptr<RNWorkerPrepareStreams>;
 /// they will be downloaded.
 class RNWorkerPrepareStreams
     : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
 {
 protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
+    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
 
-    String getName() const noexcept override { return "PrepareStreams"; }
 
-public:
-    const ColumnDefinesPtr columns_to_read;
-    const UInt64 read_tso;
-    const PushDownFilterPtr push_down_filter;
-    const ReadMode read_mode;
+private:
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
 
 public:
     struct Options
     {
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
-        const LoggerPtr & log;
         const size_t concurrency;
-        const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
-        const PushDownFilterPtr & push_down_filter;
-        const ReadMode read_mode;
     };
 
     static RNWorkerPrepareStreamsPtr create(const Options & options)
@@ -65,20 +53,16 @@ public:
     }
 
     explicit RNWorkerPrepareStreams(const Options & options)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+        : StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+            "PrepareStreams",
             options.source_queue,
             options.result_queue,
-            options.log,
             options.concurrency)
-        , columns_to_read(options.columns_to_read)
-        , read_tso(options.read_tso)
-        , push_down_filter(options.push_down_filter)
-        , read_mode(options.read_mode)
     {}
 
     ~RNWorkerPrepareStreams() override { wait(); }
 
-    bool initInputStream(const RNReadSegmentTaskPtr & task, bool enable_delta_index_error_fallback);
+    static bool initInputStream(const RNReadSegmentTaskPtr & task, bool enable_delta_index_error_fallback);
 
     // Only use in unit-test.
     RNReadSegmentTaskPtr testDoWork(const RNReadSegmentTaskPtr & task) { return doWork(task); }

@@ -41,6 +41,7 @@ StorageDisaggregated::StorageDisaggregated(
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
     , filter_conditions(filter_conditions_)
+    , param(buildSegmentReadTaskParam())
 {}
 
 BlockInputStreams StorageDisaggregated::read(

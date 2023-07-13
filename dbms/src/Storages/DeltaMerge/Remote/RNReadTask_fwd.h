@@ -26,4 +26,6 @@ using RNReadTaskPtr = std::shared_ptr<RNReadTask>;
 class RNReadSegmentTask;
 using RNReadSegmentTaskPtr = std::shared_ptr<RNReadSegmentTask>;
 
+class RNSegmentReadTaskParam;
+using RNSegmentReadTaskParamPtr = std::shared_ptr<RNSegmentReadTaskParam>;
 } // namespace DB::DM::Remote

@@ -20,9 +20,11 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -119,11 +121,7 @@ private:
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
-    DM::Remote::RNWorkersPtr buildRNWorkers(
-        const Context & db_context,
-        const DM::Remote::RNReadTaskPtr & read_task,
-        const DM::ColumnDefinesPtr & column_defines,
-        size_t num_streams);
+    DM::Remote::RNWorkersPtr buildRNWorkers(const DM::Remote::RNReadTaskPtr & read_task, size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
@@ -135,6 +133,7 @@ private:
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
         size_t num_streams);
+    DM::Remote::RNSegmentReadTaskParamPtr buildSegmentReadTaskParam();
 
 private:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
@@ -182,5 +181,6 @@ private:
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+    DM::Remote::RNSegmentReadTaskParamPtr param;
 };
 } // namespace DB

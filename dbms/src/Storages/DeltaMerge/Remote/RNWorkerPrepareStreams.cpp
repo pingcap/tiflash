@@ -32,7 +32,7 @@ bool RNWorkerPrepareStreams::initInputStream(const RNReadSegmentTaskPtr & task, 
 {
     try
     {
-        task->initInputStream(*columns_to_read, read_tso, push_down_filter, read_mode);
+        task->initInputStream();
         return true;
     }
     catch (const Exception & e)
@@ -49,7 +49,25 @@ bool RNWorkerPrepareStreams::initInputStream(const RNReadSegmentTaskPtr & task, 
     }
 }
 
-RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & task)
+RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & seg_task) noexcept
+{
+    try
+    {
+        if (seg_task->param->getPreparedQueueStatus() == MPMCQueueStatus::NORMAL)
+        {
+            doWorkImpl(seg_task);
+            seg_task->param->pushPreparedTask(seg_task); // Last pipeline stage, dispatch to each query.
+        }
+    }
+    catch (...)
+    {
+        auto error = getCurrentExceptionMessage(false);
+        seg_task->param->cancelPreparedQueue(error);
+    }
+    return nullptr;
+}
+
+void RNWorkerPrepareStreams::doWorkImpl(const RNReadSegmentTaskPtr & task)
 {
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
@@ -62,7 +80,7 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
             task,
             task->meta.dm_context->db_context.getSettingsRef().dt_enable_delta_index_error_fallback)))
     {
-        return task;
+        return;
     }
 
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
@@ -73,7 +91,6 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
         cache->setDeltaIndex(task->meta.segment_snap->delta->getSharedDeltaIndex());
     }
     initInputStream(task, false);
-    return task;
 }
 
 } // namespace DB::DM::Remote

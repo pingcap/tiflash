@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MPMCQueue.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
@@ -22,6 +23,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/KVStore/Types.h>
+#include <pingcap/kv/Cluster.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
@@ -65,6 +67,46 @@ struct RNReadSegmentMeta
     // =================================================================
 };
 
+// `RNSegmentReadTaskParam` is the parameters of a table scanning request.
+// It is shared between `RNReadSegmentTasks`.
+// After the request is prepared, dispatch it to the corresponding requests through `RNSegmentReadTaskParam.pushPreparedTask`.
+class RNSegmentReadTaskParam
+{
+public:
+    RNSegmentReadTaskParam(
+        const DM::PushDownFilterPtr & push_down_filter_,
+        DM::ReadMode read_mode_,
+        const DM::ColumnDefinesPtr & columns_to_read_,
+        UInt64 read_tso_,
+        pingcap::kv::Cluster * cluster_,
+        const DB::LoggerPtr & log_)
+        : push_down_filter(push_down_filter_)
+        , read_mode(read_mode_)
+        , columns_to_read(columns_to_read_)
+        , read_tso(read_tso_)
+        , cluster(cluster_)
+        , log(log_)
+    {}
+
+    const DM::PushDownFilterPtr push_down_filter;
+    const DM::ReadMode read_mode;
+    const DM::ColumnDefinesPtr columns_to_read;
+    const UInt64 read_tso;
+    const pingcap::kv::Cluster * cluster;
+    const DB::LoggerPtr log;
+
+    std::shared_ptr<MPMCQueue<DM::Remote::RNReadSegmentTaskPtr>> initPreparedTaskQueue(Int64 count);
+    void pushPreparedTask(const DM::Remote::RNReadSegmentTaskPtr & task);
+    MPMCQueueStatus getPreparedQueueStatus();
+    void cancelPreparedQueue(const String & msg);
+
+private:
+    std::atomic<Int64> pending_task_count = 0;
+    // The life-cycle of prepared task queue is hold by the `RNWorkers` which is hold by RNSegmentInputStreams.
+    // If the query aborted, prepared task queue will be released and thread pools can detect it through weak_ptr.
+    std::weak_ptr<MPMCQueue<DM::Remote::RNReadSegmentTaskPtr>> prepared_tasks;
+};
+
 /// Represent a read from a remote segment. Initially it is built from information
 /// returned by Write Node in EstablishDisaggTask.
 /// It is a stateful object, fields may be changed when the segment is being read.
@@ -74,6 +116,7 @@ public:
     // meta is assigned when this SegmentTask is initially created from info returned
     // by Write Node. It is never changed.
     const RNReadSegmentMeta meta;
+    const RNSegmentReadTaskParamPtr param;
 
     static RNReadSegmentTaskPtr buildFromEstablishResp(
         const LoggerPtr & log,
@@ -84,7 +127,8 @@ public:
         StoreID store_id,
         const String & store_address,
         KeyspaceID keyspace_id,
-        TableID physical_table_id);
+        TableID physical_table_id,
+        const RNSegmentReadTaskParamPtr & param);
 
     String info() const
     {
@@ -100,11 +144,7 @@ public:
     void initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard);
 
     /// Called from WorkerPrepareStreams.
-    void initInputStream(
-        const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
-        const PushDownFilterPtr & push_down_filter,
-        ReadMode read_mode);
+    void initInputStream();
 
     BlockInputStreamPtr getInputStream() const
     {
@@ -117,8 +157,9 @@ private:
 #else
 public:
 #endif
-    explicit RNReadSegmentTask(const RNReadSegmentMeta & meta_)
+    RNReadSegmentTask(const RNReadSegmentMeta & meta_, const RNSegmentReadTaskParamPtr & param_)
         : meta(meta_)
+        , param(param_)
     {}
 
 private:

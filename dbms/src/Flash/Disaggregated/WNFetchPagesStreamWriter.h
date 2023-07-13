@@ -47,7 +47,8 @@ public:
     static WNFetchPagesStreamWriterPtr build(
         const DM::Remote::SegmentPagesFetchTask & task,
         const PageIdU64s & read_page_ids,
-        UInt64 packet_limit_size);
+        UInt64 packet_limit_size,
+        const LoggerPtr & log);
 
     void pipeTo(SyncPagePacketWriter * sync_writer);
 
@@ -56,12 +57,13 @@ private:
         DM::SegmentReadTaskPtr seg_task_,
         DM::ColumnDefinesPtr column_defines_,
         PageIdU64s read_page_ids,
-        UInt64 packet_limit_size_)
+        UInt64 packet_limit_size_,
+        const LoggerPtr & log_)
         : seg_task(std::move(seg_task_))
         , column_defines(column_defines_)
         , read_page_ids(std::move(read_page_ids))
         , packet_limit_size(packet_limit_size_)
-        , log(Logger::get())
+        , log(log_)
     {}
 
     /// Returns the next packet that could write to the response sink.
@@ -70,7 +72,6 @@ private:
     std::pair<DM::RemotePb::RemotePage, size_t> getPersistedRemotePage(UInt64 page_id);
 
 private:
-    const DM::DisaggTaskId task_id;
     DM::SegmentReadTaskPtr seg_task;
     DM::ColumnDefinesPtr column_defines;
     PageIdU64s read_page_ids;

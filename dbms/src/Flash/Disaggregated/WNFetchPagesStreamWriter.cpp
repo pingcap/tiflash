@@ -37,10 +37,15 @@ namespace DB
 WNFetchPagesStreamWriterPtr WNFetchPagesStreamWriter::build(
     const DM::Remote::SegmentPagesFetchTask & task,
     const PageIdU64s & read_page_ids,
-    UInt64 packet_limit_size)
+    UInt64 packet_limit_size,
+    const LoggerPtr & log)
 {
-    return std::unique_ptr<WNFetchPagesStreamWriter>(
-        new WNFetchPagesStreamWriter(task.seg_task, task.column_defines, read_page_ids, packet_limit_size));
+    return std::unique_ptr<WNFetchPagesStreamWriter>(new WNFetchPagesStreamWriter(
+        task.seg_task,
+        task.column_defines,
+        read_page_ids,
+        packet_limit_size,
+        log));
 }
 
 std::pair<DM::RemotePb::RemotePage, size_t> WNFetchPagesStreamWriter::getPersistedRemotePage(UInt64 page_id)

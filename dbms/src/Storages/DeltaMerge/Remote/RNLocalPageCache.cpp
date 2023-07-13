@@ -173,7 +173,8 @@ void RNLocalPageCache::guard(
     std::unique_lock<std::mutex> & lock,
     const std::vector<UniversalPageId> & keys,
     const std::vector<size_t> & sizes,
-    uint64_t guard_debug_id)
+    uint64_t guard_debug_id,
+    const LoggerPtr & req_log)
 {
     RUNTIME_CHECK(max_size > 0);
 
@@ -201,7 +202,7 @@ void RNLocalPageCache::guard(
             info.size = sizes[i];
             info.alive_guards = 1;
 
-            LOG_TRACE(log, "Occupy: key={} size={} stats={}", keys[i], sizes[i], statistics(lock));
+            LOG_TRACE(req_log, "Occupy: key={} size={} stats={}", keys[i], sizes[i], statistics(lock));
 
             // Keep these keys not evictable.
             // Only necessary when keys are added to the `occupied_keys` for the first time.
@@ -215,7 +216,7 @@ void RNLocalPageCache::guard(
     }
 
     LOG_DEBUG(
-        log,
+        req_log,
         "Guard keys, guard={} size={}(n={}) newly_occupied_size={}(n={}) stats={}",
         guard_debug_id,
         total_keys_size,
@@ -227,7 +228,10 @@ void RNLocalPageCache::guard(
     evictFromStorage(lock);
 }
 
-void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64_t guard_debug_id)
+void RNLocalPageCache::unguard(
+    const std::vector<UniversalPageId> & keys,
+    uint64_t guard_debug_id,
+    const LoggerPtr & req_log)
 {
     RUNTIME_CHECK(max_size > 0);
 
@@ -259,7 +263,7 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
     }
 
     LOG_DEBUG(
-        log,
+        req_log,
         "Unguard keys, guard={} n={} released_occupied_size={}(n={}) stats={}",
         guard_debug_id,
         keys.size(),
@@ -275,7 +279,8 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
 RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
     const std::vector<PageOID> & pages,
     const std::vector<size_t> & page_sizes,
-    ScanContextPtr scan_context)
+    ScanContextPtr scan_context,
+    const LoggerPtr & req_log)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -303,14 +308,16 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         };
 
         update_need_occupy_size();
-        if (need_occupy_size > max_size)
-            throw Exception(
-                fmt::format("Occupy space failed, max_size={} need_occupy_size={}", max_size, need_occupy_size));
+        RUNTIME_CHECK_MSG(
+            need_occupy_size <= max_size,
+            "Occupy space failed, max_size={} need_occupy_size={}",
+            max_size,
+            need_occupy_size);
 
         if (occupied_size + need_occupy_size > max_size)
         {
             LOG_WARNING(
-                log,
+                req_log,
                 "Start waiting because local page cache space is insufficient to contain living query data, "
                 "need_occupy_size={} all_keys_n={} stats={}",
                 need_occupy_size,
@@ -331,7 +338,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
                 auto cv_status = cv.wait_for(lock, std::chrono::seconds(wait_second));
                 if (cv_status == std::cv_status::timeout)
                     LOG_WARNING(
-                        log,
+                        req_log,
                         "Still waiting local page cache to release space, elapsed={}s need_occupy_size={} "
                         "all_keys_n={} stats={}",
                         watch.elapsedSeconds(),
@@ -354,7 +361,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
                 max_size);
 
             LOG_WARNING(
-                log,
+                req_log,
                 "Finished waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} "
                 "stats={}",
                 watch.elapsedSeconds(),
@@ -365,7 +372,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         else
         {
             LOG_DEBUG(
-                log,
+                req_log,
                 "Occupy space without waiting, need_occupy_size={} all_keys_n={} stats={}",
                 need_occupy_size,
                 n,
@@ -375,7 +382,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         // Guard keys first, then check existence. In this way, these keys will not be
         // evicted after the check.
         auto this_ptr = shared_from_this();
-        guard = std::make_shared<RNLocalPageCacheGuard>(this_ptr, lock, keys, page_sizes);
+        guard = std::make_shared<RNLocalPageCacheGuard>(this_ptr, lock, keys, page_sizes, req_log);
     }
     else
     {

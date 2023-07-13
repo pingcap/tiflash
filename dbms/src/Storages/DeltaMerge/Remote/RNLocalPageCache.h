@@ -131,7 +131,8 @@ private:
         std::unique_lock<std::mutex> & lock,
         const std::vector<UniversalPageId> & keys,
         const std::vector<size_t> & sizes,
-        uint64_t guard_debug_id);
+        uint64_t guard_debug_id,
+        const LoggerPtr & req_log);
 
     /**
      * Only called by RNLocalPageCacheGuard, when it is destructed.
@@ -141,7 +142,7 @@ private:
      *
      * Internally, it adds these keys to the (evictable) LRU so that it could be evicted.
      */
-    void unguard(const std::vector<UniversalPageId> & keys, uint64_t guard_debug_id);
+    void unguard(const std::vector<UniversalPageId> & keys, uint64_t guard_debug_id, const LoggerPtr & req_log);
 
 public:
     struct RNLocalPageCacheOptions
@@ -174,7 +175,8 @@ public:
     OccupySpaceResult occupySpace(
         const std::vector<PageOID> & pages,
         const std::vector<size_t> & page_sizes,
-        ScanContextPtr scan_context = nullptr);
+        ScanContextPtr scan_context,
+        const LoggerPtr & req_log);
 
     /**
      * Put a page into the cache.
@@ -245,22 +247,26 @@ public:
         const std::shared_ptr<RNLocalPageCache> & parent_,
         std::unique_lock<std::mutex> & lock,
         const std::vector<UniversalPageId> keys_,
-        const std::vector<size_t> sizes)
+        const std::vector<size_t> sizes,
+        const LoggerPtr & req_log_)
         : parent(parent_)
         , keys(keys_)
         , debug_id(global_id_seq.fetch_add(1, std::memory_order_seq_cst))
+        , req_log(req_log_)
     {
         // Note: It is safe when a key occur multiple times in the `keys`,
         // as long as our `addPins` and `removePins` are matched.
-        parent->guard(lock, keys, sizes, debug_id);
+        parent->guard(lock, keys, sizes, debug_id, req_log);
     }
 
-    ~RNLocalPageCacheGuard() { parent->unguard(keys, debug_id); }
+    ~RNLocalPageCacheGuard() { parent->unguard(keys, debug_id, req_log); }
 
 private:
     const std::shared_ptr<RNLocalPageCache> parent;
     const std::vector<UniversalPageId> keys;
     const uint64_t debug_id; // Only for debug output
+
+    LoggerPtr req_log;
 
     inline static std::atomic<uint64_t> global_id_seq{1};
 };

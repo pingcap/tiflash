@@ -23,6 +23,43 @@
 
 namespace DB::DM::Remote
 {
+std::shared_ptr<MPMCQueue<DM::Remote::RNReadSegmentTaskPtr>> RNSegmentReadTaskParam::initPreparedTaskQueue(Int64 count)
+{
+    RUNTIME_CHECK(pending_task_count == 0 && count > 0, pending_task_count, count);
+    pending_task_count = count;
+    auto sp = std::make_shared<MPMCQueue<DM::Remote::RNReadSegmentTaskPtr>>(count);
+    prepared_tasks = sp;
+    return sp;
+}
+
+void RNSegmentReadTaskParam::pushPreparedTask(const DM::Remote::RNReadSegmentTaskPtr & task)
+{
+    auto sp = prepared_tasks.lock();
+    if (sp != nullptr)
+    {
+        auto res = sp->push(task);
+        RUNTIME_CHECK(res == MPMCQueueResult::OK, magic_enum::enum_name(res));
+        if (--pending_task_count <= 0)
+        {
+            sp->finish();
+        }
+    }
+}
+
+MPMCQueueStatus RNSegmentReadTaskParam::getPreparedQueueStatus()
+{
+    auto sp = prepared_tasks.lock();
+    return sp != nullptr ? sp->getStatus() : MPMCQueueStatus::CANCELLED;
+}
+
+void RNSegmentReadTaskParam::cancelPreparedQueue(const String & msg)
+{
+    auto sp = prepared_tasks.lock();
+    if (sp != nullptr)
+    {
+        sp->cancelWith(msg);
+    }
+}
 
 RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     const LoggerPtr & table_log,
@@ -33,7 +70,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     StoreID store_id,
     const String & store_address,
     KeyspaceID keyspace_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    const RNSegmentReadTaskParamPtr & param)
 {
     RowKeyRange segment_range;
     {
@@ -104,22 +142,24 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
         segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
         segment_snap->delta->getSharedDeltaIndex()->toString());
 
-    return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(RNReadSegmentMeta{
-        .keyspace_id = keyspace_id,
-        .physical_table_id = physical_table_id,
-        .segment_id = proto.segment_id(),
-        .store_id = store_id,
+    return std::shared_ptr<RNReadSegmentTask>(new RNReadSegmentTask(
+        RNReadSegmentMeta{
+            .keyspace_id = keyspace_id,
+            .physical_table_id = physical_table_id,
+            .segment_id = proto.segment_id(),
+            .store_id = store_id,
 
-        .delta_tinycf_page_ids = delta_tinycf_ids,
-        .delta_tinycf_page_sizes = delta_tinycf_sizes,
-        .segment = segment,
-        .segment_snap = segment_snap,
-        .store_address = store_address,
+            .delta_tinycf_page_ids = delta_tinycf_ids,
+            .delta_tinycf_page_sizes = delta_tinycf_sizes,
+            .segment = segment,
+            .segment_snap = segment_snap,
+            .store_address = store_address,
 
-        .read_ranges = read_ranges,
-        .snapshot_id = snapshot_id,
-        .dm_context = dm_context,
-    }));
+            .read_ranges = read_ranges,
+            .snapshot_id = snapshot_id,
+            .dm_context = dm_context,
+        },
+        param));
 }
 
 void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard)
@@ -135,21 +175,17 @@ void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPt
         KeyspaceTableID{meta.keyspace_id, meta.physical_table_id});
 }
 
-void RNReadSegmentTask::initInputStream(
-    const ColumnDefines & columns_to_read,
-    UInt64 read_tso,
-    const PushDownFilterPtr & push_down_filter,
-    ReadMode read_mode)
+void RNReadSegmentTask::initInputStream()
 {
     RUNTIME_CHECK(input_stream == nullptr);
     input_stream = meta.segment->getInputStream(
-        read_mode,
+        param->read_mode,
         *meta.dm_context,
-        columns_to_read,
+        *(param->columns_to_read),
         meta.segment_snap,
         meta.read_ranges,
-        push_down_filter,
-        read_tso,
+        param->push_down_filter,
+        param->read_tso,
         DEFAULT_BLOCK_SIZE);
 }
 

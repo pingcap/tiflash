@@ -14,11 +14,15 @@
 
 #pragma once
 
-#include <Common/ThreadedWorker.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
-#include <pingcap/kv/Cluster.h>
+#include <Storages/DeltaMerge/Remote/StorageThreadWorker.h>
 
 #include <boost/noncopyable.hpp>
+
+namespace disaggregated
+{
+class FetchDisaggPagesRequest;
+}
 
 namespace DB::DM::Remote
 {
@@ -29,36 +33,32 @@ using RNWorkerFetchPagesPtr = std::shared_ptr<RNWorkerFetchPages>;
 /// This worker fetch page data from Write Node, and then write page data into the local cache.
 class RNWorkerFetchPages
     : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
 {
 protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
-
-    String getName() const noexcept override { return "FetchPages"; }
+    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
 
 private:
-    void doFetchPages(const RNReadSegmentTaskPtr & seg_task, const disaggregated::FetchDisaggPagesRequest & request);
+    static void doFetchPages(
+        const RNReadSegmentTaskPtr & seg_task,
+        const disaggregated::FetchDisaggPagesRequest & request);
 
-private:
-    const pingcap::kv::Cluster * cluster;
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
 
 public:
     struct Options
     {
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
-        const LoggerPtr & log;
         const size_t concurrency;
-        const pingcap::kv::Cluster * cluster;
     };
 
     explicit RNWorkerFetchPages(const Options & options)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+        : StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+            "FetchPages",
             options.source_queue,
             options.result_queue,
-            options.log,
             options.concurrency)
-        , cluster(options.cluster)
     {}
 
     static RNWorkerFetchPagesPtr create(const Options & options)

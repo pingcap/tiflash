@@ -15,72 +15,154 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
+
 namespace DB::DM::Remote
 {
 
-RNWorkers::RNWorkers(const Context & context, const Options & options, size_t num_streams)
+std::pair<size_t, size_t> calculateConcurrency(const Context & context, size_t seg_count, size_t num_streams)
 {
-    RUNTIME_CHECK(num_streams > 0, num_streams);
-    size_t n = options.read_task->segment_read_tasks.size();
-    RUNTIME_CHECK(n > 0, n);
-
-    auto fetch_pages_concurrency = n;
-    auto prepare_streams_concurrency = n;
     const auto & settings = context.getSettingsRef();
-    if (settings.dt_fetch_page_concurrency_scale > 0.0)
-    {
-        fetch_pages_concurrency
-            = std::min(std::ceil(num_streams * settings.dt_fetch_page_concurrency_scale), fetch_pages_concurrency);
-    }
-    if (settings.dt_prepare_stream_concurrency_scale > 0.0)
-    {
-        prepare_streams_concurrency = std::min(
-            std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale),
-            prepare_streams_concurrency);
-    }
+    size_t fetch_pages_concurrency = num_streams * settings.dt_fetch_page_concurrency_scale;
+    size_t prepare_streams_concurrency = num_streams * settings.dt_prepare_stream_concurrency_scale;
+    RUNTIME_CHECK(
+        fetch_pages_concurrency > 0 && prepare_streams_concurrency > 0,
+        fetch_pages_concurrency,
+        prepare_streams_concurrency);
+    return {std::min(fetch_pages_concurrency, seg_count), std::min(prepare_streams_concurrency, seg_count)};
+}
 
-    worker_fetch_pages = RNWorkerFetchPages::create({
-        .source_queue = std::make_shared<Channel>(n),
-        .result_queue = std::make_shared<Channel>(n),
-        .log = options.log,
+std::pair<size_t, size_t> calculateSharedConcurrency(const Context & context)
+{
+    auto logical_cores = context.getServerInfo().has_value() ? context.getServerInfo()->cpu_info.logical_cores
+                                                             : std::thread::hardware_concurrency();
+    const auto & settings = context.getSettingsRef();
+    size_t fetch_pages_concurrency = logical_cores * settings.dt_fetch_page_concurrency_scale;
+    size_t prepare_streams_concurrency = logical_cores * settings.dt_prepare_stream_concurrency_scale;
+    RUNTIME_CHECK(
+        fetch_pages_concurrency > 0 && prepare_streams_concurrency > 0,
+        fetch_pages_concurrency,
+        prepare_streams_concurrency);
+    return {fetch_pages_concurrency, prepare_streams_concurrency};
+}
+
+std::pair<RNWorkerFetchPagesPtr, RNWorkerPrepareStreamsPtr> createPipelineWorkers(
+    size_t fetch_pages_concurrency,
+    size_t prepare_streams_concurrency,
+    Int64 queue_size)
+{
+    auto fetch_pages = RNWorkerFetchPages::create({
+        .source_queue = std::make_shared<MPMCQueue<RNReadSegmentTaskPtr>>(queue_size),
+        .result_queue = std::make_shared<MPMCQueue<RNReadSegmentTaskPtr>>(queue_size),
         .concurrency = fetch_pages_concurrency,
-        .cluster = options.cluster,
     });
 
-    worker_prepare_streams = RNWorkerPrepareStreams::create({
-        .source_queue = worker_fetch_pages->result_queue,
-        .result_queue = std::make_shared<Channel>(n),
-        .log = options.log,
+    auto prepare_streams = RNWorkerPrepareStreams::create({
+        .source_queue = fetch_pages->result_queue,
+        .result_queue = nullptr,
         .concurrency = prepare_streams_concurrency,
-        .columns_to_read = options.columns_to_read,
-        .read_tso = options.read_tso,
-        .push_down_filter = options.push_down_filter,
-        .read_mode = options.read_mode,
     });
 
-    // TODO: Can we push the task that all delta/stable data hit local cache first?
-    for (auto const & seg_task : options.read_task->segment_read_tasks)
+    return {fetch_pages, prepare_streams};
+}
+
+RNWorkers::RNWorkers(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams)
+    : enable_shared_workers(context.getSettingsRef().dt_enable_shared_rn_workers)
+    , pending_tasks(read_task)
+    , log(read_task->segment_read_tasks.front()->param->log)
+{
+    prepared_tasks = pending_tasks->segment_read_tasks.front()->param->initPreparedTaskQueue(
+        pending_tasks->segment_read_tasks.size());
+
+    if (enable_shared_workers)
     {
-        auto push_result = worker_fetch_pages->source_queue->tryPush(seg_task);
-        RUNTIME_CHECK(push_result == MPMCQueueResult::OK, magic_enum::enum_name(push_result));
+        std::call_once(shared_init_flag, [&]() {
+            auto [fetch_pages_concurrency, prepare_streams_concurrency] = calculateSharedConcurrency(context);
+            LOG_INFO(
+                log,
+                "Shared RNWorkers concurrency: fetch_pages={} prepare_streams={}",
+                fetch_pages_concurrency,
+                prepare_streams_concurrency);
+            std::tie(shared_fetch_pages, shared_prepare_streams) = createPipelineWorkers(
+                fetch_pages_concurrency,
+                prepare_streams_concurrency,
+                context.getSettingsRef().dt_shared_max_queue_size);
+            shared_fetch_pages->start();
+            shared_prepare_streams->start();
+        });
     }
-    worker_fetch_pages->source_queue->finish();
+    else
+    {
+        auto seg_count = read_task->segment_read_tasks.size();
+        auto [fetch_pages_concurrency, prepare_streams_concurrency]
+            = calculateConcurrency(context, seg_count, num_streams);
+        LOG_DEBUG(
+            log,
+            "RNWorkers concurrency: fetch_pages={} prepare_streams={}",
+            fetch_pages_concurrency,
+            prepare_streams_concurrency);
+        std::tie(worker_fetch_pages, worker_prepare_streams)
+            = createPipelineWorkers(fetch_pages_concurrency, prepare_streams_concurrency, seg_count);
+        // Wokers will be start in startInBackground.
+    }
+}
+
+void RNWorkers::addTasks()
+{
+    auto start_channel = getStartChannel();
+    // TODO: Can we push the task that all delta/stable data hit local cache first?
+    for (auto const & seg_task : pending_tasks->segment_read_tasks)
+    {
+        // Can not block threads here, because addTasks is called in startInBackground in RNSegmentInputStream by threads of computing.
+        // Blocking computing threads can affect consumption of prepared streams.
+        auto res = start_channel->tryPush(seg_task);
+        RUNTIME_CHECK_MSG(res != MPMCQueueResult::FULL, "Too many task in processing: {}", start_channel->size());
+        RUNTIME_CHECK(res == MPMCQueueResult::OK, magic_enum::enum_name(res));
+    }
+    pending_tasks.reset(); // Avoid hold the life time of tasks.
+    if (!enable_shared_workers)
+    {
+        start_channel->finish();
+    }
 }
 
 void RNWorkers::startInBackground()
 {
-    worker_fetch_pages->startInBackground();
-    worker_prepare_streams->startInBackground();
-}
-
-void RNWorkers::wait()
-{
-    worker_fetch_pages->wait();
-    worker_prepare_streams->wait();
+    std::call_once(start_flag, [&]() {
+        addTasks();
+        if (!enable_shared_workers)
+        {
+            worker_fetch_pages->start();
+            worker_prepare_streams->start();
+        }
+    });
 }
 
 RNWorkers::ChannelPtr RNWorkers::getReadyChannel() const
 {
-    return worker_prepare_streams->result_queue;
+    return prepared_tasks;
+}
+
+RNWorkers::ChannelPtr RNWorkers::getStartChannel() const
+{
+    return enable_shared_workers ? shared_fetch_pages->source_queue : worker_fetch_pages->source_queue;
+}
+
+RNWorkersPtr RNWorkers::create(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams)
+{
+    RUNTIME_CHECK(num_streams > 0);
+    RUNTIME_CHECK(!read_task->segment_read_tasks.empty());
+    return std::make_shared<RNWorkers>(context, read_task, num_streams);
+}
+
+void RNWorkers::shutdown()
+{
+    if (shared_fetch_pages != nullptr)
+    {
+        LOG_INFO(DB::Logger::get(), "Shared RNWorkers is going to shutdown.");
+        shared_fetch_pages->source_queue->cancelWith("shutdown");
+        shared_fetch_pages.reset();
+        shared_prepare_streams.reset();
+        LOG_INFO(DB::Logger::get(), "Shared RNWorkers has been shutdown.");
+    }
 }
 } // namespace DB::DM::Remote

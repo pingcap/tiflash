@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -26,14 +26,17 @@
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerFetchPages.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <common/logger_useful.h>
 #include <kvproto/disaggregated.pb.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 #include <ext/scope_guard.h>
-#include <magic_enum.hpp>
 
 using namespace std::chrono_literals;
+
+namespace DB::FailPoints
+{
+extern const char pause_when_fetch_page[];
+} // namespace DB::FailPoints
 
 namespace DB::DM::Remote
 {
@@ -64,7 +67,11 @@ RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask(const RNReadSegme
     auto scan_context = seg_task->meta.dm_context->scan_context;
 
     Stopwatch w_occupy;
-    auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->meta.delta_tinycf_page_sizes, scan_context);
+    auto occupy_result = page_cache->occupySpace(
+        cf_tiny_oids,
+        seg_task->meta.delta_tinycf_page_sizes,
+        scan_context,
+        seg_task->param->log);
     // This metric is per-segment.
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy).Observe(w_occupy.elapsedSeconds());
 
@@ -92,7 +99,26 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
     return req;
 }
 
-RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
+RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task) noexcept
+{
+    try
+    {
+        FAIL_POINT_PAUSE(FailPoints::pause_when_fetch_page);
+        if (seg_task->param->getPreparedQueueStatus() == MPMCQueueStatus::NORMAL)
+        {
+            doWorkImpl(seg_task);
+            return seg_task; // Go to next pipeline stage.
+        }
+    }
+    catch (...)
+    {
+        auto error = getCurrentExceptionMessage(false);
+        seg_task->param->cancelPreparedQueue(error);
+    }
+    return nullptr; // Status of `prepared_tasks` is innormal, query would fail, ignore this task.
+}
+
+void RNWorkerFetchPages::doWorkImpl(const RNReadSegmentTaskPtr & seg_task)
 {
     MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
@@ -108,7 +134,7 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         auto cftiny_total = seg_task->meta.delta_tinycf_page_ids.size();
         auto cftiny_fetch = occupy_result.pages_not_in_cache.size();
         LOG_DEBUG(
-            log,
+            seg_task->param->log,
             "Ready to fetch pages, seg_task={} page_hit_rate={} pages_not_in_cache={}",
             seg_task->info(),
             cftiny_total == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * cftiny_fetch / cftiny_total),
@@ -127,16 +153,13 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         {
             doFetchPages(seg_task, req);
             seg_task->initColumnFileDataProvider(occupy_result.pages_guard);
-
-            // We finished fetch all pages for this seg task, just return it for downstream
-            // workers. If we have met any errors, page guard will not be persisted.
-            return seg_task;
+            return;
         }
         catch (const pingcap::Exception & e)
         {
             last_exception = std::current_exception();
             LOG_WARNING(
-                log,
+                seg_task->param->log,
                 "Meet RPC client exception when fetching pages: {}, will be retried. seg_task={}",
                 e.displayText(),
                 seg_task->info());
@@ -180,7 +203,7 @@ void RNWorkerFetchPages::doFetchPages(
     double total_write_page_cache_sec = 0.0;
 
     pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(
-        cluster->rpc_client,
+        seg_task->param->cluster->rpc_client,
         seg_task->meta.store_address);
 
     grpc::ClientContext client_context;
@@ -196,12 +219,13 @@ void RNWorkerFetchPages::doFetchPages(
     for (auto p : request.page_ids())
         remaining_pages_to_fetch.insert(p);
 
+    std::vector<UInt64> received_page_ids;
     UInt64 read_stream_ns = 0;
     UInt64 deserialize_page_ns = 0;
     UInt64 schedule_write_page_ns = 0;
     UInt64 packet_count = 0;
     UInt64 task_count = 0;
-    UInt64 page_count = request.page_ids_size();
+    const UInt64 page_count = request.page_ids_size();
 
     auto schedule_task = [&task_count, &schedule_write_page_ns](WritePageTaskPtr && write_page_task) {
         task_count += 1;
@@ -246,7 +270,6 @@ void RNWorkerFetchPages::doFetchPages(
         Stopwatch watch_write_page_cache{CLOCK_MONOTONIC_COARSE};
         SCOPE_EXIT({ total_write_page_cache_sec += watch_write_page_cache.elapsedSeconds(); });
 
-        std::vector<UInt64> received_page_ids;
         for (const String & page : packet->pages())
         {
             if (write_page_task == nullptr)
@@ -317,12 +340,14 @@ void RNWorkerFetchPages::doFetchPages(
     // Verify all pending pages are now received.
     RUNTIME_CHECK_MSG(
         remaining_pages_to_fetch.empty(),
-        "Failed to fetch all pages (from {}), remaining_pages_to_fetch={}",
+        "Failed to fetch all pages (from {}), page_count={}, received_page_ids={}, remaining_pages_to_fetch={}",
         seg_task->info(),
+        page_count,
+        received_page_ids,
         remaining_pages_to_fetch);
 
     LOG_DEBUG(
-        log,
+        seg_task->param->log,
         "Finished fetch pages, seg_task={}, page_count={}, packet_count={}, task_count={}, "
         "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}, "
         "wait_write_page_finished_ms={}",
