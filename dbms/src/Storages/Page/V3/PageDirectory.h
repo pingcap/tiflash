@@ -160,6 +160,8 @@ public:
                 }
                 else
                 {
+                    // There could be some new ref count created after `snap_seq`, we need to
+                    // keep the newly added ref counts
                     versioned_ref_counts.swap(new_versioned_ref_counts);
                 }
                 return;
