@@ -92,8 +92,6 @@ public:
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
-    // When need_col_ptr is true, we will create column ptr for ExpressionActions.
-    template <bool need_col_ptr>
     void initChain(ExpressionActionsChain & chain) const;
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
