@@ -77,16 +77,16 @@ try
 }
 CATCH
 
-TEST_F(TestOperatorSpillContext, AggClearRevocableMemory)
+TEST_F(TestOperatorSpillContext, AggFinishSpillableStage)
 try
 {
     auto spill_context = std::make_shared<AggSpillContext>(1, *spill_config_ptr, 1000, logger);
     spill_context->updatePerThreadRevocableMemory(100, 0);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 100);
-    spill_context->clearPerThreadRevocableMemory(0);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 100);
+    spill_context->finishSpillableStage();
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
     ASSERT_TRUE(spill_context->updatePerThreadRevocableMemory(2000, 0) == false);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
 }
 CATCH
 
@@ -109,16 +109,16 @@ try
 }
 CATCH
 
-TEST_F(TestOperatorSpillContext, SortClearRevocableMemory)
+TEST_F(TestOperatorSpillContext, SortFinishSpillableStage)
 try
 {
     auto spill_context = std::make_shared<SortSpillContext>(*spill_config_ptr, 1000, logger);
     spill_context->updateRevocableMemory(100);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 100);
-    spill_context->clearRevocableMemory();
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == OperatorSpillContext::INVALID_REVOCABLE_MEMORY);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 100);
+    spill_context->finishSpillableStage();
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
     ASSERT_TRUE(spill_context->updateRevocableMemory(2000) == false);
-    ASSERT_TRUE(spill_context->getTotalRevocableMemory() == OperatorSpillContext::INVALID_REVOCABLE_MEMORY);
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
 }
 CATCH
 } // namespace tests

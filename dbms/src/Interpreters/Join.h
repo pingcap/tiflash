@@ -356,9 +356,6 @@ private:
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
-
     std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
 

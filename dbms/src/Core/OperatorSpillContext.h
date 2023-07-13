@@ -29,12 +29,11 @@ class OperatorSpillContext
 {
 protected:
     UInt64 operator_spill_threshold;
+    std::atomic<bool> in_spillable_stage{true};
     bool enable_spill = true;
     LoggerPtr log;
 
 public:
-    static const Int64 INVALID_REVOCABLE_MEMORY = -1;
-
     OperatorSpillContext(UInt64 operator_spill_threshold_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
         , log(log_)
@@ -42,6 +41,15 @@ public:
     virtual ~OperatorSpillContext() = default;
     bool isSpillEnabled() const { return enable_spill && operator_spill_threshold > 0; }
     void disableSpill() { enable_spill = false; }
-    virtual Int64 getTotalRevocableMemory() = 0;
+    void finishSpillableStage() { in_spillable_stage = false; }
+    Int64 getTotalRevocableMemory()
+    {
+        if (in_spillable_stage)
+            return getTotalRevocableMemoryImpl();
+        else
+            return 0;
+    }
+    virtual Int64 getTotalRevocableMemoryImpl() = 0;
+    UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
 };
 } // namespace DB

@@ -35,15 +35,9 @@ void SortSpillContext::markSpill()
     }
 }
 
-void SortSpillContext::clearRevocableMemory()
-{
-    revocable_memory = INVALID_REVOCABLE_MEMORY;
-}
-
 bool SortSpillContext::updateRevocableMemory(Int64 new_value)
 {
-    assert(new_value > INVALID_REVOCABLE_MEMORY);
-    if (revocable_memory == INVALID_REVOCABLE_MEMORY)
+    if (!in_spillable_stage)
         return false;
     revocable_memory = new_value;
     return enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold);

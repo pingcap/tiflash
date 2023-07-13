@@ -32,11 +32,10 @@ public:
     SortSpillContext(const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
     void buildSpiller(const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
-    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
+    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL && spiller->hasSpilledData(); }
     void markSpill();
     bool updateRevocableMemory(Int64 new_value);
-    void clearRevocableMemory();
-    Int64 getTotalRevocableMemory() override { return revocable_memory; };
+    Int64 getTotalRevocableMemoryImpl() override { return revocable_memory; };
 };
 
 using SortSpillContextPtr = std::shared_ptr<SortSpillContext>;

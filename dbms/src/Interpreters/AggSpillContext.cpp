@@ -43,30 +43,19 @@ void AggSpillContext::markSpill()
     }
 }
 
-void AggSpillContext::clearPerThreadRevocableMemory(size_t thread_num)
-{
-    per_thread_revocable_memories[thread_num] = INVALID_REVOCABLE_MEMORY;
-}
-
 bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num)
 {
-    assert(new_value > INVALID_REVOCABLE_MEMORY);
-    /// if per_thread_revocable_memories is already be set to -1, just return
-    if (per_thread_revocable_memories[thread_num] == INVALID_REVOCABLE_MEMORY)
+    if (in_spillable_stage)
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
     return enable_spill && per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold);
 }
 
-Int64 AggSpillContext::getTotalRevocableMemory()
+Int64 AggSpillContext::getTotalRevocableMemoryImpl()
 {
     Int64 ret = 0;
     for (const auto & x : per_thread_revocable_memories)
-    {
-        auto current_value = x.load();
-        if (current_value != INVALID_REVOCABLE_MEMORY)
-            ret += current_value;
-    }
+        ret += x;
     return ret;
 }
 } // namespace DB

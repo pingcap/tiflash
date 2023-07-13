@@ -32,15 +32,11 @@ void HashJoinSpillContext::init(size_t partition_num)
         status = SpillStatus::NOT_SPILL;
 }
 
-Int64 HashJoinSpillContext::getTotalRevocableMemory()
+Int64 HashJoinSpillContext::getTotalRevocableMemoryImpl()
 {
     Int64 ret = 0;
     for (const auto & x : *partition_revocable_memories)
-    {
-        auto current_value = x.load();
-        if (current_value != INVALID_REVOCABLE_MEMORY)
-            ret += current_value;
-    }
+        ret += x;
     return ret;
 }
 
@@ -63,17 +59,37 @@ void HashJoinSpillContext::markSpill()
     }
 }
 
-void HashJoinSpillContext::clearPartitionRevocableMemory(size_t partition_num)
-{
-    (*partition_revocable_memories)[partition_num] = INVALID_REVOCABLE_MEMORY;
-}
-
 bool HashJoinSpillContext::updatePartitionRevocableMemory(Int64 new_value, size_t partition_num)
 {
-    assert(new_value > INVALID_REVOCABLE_MEMORY);
-    if ((*partition_revocable_memories)[partition_num] == INVALID_REVOCABLE_MEMORY)
+    if (!in_spillable_stage)
         return false;
     (*partition_revocable_memories)[partition_num] = new_value;
     return false;
 }
+std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
+{
+    std::vector<size_t> ret;
+    Int64 target_partition_index = -1;
+    if ((operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() <= static_cast<Int64>(operator_spill_threshold)))
+    {
+        return ret;
+    }
+    Int64 max_bytes = 0;
+    for (size_t j = 0; j < partition_revocable_memories->size(); ++j)
+    {
+        if (!isPartitionSpilled(j) && (target_partition_index == -1 || (*partition_revocable_memories)[j] > max_bytes))
+        {
+            target_partition_index = j;
+            max_bytes = (*partition_revocable_memories)[j];
+        }
+    }
+    if (target_partition_index == -1)
+    {
+        return ret;
+    }
+    ret.push_back(target_partition_index);
+    // todo return more partitions so more memory can be released
+    return ret;
+}
+
 } // namespace DB

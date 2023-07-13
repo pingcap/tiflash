@@ -33,11 +33,10 @@ public:
     AggSpillContext(size_t concurrency, const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
     void buildSpiller(size_t partition_num, const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
-    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
+    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL && spiller->hasSpilledData(); }
     void markSpill();
     bool updatePerThreadRevocableMemory(Int64 new_value, size_t thread_num);
-    void clearPerThreadRevocableMemory(size_t thread_num);
-    Int64 getTotalRevocableMemory() override;
+    Int64 getTotalRevocableMemoryImpl() override;
 };
 
 using AggSpillContextPtr = std::shared_ptr<AggSpillContext>;

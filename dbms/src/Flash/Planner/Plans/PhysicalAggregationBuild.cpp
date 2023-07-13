@@ -77,6 +77,7 @@ EventPtr PhysicalAggregationBuild::doSinkComplete(PipelineExecutorContext & exec
         aggregate_context.reset();
         return nullptr;
     }
+    aggregate_context->getAggSpillContext()->finishSpillableStage();
 
     /// Currently, the aggregation spill algorithm requires all bucket data to be spilled,
     /// so a new event is added here to execute the final spill.

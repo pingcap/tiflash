@@ -99,7 +99,7 @@ Block MergeSortingBlockInputStream::readImpl()
         if (isCancelledOrThrowIfKilled() || (blocks.empty() && !hasSpilledData()))
             return Block();
 
-        sort_spill_context->clearRevocableMemory();
+        sort_spill_context->finishSpillableStage();
         if (!hasSpilledData())
         {
             impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);

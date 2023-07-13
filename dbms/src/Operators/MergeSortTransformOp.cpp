@@ -136,7 +136,7 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
     {
         if unlikely (!block)
         {
-            sort_spill_context->clearRevocableMemory();
+            sort_spill_context->finishSpillableStage();
             return hasSpilledData()
                 ? fromPartialToRestore()
                 : fromPartialToMerge(block);
