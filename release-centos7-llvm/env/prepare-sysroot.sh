@@ -16,7 +16,7 @@
 
 set -ueox pipefail
 
-CMAKE_VERSION=3.22.1
+CMAKE_VERSION=3.26.0
 GO_VERSION="1.20"
 ARCH=$(uname -m)
 GO_ARCH=$([[ "$ARCH" == "aarch64" ]] && echo "arm64" || echo "amd64")
