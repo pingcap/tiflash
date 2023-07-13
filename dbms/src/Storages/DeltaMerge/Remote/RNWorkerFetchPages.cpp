@@ -93,6 +93,23 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
 
 RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
 {
+    try
+    {
+        if (seg_task->param->prepared_tasks->getStatus() == MPMCQueueStatus::NORMAL)
+        {
+            doWorkImpl(seg_task);
+        }
+    }
+    catch (...)
+    {
+        auto error = getCurrentExceptionMessage(false);
+        seg_task->param->prepared_tasks->cancelWith(error);
+    }
+    return seg_task;
+}
+
+void RNWorkerFetchPages::doWorkImpl(const RNReadSegmentTaskPtr & seg_task)
+{
     MemoryTrackerSetter setter(true, fetch_pages_mem_tracker.get());
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
@@ -106,7 +123,7 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         auto cftiny_total = seg_task->meta.delta_tinycf_page_ids.size();
         auto cftiny_fetch = occupy_result.pages_not_in_cache.size();
         LOG_DEBUG(
-            log,
+            seg_task->param->log,
             "Ready to fetch pages, seg_task={} page_hit_rate={} pages_not_in_cache={}",
             seg_task->info(),
             cftiny_total == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * cftiny_fetch / cftiny_total),
@@ -125,16 +142,12 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         {
             doFetchPages(seg_task, req);
             seg_task->initColumnFileDataProvider(occupy_result.pages_guard);
-
-            // We finished fetch all pages for this seg task, just return it for downstream
-            // workers. If we have met any errors, page guard will not be persisted.
-            return seg_task;
         }
         catch (const pingcap::Exception & e)
         {
             last_exception = std::current_exception();
             LOG_WARNING(
-                log,
+                seg_task->param->log,
                 "Meet RPC client exception when fetching pages: {}, will be retried. seg_task={}",
                 e.displayText(),
                 seg_task->info());
@@ -177,7 +190,7 @@ void RNWorkerFetchPages::doFetchPages(
     bool rpc_is_observed = false;
     double total_write_page_cache_sec = 0.0;
 
-    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(cluster->rpc_client, seg_task->meta.store_address);
+    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(FetchDisaggPages)> rpc(seg_task->param->cluster->rpc_client, seg_task->meta.store_address);
 
     grpc::ClientContext client_context;
     auto stream_resp = rpc.call(&client_context, request);
@@ -311,7 +324,7 @@ void RNWorkerFetchPages::doFetchPages(
         seg_task->info(),
         remaining_pages_to_fetch);
 
-    LOG_DEBUG(log,
+    LOG_DEBUG(seg_task->param->log,
               "Finished fetch pages, seg_task={}, page_count={}, packet_count={}, task_count={}, "
               "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}, wait_write_page_finished_ms={}",
               seg_task->info(),

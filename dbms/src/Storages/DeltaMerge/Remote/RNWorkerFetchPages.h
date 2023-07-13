@@ -37,35 +37,30 @@ protected:
     String getName() const noexcept override { return "FetchPages"; }
 
 private:
-    void doFetchPages(
+    static void doFetchPages(
         const RNReadSegmentTaskPtr & seg_task,
         const disaggregated::FetchDisaggPagesRequest & request);
 
-private:
-    const pingcap::kv::Cluster * cluster;
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
 
 public:
-    struct Options
-    {
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
-        const LoggerPtr & log;
-        const size_t concurrency;
-        const pingcap::kv::Cluster * cluster;
-    };
-
-    explicit RNWorkerFetchPages(const Options & options)
+    RNWorkerFetchPages(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
+        const size_t concurrency)
         : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            options.source_queue,
-            options.result_queue,
-            options.log,
-            options.concurrency)
-        , cluster(options.cluster)
+            source_queue,
+            result_queue,
+            DB::Logger::get(getName()),
+            concurrency)
     {}
 
-    static RNWorkerFetchPagesPtr create(const Options & options)
+    static RNWorkerFetchPagesPtr create(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
+        const size_t concurrency)
     {
-        return std::make_shared<RNWorkerFetchPages>(options);
+        return std::make_shared<RNWorkerFetchPages>(source_queue, result_queue, concurrency);
     }
 
     ~RNWorkerFetchPages() override { wait(); }

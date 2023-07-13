@@ -40,40 +40,27 @@ protected:
 
     String getName() const noexcept override { return "PrepareStreams"; }
 
-public:
-    const ColumnDefinesPtr columns_to_read;
-    const UInt64 read_tso;
-    const PushDownFilterPtr push_down_filter;
-    const ReadMode read_mode;
+private:
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
 
 public:
-    struct Options
+    static RNWorkerPrepareStreamsPtr create(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
+        const size_t concurrency)
     {
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
-        const LoggerPtr & log;
-        const size_t concurrency;
-        const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
-        const PushDownFilterPtr & push_down_filter;
-        const ReadMode read_mode;
-    };
-
-    static RNWorkerPrepareStreamsPtr create(const Options & options)
-    {
-        return std::make_shared<RNWorkerPrepareStreams>(options);
+        return std::make_shared<RNWorkerPrepareStreams>(source_queue, result_queue, concurrency);
     }
 
-    explicit RNWorkerPrepareStreams(const Options & options)
+    explicit RNWorkerPrepareStreams(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
+        const size_t concurrency)
         : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            options.source_queue,
-            options.result_queue,
-            options.log,
-            options.concurrency)
-        , columns_to_read(options.columns_to_read)
-        , read_tso(options.read_tso)
-        , push_down_filter(options.push_down_filter)
-        , read_mode(options.read_mode)
+            source_queue,
+            result_queue,
+            DB::Logger::get(getName()),
+            concurrency)
     {}
 
     ~RNWorkerPrepareStreams() override { wait(); }

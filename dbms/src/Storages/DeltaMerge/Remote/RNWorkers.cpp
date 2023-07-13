@@ -15,15 +15,61 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
+
+#include "Common/Stopwatch.h"
+#include "common/types.h"
 namespace DB::DM::Remote
 {
 
-RNWorkers::RNWorkers(const Context & context, const Options & options, size_t num_streams)
+void RNWorkers::initSharedWorkers(const Context & context)
 {
-    RUNTIME_CHECK(num_streams > 0, num_streams);
-    size_t n = options.read_task->segment_read_tasks.size();
-    RUNTIME_CHECK(n > 0, n);
+    Stopwatch sw;
+    auto logical_cores = context.getServerInfo().has_value() ? context.getServerInfo()->cpu_info.logical_cores : std::thread::hardware_concurrency();
+    const auto & settings = context.getSettingsRef();
+    const size_t fetch_pages_concurrency = std::ceil(settings.dt_fetch_page_concurrency_scale * logical_cores);
+    const size_t prepare_streams_concurrency = std::ceil(settings.dt_prepare_stream_concurrency_scale * logical_cores);
+    const size_t dispatch_tasks_concurrency = 1; // TODO: remote dispatch worker and make prepare streams worker dispatching task to different queries.
+    const Int64 max_queue_size = 16384;
+    LOG_INFO(
+        DB::Logger::get(),
+        "logical_cores={}, fetch_pages_concurrency={} prepare_streams_concurrency={} dispatch_tasks_concurrency={}",
+        logical_cores,
+        fetch_pages_concurrency,
+        prepare_streams_concurrency,
+        dispatch_tasks_concurrency);
+    shared_worker_fetch_pages = RNWorkerFetchPages::create(
+        std::make_shared<Channel>(max_queue_size),
+        std::make_shared<Channel>(max_queue_size),
+        fetch_pages_concurrency);
 
+    shared_worker_prepare_streams = RNWorkerPrepareStreams::create(
+        shared_worker_fetch_pages->result_queue,
+        std::make_shared<Channel>(max_queue_size),
+        prepare_streams_concurrency);
+
+    shared_worker_dispatch_tasks = RNWorkerDispatchSegmentReadTasks::create(
+        shared_worker_prepare_streams->result_queue,
+        dispatch_tasks_concurrency);
+
+    shared_worker_fetch_pages->startInBackground();
+    shared_worker_prepare_streams->startInBackground();
+    shared_worker_dispatch_tasks->start();
+    LOG_INFO(DB::Logger::get(), "initSharedWorkers cost {}ms", sw.elapsedMilliseconds());
+}
+
+RNWorkers::RNWorkers(const Context & context, const RNReadTaskPtr & read_task)
+    : pending_read_task(read_task)
+    , prepared_tasks(read_task->segment_read_tasks.front()->param->prepared_tasks)
+    , task_count(read_task->segment_read_tasks.size())
+{
+    std::call_once(init_flag, initSharedWorkers, context);
+}
+
+RNWorkers::RNWorkers(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams)
+    : prepared_tasks(read_task->segment_read_tasks.front()->param->prepared_tasks)
+    , task_count(read_task->segment_read_tasks.size())
+{
+    size_t n = read_task->segment_read_tasks.size();
     auto fetch_pages_concurrency = n;
     auto prepare_streams_concurrency = n;
     const auto & settings = context.getSettingsRef();
@@ -36,48 +82,44 @@ RNWorkers::RNWorkers(const Context & context, const Options & options, size_t nu
         prepare_streams_concurrency = std::min(std::ceil(num_streams * settings.dt_prepare_stream_concurrency_scale), prepare_streams_concurrency);
     }
 
-    worker_fetch_pages = RNWorkerFetchPages::create({
-        .source_queue = std::make_shared<Channel>(n),
-        .result_queue = std::make_shared<Channel>(n),
-        .log = options.log,
-        .concurrency = fetch_pages_concurrency,
-        .cluster = options.cluster,
-    });
+    worker_fetch_pages = RNWorkerFetchPages::create(
+        std::make_shared<Channel>(n),
+        std::make_shared<Channel>(n),
+        fetch_pages_concurrency);
 
-    worker_prepare_streams = RNWorkerPrepareStreams::create({
-        .source_queue = worker_fetch_pages->result_queue,
-        .result_queue = std::make_shared<Channel>(n),
-        .log = options.log,
-        .concurrency = prepare_streams_concurrency,
-        .columns_to_read = options.columns_to_read,
-        .read_tso = options.read_tso,
-        .push_down_filter = options.push_down_filter,
-        .read_mode = options.read_mode,
-    });
+    worker_prepare_streams = RNWorkerPrepareStreams::create(
+        worker_fetch_pages->result_queue,
+        prepared_tasks,
+        prepare_streams_concurrency);
 
     // TODO: Can we push the task that all delta/stable data hit local cache first?
-    for (auto const & seg_task : options.read_task->segment_read_tasks)
-    {
-        auto push_result = worker_fetch_pages->source_queue->tryPush(seg_task);
-        RUNTIME_CHECK(push_result == MPMCQueueResult::OK, magic_enum::enum_name(push_result));
-    }
+    addTasks(read_task, worker_fetch_pages->source_queue);
     worker_fetch_pages->source_queue->finish();
 }
 
 void RNWorkers::startInBackground()
 {
-    worker_fetch_pages->startInBackground();
-    worker_prepare_streams->startInBackground();
+    if (worker_fetch_pages != nullptr && worker_prepare_streams != nullptr)
+    {
+        RUNTIME_CHECK(pending_read_task == nullptr);
+        worker_fetch_pages->startInBackground();
+        worker_prepare_streams->startInBackground();
+    }
+    else
+    {
+        RUNTIME_CHECK(pending_read_task != nullptr);
+        addTasks(pending_read_task, shared_worker_fetch_pages->source_queue);
+        pending_read_task.reset();
+    }
 }
 
 void RNWorkers::wait()
 {
-    worker_fetch_pages->wait();
-    worker_prepare_streams->wait();
+    if (worker_fetch_pages != nullptr && worker_prepare_streams != nullptr)
+    {
+        worker_fetch_pages->wait();
+        worker_prepare_streams->wait();
+    }
 }
 
-RNWorkers::ChannelPtr RNWorkers::getReadyChannel() const
-{
-    return worker_prepare_streams->result_queue;
-}
 } // namespace DB::DM::Remote

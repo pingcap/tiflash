@@ -26,7 +26,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 #include <signal.h>
-
+#include <Storages/DeltaMerge/Remote/RNWorkers.h>
 
 namespace DB::FailPoints
 {
@@ -116,6 +116,10 @@ int main(int argc, char ** argv)
 
     auto ret = RUN_ALL_TESTS();
 
+    if (DB::DM::Remote::RNWorkers::shared_worker_fetch_pages != nullptr)
+    {
+        DB::DM::Remote::RNWorkers::shared_worker_fetch_pages->source_queue->cancel();
+    }
     // `SegmentReader` threads may hold a segment and its delta-index for read.
     // `TiFlashTestEnv::shutdown()` will destroy `DeltaIndexManager`.
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.

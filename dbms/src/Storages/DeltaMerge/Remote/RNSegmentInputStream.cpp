@@ -51,7 +51,7 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
         if (!current_seg_task)
         {
             Stopwatch w{CLOCK_MONOTONIC_COARSE};
-            auto pop_result = workers->getReadyChannel()->pop(current_seg_task);
+            auto pop_result = workers->getReadyTask(current_seg_task);
             duration_wait_ready_task_sec += w.elapsedSeconds();
 
             if (pop_result == MPMCQueueResult::OK)
@@ -68,7 +68,7 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
             else if (pop_result == MPMCQueueResult::CANCELLED)
             {
                 current_seg_task = nullptr;
-                throw Exception(workers->getReadyChannel()->getCancelReason());
+                throw Exception(workers->getCancelReason());
             }
             else
             {

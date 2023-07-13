@@ -63,6 +63,8 @@
 #include <numeric>
 #include <unordered_set>
 
+using namespace DB::DM::Remote;
+
 namespace DB
 {
 namespace ErrorCodes
@@ -167,7 +169,7 @@ DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const C
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
-
+    param->prepared_tasks = std::make_shared<MPMCQueue<RNReadSegmentTaskPtr>>(read_task->segment_read_tasks.size());
     return read_task;
 }
 
@@ -388,7 +390,8 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
                     store_id,
                     store_address,
                     table.keyspace_id(),
-                    table.table_id());
+                    table.table_id(),
+                    param);
 
                 std::lock_guard lock(output_lock);
                 output_seg_tasks.push_back(seg_read_task);
@@ -494,45 +497,16 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     return rs_operator;
 }
 
-DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
-    const Context & db_context,
-    const DM::Remote::RNReadTaskPtr & read_task,
-    const DM::ColumnDefinesPtr & column_defines,
-    size_t num_streams)
+DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(const DM::Remote::RNReadTaskPtr & read_task, size_t num_streams)
 {
-    const auto & executor_id = table_scan.getTableScanExecutorID();
-
-    auto rs_operator = buildRSOperator(db_context, column_defines);
-    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
-        rs_operator,
-        table_scan.getColumns(),
-        table_scan.getPushedDownFilters(),
-        *column_defines,
-        db_context,
-        log);
-    const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
-    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
-    LOG_INFO(
+    LOG_DEBUG(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
-        magic_enum::enum_name(read_mode),
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={}",
+        magic_enum::enum_name(param->read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
-        read_task->segment_read_tasks.size(),
-        num_streams);
-
-    return DM::Remote::RNWorkers::create(
-        db_context,
-        {
-            .log = log->getChild(executor_id),
-            .read_task = read_task,
-            .columns_to_read = column_defines,
-            .read_tso = read_tso,
-            .push_down_filter = push_down_filter,
-            .read_mode = read_mode,
-            .cluster = db_context.getTMTContext().getKVCluster(),
-        },
-        num_streams);
+        read_task->segment_read_tasks.size());
+    return DM::Remote::RNWorkers::create(context, read_task, num_streams);
 }
 
 void StorageDisaggregated::buildRemoteSegmentInputStreams(
@@ -545,7 +519,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
+    auto workers = buildRNWorkers(read_task, num_streams);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
@@ -581,7 +555,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
+    auto workers = buildRNWorkers(read_task, num_streams);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
     for (size_t i = 0; i < num_streams; ++i)
@@ -599,6 +573,33 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     }
     db_context.getDAGContext()->addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
     db_context.getDAGContext()->addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
+}
+
+StorageDisaggregated::SegmentReadTaskParamPtr StorageDisaggregated::buildSegmentReadTaskParam()
+{
+    auto exec_log = log->getChild(table_scan.getTableScanExecutorID());
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
+        buildRSOperator(context, column_defines),
+        table_scan.getColumns(),
+        table_scan.getPushedDownFilters(),
+        *column_defines,
+        context,
+        exec_log);
+    const auto read_mode = DM::DeltaMergeStore::getReadMode(
+        context,
+        table_scan.isFastScan(),
+        table_scan.keepOrder(),
+        push_down_filter);
+    return std::make_shared<SegmentReadTaskParam>(
+        SegmentReadTaskParam{
+            .push_down_filter = push_down_filter,
+            .read_mode = read_mode,
+            .columns_to_read = column_defines,
+            .read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts,
+            .cluster = context.getTMTContext().getKVCluster(),
+            .log = exec_log,
+        });
 }
 
 } // namespace DB

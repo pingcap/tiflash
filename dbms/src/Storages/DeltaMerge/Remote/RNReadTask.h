@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/Types.h>
 
 #include <boost/noncopyable.hpp>
@@ -74,6 +75,7 @@ public:
     // meta is assigned when this SegmentTask is initially created from info returned
     // by Write Node. It is never changed.
     const RNReadSegmentMeta meta;
+    const StorageDisaggregated::SegmentReadTaskParamPtr param;
 
     static RNReadSegmentTaskPtr buildFromEstablishResp(
         const LoggerPtr & log,
@@ -84,7 +86,8 @@ public:
         StoreID store_id,
         const String & store_address,
         KeyspaceID keyspace_id,
-        TableID physical_table_id);
+        TableID physical_table_id,
+        const StorageDisaggregated::SegmentReadTaskParamPtr & param);
 
     String info() const
     {
@@ -100,11 +103,7 @@ public:
     void initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard);
 
     /// Called from WorkerPrepareStreams.
-    void initInputStream(
-        const ColumnDefines & columns_to_read,
-        UInt64 read_tso,
-        const PushDownFilterPtr & push_down_filter,
-        ReadMode read_mode);
+    void initInputStream();
 
     BlockInputStreamPtr getInputStream() const
     {
@@ -112,9 +111,14 @@ public:
         return input_stream;
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    explicit RNReadSegmentTask(const RNReadSegmentMeta & meta_)
+#else
+public:
+#endif
+    RNReadSegmentTask(const RNReadSegmentMeta & meta_, const StorageDisaggregated::SegmentReadTaskParamPtr & param_)
         : meta(meta_)
+        , param(param_)
     {
     }
 

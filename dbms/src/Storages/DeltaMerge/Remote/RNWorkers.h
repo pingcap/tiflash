@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/MPMCQueue.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Remote/RNWorkerDispatchSegmentReadTasks.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerFetchPages.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
@@ -33,40 +35,74 @@ public:
     using ChannelPtr = std::shared_ptr<Channel>;
 
 public:
-    /// Get the channel which outputs ready-for-read segment tasks.
-    ChannelPtr getReadyChannel() const;
-
     void startInBackground();
 
     void wait();
 
     ~RNWorkers()
     {
+        prepared_tasks->finish();
         wait();
     }
 
+    MPMCQueueResult getReadyTask(RNReadSegmentTaskPtr & task)
+    {
+        auto res = prepared_tasks->pop(task);
+        if (res == MPMCQueueResult::OK)
+        {
+            ready_task_count++;
+            if (ready_task_count >= task_count)
+            {
+                prepared_tasks->finish();
+            }
+        }
+        return res;
+    }
+
+    String getCancelReason() const
+    {
+        return prepared_tasks->getCancelReason();
+    }
+
 public:
-    struct Options
-    {
-        const LoggerPtr log;
-        const RNReadTaskPtr & read_task;
-        const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
-        const PushDownFilterPtr & push_down_filter;
-        const ReadMode read_mode;
-        const pingcap::kv::Cluster * cluster;
-    };
+    RNWorkers(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams);
+    RNWorkers(const Context & context, const RNReadTaskPtr & read_task);
 
-    explicit RNWorkers(const Context & context, const Options & options, size_t num_streams);
-
-    static RNWorkersPtr create(const Context & context, const Options & options, size_t num_streams)
+    static RNWorkersPtr create(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams)
     {
-        return std::make_shared<RNWorkers>(context, options, num_streams);
+        RUNTIME_CHECK(!read_task->segment_read_tasks.empty());
+        RUNTIME_CHECK(num_streams > 0);
+        return context.getSettingsRef().dt_use_shared_rn_workers ? std::make_shared<RNWorkers>(context, read_task) : std::make_shared<RNWorkers>(context, read_task, num_streams);
     }
 
 private:
+    static void addTasks(const RNReadTaskPtr & read_task, const ChannelPtr & q)
+    {
+        for (auto const & seg_task : read_task->segment_read_tasks)
+        {
+            auto push_result = q->push(seg_task);
+            RUNTIME_CHECK(push_result == MPMCQueueResult::OK, magic_enum::enum_name(push_result));
+        }
+    }
+
+    static void initSharedWorkers(const Context & context);
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
     RNWorkerFetchPagesPtr worker_fetch_pages;
     RNWorkerPrepareStreamsPtr worker_prepare_streams;
+    RNReadTaskPtr pending_read_task;
+    ChannelPtr prepared_tasks;
+    size_t task_count;
+    size_t ready_task_count = 0;
+
+    inline static std::once_flag init_flag;
+    inline static RNWorkerFetchPagesPtr shared_worker_fetch_pages;
+    inline static RNWorkerPrepareStreamsPtr shared_worker_prepare_streams;
+    inline static RNWorkerDispatchSegmentReadTasksPtr shared_worker_dispatch_tasks;
 };
 
 } // namespace DB::DM::Remote

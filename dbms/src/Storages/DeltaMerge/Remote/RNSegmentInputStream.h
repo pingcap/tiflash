@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MPMCQueue.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -51,12 +52,14 @@ public:
         const RNWorkersPtr & workers;
         const ColumnDefines & columns_to_read;
         int extra_table_id_index;
+        std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> prepared_tasks;
     };
 
     explicit RNSegmentInputStream(const Options & options)
         : log(Logger::get(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
+        , prepared_tasks(options.prepared_tasks)
     {}
 
     static BlockInputStreamPtr create(const Options & options)
@@ -75,6 +78,8 @@ private:
 
     double duration_wait_ready_task_sec = 0;
     double duration_read_sec = 0;
+
+    std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> prepared_tasks;
 };
 
 } // namespace DB::DM::Remote

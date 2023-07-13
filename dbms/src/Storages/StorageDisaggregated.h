@@ -15,14 +15,17 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -93,6 +96,19 @@ public:
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
+    struct SegmentReadTaskParam
+    {
+        DM::PushDownFilterPtr push_down_filter;
+        DM::ReadMode read_mode;
+        DM::ColumnDefinesPtr columns_to_read;
+        UInt64 read_tso;
+        pingcap::kv::Cluster * cluster;
+        DB::LoggerPtr log;
+
+        std::shared_ptr<MPMCQueue<DM::Remote::RNReadSegmentTaskPtr>> prepared_tasks;
+    };
+    using SegmentReadTaskParamPtr = std::shared_ptr<SegmentReadTaskParam>;
+
 private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readThroughS3(
@@ -134,11 +150,7 @@ private:
     DM::RSOperatorPtr buildRSOperator(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);
-    DM::Remote::RNWorkersPtr buildRNWorkers(
-        const Context & db_context,
-        const DM::Remote::RNReadTaskPtr & read_task,
-        const DM::ColumnDefinesPtr & column_defines,
-        size_t num_streams);
+    DM::Remote::RNWorkersPtr buildRNWorkers(const DM::Remote::RNReadTaskPtr & read_task, size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
@@ -150,6 +162,7 @@ private:
         const Context & db_context,
         const DM::Remote::RNReadTaskPtr & read_task,
         size_t num_streams);
+    SegmentReadTaskParamPtr buildSegmentReadTaskParam();
 
 private:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
@@ -179,5 +192,7 @@ private:
     const FilterConditions & filter_conditions;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
+
+    SegmentReadTaskParamPtr param;
 };
 } // namespace DB

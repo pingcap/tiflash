@@ -84,7 +84,7 @@ OperatorStatus RNSegmentSourceOp::awaitImpl()
         return OperatorStatus::IO_IN;
     }
 
-    auto pop_result = workers->getReadyChannel()->tryPop(current_seg_task);
+    auto pop_result = workers->getReadyTask(current_seg_task);
     switch (pop_result)
     {
     case MPMCQueueResult::OK:
@@ -103,7 +103,7 @@ OperatorStatus RNSegmentSourceOp::awaitImpl()
         current_seg_task = nullptr;
         done = true;
         duration_wait_ready_task_sec += wait_stop_watch.elapsedSeconds();
-        throw Exception(workers->getReadyChannel()->getCancelReason());
+        throw Exception(workers->getCancelReason());
     default:
         current_seg_task = nullptr;
         done = true;

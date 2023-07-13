@@ -33,7 +33,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
     StoreID store_id,
     const String & store_address,
     KeyspaceID keyspace_id,
-    TableID physical_table_id)
+    TableID physical_table_id,
+    const StorageDisaggregated::SegmentReadTaskParamPtr & param)
 {
     RowKeyRange segment_range;
     {
@@ -118,7 +119,8 @@ RNReadSegmentTaskPtr RNReadSegmentTask::buildFromEstablishResp(
             .read_ranges = read_ranges,
             .snapshot_id = snapshot_id,
             .dm_context = dm_context,
-        }));
+        },
+        param));
 }
 
 void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPtr & pages_guard)
@@ -134,21 +136,17 @@ void RNReadSegmentTask::initColumnFileDataProvider(const RNLocalPageCacheGuardPt
         KeyspaceTableID{meta.keyspace_id, meta.physical_table_id});
 }
 
-void RNReadSegmentTask::initInputStream(
-    const ColumnDefines & columns_to_read,
-    UInt64 read_tso,
-    const PushDownFilterPtr & push_down_filter,
-    ReadMode read_mode)
+void RNReadSegmentTask::initInputStream()
 {
     RUNTIME_CHECK(input_stream == nullptr);
     input_stream = meta.segment->getInputStream(
-        read_mode,
+        param->read_mode,
         *meta.dm_context,
-        columns_to_read,
+        *(param->columns_to_read),
         meta.segment_snap,
         meta.read_ranges,
-        push_down_filter,
-        read_tso,
+        param->push_down_filter,
+        param->read_tso,
         DEFAULT_BLOCK_SIZE);
 }
 
