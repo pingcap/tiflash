@@ -47,14 +47,16 @@ namespace DB
 // clang-format off
 #define APPLY_FOR_METRICS(M, F)                                                                                                                     \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_cop, {"type", "cop"}),                                          \
-        F(type_cop_executing, {"type", "cop_executing"}), F(type_batch, {"type", "batch"}),                                                         \
+        F(type_cop_executing, {"type", "cop_executing"}), F(type_cop_stream, {"type", "cop_stream"}),                                               \
+        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                                         \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
         F(type_remote_read_constructed, {"type", "remote_read_constructed"}), F(type_remote_read_sent, {"type", "remote_read_sent"}),               \
         F(type_disagg_establish_task, {"type", "disagg_establish_task"}), F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))               \
     M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}),                                \
-        F(type_cop_executing, {"type", "cop_executing"}), F(type_batch, {"type", "batch"}),                                                         \
+        F(type_cop_executing, {"type", "cop_executing"}), F(type_cop_stream, {"type", "cop_stream"}),                                               \
+        F(type_cop_stream_executing, {"type", "cop_stream_executing"}), F(type_batch, {"type", "batch"}),                                                         \
         F(type_batch_executing, {"type", "batch_executing"}), F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}),                             \
         F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}), F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}),                           \
         F(type_run_mpp_task, {"type", "run_mpp_task"}), F(type_remote_read, {"type", "remote_read"}),                                               \
@@ -70,6 +72,7 @@ namespace DB
     M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                                               \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                                                                                               \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.001, 2, 20}),                                                     \
@@ -79,6 +82,7 @@ namespace DB
         F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                                \
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                             \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                                                                                            \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                                         \
         F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 20}),                                                           \
         F(type_run_mpp_query, {{"type", "run_mpp_query"}}, ExpBuckets{1024 * 1024, 2, 20}))                                                         \
@@ -88,9 +92,11 @@ namespace DB
         F(reason_other_error, {"reason", "other_error"}))                                                                                           \
     M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                                       \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
+        F(type_cop_stream, {{"type", "cop_stream"}}, ExpBuckets{0.001, 2, 20}),                                                                                                                                            \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                               \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter,                                                                  \
         F(type_cop, {{"type", "cop"}}),                                                                                                             \
+        F(type_cop_stream, {{"type", "cop_stream"}}),                                                                                                                                            \
         F(type_batch_cop, {{"type", "batch_cop"}}),                                                                                                 \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}),                                                                                 \
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
@@ -323,6 +329,7 @@ namespace DB
     M(tiflash_compute_request_unit, "Request Unit used by tiflash compute", Counter,                                                                \
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
+        F(type_cop_stream, {{"type", "cop_stream"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
     M(tiflash_shared_block_schemas, "statistics about shared block schemas of ColumnFiles", Gauge,                                                  \
         F(type_current_size, {{"type", "current_size"}}),                                                                                           \

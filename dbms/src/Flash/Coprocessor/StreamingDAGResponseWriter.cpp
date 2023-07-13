@@ -146,7 +146,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     writer->write(response.getResponse());
 }
 
-template class StreamingDAGResponseWriter<StreamWriterPtr>;
+template class StreamingDAGResponseWriter<CopStreamWriterPtr>;
+template class StreamingDAGResponseWriter<BatchCopStreamWriterPtr>;
 template class StreamingDAGResponseWriter<SyncMPPTunnelSetWriterPtr>;
 template class StreamingDAGResponseWriter<AsyncMPPTunnelSetWriterPtr>;
 } // namespace DB

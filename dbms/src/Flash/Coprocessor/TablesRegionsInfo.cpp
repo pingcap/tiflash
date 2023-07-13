@@ -79,7 +79,7 @@ static void insertRegionInfoToTablesRegionInfo(
             r.region_id(),
             r.region_epoch().version(),
             r.region_epoch().conf_ver(),
-            CoprocessorHandler::genCopKeyRange(r.ranges()),
+            genCopKeyRange(r.ranges()),
             nullptr);
         if (region_info.key_ranges.empty())
         {
