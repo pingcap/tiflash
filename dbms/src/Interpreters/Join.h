@@ -31,10 +31,19 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <memory>
 #include <shared_mutex>
 
 namespace DB
 {
+struct JoinProfileInfo
+{
+    UInt64 peak_build_bytes_usage = 0;
+    bool is_spill_enabled = false;
+    bool is_spilled = false;
+};
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
+
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -276,6 +285,8 @@ public:
 
     JoinSpillContextPtr spill_context;
 
+    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
 
@@ -444,6 +455,8 @@ private:
     void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
+
+    void finalizeProfileInfo();
 };
 
 } // namespace DB

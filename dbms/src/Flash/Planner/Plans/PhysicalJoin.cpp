@@ -50,8 +50,8 @@ void recordJoinExecuteInfo(
 {
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
-    join_execute_info.join_ptr = join_ptr;
-    RUNTIME_CHECK(join_execute_info.join_ptr);
+    join_execute_info.join_profile_info = join_ptr->profile_info;
+    RUNTIME_CHECK(join_execute_info.join_profile_info);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 } // namespace

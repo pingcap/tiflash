@@ -1545,6 +1545,13 @@ void Join::workAfterBuildFinish(size_t stream_index)
     finalizeRuntimeFilter();
 }
 
+void Join::finalizeProfileInfo()
+{
+    profile_info->is_spill_enabled = isEnableSpill();
+    profile_info->is_spilled = isSpilled();
+    profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+}
+
 void Join::workAfterProbeFinish(size_t stream_index)
 {
     if (isEnableSpill())
@@ -1558,6 +1565,7 @@ void Join::workAfterProbeFinish(size_t stream_index)
             }
         }
     }
+    finalizeProfileInfo();
 }
 
 void Join::waitUntilAllBuildFinished() const
