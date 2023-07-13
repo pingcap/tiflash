@@ -46,22 +46,11 @@ public:
     }
 
 public:
-    struct Options
-    {
-        const LoggerPtr log;
-        const RNReadTaskPtr & read_task;
-        const ColumnDefinesPtr & columns_to_read;
-        const UInt64 read_tso;
-        const PushDownFilterPtr & push_down_filter;
-        const ReadMode read_mode;
-        const pingcap::kv::Cluster * cluster;
-    };
+    explicit RNWorkers(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams);
 
-    explicit RNWorkers(const Context & context, const Options & options, size_t num_streams);
-
-    static RNWorkersPtr create(const Context & context, const Options & options, size_t num_streams)
+    static RNWorkersPtr create(const Context & context, const RNReadTaskPtr & read_task, size_t num_streams)
     {
-        return std::make_shared<RNWorkers>(context, options, num_streams);
+        return std::make_shared<RNWorkers>(context, read_task, num_streams);
     }
 
 private:

@@ -37,30 +37,25 @@ protected:
     String getName() const noexcept override { return "FetchPages"; }
 
 private:
-    void doFetchPages(
+    static void doFetchPages(
         const RNReadSegmentTaskPtr & seg_task,
         std::shared_ptr<disaggregated::FetchDisaggPagesRequest> request);
-
-private:
-    const pingcap::kv::Cluster * cluster;
+    static RNReadSegmentTaskPtr doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
 
 public:
     struct Options
     {
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue;
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue;
-        const LoggerPtr & log;
         const size_t concurrency;
-        const pingcap::kv::Cluster * cluster;
     };
 
     explicit RNWorkerFetchPages(const Options & options)
         : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
             options.source_queue,
             options.result_queue,
-            options.log,
+            DB::Logger::get(getName()),
             options.concurrency)
-        , cluster(options.cluster)
     {}
 
     static RNWorkerFetchPagesPtr create(const Options & options)

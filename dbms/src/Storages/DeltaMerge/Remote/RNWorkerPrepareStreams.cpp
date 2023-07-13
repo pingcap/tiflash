@@ -21,17 +21,18 @@ namespace DB::DM::Remote
 
 RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & task)
 {
+    return doWorkImpl(task);
+}
+
+RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWorkImpl(const RNReadSegmentTaskPtr & task)
+{
     Stopwatch watch_work{CLOCK_MONOTONIC_COARSE};
     SCOPE_EXIT({
         // This metric is per-segment.
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_worker_prepare_stream).Observe(watch_work.elapsedSeconds());
     });
 
-    task->initInputStream(
-        *columns_to_read,
-        read_tso,
-        push_down_filter,
-        read_mode);
+    task->initInputStream();
 
     return task;
 }
