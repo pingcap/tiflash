@@ -59,6 +59,12 @@ void HashJoinSpillContext::markSpill()
     }
 }
 
+void HashJoinSpillContext::markPartitionSpill(size_t partition_index)
+{
+    markSpill();
+    (*partition_spill_status)[partition_index] = SpillStatus::SPILL;
+}
+
 bool HashJoinSpillContext::updatePartitionRevocableMemory(Int64 new_value, size_t partition_num)
 {
     if (!in_spillable_stage)
@@ -66,9 +72,26 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(Int64 new_value, size_
     (*partition_revocable_memories)[partition_num] = new_value;
     return false;
 }
+
+SpillConfig HashJoinSpillContext::createBuildSpillConfig(const String & spill_id) const
+{
+    return SpillConfig(build_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
+}
+SpillConfig HashJoinSpillContext::createProbeSpillConfig(const String & spill_id) const
+{
+    return SpillConfig(probe_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
+}
+
+bool HashJoinSpillContext::needSpillCurrentData(size_t partition_id) const
+{
+    return (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller);
+}
+
 std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
 {
     std::vector<size_t> ret;
+    if (!in_spillable_stage)
+        return ret;
     Int64 target_partition_index = -1;
     if ((operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() <= static_cast<Int64>(operator_spill_threshold)))
     {

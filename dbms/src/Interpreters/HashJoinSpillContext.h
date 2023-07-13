@@ -41,21 +41,12 @@ public:
     bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
     bool isPartitionSpilled(size_t partition_index) const { return (*partition_spill_status)[partition_index] != SpillStatus::NOT_SPILL; }
     void markSpill();
-    void markPartitionSpill(size_t partition_index) { (*partition_spill_status)[partition_index] = SpillStatus::SPILL; }
+    void markPartitionSpill(size_t partition_index);
     bool updatePartitionRevocableMemory(Int64 new_value, size_t partition_num);
     Int64 getTotalRevocableMemoryImpl() override;
-    SpillConfig createBuildSpillConfig(const String & spill_id)
-    {
-        return SpillConfig(build_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
-    }
-    SpillConfig createProbeSpillConfig(const String & spill_id)
-    {
-        return SpillConfig(probe_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
-    }
-    bool needSpillCurrentData(size_t partition_id) const
-    {
-        return (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller);
-    }
+    SpillConfig createBuildSpillConfig(const String & spill_id) const;
+    SpillConfig createProbeSpillConfig(const String & spill_id) const;
+    bool needSpillCurrentData(size_t partition_id) const;
     std::vector<size_t> getPartitionsToSpill();
 };
 

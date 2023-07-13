@@ -16,6 +16,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Interpreters/AggSpillContext.h>
+#include <Interpreters/HashJoinSpillContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Poco/File.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -119,6 +120,44 @@ try
     ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
     ASSERT_TRUE(spill_context->updateRevocableMemory(2000) == false);
     ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+}
+CATCH
+
+TEST_F(TestOperatorSpillContext, JoinMarkSpill)
+try
+{
+    auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
+    spill_context->init(10);
+    ASSERT_FALSE(spill_context->isSpilled());
+    spill_context->markPartitionSpill(0);
+    ASSERT_TRUE(spill_context->isSpilled());
+}
+CATCH
+
+TEST_F(TestOperatorSpillContext, HashJoinTriggerSpill)
+try
+{
+    auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
+    spill_context->init(2);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(600, 0) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(800, 1) == false);
+    auto spill_partitions = spill_context->getPartitionsToSpill();
+    ASSERT_TRUE(spill_partitions.size() == 1);
+    ASSERT_TRUE(spill_partitions[0] == 1);
+}
+CATCH
+
+TEST_F(TestOperatorSpillContext, HashJoinFinishSpillableStage)
+try
+{
+    auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
+    spill_context->init(2);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(600, 0) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(800, 1) == false);
+    spill_context->finishSpillableStage();
+    ASSERT_TRUE(spill_context->getTotalRevocableMemoryImpl() == 0);
+    auto spill_partitions = spill_context->getPartitionsToSpill();
+    ASSERT_TRUE(spill_partitions.size() == 0);
 }
 CATCH
 } // namespace tests
