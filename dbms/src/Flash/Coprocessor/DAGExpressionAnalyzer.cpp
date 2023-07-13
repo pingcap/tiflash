@@ -45,9 +45,7 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
-
-#include "Core/Types.h"
-
+#include <Core/Types.h>
 
 namespace DB
 {
@@ -216,7 +214,7 @@ void setAuxiliaryColumnInfoImpl(
 
         // Set auxiliary columns' indexes
         size_t aux_col_idx = tmp_block.getPositionByName(aux_col_name);
-        range_auxiliary_column_index = aux_col_idx; // Set here
+        range_auxiliary_column_index = aux_col_idx;
 
         // Set auxiliary columns' types
         const auto & col_and_name = tmp_block.getByName(aux_col_name);
@@ -225,13 +223,13 @@ void setAuxiliaryColumnInfoImpl(
         if (is_nullable)
         {
             if (const auto * const data_type_nullable = typeid_cast<const DataTypeNullable *>(data_type.get()))
-                aux_col_type = data_type_nullable->getNestedType()->getTypeId(); // Set here
+                aux_col_type = data_type_nullable->getNestedType()->getTypeId();
             else
                 throw Exception("Invalid data type");
-            is_aux_col_nullable = true; // Set here
+            is_aux_col_nullable = true;
         }
         else
-            aux_col_type = col_and_name.type->getTypeId(); // Set here
+            aux_col_type = col_and_name.type->getTypeId();
     }
 }
 
