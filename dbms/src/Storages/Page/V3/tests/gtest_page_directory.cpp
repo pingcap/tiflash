@@ -2419,7 +2419,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto config = BlobConfig{};
-        BlobStats stats(log, delegator, config);
+        BlobStats stats(log, delegator, config, {PageType::Normal});
         {
             const auto & lock = stats.lock();
             stats.createStatNotChecking(file_id1, BLOBFILE_LIMIT_SIZE, lock);

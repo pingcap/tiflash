@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <mutex>
@@ -56,7 +57,12 @@ public:
     using PageMap = typename Trait::PageMap;
 
 public:
-    BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config);
+    BlobStore(
+        const String & storage_name,
+        const FileProviderPtr & file_provider_,
+        PSDiskDelegatorPtr delegator_,
+        const BlobConfig & config,
+        const PageTypeAndConfig & page_type_and_config_);
 
     void registerPaths();
 
@@ -80,7 +86,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr, PageType page_type = PageType::Normal);
+    PageEntriesEdit write(typename Trait::WriteBatch && wb, PageType page_type = PageType::Normal, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntries & del_entries);
 
@@ -141,6 +147,7 @@ private:
 
     FileProviderPtr file_provider;
     BlobConfig config;
+    PageTypeAndConfig page_type_and_config;
 
     LoggerPtr log;
 

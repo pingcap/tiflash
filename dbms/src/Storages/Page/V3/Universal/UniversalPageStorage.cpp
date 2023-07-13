@@ -48,12 +48,17 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider)
 {
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate_raft_data}},
+    };
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
         name,
         file_provider,
         delegator,
-        PS::V3::BlobConfig::from(config));
+        PS::V3::BlobConfig::from(config),
+        page_type_and_config);
     if (S3::ClientFactory::instance().isEnabled())
     {
         storage->remote_reader = std::make_unique<PS::V3::S3PageReader>();
@@ -79,7 +84,7 @@ size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
     return page_directory->numPagesWithPrefix(prefix);
 }
 
-void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter, PageType page_type) const
+void UniversalPageStorage::write(UniversalWriteBatch && write_batch, PageType page_type, const WriteLimiterPtr & write_limiter) const
 {
     if (unlikely(write_batch.empty()))
         return;
@@ -96,7 +101,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    auto edit = blob_store->write(std::move(write_batch), write_limiter, page_type);
+    auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
     if (has_writes_from_remote)
     {

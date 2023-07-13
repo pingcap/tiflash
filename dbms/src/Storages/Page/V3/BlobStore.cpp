@@ -76,12 +76,18 @@ static_assert(!std::is_same_v<ChecksumClass, Digest::City128>, "The checksum mus
   *********************/
 
 template <typename Trait>
-BlobStore<Trait>::BlobStore(const String & storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
+BlobStore<Trait>::BlobStore(
+    const String & storage_name,
+    const FileProviderPtr & file_provider_,
+    PSDiskDelegatorPtr delegator_,
+    const BlobConfig & config_,
+    const PageTypeAndConfig & page_type_and_config_)
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
+    , page_type_and_config(page_type_and_config_)
     , log(Logger::get(storage_name))
-    , blob_stats(log, delegator, config)
+    , blob_stats(log, delegator, config, PageTypeUtils::extractPageTypes(page_type_and_config_))
 {
 }
 
@@ -132,6 +138,16 @@ void BlobStore<Trait>::reloadConfig(const BlobConfig & rhs)
     config.spacemap_type = rhs.spacemap_type;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
     config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
+    config.heavy_gc_valid_rate_raft_data = rhs.heavy_gc_valid_rate_raft_data;
+    auto reload_page_type_config = [this](PageType page_type, const PageTypeConfig & config) {
+        auto iter = page_type_and_config.find(page_type);
+        if (iter != page_type_and_config.end())
+        {
+            iter->second = config;
+        }
+    };
+    reload_page_type_config(PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate});
+    reload_page_type_config(PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = config.heavy_gc_valid_rate_raft_data});
 }
 
 template <typename Trait>
@@ -351,7 +367,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch && wb, PageType pa
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter, PageType page_type)
+BlobStore<Trait>::write(typename Trait::WriteBatch && wb, PageType page_type, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -1136,10 +1152,13 @@ typename BlobStore<Trait>::PageTypeAndBlobIds BlobStore<Trait>::getGCStats()
             // Raft log is written and deleted in a faster pace which is not suitable for full gc.
             // But other meta data is written and deleted in a slower pace and cannot be completely deleted even if the region is removed, and full gc is needed.
             // So we choose to also do full gc for raft related data but with a smaller threshold.
-            PageType page_type = BlobStats::BlobFileIdManager::getBlobFileType(stat->id);
-            bool do_full_gc = (page_type == PageType::Normal)
-                ? stat->sm_valid_rate <= config.heavy_gc_valid_rate
-                : stat->sm_valid_rate <= config.heavy_gc_valid_rate / 10;
+            PageType page_type = PageTypeUtils::getPageType(stat->id);
+            auto heavy_gc_threhold = config.heavy_gc_valid_rate;
+            if (auto iter = page_type_and_config.find(page_type); iter != page_type_and_config.end())
+            {
+                heavy_gc_threhold = iter->second.heavy_gc_valid_rate;
+            }
+            bool do_full_gc = stat->sm_valid_rate <= heavy_gc_threhold;
             if (do_full_gc)
             {
                 LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);

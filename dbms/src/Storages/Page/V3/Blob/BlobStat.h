@@ -18,6 +18,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/PathPool.h>
 #include <common/types.h>
@@ -59,7 +60,11 @@ public:
         double sm_valid_rate = 0.0;
 
     public:
-        BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_)
+        BlobStat(
+            BlobFileId id_,
+            SpaceMap::SpaceMapType sm_type,
+            UInt64 sm_max_caps_,
+            BlobStatType type_)
             : id(id_)
             , type(type_)
             , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
@@ -122,33 +127,27 @@ public:
     class BlobFileIdManager
     {
     public:
+        explicit BlobFileIdManager(const PageTypes & page_types);
+
         // Used at restart to add old blob file id to manager
         void addFileId(BlobFileId file_id);
 
         BlobFileId nextFileId(PageType page_type, const std::lock_guard<std::mutex> &);
-
-        static PageType getBlobFileType(BlobFileId file_id);
-
-    private:
-        static inline bool isRaftFileId(BlobFileId file_id)
-        {
-            return file_id >= FIRST_RAFT_FILE_ID;
-        }
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #else
     public:
 #endif
-        constexpr static BlobFileId FIRST_RAFT_FILE_ID = 4611686018427387904ULL; // 2^62
-
-        BlobFileId next_raft_id = FIRST_RAFT_FILE_ID;
-
-        BlobFileId next_normal_id = 1;
+        std::unordered_map<PageType, BlobFileId> next_file_id_map;
     };
 
 public:
-    BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig & config);
+    BlobStats(
+        LoggerPtr log_,
+        PSDiskDelegatorPtr delegator_,
+        BlobConfig & config,
+        const PageTypes & page_types_);
 
     // Don't require a lock from BlobStats When you already hold a BlobStat lock
     //
@@ -213,6 +212,7 @@ private:
     BlobConfig & config;
 
     mutable std::mutex lock_stats;
+    const PageTypeAndConfig page_type_and_config;
     BlobFileIdManager blob_file_id_manager;
     // Index for selecting next path for creating new blobfile
     UInt32 stats_map_path_index = 0;

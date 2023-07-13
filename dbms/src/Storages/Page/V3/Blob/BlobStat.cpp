@@ -35,10 +35,15 @@ namespace DB::PS::V3
   * BlobStats methods *
   *********************/
 
-BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig & config_)
+BlobStats::BlobStats(
+    LoggerPtr log_,
+    PSDiskDelegatorPtr delegator_,
+    BlobConfig & config_,
+    const PageTypes & page_types_)
     : log(std::move(log_))
     , delegator(delegator_)
     , config(config_)
+    , blob_file_id_manager(page_types_)
 {
 }
 
@@ -204,7 +209,7 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
-            if (BlobFileIdManager::getBlobFileType(stat->id) != page_type)
+            if (PageTypeUtils::getPageType(stat->id) != page_type)
                 continue;
 
             auto defer_lock = stat->defer_lock();
@@ -340,25 +345,34 @@ void BlobStats::BlobStat::recalculateCapacity()
     sm_max_caps = smap->updateAccurateMaxCapacity();
 }
 
+BlobStats::BlobFileIdManager::BlobFileIdManager(const PageTypes & page_types)
+{
+    RUNTIME_ASSERT(!page_types.empty());
+    for (const auto & page_type : page_types)
+    {
+        next_file_id_map.emplace(page_type, PageTypeUtils::firstFileID(page_type));
+    }
+}
+
 void BlobStats::BlobFileIdManager::addFileId(BlobFileId file_id)
 {
-    if (isRaftFileId(file_id))
+    auto page_type = PageTypeUtils::getPageType(file_id, /*treat_unknown_as_normal*/ false);
+    if (page_type == PageType::TypeCountLimit)
+        return;
+
+    auto iter = next_file_id_map.find(page_type);
+    if (iter != next_file_id_map.end())
     {
-        next_raft_id = std::max(next_raft_id, file_id + 1);
-    }
-    else
-    {
-        next_normal_id = std::max(next_normal_id, file_id + 1);
+        iter->second = std::max(iter->second, PageTypeUtils::nextFileID(iter->first, file_id));
     }
 }
 
 BlobFileId BlobStats::BlobFileIdManager::nextFileId(PageType page_type, const std::lock_guard<std::mutex> &)
 {
-    return page_type == PageType::RaftData ? next_raft_id++ : next_normal_id++;
-}
-
-PageType BlobStats::BlobFileIdManager::getBlobFileType(BlobFileId file_id)
-{
-    return isRaftFileId(file_id) ? PageType::RaftData : PageType::Normal;
+    auto iter = next_file_id_map.find(page_type);
+    RUNTIME_CHECK(iter != next_file_id_map.end());
+    auto next_file_id = iter->second;
+    iter->second = PageTypeUtils::nextFileID(page_type, next_file_id);
+    return next_file_id;
 }
 } // namespace DB::PS::V3
