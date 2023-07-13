@@ -90,6 +90,8 @@ public:
     ///     taskn──┘    └──►taskm
     EventPtr complete(PipelineExecutorContext & exec_context);
 
+    String getFinalPlanExecId() const;
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
