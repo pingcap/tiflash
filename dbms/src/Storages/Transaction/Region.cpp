@@ -539,7 +539,7 @@ void Region::afterPrehandleSnapshot()
     if (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
         data.orphan_keys_info.pre_handling = false;
-        LOG_INFO(log, "After prehandle, remains {} orphan keys [region_id={}]", data.orphan_keys_info.remainedKeyCount(), id());
+        LOG_INFO(log, "After prehandle, remains orphan keys {} removed orphan keys {} [region_id={}]", data.orphan_keys_info.remainedKeyCount(), data.orphan_keys_info.removed_remained_keys.size(), id());
     }
 }
 
@@ -764,7 +764,29 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            try
+            {
+                RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            }
+            catch (DB::Exception & e)
+            {
+                std::vector<std::string> entry_infos;
+                for (UInt64 i = 0; i < cmds.len; ++i)
+                {
+                    auto cf = cmds.cmd_cf[i];
+                    auto type = cmds.cmd_types[i];
+                    auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
+                    entry_infos.emplace_back(fmt::format("{}|{}|{}", type == DB::WriteCmdType::Put ? "PUT" : "DEL", CFToName(cf), tikv_key.toDebugString()));
+                }
+                LOG_ERROR(log,
+                          "{} catch exception: {}, while applying `RegionTable::writeBlockByRegion` on [term {}, index {}], entries {}",
+                          toString(),
+                          e.message(),
+                          term,
+                          index,
+                          fmt::join(entry_infos.begin(), entry_infos.end(), ":"));
+                e.rethrow();
+            }
         }
 
         meta.setApplied(index, term);
