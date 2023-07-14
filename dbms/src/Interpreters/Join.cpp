@@ -1873,12 +1873,12 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
-void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && spill_blocks)
+void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
 {
     hash_join_spill_context->getBuildSpiller()->spillBlocks(std::move(spill_blocks), part_id);
 }
 
-void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && spill_blocks)
+void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
 {
     hash_join_spill_context->getProbeSpiller()->spillBlocks(std::move(spill_blocks), part_id);
 }
