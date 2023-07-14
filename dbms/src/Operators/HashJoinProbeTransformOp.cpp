@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Operators/HashJoinProbeTransformOp.h>
-#include <Interpreters/Join.h>
 
 #include <magic_enum.hpp>
 
@@ -52,6 +51,31 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
     LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}", joined_rows + scan_hash_map_rows, joined_rows, scan_hash_map_rows);
 }
 
+OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
+{
+    while (true)
+    {
+        switch (status)
+        {
+        case ProbeStatus::PROBE:
+            block = join->joinBlock(probe_process_info);
+            if unlikely (!block)
+                return onProbeFinish(block);
+
+            joined_rows += block.rows();
+            return spill_context.isProbeSideSpilling(op_index)
+                ? OperatorStatus::WAITING
+                : OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
+            return scanHashMapData(block);
+        case ProbeStatus::FINISHED:
+            return OperatorStatus::HAS_OUTPUT;
+        default:
+            throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
+        }
+    }
+}
+
 void HashJoinProbeTransformOp::probeOnTransform(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
@@ -68,7 +92,7 @@ OperatorStatus HashJoinProbeTransformOp::onProbeFinish(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     join->finishOneProbe(op_index);
-    if (!spill_context->isProbeSideSpilling(op_index))
+    if (!spill_context.isProbeSideSpilling(op_index))
     {
         if (scan_hash_map_after_probe_stream)
         {
@@ -93,7 +117,7 @@ OperatorStatus HashJoinProbeTransformOp::onProbeFinish(Block & block)
     else
     {
         status = ProbeStatus::WAIT_PROBE_FINAL_SPILL;
-        return OperatorStatus::WAITING; 
+        return OperatorStatus::WAITING;
     }
 }
 
@@ -114,42 +138,24 @@ OperatorStatus HashJoinProbeTransformOp::scanHashMapData(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus HashJoinProbeTransformOp::handleProbedBlock(Block & block)
-{
-    assert(status == ProbeStatus::PROBE);
-    if unlikely (!block)
-        return onProbeFinish(block);
-
-    joined_rows += block.rows();
-    return spill_context.isProbeSideSpilling(op_index)
-        ? OperatorStatus::WAITING
-        : OperatorStatus::HAS_OUTPUT;
-}
-
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
-    probeOnTransform(block);
-    return handleProbedBlock(block);
+    assert(probe_process_info.all_rows_joined_finish);
+    if likely (block)
+    {
+        join->checkTypes(block);
+        probe_process_info.resetBlock(std::move(block), 0);
+    }
+    return onOutput(block);
 }
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
-    switch (status)
-    {
-    case ProbeStatus::PROBE:
-        if (probe_process_info.all_rows_joined_finish)
-            return OperatorStatus::NEED_INPUT;
+    if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
+        return OperatorStatus::NEED_INPUT;
 
-        block = join->joinBlock(probe_process_info);
-        return handleProbedBlock(block);
-    case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-        return scanHashMapData(block);
-    case ProbeStatus::FINISHED:
-        return OperatorStatus::HAS_OUTPUT;
-    default:
-        throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
-    }
+    return onOutput(block);
 }
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
@@ -161,7 +167,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
             ? OperatorStatus::WAITING
             : OperatorStatus::HAS_OUTPUT;
     case ProbeStatus::WAIT_PROBE_FINAL_SPILL:
-        if (!spill_context->isProbeSideSpilling(op_index))
+        if (!spill_context.isProbeSideSpilling(op_index))
         {
             if (scan_hash_map_after_probe_stream)
             {

@@ -15,12 +15,10 @@
 #pragma once
 
 #include <Operators/Operator.h>
+#include <Interpreters/Join.h>
 
 namespace DB
 {
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-
 class PipelineJoinSpillContext;
 
 class HashJoinProbeTransformOp : public TransformOp
@@ -57,7 +55,7 @@ private:
 
     OperatorStatus onProbeFinish(Block & block);
 
-    OperatorStatus handleProbedBlock(Block & block);
+    OperatorStatus onOutput(Block & block);
 
 private:
     JoinPtr join;
