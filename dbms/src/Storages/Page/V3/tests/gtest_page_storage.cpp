@@ -350,7 +350,7 @@ try
 
     // Make sure in-disk data is encrypted.
 
-    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, PageTypeUtils::firstFileID(PageType::Normal)),
+    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, PageTypeUtils::nextFileID(PageType::Normal, 1)),
                                                                             -1,
                                                                             nullptr);
     file_read->pread(c_buff_read, buf_sz, 0);

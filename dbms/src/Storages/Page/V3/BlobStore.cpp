@@ -87,7 +87,7 @@ BlobStore<Trait>::BlobStore(
     , config(config_)
     , page_type_and_config(page_type_and_config_)
     , log(Logger::get(storage_name))
-    , blob_stats(log, delegator, config, PageTypeUtils::extractPageTypes(page_type_and_config_))
+    , blob_stats(log, delegator, config)
 {
 }
 

@@ -1034,7 +1034,7 @@ TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
     // Remain entries index [8, 9].
     blob_store.remove(entries_del);
 
-    auto stat = blob_store.blob_stats.blobIdToStat(PageTypeUtils::firstFileID(PageType::RaftData));
+    auto stat = blob_store.blob_stats.blobIdToStat(PageTypeUtils::nextFileID(PageType::RaftData, 1));
     ASSERT_NE(stat, nullptr);
     const auto & gc_stats = blob_store.getGCStats();
     // No full gc for raft data

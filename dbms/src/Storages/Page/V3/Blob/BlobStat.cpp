@@ -38,12 +38,10 @@ namespace DB::PS::V3
 BlobStats::BlobStats(
     LoggerPtr log_,
     PSDiskDelegatorPtr delegator_,
-    BlobConfig & config_,
-    const PageTypes & page_types_)
+    BlobConfig & config_)
     : log(std::move(log_))
     , delegator(delegator_)
     , config(config_)
-    , blob_file_id_manager(page_types_)
 {
 }
 
@@ -101,7 +99,7 @@ void BlobStats::restore()
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
-            blob_file_id_manager.addFileId(stat->id);
+            cur_max_id = std::max(stat->id, cur_max_id);
         }
     }
 }
@@ -186,14 +184,16 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
     eraseStat(std::move(stat), lock);
 }
 
-std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> & lock_stats)
+std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_size, PageType page_type, const std::lock_guard<std::mutex> &)
 {
     BlobStatPtr stat_ptr = nullptr;
 
     // No stats exist
     if (stats_map.empty())
     {
-        return std::make_pair(nullptr, blob_file_id_manager.nextFileId(page_type, lock_stats));
+        auto next_id = PageTypeUtils::nextFileID(page_type, cur_max_id);
+        cur_max_id = next_id;
+        return std::make_pair(nullptr, next_id);
     }
 
     // If the stats_map size changes, or stats_map_path_index is out of range,
@@ -231,7 +231,9 @@ std::pair<BlobStats::BlobStatPtr, BlobFileId> BlobStats::chooseStat(size_t buf_s
     stats_map_path_index += path_iter_idx + 1;
 
     // Can not find a suitable stat under all paths
-    return std::make_pair(nullptr, blob_file_id_manager.nextFileId(page_type, lock_stats));
+    auto next_id = PageTypeUtils::nextFileID(page_type, cur_max_id);
+    cur_max_id = next_id;
+    return std::make_pair(nullptr, next_id);
 }
 
 BlobStats::BlobStatPtr BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
@@ -343,36 +345,5 @@ void BlobStats::BlobStat::recalculateSpaceMap()
 void BlobStats::BlobStat::recalculateCapacity()
 {
     sm_max_caps = smap->updateAccurateMaxCapacity();
-}
-
-BlobStats::BlobFileIdManager::BlobFileIdManager(const PageTypes & page_types)
-{
-    RUNTIME_ASSERT(!page_types.empty());
-    for (const auto & page_type : page_types)
-    {
-        next_file_id_map.emplace(page_type, PageTypeUtils::firstFileID(page_type));
-    }
-}
-
-void BlobStats::BlobFileIdManager::addFileId(BlobFileId file_id)
-{
-    auto page_type = PageTypeUtils::getPageType(file_id, /*treat_unknown_as_normal*/ false);
-    if (page_type == PageType::TypeCountLimit)
-        return;
-
-    auto iter = next_file_id_map.find(page_type);
-    if (iter != next_file_id_map.end())
-    {
-        iter->second = std::max(iter->second, PageTypeUtils::nextFileID(iter->first, file_id));
-    }
-}
-
-BlobFileId BlobStats::BlobFileIdManager::nextFileId(PageType page_type, const std::lock_guard<std::mutex> &)
-{
-    auto iter = next_file_id_map.find(page_type);
-    RUNTIME_CHECK(iter != next_file_id_map.end());
-    auto next_file_id = iter->second;
-    iter->second = PageTypeUtils::nextFileID(page_type, next_file_id);
-    return next_file_id;
 }
 } // namespace DB::PS::V3

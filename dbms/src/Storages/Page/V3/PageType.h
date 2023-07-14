@@ -54,30 +54,12 @@ struct PageTypeUtils
         }
     }
 
-    static inline UInt64 firstFileID(PageType page_type)
+    static inline UInt64 nextFileID(PageType page_type, UInt64 cur_max_id)
     {
         using T = std::underlying_type_t<PageType>;
-        RUNTIME_CHECK(page_type < PageType::TypeCountLimit);
-        // 0 is invalid file id
-        return (page_type == PageType::Normal) ? static_cast<T>(PageType::TypeCountLimit) : static_cast<T>(page_type);
-    }
-
-    static inline UInt64 nextFileID(PageType page_type, UInt64 cur_file_id)
-    {
-        using T = std::underlying_type_t<PageType>;
-        RUNTIME_ASSERT(PageTypeUtils::getPageType(cur_file_id, false) == page_type);
-        return cur_file_id + static_cast<T>(PageType::TypeCountLimit);
-    }
-
-    static inline PageTypes extractPageTypes(const PageTypeAndConfig & page_type_and_config)
-    {
-        PageTypes page_types;
-        page_types.reserve(page_type_and_config.size());
-        for (const auto & [page_type, _] : page_type_and_config)
-        {
-            page_types.emplace_back(page_type);
-        }
-        return page_types;
+        auto step = static_cast<T>(PageType::TypeCountLimit);
+        auto id = cur_max_id + step;
+        return id - (id % step) + static_cast<T>(page_type);
     }
 };
 } // namespace DB::PS::V3
