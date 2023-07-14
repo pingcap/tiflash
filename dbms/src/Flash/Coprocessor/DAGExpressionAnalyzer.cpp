@@ -16,9 +16,11 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
@@ -45,7 +47,7 @@
 #include <WindowFunctions/WindowFunctionFactory.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
-#include <Core/Types.h>
+
 
 namespace DB
 {
@@ -210,7 +212,6 @@ void setAuxiliaryColumnInfoImpl(
         // Prepare something
         Int32 & range_auxiliary_column_index = is_begin ? window_desc.frame.begin_range_auxiliary_column_index : window_desc.frame.end_range_auxiliary_column_index;
         TypeIndex & aux_col_type = is_begin ? window_desc.begin_aux_col_type : window_desc.end_aux_col_type;
-        bool & is_aux_col_nullable = is_begin ? window_desc.is_aux_begin_col_nullable : window_desc.is_aux_end_col_nullable;
 
         // Set auxiliary columns' indexes
         size_t aux_col_idx = tmp_block.getPositionByName(aux_col_name);
@@ -219,17 +220,9 @@ void setAuxiliaryColumnInfoImpl(
         // Set auxiliary columns' types
         const auto & col_and_name = tmp_block.getByName(aux_col_name);
         auto data_type = col_and_name.type;
-        bool is_nullable = data_type->isNullable();
-        if (is_nullable)
-        {
-            if (const auto * const data_type_nullable = typeid_cast<const DataTypeNullable *>(data_type.get()))
-                aux_col_type = data_type_nullable->getNestedType()->getTypeId();
-            else
-                throw Exception("Invalid data type");
-            is_aux_col_nullable = true;
-        }
-        else
-            aux_col_type = col_and_name.type->getTypeId();
+        if (data_type->isNullable())
+            throw Exception("Get an unexpected nullable column when the frame type is range");
+        aux_col_type = data_type->getTypeId();
     }
 }
 

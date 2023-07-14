@@ -117,14 +117,7 @@ struct WindowDescription
     // each time we update the start/end frame position.
     TypeIndex order_by_col_type = TypeIndex::Nothing;
 
-    // Sometimes, we may cast order by column or const column to the target type.
-    // When the casted column is nullable, we need to check if there is null in
-    // the casted column as range frame type forbids the occurrence of null value.
-    // Tip: only used for range frame type
-    bool is_aux_begin_col_nullable = false;
-    bool is_aux_end_col_nullable = false;
-
-    TypeIndex begin_aux_col_type = TypeIndex::Nothing; // todo
+    TypeIndex begin_aux_col_type = TypeIndex::Nothing;
     TypeIndex end_aux_col_type = TypeIndex::Nothing;
 
     // ascending or descending for order by column
