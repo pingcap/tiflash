@@ -156,6 +156,7 @@ size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, si
         {
             size_compressed = new_size_compressed;
             bytes += offset();
+            assert(size_decompressed > 0);
             memory.resize(size_decompressed);
             working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
             pos = working_buffer.begin();
