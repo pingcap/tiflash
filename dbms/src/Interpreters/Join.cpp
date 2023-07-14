@@ -1006,6 +1006,11 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         RUNTIME_CHECK_MSG(!block.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
+        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
+        {
+            // todo figure out more accurate `rows`
+            added_columns.back()->reserve(rows);
+        }
         right_indexes.push_back(num_columns_to_skip + i);
     }
 
@@ -1015,6 +1020,8 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     if (useRowFlaggedHashMap(kind, has_other_condition))
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
+        // todo figure out more accurate `rows`
+        flag_mapped_entry_helper_column->reserve(rows);
     }
 
     IColumn::Offset current_offset = 0;
