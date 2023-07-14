@@ -249,6 +249,8 @@ public:
 
     void drop(const FileProviderPtr & file_provider);
 
+    size_t avgRowBytes(const ColumnDefines & read_columns);
+
 private:
     const PageIdU64 id;
 

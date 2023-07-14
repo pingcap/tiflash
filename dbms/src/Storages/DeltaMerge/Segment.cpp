@@ -714,15 +714,17 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
+    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
     switch (read_mode)
     {
     case ReadMode::Normal:
-        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, max_version, expected_block_size);
+        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, max_version, clipped_block_rows);
     case ReadMode::Fast:
-        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, expected_block_size);
+        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter ? filter->rs_operator : EMPTY_RS_OPERATOR, clipped_block_rows);
     case ReadMode::Raw:
-        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, expected_block_size);
+        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, clipped_block_rows);
     case ReadMode::Bitmap:
+        // getBitmapFilterInputStream will read columns by multi-stages, so we clip its block rows inside.
         return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
     default:
         return nullptr;
@@ -2487,14 +2489,20 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
                                            size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
-
+    // buildBitmapFilter will only read handle, version and tag.
+    const ColumnDefines columns_to_read{
+        getExtraHandleColumnDefine(is_common_handle),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
+    };
+    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
-        return buildBitmapFilterStableOnly(dm_context, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        return buildBitmapFilterStableOnly(dm_context, segment_snap, read_ranges, filter, max_version, clipped_block_rows);
     }
     else
     {
-        return buildBitmapFilterNormal(dm_context, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        return buildBitmapFilterNormal(dm_context, segment_snap, read_ranges, filter, max_version, clipped_block_rows);
     }
 }
 
@@ -2708,13 +2716,14 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
 
+    auto clipped_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         columns_to_read,
         read_ranges,
         filter,
         max_version,
-        expected_block_size,
+        clipped_block_rows,
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
@@ -2751,13 +2760,14 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
 
     // construct filter column stream
     const auto & filter_columns = filter->filter_columns;
+    auto clipped_filter_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, *filter_columns);
     SkippableBlockInputStreamPtr filter_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *filter_columns,
         data_ranges,
         filter->rs_operator,
         max_version,
-        expected_block_size,
+        clipped_filter_block_rows,
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
@@ -2816,13 +2826,14 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
     }
 
     // construct rest column stream
+    auto clipped_rest_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, *rest_columns_to_read);
     SkippableBlockInputStreamPtr rest_column_stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *rest_columns_to_read,
         data_ranges,
         filter->rs_operator,
         max_version,
-        expected_block_size,
+        clipped_rest_block_rows,
         enable_handle_clean_read,
         is_fast_scan,
         enable_del_clean_read);
@@ -2898,6 +2909,28 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
         expected_block_size);
+}
+
+size_t Segment::clipBlockRows(const Context & context, size_t expected_block_rows, const ColumnDefines & read_columns)
+{
+    size_t max_block_bytes = context.getSettingsRef().max_block_bytes;
+    size_t pack_rows = context.getSettingsRef().dt_segment_stable_pack_rows; // At least one pack.
+    return clipBlockRows(max_block_bytes, pack_rows, expected_block_rows, read_columns);
+}
+
+size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t expected_block_rows, const ColumnDefines & read_columns)
+{
+    if (unlikely(max_block_bytes <= 0)) // Disable block bytes limit.
+    {
+        return expected_block_rows;
+    }
+    else
+    {
+        auto row_bytes = std::max(1, stable->avgRowBytes(read_columns)); // Avoid row_bytes to be 0.
+        auto rows = max_block_bytes / row_bytes;
+        rows = std::max(rows / pack_rows * pack_rows, pack_rows); // Align with pack and at least read one pack.
+        return std::min(expected_block_rows, rows);
+    }
 }
 
 } // namespace DM

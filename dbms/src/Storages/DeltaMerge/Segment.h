@@ -677,8 +677,21 @@ public:
                                                      UInt64 max_version,
                                                      size_t expected_block_size);
 
+    // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
+    size_t clipBlockRows(const Context & context,
+                         size_t expected_block_rows,
+                         const ColumnDefines & read_columns);
+    size_t clipBlockRows(size_t max_block_bytes,
+                         size_t pack_rows,
+                         size_t expected_block_rows,
+                         const ColumnDefines & read_columns);
 
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 
