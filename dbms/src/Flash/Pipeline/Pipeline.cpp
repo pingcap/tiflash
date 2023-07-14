@@ -167,6 +167,18 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     addPlanNode(get_result_sink);
 }
 
+String Pipeline::getFinalPlanExecId() const
+{
+    // NOLINTNEXTLINE(modernize-loop-convert)
+    for (auto it = plan_nodes.crbegin(); it != plan_nodes.crend(); ++it)
+    {
+        const auto & plan_node = *it;
+        if (plan_node->isTiDBOperator())
+            return plan_node->execId();
+    }
+    return "";
+}
+
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!plan_nodes.empty());
