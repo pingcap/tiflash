@@ -969,6 +969,7 @@ public:
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
         auto & settings = global_context.getSettingsRef();
         settings.remote_checkpoint_only_upload_manifest = old_remote_checkpoint_only_upload_manifest;
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
     static UniversalPageStorageServicePtr newService()
@@ -981,11 +982,6 @@ public:
             "test.t",
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
-    }
-
-    void TearDown() override
-    {
-        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:
