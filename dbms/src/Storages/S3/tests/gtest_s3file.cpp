@@ -80,6 +80,7 @@ public:
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+        DB::tests::TiFlashTestEnv::enableS3Config();
     }
 
     void reload()
@@ -88,6 +89,11 @@ public:
     }
 
     Context & dbContext() { return *db_context; }
+
+    void TearDown() override
+    {
+        DB::tests::TiFlashTestEnv::disableS3Config();
+    }
 
 protected:
     void writeLocalFile(const String & path, size_t size)
@@ -305,8 +311,9 @@ try
         {
             auto itr = remote_files_with_size.find(fname);
             ASSERT_NE(itr, remote_files_with_size.end());
-            if (fname != DMFile::metav2FileName())
+            if (fname.find(".dat") != String::npos) // only .dat size contains header part
             {
+                LOG_INFO(Logger::get("hyy"), "into compare");
                 ASSERT_EQ(itr->second, fsize);
             }
             uploaded_files.push_back(fname);

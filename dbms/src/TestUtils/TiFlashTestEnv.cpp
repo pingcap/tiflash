@@ -292,4 +292,39 @@ void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
     }
 }
 
+void TiFlashTestEnv::initS3Config()
+{
+    const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
+    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
+    const auto s3_root = Poco::Environment::get("S3_ROOT", "tiflash_ut/");
+    const auto s3_verbose = Poco::Environment::get("S3_VERBOSE", "false");
+    const auto s3_poco_client = Poco::Environment::get("S3_POCO_CLIENT", "true");
+    const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
+    const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
+    const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
+    auto s3config = DB::StorageS3Config{
+        .verbose = s3_verbose == "true",
+        .enable_poco_client = s3_poco_client == "true",
+        .endpoint = s3_endpoint,
+        .bucket = s3_bucket,
+        .access_key_id = access_key_id,
+        .secret_access_key = secret_access_key,
+        .root = s3_root,
+    };
+    // s3config.enable(/*check_requirements*/ false, DB::Logger::get());
+    Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    DB::tests::TiFlashTestEnv::setIsMockedS3Client(mock_s3 == "true");
+    DB::S3::ClientFactory::instance().init(s3config, mock_s3 == "true");
+}
+
+void TiFlashTestEnv::disableS3Config()
+{
+    DB::S3::ClientFactory::instance().disable();
+    // DB::S3::ClientFactory::instance().shutdown();
+}
+
+void TiFlashTestEnv::enableS3Config()
+{
+    DB::S3::ClientFactory::instance().enable();
+}
 } // namespace DB::tests

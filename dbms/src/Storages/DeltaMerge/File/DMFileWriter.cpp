@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/S3/S3Common.h>
@@ -45,13 +46,12 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
 
     if (dmfile->useMetaV2())
     {
-        merged_file.buffer = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                         dmfile->mergedPath(0),
-                                                                         dmfile->encryptionMergedPath(0),
-                                                                         false,
-                                                                         write_limiter,
-                                                                         dmfile->configuration->getChecksumAlgorithm(),
-                                                                         dmfile->configuration->getChecksumFrameLength());
+        merged_file.buffer = std::make_unique<WriteBufferFromFileProvider>(
+            file_provider,
+            dmfile->mergedPath(0),
+            dmfile->encryptionMergedPath(0),
+            /*create_new_encryption_info*/ false,
+            write_limiter);
 
         merged_file.file_info = DMFile::MergedFile({0, 0});
     }
@@ -273,14 +273,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             auto fd = buf.getFD();
             struct stat file_stat = {};
             ::fstat(fd, &file_stat);
-            if (!dmfile->configuration)
-            {
-                assert(buf.getMaterializedBytes() == file_stat.st_size);
-            }
-            else
-            {
-                assert(buf.getMaterializedBytesWithHeader() == file_stat.st_size);
-            }
+            assert(buf.getMaterializedBytes() == file_stat.st_size);
         }
     };
 #endif
@@ -302,18 +295,18 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         if (dmfile->useMetaV2())
         {
             stream->compressed_buf->next();
-            bytes_written += stream->plain_file->getMaterializedBytesWithHeader();
+            bytes_written += stream->plain_file->getMaterializedBytes(); // bytes with header
 
             if (is_nullmap_stream(substream))
             {
-                nullmap_data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
+                nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
             }
             else
             {
-                data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
+                data_bytes = stream->plain_file->getMaterializedBytes();
             }
 
-            stream->plain_file->next();
+            stream->plain_file->next(); // 可以调整回去
             stream->plain_file->sync();
 
 #ifndef NDEBUG
@@ -327,14 +320,19 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colIndexFileName(stream_name);
 
-                stream->minmaxes->write(*type, *merged_file.buffer);
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(merged_file.buffer,
+                                                                          dmfile->configuration->getChecksumAlgorithm(),
+                                                                          dmfile->configuration->getChecksumFrameLength());
 
-                auto size = merged_file.buffer->getMaterializedBytes() - merged_file.file_info.size;
-                index_bytes = size;
-                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, size};
+                stream->minmaxes->write(*type, *buffer); //写入了 checksum 的 buffer，为了让他真实的写入到 merged_file 中，需要先把他 sync 出去？
+
+                index_bytes = buffer->getMaterializedBytes();
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, index_bytes};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file.file_info.size = merged_file.buffer->getMaterializedBytes();
+                merged_file.file_info.size += index_bytes; // 包含了 header
+
+                buffer->sync(); // 感觉 next 可能也够用了，后面试一下
             }
 
             // write mark into merged_file_writer
@@ -344,16 +342,31 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 auto fname = dmfile->colMarkFileName(stream_name);
 
+                auto buffer = createWriteBufferFromFileBaseByWriterBuffer(merged_file.buffer,
+                                                                          dmfile->configuration->getChecksumAlgorithm(),
+                                                                          dmfile->configuration->getChecksumFrameLength());
+
+
                 for (const auto & mark : stream->marks)
                 {
-                    writeIntBinary(mark.offset_in_compressed_file, *merged_file.buffer);
-                    writeIntBinary(mark.offset_in_decompressed_block, *merged_file.buffer);
+                    writeIntBinary(mark.offset_in_compressed_file, *buffer);
+                    writeIntBinary(mark.offset_in_decompressed_block, *buffer);
                 }
-                auto size = merged_file.buffer->getMaterializedBytes() - merged_file.file_info.size;
-                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, size};
+                size_t mark_size = buffer->getMaterializedBytes(); //包含了 header
+                MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, mark_size};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file.file_info.size = merged_file.buffer->getMaterializedBytes();
+                merged_file.file_info.size += mark_size;
+                buffer->sync();
+
+                if (is_nullmap_stream(substream))
+                {
+                    nullmap_mark_bytes = mark_size;
+                }
+                else
+                {
+                    mark_bytes = mark_size;
+                }
             }
         }
         else
@@ -384,16 +397,16 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             }
             else
             { // v2
-                bytes_written += stream->plain_file->getMaterializedBytesWithHeader() + stream->mark_file->getMaterializedBytesWithHeader();
+                bytes_written += stream->plain_file->getMaterializedBytes() + stream->mark_file->getMaterializedBytes();
                 if (is_nullmap_stream(substream))
                 {
-                    nullmap_data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
-                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+                    nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+                    nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
                 else
                 {
-                    data_bytes = stream->plain_file->getMaterializedBytesWithHeader();
-                    mark_bytes = stream->mark_file->getMaterializedBytesWithHeader();
+                    data_bytes = stream->plain_file->getMaterializedBytes();
+                    mark_bytes = stream->mark_file->getMaterializedBytes();
                 }
             }
 
@@ -432,7 +445,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                     // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                     // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                    index_bytes = buf->getMaterializedBytesWithHeader();
+                    index_bytes = buf->getMaterializedBytes();
                     bytes_written += is_empty_file ? 0 : index_bytes;
 
 #ifndef NDEBUG

@@ -953,6 +953,7 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        DB::tests::TiFlashTestEnv::enableS3Config();
         uni_ps_service = newService();
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -969,6 +970,11 @@ public:
             "test.t",
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
+    }
+
+    void TearDown() override
+    {
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:

@@ -72,12 +72,24 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     size_t estimated_size,
     const ReadLimiterPtr & read_limiter_,
     ChecksumAlgo checksum_algorithm,
-    size_t checksum_frame_size,
-    std::optional<String> data,
-    std::optional<String> file_name)
+    size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
     , p_file_in(
-          createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, checksum_algorithm, checksum_frame_size, -1, data, file_name))
+          createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, checksum_algorithm, checksum_frame_size))
+    , file_in(*p_file_in)
+{
+    this->compressed_in = &file_in;
+}
+
+template <bool has_checksum>
+CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+    String && data,
+    const String & file_name,
+    size_t estimated_size,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size)
+    : CompressedSeekableReaderBuffer()
+    , p_file_in(createReadBufferFromData(std::forward<String>(data), file_name, estimated_size, checksum_algorithm, checksum_frame_size))
     , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;

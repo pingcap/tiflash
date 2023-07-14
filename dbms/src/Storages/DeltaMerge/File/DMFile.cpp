@@ -1098,16 +1098,10 @@ void DMFile::listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::funct
 {
     auto name_base = getFileNameBase(col_id, {});
     handle(colDataFileName(name_base), stat.data_bytes);
-    handle(colMarkFileName(name_base), stat.mark_bytes);
-    if (stat.index_bytes > 0)
-    {
-        handle(colIndexFileName(name_base), stat.index_bytes);
-    }
     if (stat.type->isNullable())
     {
         auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
         handle(colDataFileName(null_name_base), stat.nullmap_data_bytes);
-        handle(colMarkFileName(null_name_base), stat.nullmap_mark_bytes);
     }
 }
 
@@ -1139,13 +1133,12 @@ void DMFile::checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_p
         writer.file_info.size = 0;
         writer.buffer.reset();
 
-        writer.buffer = createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                    mergedPath(writer.file_info.number),
-                                                                    encryptionMergedPath(writer.file_info.number),
-                                                                    false,
-                                                                    write_limiter,
-                                                                    configuration->getChecksumAlgorithm(),
-                                                                    configuration->getChecksumFrameLength());
+        writer.buffer = std::make_unique<WriteBufferFromFileProvider>(
+            file_provider,
+            mergedPath(writer.file_info.number),
+            encryptionMergedPath(writer.file_info.number),
+            /*create_new_encryption_info*/ false,
+            write_limiter);
     }
 }
 

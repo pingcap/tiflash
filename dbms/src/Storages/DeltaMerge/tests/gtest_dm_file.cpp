@@ -79,7 +79,7 @@ inline static DMFileFormat::Version modeToVersion(DMFileMode mode)
         return DMFileFormat::V1;
     case DMFileMode::DirectoryChecksum:
         return DMFileFormat::V2;
-    case DMFileMode::DirectoryMetaV2:
+    case DMFileMode::DirectoryMetaV2: // here we just test without s3, for s3 we will test in gtest_s3file.cpp
         return DMFileFormat::V3;
     }
 }
@@ -110,6 +110,8 @@ public:
         dm_file = DMFile::create(1, parent_path, std::move(configuration), 16 * 1024, 16 * 1024 * 1024, modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
+
+        DB::tests::TiFlashTestEnv::disableS3Config();
 
         reload();
     }
@@ -566,7 +568,7 @@ try
             ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
             ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
             ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
-            ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // in v3 serialized bytes doesn't contains mark and header
+            ASSERT_GT(col_stat1.serialized_bytes, col_stat2.serialized_bytes); // v3 without mrk
 
             ASSERT_EQ(col_stat2.serialized_bytes,
                       col_stat2.data_bytes + col_stat2.nullmap_data_bytes)
@@ -580,7 +582,7 @@ try
             ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
             if (dmfile1->isColIndexExist(col_def.id))
             {
-                ASSERT_GT(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
+                ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
             }
             if (col_def.type->isNullable())
             {
@@ -588,63 +590,6 @@ try
             }
         }
     };
-    //因为不是裸写的文件，这样测很麻烦
-    // auto check_merged_file = [&](const DMFilePtr & dmfile, const String & merged_filename, const std::set<String> & merged_files) {
-    //     ASSERT_GT(dmfile->merged_sub_file_infos.size(), small_fnames.size()) << fmt::format("{} vs {}", small_fnames.size(), dmfile->merged_sub_file_infos.size());
-    //     auto file = PosixRandomAccessFile::create(merged_filename);
-    //     // for (const auto & fname : small_fnames)
-    //     // {
-    //     for (const auto & [fname, info] : dmfile->merged_sub_file_infos)
-    //     {
-    //         ASSERT(merged_files.find(merged_filename) != merged_files.end();)
-
-    //         String merged_data;
-    //         merged_data.resize(info.size);
-    //         auto n = file->pread(merged_data.data(), info.size, itr->second.offset);
-    //         ASSERT_EQ(n, itr->second.size);
-
-    //         auto sub_path = fmt::format("{}/{}", dmfile->path(), fname);
-    //         auto sub_fsize = std::filesystem::file_size(sub_path);
-    //         ASSERT_EQ(sub_fsize, itr->second.size);
-    //         auto sub_file = PosixRandomAccessFile::create(sub_path);
-    //         String sub_data;
-    //         sub_data.resize(sub_fsize);
-    //         n = sub_file->pread(sub_data.data(), sub_fsize, 0);
-    //         ASSERT_EQ(n, sub_fsize);
-    //         ASSERT_EQ(merged_data, sub_data);
-    //     }
-    // };
-
-    // auto check_files = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
-    //     // try
-    //     // {
-    //     //     auto fnames = dmfile1->listFilesForUpload();
-    //     //     FAIL() << "Shouldn't come here.";
-    //     // }
-    //     // catch (...)
-    //     // {
-    //     // }
-
-    //     ASSERT_TRUE(S3::ClientFactory::instance().isEnabled()) << "S3 should be enabled is gtests";
-    //     //auto fnames = dmfile2->listFilesForUpload();
-    //     auto dir = dmfile2->path();
-
-    //     std::set<String> merged_files;
-    //     Poco::DirectoryIterator end;
-    //     for (Poco::DirectoryIterator itr(dir); itr != end; ++itr)
-    //     {
-    //         if (itr.name().find("merged") > 0)
-    //         {
-    //             merged_files.insert(itr.name());
-    //         }
-    //     }
-
-    //     for (const auto & [number, size] : dmfile2->merged_files)
-    //     {
-    //         auto merged_filename = dmfile2->mergedPath(number);
-    //         check_merged_file(dmfile2, merged_filename, merged_files);
-    //     }
-    // };
 
     auto check_meta = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
         ASSERT_FALSE(dmfile1->useMetaV2());
@@ -652,7 +597,6 @@ try
         check_pack_stats(dmfile1, dmfile2);
         check_pack_properties(dmfile1, dmfile2);
         check_column_stats(dmfile1, dmfile2);
-        //check_files(dmfile1, dmfile2);
     };
 
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);

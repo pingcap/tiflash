@@ -141,7 +141,7 @@ private:
     }
 
     // For checksum buffer, this is the real bytes(contains header) to be materialized to disk.
-    off_t getMaterializedBytesWithHeader() override
+    off_t getMaterializedBytes() override // 我理解这个不需要强制 sync 也是一样的大小？
     {
         return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
     }

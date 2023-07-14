@@ -28,6 +28,8 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <common/logger_useful.h>
+
+#include "Encryption/WriteBufferFromFileProvider.h"
 namespace DB::DM
 {
 class DMFile;
@@ -501,7 +503,7 @@ public:
     struct MergedFileWriter
     {
         MergedFile file_info;
-        std::unique_ptr<WriteBufferFromFileBase> buffer;
+        std::unique_ptr<WriteBufferFromWritableFile> buffer;
     };
     PaddedPODArray<MergedFile> merged_files;
     // Filename -> MergedSubFileInfo

@@ -66,6 +66,7 @@ public:
 
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider);
         page_storage->restore();
+        DB::tests::TiFlashTestEnv::enableS3Config();
     }
 
     void reload()
@@ -95,6 +96,11 @@ public:
         dst_buf->next();
         auto r = dst_file->fsync();
         ASSERT_EQ(r, 0);
+    }
+
+    void TearDown() override
+    {
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:

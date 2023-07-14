@@ -35,16 +35,10 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     const String & file_path_,
     const EncryptionPath & encryption_path_,
     const ReadLimiterPtr & read_limiter,
-    int flags,
-    std::optional<String> data,
-    std::optional<String> file_name) const
+    int flags) const
 {
     RandomAccessFilePtr file;
-    if (data.has_value())
-    {
-        file = std::make_shared<MemoryRandomAccessFile>(file_name.value(), std::move(data.value()));
-    }
-    else if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
+    if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
     {
         file = S3::S3RandomAccessFile::create(view.toFullKey());
     }

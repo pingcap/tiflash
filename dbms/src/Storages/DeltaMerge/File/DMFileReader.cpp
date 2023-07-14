@@ -30,6 +30,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
 namespace CurrentMetrics
@@ -68,7 +69,7 @@ DMFileReader::Stream::Stream(
         auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
         if (reader.dmfile->configuration)
         {
-            if (reader.dmfile->useMetaV2())
+            if (reader.dmfile->useMetaV2() && !DB::S3::ClientFactory::instance().isEnabled()) // metav2 and not s3
             { // v3
                 auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
                 if (info == reader.dmfile->merged_sub_file_infos.end())
@@ -84,19 +85,29 @@ DMFileReader::Stream::Stream(
                 if (data_size == 0)
                     return res;
 
-                auto buffer = createReadBufferFromFileBaseByFileProvider(
+                // 这边先把 memory 读取出来
+                auto buffer = ReadBufferFromFileProvider(
                     reader.file_provider,
                     file_path,
                     encryp_path,
                     reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-                    read_limiter,
-                    reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
-                    reader.dmfile->getConfiguration()->getChecksumFrameLength());
-                buffer->seek(offset);
-                buffer->readBig(reinterpret_cast<char *>(res->data()), data_size);
+                    read_limiter);
+                buffer.seek(offset);
+
+                String temp_data;
+                temp_data.resize(data_size);
+
+                buffer.read(reinterpret_cast<char *>(temp_data.data()), data_size);
+
+                auto buf = createReadBufferFromData(std::move(temp_data),
+                                                    reader.dmfile->colDataPath(file_name_base),
+                                                    reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                                                    reader.dmfile->configuration->getChecksumAlgorithm(),
+                                                    reader.dmfile->configuration->getChecksumFrameLength());
+                buf->readBig(reinterpret_cast<char *>(res->data()), size);
             }
             else
-            { // v2
+            { // v2 or s3
                 auto buffer = createReadBufferFromFileBaseByFileProvider(
                     reader.file_provider,
                     reader.dmfile->colMarkPath(file_name_base),
@@ -190,7 +201,7 @@ DMFileReader::Stream::Stream(
                                                                            read_limiter,
                                                                            buffer_size);
     }
-    else if (reader.dmfile->useMetaV2()) // v3
+    else if (reader.dmfile->useMetaV2() and !DB::S3::ClientFactory::instance().isEnabled()) // v3
     {
         auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
         if (info == reader.dmfile->merged_sub_file_infos.end())
@@ -212,35 +223,30 @@ DMFileReader::Stream::Stream(
             auto size = info->second.size;
 
             // 这边先把 memory 读取出来
-            auto buffer = createReadBufferFromFileBaseByFileProvider(
+
+            auto buffer = ReadBufferFromFileProvider(
                 reader.file_provider,
                 file_path,
                 encryp_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-                read_limiter,
-                reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
-                reader.dmfile->getConfiguration()->getChecksumFrameLength());
-            buffer->seek(offset);
+                read_limiter);
+            buffer.seek(offset);
 
             String temp_data;
             temp_data.resize(size);
 
-            buffer->read(reinterpret_cast<char *>(temp_data.data()), size);
+            buffer.read(reinterpret_cast<char *>(temp_data.data()), size);
 
             buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
-                reader.file_provider,
-                reader.dmfile->colDataPath(file_name_base),
-                reader.dmfile->encryptionDataPath(file_name_base),
+                std::move(temp_data),
+                file_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-                read_limiter,
                 reader.dmfile->configuration->getChecksumAlgorithm(),
-                reader.dmfile->configuration->getChecksumFrameLength(),
-                temp_data,
-                file_path);
+                reader.dmfile->configuration->getChecksumFrameLength());
         }
     }
     else
-    { // v2
+    { // v2 or s3
         buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),

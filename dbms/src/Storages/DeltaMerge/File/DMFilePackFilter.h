@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/S3/S3Common.h>
 
 namespace ProfileEvents
 {
@@ -250,7 +251,7 @@ private:
                     read_limiter);
                 return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
-            else if (dmfile->useMetaV2()) // v3
+            else if (dmfile->useMetaV2() and !DB::S3::ClientFactory::instance().isEnabled()) // v3
             {
                 auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
                 if (info == dmfile->merged_sub_file_infos.end())
@@ -261,21 +262,36 @@ private:
                 auto file_path = dmfile->mergedPath(info->second.number);
                 auto encryp_path = dmfile->encryptionMergedPath(info->second.number);
                 auto offset = info->second.offset;
-                //auto size = info->second.size;
+                auto data_size = info->second.size;
 
-                auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
-                                                                            file_path,
-                                                                            encryp_path,
-                                                                            dmfile->configuration->getChecksumFrameLength(), // 这个
-                                                                            read_limiter,
-                                                                            dmfile->configuration->getChecksumAlgorithm(),
-                                                                            dmfile->configuration->getChecksumFrameLength());
+                // 这边先把 memory 读取出来
+                auto buffer = ReadBufferFromFileProvider(
+                    file_provider,
+                    file_path,
+                    encryp_path,
+                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter);
+                buffer.seek(offset);
 
-                index_buf->seek(offset);
-                return MinMaxIndex::read(*type, *index_buf, index_file_size);
+                String temp_data;
+                temp_data.resize(data_size);
+
+                buffer.read(reinterpret_cast<char *>(temp_data.data()), data_size);
+
+                auto buf = createReadBufferFromData(std::move(temp_data),
+                                                    dmfile->colDataPath(file_name_base),
+                                                    dmfile->getConfiguration()->getChecksumFrameLength(),
+                                                    dmfile->configuration->getChecksumAlgorithm(),
+                                                    dmfile->configuration->getChecksumFrameLength());
+
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+
+                return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
             }
             else
-            { // v2
+            { // v2 or s3
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),
