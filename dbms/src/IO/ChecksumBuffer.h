@@ -150,7 +150,6 @@ private:
     {
         next();
 
-        ProfileEvents::increment(ProfileEvents::FileFSync);
         int res = out->fsync();
         if (-1 == res)
             throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);

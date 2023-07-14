@@ -24,7 +24,7 @@ extern const char pause_when_reading_from_dt_stream[];
 } // namespace FailPoints
 
 DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const DM::DMContextPtr & dm_context_,
     const DM::SegmentReadTaskPoolPtr & task_pool_,
     DM::AfterSegmentRead after_segment_read_,
@@ -34,7 +34,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     size_t expected_block_size_,
     DM::ReadMode read_mode_,
     const String & req_id)
-    : SourceOp(exec_status_, req_id)
+    : SourceOp(exec_context_, req_id)
     , dm_context(dm_context_)
     , task_pool(task_pool_)
     , after_segment_read(after_segment_read_)
@@ -71,7 +71,7 @@ OperatorStatus DMSegmentThreadSourceOp::readImpl(Block & block)
         total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     }
-    return OperatorStatus::IO;
+    return OperatorStatus::IO_IN;
 }
 
 OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
@@ -108,7 +108,7 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
         LOG_TRACE(log, "Finish reading segment, segment={}", cur_segment->simpleInfo());
         cur_segment = {};
         cur_stream = {};
-        return OperatorStatus::IO;
+        return OperatorStatus::IO_IN;
     }
 }
 

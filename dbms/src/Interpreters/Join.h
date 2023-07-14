@@ -31,10 +31,19 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <memory>
 #include <shared_mutex>
 
 namespace DB
 {
+struct JoinProfileInfo
+{
+    UInt64 peak_build_bytes_usage = 0;
+    bool is_spill_enabled = false;
+    bool is_spilled = false;
+};
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
+
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -155,7 +164,7 @@ public:
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
          bool is_test = true,
-         const std::vector<RuntimeFilterPtr> runtime_filter_list_ = dummy_runtime_filter_list);
+         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 
@@ -263,6 +272,9 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -274,8 +286,7 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
+    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -333,9 +344,10 @@ private:
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
-    BlockInputStreams restore_build_streams;
-    BlockInputStreams restore_probe_streams;
-    BlockInputStreams restore_scan_hash_map_streams;
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
+
+    std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;
@@ -355,7 +367,6 @@ private:
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
     size_t shallow_copy_cross_probe_threshold;
 
-private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
@@ -387,6 +398,7 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
@@ -449,6 +461,8 @@ private:
     void workAfterProbeFinish();
 
     void generateRuntimeFilterValues(const Block & block);
+
+    void finalizeProfileInfo();
 };
 
 } // namespace DB

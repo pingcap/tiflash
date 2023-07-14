@@ -18,6 +18,8 @@
 #include <Core/SpillConfig.h>
 #include <Poco/File.h>
 
+#include <mutex>
+
 namespace DB
 {
 class IBlockInputStream;
@@ -85,7 +87,6 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    static bool supportSpill(const Block & header);
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
@@ -113,7 +114,16 @@ private:
         std::lock_guard lock(spill_finished_mutex);
         return spill_finished;
     }
+    bool isAllConstant() const { return header_without_constants.columns() == 0; }
+    void recordAllConstantBlockRows(UInt64 partition_id, UInt64 rows)
+    {
+        assert(isAllConstant());
+        RUNTIME_CHECK_MSG(isSpillFinished() == false, "{}: spill after the spiller is finished.", config.spill_id);
+        std::lock_guard lock(all_constant_mutex);
+        all_constant_block_rows[partition_id] += rows;
+    }
 
+private:
     SpillConfig config;
     const bool is_input_sorted;
     const UInt64 partition_num;
@@ -127,6 +137,12 @@ private:
     std::atomic<bool> has_spilled_data{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
+
+    // Used for the case that spilled blocks containing only constant columns.
+    // Record the rows of these blocks.
+    std::mutex all_constant_mutex;
+    std::vector<UInt64> all_constant_block_rows;
+
     const Int64 spill_version = 1;
     /// If release_spilled_file_on_restore is true, the spilled file will be released once all the data in the spilled
     /// file is read, otherwise, the spilled file will be released when destruct the spiller. Currently, all the spilled

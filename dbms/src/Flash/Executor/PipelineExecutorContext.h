@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MemoryTracker.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
@@ -26,17 +27,21 @@
 
 namespace DB
 {
-class PipelineExecutorStatus : private boost::noncopyable
+class PipelineExecutorContext : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    PipelineExecutorStatus()
+    // Only used for unit test.
+    PipelineExecutorContext()
         : log(Logger::get())
+        , mem_tracker(nullptr)
     {}
 
-    explicit PipelineExecutorStatus(const String & req_id)
-        : log(Logger::get(req_id))
+    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
+        : query_id(query_id_)
+        , log(Logger::get(req_id))
+        , mem_tracker(mem_tracker_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -44,9 +49,9 @@ public:
     std::exception_ptr getExceptionPtr();
     String getExceptionMsg();
 
-    void onEventSchedule();
+    void incActiveRefCount();
 
-    void onEventFinish();
+    void decActiveRefCount();
 
     void onErrorOccurred(const String & err_msg);
     void onErrorOccurred(const std::exception_ptr & exception_ptr_);
@@ -60,7 +65,7 @@ public:
         {
             std::unique_lock lock(mu);
             RUNTIME_ASSERT(isWaitMode());
-            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_event_count; });
+            is_timeout = !cv.wait_for(lock, timeout_duration, [&] { return 0 == active_ref_count; });
         }
         if (is_timeout)
         {
@@ -113,10 +118,10 @@ public:
         }
         else
         {
-            // In order to ensure that `onEventFinish` has finished calling at this point
-            // and avoid referencing the already destructed `mu` in `onEventFinish`.
+            // In order to ensure that `decActiveRefCount` has finished calling at this point
+            // and avoid referencing the already destructed `mu` in `decActiveRefCount`.
             std::unique_lock lock(mu);
-            cv.wait(lock, [&] { return 0 == active_event_count; });
+            cv.wait(lock, [&] { return 0 == active_ref_count; });
         }
         LOG_DEBUG(log, "query finished and consume done");
     }
@@ -140,6 +145,16 @@ public:
         return query_profile_info;
     }
 
+    const String & getQueryId() const
+    {
+        return query_id;
+    }
+
+    const MemoryTrackerPtr & getMemoryTracker() const
+    {
+        return mem_tracker;
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -149,18 +164,22 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
 private:
+    const String query_id;
+
     LoggerPtr log;
+
+    MemoryTrackerPtr mem_tracker;
 
     std::mutex mu;
     std::condition_variable cv;
     std::exception_ptr exception_ptr;
-    UInt32 active_event_count{0};
+    UInt32 active_ref_count{0};
 
     std::atomic_bool is_cancelled{false};
 
     bool is_finished{false};
 
-    // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
+    // `result_queue.finish` can only be called in `decActiveRefCount` because `result_queue.pop` cannot end until events end.
     std::optional<ResultQueuePtr> result_queue;
 
     QueryProfileInfo query_profile_info;

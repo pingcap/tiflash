@@ -766,6 +766,10 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
+        RNWritePageCachePool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
     }
 
     if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
@@ -813,6 +817,12 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
         S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
         S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (RNWritePageCachePool::instance)
+    {
+        RNWritePageCachePool::instance->setMaxThreads(max_io_thread_count);
+        RNWritePageCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNWritePageCachePool::instance->setQueueSize(max_io_thread_count * 2);
     }
 }
 

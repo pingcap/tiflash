@@ -47,6 +47,8 @@ struct CheckpointLocation
         const CheckpointProto::EntryDataLocation & proto_rec,
         CheckpointProto::StringsInternMap & strings_map);
 
+    bool isValid() const { return !data_file_id->empty(); }
+
     std::string toDebugString() const
     {
         return fmt::format("{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}", *data_file_id, offset_in_file, size_in_file);

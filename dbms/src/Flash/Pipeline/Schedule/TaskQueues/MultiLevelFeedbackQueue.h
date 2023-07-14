@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <array>
@@ -62,7 +63,7 @@ struct UnitQueueInfo
     UInt64 time_slice;
 
     // factor for normalization.
-    // The priority value is equal to `accu_consume_time / factor_for_normal`.
+    // The priority value is equal to `accu_consume_time_microsecond / factor_for_normal`.
     // The smaller the value, the higher the priority.
     // Therefore, the higher the priority of the queue, the larger the value of factor_for_normal.
     double factor_for_normal;
@@ -81,14 +82,13 @@ public:
 
     bool empty() const;
 
-    double normalizedTime();
+    double normalizedTimeMicrosecond();
 
 public:
     const UnitQueueInfo info;
-    std::atomic_uint64_t accu_consume_time{0};
+    std::atomic_uint64_t accu_consume_time_microsecond{0};
 
-private:
-    std::deque<TaskPtr> task_queue;
+    std::list<TaskPtr> task_queue;
 };
 using UnitQueuePtr = std::unique_ptr<UnitQueue>;
 
@@ -106,13 +106,15 @@ public:
 
     bool take(TaskPtr & task) override;
 
-    void updateStatistics(const TaskPtr & task, size_t inc_value) override;
+    void updateStatistics(const TaskPtr & task, ExecTaskStatus, UInt64 inc_ns) override;
 
     bool empty() const override;
 
     void finish() override;
 
     const UnitQueueInfo & getUnitQueueInfo(size_t level);
+
+    void cancel(const String & query_id) override;
 
 public:
     static constexpr size_t QUEUE_SIZE = 8;
@@ -125,6 +127,8 @@ public:
 private:
     void computeQueueLevel(const TaskPtr & task);
 
+    void submitTaskWithoutLock(TaskPtr && task);
+
 private:
     mutable std::mutex mu;
     std::condition_variable cv;
@@ -135,6 +139,9 @@ private:
     // the longer the total execution time of all tasks in the queue,
     // and the shorter the execution time of each individual task.
     std::array<UnitQueuePtr, QUEUE_SIZE> level_queues;
+
+    FIFOQueryIdCache cancel_query_id_cache;
+    std::deque<TaskPtr> cancel_task_queue;
 };
 
 struct CPUTimeGetter
