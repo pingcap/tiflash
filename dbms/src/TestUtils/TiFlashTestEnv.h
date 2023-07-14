@@ -110,7 +110,6 @@ public:
     static bool createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client);
     static void deleteBucket(::DB::S3::TiFlashS3Client & s3_client);
 
-    static void initS3Config();
     static void disableS3Config();
     static void enableS3Config();
 
