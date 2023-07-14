@@ -266,7 +266,7 @@ private:
             for (size_t i = 0; i < read_packet_index; ++i)
             {
                 auto & packet = packets[i];
-                if (!received_message_queue->pushLocalPacket<false>(request->source_index, req_info, packet, ReceiverMode::Async))
+                if (!received_message_queue->pushPacket<false>(request->source_index, req_info, packet, ReceiverMode::Async))
                 {
                     return {false, "channel write fails"};
                 }
@@ -594,7 +594,6 @@ void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && re
     --connection_uncreated_num;
 }
 
-
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
@@ -678,7 +677,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!received_message_queue.pushLocalPacket<false>(req.source_index, req_info, packet, recv_mode))
+                if (!received_message_queue.pushPacket<false>(req.source_index, req_info, packet, recv_mode))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());

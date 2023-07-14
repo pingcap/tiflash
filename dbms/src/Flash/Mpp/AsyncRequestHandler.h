@@ -162,7 +162,7 @@ private:
 
         // Need to set the stage first to avoid data race problem
         stage = AsyncRequestStage::WAIT_PUSH_TO_QUEUE;
-        auto res = message_queue->pushGRPCPacket(request.source_index, req_info, packet, asGRPCKickTag());
+        auto res = message_queue->pushAsyncGRPCPacket(request.source_index, req_info, packet, asGRPCKickTag());
         switch (res)
         {
         case MPMCQueueResult::OK:

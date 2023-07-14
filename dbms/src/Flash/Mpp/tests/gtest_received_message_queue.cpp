@@ -93,12 +93,12 @@ try
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
                     /// is_force = false
-                    auto result = queue.pushLocalPacket<false>(0, "mock", newDataPacket(fmt::format("test_{}", i)), ReceiverMode::Async);
+                    auto result = queue.pushPacket<false>(0, "mock", newDataPacket(fmt::format("test_{}", i)), ReceiverMode::Async);
                     ASSERT_TRUE(result);
                 }
                 ASSERT_TRUE(!queue.isWritable());
                 /// is_force = true
-                auto result = queue.pushLocalPacket<true>(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), ReceiverMode::Async);
+                auto result = queue.pushPacket<true>(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), ReceiverMode::Async);
                 ASSERT_TRUE(result);
                 if (fine_grained)
                 {
@@ -156,11 +156,11 @@ try
                 });
                 for (size_t i = 0; i < buffer_size; ++i)
                 {
-                    auto result = queue.pushGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", i)), &tag);
+                    auto result = queue.pushAsyncGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", i)), &tag);
                     ASSERT_TRUE(result == MPMCQueueResult::OK);
                 }
                 ASSERT_TRUE(!queue.isWritable());
-                auto result = queue.pushGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
+                auto result = queue.pushAsyncGRPCPacket(0, "mock", newDataPacket(fmt::format("test_{}", buffer_size)), &tag);
                 ASSERT_TRUE(result == MPMCQueueResult::FULL);
                 if (fine_grained)
                 {

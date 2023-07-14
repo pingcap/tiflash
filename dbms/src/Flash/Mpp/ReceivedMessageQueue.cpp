@@ -165,7 +165,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 }
 
 template <bool is_force>
-bool ReceivedMessageQueue::pushLocalPacket(size_t source_index,
+bool ReceivedMessageQueue::pushPacket(size_t source_index,
                                            const String & req_info,
                                            const TrackedMppDataPacketPtr & tracked_packet,
                                            ReceiverMode mode)
@@ -187,7 +187,7 @@ bool ReceivedMessageQueue::pushLocalPacket(size_t source_index,
     return success;
 }
 
-MPMCQueueResult ReceivedMessageQueue::pushGRPCPacket(size_t source_index,
+MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(size_t source_index,
                                                      const String & req_info,
                                                      const TrackedMppDataPacketPtr & tracked_packet,
                                                      GRPCKickTag * new_tag)
@@ -206,11 +206,11 @@ MPMCQueueResult ReceivedMessageQueue::pushGRPCPacket(size_t source_index,
 
 template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
-template bool ReceivedMessageQueue::pushLocalPacket<true>(size_t source_index,
+template bool ReceivedMessageQueue::pushPacket<true>(size_t source_index,
                                                           const String & req_info,
                                                           const TrackedMppDataPacketPtr & tracked_packet,
                                                           ReceiverMode mode);
-template bool ReceivedMessageQueue::pushLocalPacket<false>(size_t source_index,
+template bool ReceivedMessageQueue::pushPacket<false>(size_t source_index,
                                                            const String & req_info,
                                                            const TrackedMppDataPacketPtr & tracked_packet,
                                                            ReceiverMode mode);

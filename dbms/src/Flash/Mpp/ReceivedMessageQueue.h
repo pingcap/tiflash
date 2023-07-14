@@ -70,15 +70,15 @@ public:
     MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
     template <bool is_force>
-    bool pushLocalPacket(size_t source_index,
-                         const String & req_info,
-                         const TrackedMppDataPacketPtr & tracked_packet,
-                         ReceiverMode mode);
+    bool pushPacket(size_t source_index,
+                    const String & req_info,
+                    const TrackedMppDataPacketPtr & tracked_packet,
+                    ReceiverMode mode);
 
-    MPMCQueueResult pushGRPCPacket(size_t source_index,
-                                   const String & req_info,
-                                   const TrackedMppDataPacketPtr & tracked_packet,
-                                   GRPCKickTag * new_tag);
+    MPMCQueueResult pushAsyncGRPCPacket(size_t source_index,
+                                        const String & req_info,
+                                        const TrackedMppDataPacketPtr & tracked_packet,
+                                        GRPCKickTag * new_tag);
 
     void finish()
     {
