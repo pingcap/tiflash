@@ -105,8 +105,7 @@ OperatorStatus MergeSortTransformOp::fromPartialToSpill()
     // convert to restore phase.
     status = MergeSortStatus::SPILL;
     assert(!cached_handler);
-    if (!hasSpilledData())
-        LOG_INFO(log, "Begin spill in merge sort");
+    sort_spill_context->markSpill();
     cached_handler = sort_spill_context->getSpiller()->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,

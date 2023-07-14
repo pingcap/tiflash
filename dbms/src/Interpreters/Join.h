@@ -202,13 +202,13 @@ public:
 
     bool isRestoreJoin() const;
 
-    bool getPartitionSpilled(size_t partition_index);
+    bool getPartitionSpilled(size_t partition_index) const;
 
     bool hasPartitionSpilledWithLock();
 
     bool hasPartitionSpilled();
 
-    bool isSpilled() const { return is_spilled; }
+    bool isSpilled() const { return hash_join_spill_context->isSpilled(); }
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
@@ -352,7 +352,6 @@ private:
     std::list<size_t> spilled_partition_indexes;
 
     Int64 join_restore_concurrency;
-    bool is_spilled = false;
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 

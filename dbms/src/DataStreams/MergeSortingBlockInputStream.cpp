@@ -79,10 +79,7 @@ Block MergeSortingBlockInputStream::readImpl()
               */
             if (sort_spill_context->updateRevocableMemory(sum_bytes_in_blocks))
             {
-                if (!hasSpilledData())
-                {
-                    sort_spill_context->markSpill();
-                }
+                sort_spill_context->markSpill();
                 auto block_in = std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
                 auto is_cancelled_pred = [this]() {
                     return this->isCancelled();

@@ -78,6 +78,7 @@ bool AggregatedDataVariants::tryMarkNeedSpill()
         convertToTwoLevel();
     }
     need_spill = true;
+    aggregator->agg_spill_context->markSpill();
     return true;
 }
 
@@ -874,7 +875,6 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
 void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num)
 {
     assert(data_variants.need_spill);
-    agg_spill_context->markSpill();
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \

@@ -181,6 +181,11 @@ Join::Join(
         throw Exception("Validate join conditions error: {}" + err);
 
     hash_join_spill_context = std::make_shared<HashJoinSpillContext>(build_spill_config, probe_spill_config, max_bytes_before_external_join, log);
+    if (hash_join_spill_context->isSpillEnabled() && restore_round >= 4)
+    {
+        LOG_INFO(log, fmt::format("restore round reach to 4, spilling will be disabled."));
+        hash_join_spill_context->disableSpill();
+    }
 
     LOG_DEBUG(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
@@ -321,7 +326,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         0,
         max_bytes_before_external_join_,
         hash_join_spill_context->createBuildSpillConfig(fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
-        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
+        hash_join_spill_context->createProbeSpillConfig(fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
         tidb_output_column_names,
         collators,
@@ -1095,7 +1100,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     auto & offsets_to_replicate = probe_process_info.offsets_to_replicate;
 
     bool enable_spill_join = isEnableSpill();
-    JoinBuildInfo join_build_info{enable_fine_grained_shuffle, fine_grained_shuffle_count, enable_spill_join, is_spilled, build_concurrency, restore_round};
+    JoinBuildInfo join_build_info{enable_fine_grained_shuffle, fine_grained_shuffle_count, enable_spill_join, hash_join_spill_context->isSpilled(), build_concurrency, restore_round};
     JoinPartition::probeBlock(partitions, rows, probe_process_info.key_columns, key_sizes, added_columns, probe_process_info.null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info, flag_mapped_entry_helper_column);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
@@ -1900,6 +1905,8 @@ void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t strea
 
 void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 {
+    if (!hash_join_spill_context->isSpillEnabled())
+        return;
     Int64 target_partition_index = -1;
     Blocks blocks_to_spill;
 
@@ -1910,20 +1917,11 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
 #endif
-        if (!disable_spill && restore_round >= 4)
-        {
-            LOG_INFO(log, fmt::format("restore round reach to 4, spilling will be disabled."));
-            disable_spill = true;
-            return;
-        }
-        if (disable_spill)
-            return;
         RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         auto partitions_to_be_spilled = hash_join_spill_context->getPartitionsToSpill();
         if (partitions_to_be_spilled.empty())
             return;
         target_partition_index = partitions_to_be_spilled[0];
-        is_spilled = true;
 
         LOG_INFO(log, fmt::format("Join with restore round: {}, used {} bytes, will spill partition: {}.", restore_round, getTotalByteCount(), target_partition_index));
 
@@ -1937,7 +1935,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
-bool Join::getPartitionSpilled(size_t partition_index)
+bool Join::getPartitionSpilled(size_t partition_index) const
 {
     return hash_join_spill_context->isPartitionSpilled(partition_index);
 }
