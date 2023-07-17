@@ -150,7 +150,7 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
         " -> ");
 }
 
-String Pipeline::toTreeString() const
+const String & Pipeline::toTreeString() const
 {
     if (!tree_string.empty())
         return tree_string;
