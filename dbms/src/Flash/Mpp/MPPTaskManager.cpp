@@ -138,7 +138,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
             call_data->setToWaitingTunnelState();
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data);
+            alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
             return {nullptr, ""};
         }
         else
