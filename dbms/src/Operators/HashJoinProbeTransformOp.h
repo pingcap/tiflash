@@ -47,13 +47,7 @@ protected:
     void operateSuffixImpl() override;
 
 private:
-    void probeOnTransform(Block & block);
-
-    OperatorStatus scanHashMapData(Block & block);
-
-    OperatorStatus onProbeFinish(Block & block);
-
-    OperatorStatus handleProbedBlock(Block & block);
+    OperatorStatus onOutput(Block & block);
 
 private:
     JoinPtr join;
