@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Executor/ResultQueue.h>
 
@@ -82,6 +82,6 @@ private:
 private:
     PipelinePtr root_pipeline;
 
-    PipelineExecutorStatus status;
+    PipelineExecutorContext exec_context;
 };
 } // namespace DB

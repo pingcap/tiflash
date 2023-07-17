@@ -59,6 +59,8 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks);
 
+    void cancel(const String & query_id);
+
 private:
     void loop(size_t thread_no);
     void doLoop(size_t thread_no);
