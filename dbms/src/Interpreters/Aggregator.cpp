@@ -845,7 +845,7 @@ bool Aggregator::executeOnBlock(
 
     /** Flush data to disk if too much RAM is consumed.
       */
-    if (agg_spill_context->updatePerThreadRevocableMemory(result_size_bytes, thread_num) && result_size > 0)
+    if (agg_spill_context->updatePerThreadRevocableMemory(result.revokableBytes(), thread_num))
     {
         result.tryMarkNeedSpill();
     }
@@ -900,7 +900,7 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
     data_variants.without_key = nullptr;
     auto size_bytes = data_variants.bytesCount();
-    agg_spill_context->updatePerThreadRevocableMemory(size_bytes, thread_num);
+    agg_spill_context->updatePerThreadRevocableMemory(data_variants.revokableBytes(), thread_num);
 }
 
 template <typename Method>

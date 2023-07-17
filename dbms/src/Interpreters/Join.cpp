@@ -506,7 +506,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                 const auto & join_partition = partitions[i];
                 auto partition_lock = join_partition->lockPartition();
                 partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
-                if (hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->getMemoryUsage()))
+                if (hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->revokableBytes()))
                     blocks_to_spill = join_partition->trySpillBuildPartition(partition_lock);
                 else
                     stored_block = join_partition->getLastBuildBlock();
@@ -519,7 +519,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     {
                         join_partition->addMemoryUsage(byte_after_insert - byte_before_insert);
                     }
-                    auto ret = hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->getMemoryUsage());
+                    auto ret = hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->revokableBytes());
                     /// todo remove this after query level memory control
                     RUNTIME_CHECK_MSG(ret != true, "Join spill should not triggered here");
                     continue;
@@ -2036,7 +2036,7 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
             if (getPartitionSpilled(i))
             {
                 partitions[i]->insertBlockForProbe(std::move(partition_blocks[i]));
-                if (hash_join_spill_context->updatePartitionRevocableMemory(false, i, partitions[i]->getMemoryUsage()))
+                if (hash_join_spill_context->updatePartitionRevocableMemory(false, i, partitions[i]->revokableBytes()))
                     blocks_to_spill = partitions[i]->trySpillProbePartition(partition_lock);
                 need_spill = true;
             }

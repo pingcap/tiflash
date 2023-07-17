@@ -124,7 +124,6 @@ public:
     void addMemoryUsage(size_t delta)
     {
         memory_usage += delta;
-        //hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
     }
     void subMemoryUsage(size_t delta)
     {
@@ -132,7 +131,6 @@ public:
             memory_usage -= delta;
         else
             memory_usage = 0;
-        //hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
     }
     bool isSpill() const { return hash_join_spill_context->isPartitionSpilled(partition_index); }
     JoinMapMethod getJoinMapMethod() const { return join_map_method; }
@@ -144,6 +142,13 @@ public:
         return pool;
     }
     size_t getMemoryUsage() const { return memory_usage; }
+    size_t revokableBytes() const
+    {
+        if (build_partition.rows > 0 || probe_partition.rows > 0)
+            return memory_usage;
+        else
+            return 0;
+    }
     template <typename Map>
     Map & getHashMap();
 
