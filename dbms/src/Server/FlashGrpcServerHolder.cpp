@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
+#include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
 
 // In order to include grpc::SecureServerCredentials which used in
@@ -58,7 +60,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             });
             // If ok is false, it means server is shutdown.
             // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            static_cast<EstablishCallData *>(tag)->proceed(ok);
+            reinterpret_cast<GRPCKickTag *>(tag)->execute(ok);
         }
         catch (Exception & e)
         {
@@ -127,7 +129,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
-    background_task.begin();
     grpc::ServerBuilder builder;
 
     if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
@@ -212,6 +213,10 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         int wait_cnt = 0;
         while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
             std::this_thread::sleep_for(std::chrono::seconds(1));
+        if (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1)
+            LOG_WARNING(log, "Wait {} seconds for mpp tunnels shutdown, still some mpp tunnels are alive, potential resource leak", wait_cnt);
+        else
+            LOG_INFO(log, "Wait {} seconds for mpp tunnels shutdown, all finished", wait_cnt);
 
         for (auto & cq : cqs)
             cq->Shutdown();
@@ -235,7 +240,6 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-        background_task.end();
     }
     catch (...)
     {

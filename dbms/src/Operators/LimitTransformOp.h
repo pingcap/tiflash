@@ -19,19 +19,16 @@
 
 namespace DB
 {
-struct GlobalLimitTransformAction;
-using GlobalLimitPtr = std::shared_ptr<GlobalLimitTransformAction>;
-
+template <typename LimitActionPtr>
 class LimitTransformOp : public TransformOp
 {
 public:
     LimitTransformOp(
-        PipelineExecutorStatus & exec_status_,
-        const GlobalLimitPtr & action_,
-        const String & req_id)
-        : TransformOp(exec_status_)
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const LimitActionPtr & action_)
+        : TransformOp(exec_context_, req_id)
         , action(action_)
-        , log(Logger::get(req_id))
     {}
 
     String getName() const override
@@ -45,7 +42,6 @@ protected:
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    GlobalLimitPtr action;
-    const LoggerPtr log;
+    LimitActionPtr action;
 };
 } // namespace DB

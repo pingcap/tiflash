@@ -27,6 +27,7 @@
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 namespace DB
 {
@@ -146,7 +147,7 @@ void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
         table.id = id;
         auto tbl_json = td_json->getObject(std::to_string(id));
         auto meta_json = tbl_json->getObject(TABLE_META);
-        table.meta = TiDB::TableInfo(meta_json);
+        table.meta = TiDB::TableInfo(meta_json, NullspaceID);
         auto regions_json = tbl_json->getArray(TABLE_REGIONS);
         for (const auto & region_json : *regions_json)
         {
@@ -198,7 +199,7 @@ void NaturalDag::buildTables(Context & context)
     using ClientPtr = pingcap::pd::ClientPtr;
     TMTContext & tmt = context.getTMTContext();
     ClientPtr pd_client = tmt.getPDClient();
-    auto schema_syncer = tmt.getSchemaSyncer();
+    auto schema_syncer = tmt.getSchemaSyncerManager();
 
     String db_name(getDatabaseName());
     buildDatabase(context, schema_syncer, db_name);
@@ -208,7 +209,7 @@ void NaturalDag::buildTables(Context & context)
         auto & table = it.second;
         auto meta = table.meta;
         MockTiDB::instance().addTable(db_name, std::move(meta));
-        schema_syncer->syncSchemas(context);
+        schema_syncer->syncSchemas(context, NullspaceID);
         for (auto & region : table.regions)
         {
             metapb::Region region_pb;
@@ -235,7 +236,7 @@ void NaturalDag::buildTables(Context & context)
     }
 }
 
-void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_syncer, const String & db_name)
+void NaturalDag::buildDatabase(Context & context, std::shared_ptr<TiDBSchemaSyncerManager> & schema_syncer, const String & db_name)
 {
     auto result = MockTiDB::instance().getDBIDByName(db_name);
     if (result.first)
@@ -243,7 +244,7 @@ void NaturalDag::buildDatabase(Context & context, SchemaSyncerPtr & schema_synce
         MockTiDB::instance().dropDB(context, db_name, true);
     }
     MockTiDB::instance().newDataBase(db_name);
-    schema_syncer->syncSchemas(context);
+    schema_syncer->syncSchemas(context, NullspaceID);
 }
 
 void NaturalDag::build(Context & context)

@@ -102,8 +102,8 @@ protected:
             const auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
-                auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
-                EncodeDatum(key_encode_fields[i], table_info.columns[idx].getCodecFlag(), pk_buf);
+                size_t pk_offset = primary_index_info.idx_cols[i].offset;
+                EncodeDatum(key_encode_fields[i], table_info.columns[pk_offset].getCodecFlag(), pk_buf);
             }
         }
         else
@@ -591,7 +591,8 @@ try
         {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"case_no","O":"case_no"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":32,"Tp":15}},
         {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"p","O":"p"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":12,"Tp":15}},
         {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"source","O":"source"},"offset":2,"origin_default":"","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":15}}
-    ],"comment":"","id":77,"index_info":[],"is_common_handle":false,"name":{"L":"t_case","O":"t_case"},"partition":null,"pk_is_handle":false,"schema_version":62,"state":5,"tiflash_replica":{"Count":1},"update_timestamp":435984541435559947})");
+    ],"comment":"","id":77,"index_info":[],"is_common_handle":false,"name":{"L":"t_case","O":"t_case"},"partition":null,"pk_is_handle":false,"schema_version":62,"state":5,"tiflash_replica":{"Count":1},"update_timestamp":435984541435559947})",
+                         NullspaceID);
 
     RegionID region_id = 4;
     String region_start_key(bytesFromHexString("7480000000000000FF445F720000000000FA"));

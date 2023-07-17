@@ -93,6 +93,19 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines &
     return columns_to_read[column_index].id;
 }
 
+ColumnDefine getColumnDefineForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
+{
+    assert(isColumnExpr(expr));
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
+    {
+        throw TiFlashException("Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
+                                   + DB::toString(columns_to_read.size()) + ")",
+                               Errors::Coprocessor::BadRequest);
+    }
+    return columns_to_read[column_index];
+}
+
 enum class OperandType
 {
     Unknown = 0,
@@ -251,7 +264,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
 {
     assert(isFunctionExpr(expr));
 
-    RSOperatorPtr op = EMPTY_FILTER;
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (unlikely(isAggFunctionExpr(expr)))
     {
         op = createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
@@ -392,21 +405,29 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           FilterParser::AttrCreatorByColumnID && creator,
                                           const LoggerPtr & log)
 {
-    RSOperatorPtr op = EMPTY_FILTER;
-    if (dag_info.filters.empty())
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
+    if (dag_info.filters.empty() && dag_info.pushed_down_filters.empty())
         return op;
 
-    if (dag_info.filters.size() == 1)
+    if (dag_info.filters.size() == 1 && dag_info.pushed_down_filters.empty())
     {
-        op = cop::tryParse(*dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
+        op = cop::tryParse(dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
+    }
+    else if (dag_info.pushed_down_filters.size() == 1 && dag_info.filters.empty())
+    {
+        op = cop::tryParse(dag_info.pushed_down_filters[0], columns_to_read, creator, dag_info.timezone_info, log);
     }
     else
     {
         /// By default, multiple conditions with operator "and"
         RSOperators children;
-        for (size_t i = 0; i < dag_info.filters.size(); ++i)
+        children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
+        for (const auto & filter : dag_info.filters)
         {
-            const auto & filter = *dag_info.filters[i];
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
+        }
+        for (const auto & filter : dag_info.pushed_down_filters)
+        {
             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
         }
         op = createAnd(children);
@@ -414,72 +435,104 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
     return op;
 }
 
+RSOperatorPtr FilterParser::parseRFInExpr(const tipb::RuntimeFilterType rf_type, const tipb::Expr & target_expr, const ColumnDefines & columns_to_read, const std::set<Field> & setElements)
+{
+    // todo check if set elements is empty
+    Attr attr;
+    Fields values;
+    switch (rf_type)
+    {
+    case tipb::IN:
+    {
+        if (!isColumnExpr(target_expr))
+        {
+            return createUnsupported(target_expr.ShortDebugString(), "rf target expr is not column expr", false);
+        }
+        auto column_define = cop::getColumnDefineForColumnExpr(target_expr, columns_to_read);
+        attr = Attr{.col_name = column_define.name, .col_id = column_define.id, .type = column_define.type};
+        std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
+            values.push_back(element);
+        });
+        return createIn(attr, values);
+    }
+    case tipb::MIN_MAX:
+    case tipb::BLOOM_FILTER:
+        return createUnsupported(target_expr.ShortDebugString(), "function params should be in predicate", false);
+    }
+    return createUnsupported(target_expr.ShortDebugString(), "function params should be in predicate", false);
+}
+
+bool FilterParser::isRSFilterSupportType(const Int32 field_type)
+{
+    return cop::isRoughSetFilterSupportType(field_type);
+}
+
 std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{
     /*
-    {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsString, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsString, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastRealAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsString, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsString, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastDecimalAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsString, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsString, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastStringAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsString, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsString, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastTimeAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsString, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsString, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsString, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsString, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsString, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsTime, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
-    {tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsReal, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsString, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsDecimal, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsTime, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
+        {tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceString, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceTime, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceJson, "coalesce"},
-    */
+        {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceString, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceTime, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
+        {tipb::ScalarFuncSig::CoalesceJson, "coalesce"},
+        */
 
     {tipb::ScalarFuncSig::LTInt, FilterParser::RSFilterType::Less},
     {tipb::ScalarFuncSig::LTReal, FilterParser::RSFilterType::Less},
@@ -675,11 +728,11 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     //{tipb::ScalarFuncSig::ValuesString, "cast"},
     //{tipb::ScalarFuncSig::ValuesTime, "cast"},
 
-    // {tipb::ScalarFuncSig::InInt, "in"},
-    // {tipb::ScalarFuncSig::InReal, "in"},
-    // {tipb::ScalarFuncSig::InString, "in"},
-    // {tipb::ScalarFuncSig::InDecimal, "in"},
-    // {tipb::ScalarFuncSig::InTime, "in"},
+    {tipb::ScalarFuncSig::InInt, FilterParser::RSFilterType::In},
+    {tipb::ScalarFuncSig::InReal, FilterParser::RSFilterType::In},
+    {tipb::ScalarFuncSig::InString, FilterParser::RSFilterType::In},
+    {tipb::ScalarFuncSig::InDecimal, FilterParser::RSFilterType::In},
+    {tipb::ScalarFuncSig::InTime, FilterParser::RSFilterType::In},
     // {tipb::ScalarFuncSig::InDuration, "in"},
     // {tipb::ScalarFuncSig::InJson, "in"},
 

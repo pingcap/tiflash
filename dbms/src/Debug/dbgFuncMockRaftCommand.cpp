@@ -60,16 +60,9 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         std::vector<Field> end_keys1;
         std::vector<Field> end_keys2;
 
-        std::unordered_map<String, size_t> column_name_columns_index_map;
-        for (size_t i = 0; i < table_info.columns.size(); i++)
-        {
-            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-        }
-
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            auto & column_info = table_info.columns[idx];
+            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
 
             auto start_field1 = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum1 = TiDB::DatumBumpy(start_field1, column_info.tp);
@@ -171,7 +164,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
             prepare_merge->set_min_index(min_index);
 
             metapb::Region * target = prepare_merge->mutable_target();
-            *target = target_region->getMetaRegion();
+            *target = target_region->cloneMetaRegion();
         }
     }
 
@@ -207,7 +200,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
         auto * commit_merge = request.mutable_commit_merge();
         {
             commit_merge->set_commit(source_region->appliedIndex());
-            *commit_merge->mutable_source() = source_region->getMetaRegion();
+            *commit_merge->mutable_source() = source_region->cloneMetaRegion();
         }
     }
 
@@ -241,7 +234,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
 
         auto * rollback_merge = request.mutable_rollback_merge();
         {
-            auto merge_state = region->getMergeState();
+            auto merge_state = region->cloneMergeState();
             rollback_merge->set_commit(merge_state.commit());
         }
     }

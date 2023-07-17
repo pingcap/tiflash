@@ -28,7 +28,7 @@ using RSOperators = std::vector<RSOperatorPtr>;
 using Fields = std::vector<Field>;
 using RSResults = std::vector<RSResult>;
 
-inline static const RSOperatorPtr EMPTY_FILTER{};
+inline static const RSOperatorPtr EMPTY_RS_OPERATOR{};
 
 struct RSCheckParam
 {

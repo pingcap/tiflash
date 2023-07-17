@@ -15,17 +15,15 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
-#include <Operators/FilterTransformOp.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -37,7 +35,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     const tipb::Expand & expand,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     if (unlikely(expand.grouping_sets().empty()))
     {
@@ -64,29 +62,27 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
         expand_output_columns,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         expand_action.expand,
         before_expand_actions);
-
     return physical_expand;
 }
-
 
 void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}: grouping set {}", execId(), shared_expand->getGroupingSetsDes());
-    child_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, expand_actions, log->identifier());
-        stream->setExtraInfo(expand_extra_info);
-    });
+    executeExpression(child_pipeline, expand_actions, log, expand_extra_info);
 }
 
-void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
+void PhysicalExpand::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
-    });
+    executeExpression(exec_context, group_builder, expand_actions, log);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

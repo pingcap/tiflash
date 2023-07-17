@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/IAST.h>
@@ -28,6 +30,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
 
 namespace DB
@@ -93,10 +96,31 @@ public:
     void refreshSchema()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
-        auto schema_syncer = flash_ctx.getSchemaSyncer();
+        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
         try
         {
-            schema_syncer->syncSchemas(global_ctx);
+            schema_syncer->syncSchemas(global_ctx, NullspaceID);
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+            {
+                return;
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+
+    void refreshTableSchema(TableID table_id)
+    {
+        auto & flash_ctx = global_ctx.getTMTContext();
+        auto schema_syncer = flash_ctx.getSchemaSyncerManager();
+        try
+        {
+            schema_syncer->syncTableSchema(global_ctx, NullspaceID, table_id);
         }
         catch (Exception & e)
         {
@@ -115,7 +139,7 @@ public:
     void resetSchemas()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
-        flash_ctx.getSchemaSyncer()->reset();
+        flash_ctx.getSchemaSyncerManager()->reset(NullspaceID);
     }
 
     // Get the TiFlash synced table
@@ -123,7 +147,7 @@ public:
     {
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
-        auto tbl = flash_storages.get(table_id);
+        auto tbl = flash_storages.get(NullspaceID, table_id);
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! table_id={}", table_id);
         return tbl;
     }
@@ -135,7 +159,7 @@ public:
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
         auto mock_tbl = MockTiDB::instance().getTableByName(db_name, tbl_name);
-        auto tbl = flash_storages.get(mock_tbl->id());
+        auto tbl = flash_storages.get(NullspaceID, mock_tbl->id());
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
     }
@@ -167,7 +191,7 @@ public:
 private:
     static void recreateMetadataPath()
     {
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";
@@ -206,9 +230,14 @@ try
         {"t1", cols, ""},
         {"t2", cols, ""},
     };
-    MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
+    auto table_ids = MockTiDB::instance().newTables(db_name, tables, pd_client->getTS(), "dt");
 
     refreshSchema();
+
+    for (auto table_id : table_ids)
+    {
+        refreshTableSchema(table_id);
+    }
 
     TableID t1_id = mustGetSyncedTableByName(db_name, "t1")->getTableInfo().id;
     TableID t2_id = mustGetSyncedTableByName(db_name, "t2")->getTableInfo().id;
@@ -247,7 +276,11 @@ try
 
     // TODO: write some data
 
+
     refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(part1_id);
+    refreshTableSchema(part2_id);
 
     // check partition table are created
     // TODO: read from partition table
@@ -297,6 +330,10 @@ try
     auto part3_id = MockTiDB::instance().newPartition(logical_table_id, "blue", pd_client->getTS(), /*is_add_part*/ true);
 
     refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(part1_id);
+    refreshTableSchema(part2_id);
+    refreshTableSchema(part3_id);
     {
         mustGetSyncedTable(part1_id);
         mustGetSyncedTable(part2_id);
@@ -319,6 +356,10 @@ try
     const String new_tbl_name = "mock_part_tbl_1";
     MockTiDB::instance().renameTable(db_name, tbl_name, new_tbl_name);
     refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(part1_id);
+    refreshTableSchema(part2_id);
+    refreshTableSchema(part3_id);
 
     {
         auto part1_tbl = mustGetSyncedTable(part1_id);
@@ -336,6 +377,10 @@ try
     resetSchemas();
     MockTiDB::instance().dropPartition(db_name, new_tbl_name, part1_id);
     refreshSchema();
+    refreshTableSchema(logical_table_id);
+    refreshTableSchema(part1_id);
+    refreshTableSchema(part2_id);
+    refreshTableSchema(part3_id);
     auto part1_tbl = mustGetSyncedTable(part1_id);
     ASSERT_EQ(part1_tbl->isTombstone(), true);
 }

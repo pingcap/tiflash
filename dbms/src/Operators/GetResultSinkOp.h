@@ -14,24 +14,23 @@
 
 #pragma once
 
-#include <Flash/Executor/ResultHandler.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-class PhysicalGetResultSink;
-using PhysicalGetResultSinkPtr = std::shared_ptr<PhysicalGetResultSink>;
 // The sink operator for getting the execution results.
 class GetResultSinkOp : public SinkOp
 {
 public:
     GetResultSinkOp(
-        PipelineExecutorStatus & exec_status_,
-        const PhysicalGetResultSinkPtr & physical_sink_)
-        : SinkOp(exec_status_)
-        , physical_sink(physical_sink_)
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const ResultQueuePtr & result_queue_)
+        : SinkOp(exec_context_, req_id)
+        , result_queue(result_queue_)
     {
-        assert(physical_sink);
+        assert(result_queue);
     }
 
     String getName() const override
@@ -42,7 +41,12 @@ public:
 protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus prepareImpl() override;
+
+    OperatorStatus awaitImpl() override;
+
 private:
-    PhysicalGetResultSinkPtr physical_sink;
+    ResultQueuePtr result_queue;
+    std::optional<Block> t_block;
 };
 } // namespace DB

@@ -45,12 +45,12 @@ public:
 
     void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    PipelinePtr toPipeline();
+    PipelinePtr toPipeline(PipelineExecutorContext & exec_context, Context & context);
 
 private:
     void addRootFinalProjectionIfNeed();
 
-    void build(const String & executor_id, const tipb::Executor * executor);
+    void build(const tipb::Executor * executor);
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 

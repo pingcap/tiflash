@@ -14,14 +14,16 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+
 
 namespace TiDB
 {
@@ -83,7 +85,7 @@ public:
     virtual UInt64 onSyncGc(Int64 /*limit*/, const DM::GCOptions &) { throw Exception("Unsupported"); }
 
     /// Return true is data dir exist
-    virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
+    virtual bool initStoreIfDataDirExist(ThreadPool * /*thread_pool*/) { throw Exception("Unsupported"); }
 
     virtual ::TiDB::StorageEngine engineType() const = 0;
 
@@ -98,9 +100,7 @@ public:
     Timestamp getTombstone() const { return tombstone; }
     void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
-    /// Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    /// Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
-    virtual void alterFromTiDB(
+    virtual void updateTombstone(
         const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
@@ -109,6 +109,15 @@ public:
         const Context & context)
         = 0;
 
+    virtual void alterSchemaChange(
+        const TableLockHolder &,
+        TiDB::TableInfo & table_info,
+        const String & database_name,
+        const String & table_name,
+        const Context & context)
+        = 0;
+
+    virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
@@ -140,13 +149,13 @@ public:
 
     PKType getPKType() const
     {
-        static const DataTypeInt64 & dataTypeInt64 = {};
-        static const DataTypeUInt64 & dataTypeUInt64 = {};
+        static const DataTypeInt64 & data_type_int64 = {};
+        static const DataTypeUInt64 & data_type_u_int64 = {};
 
         auto pk_data_type = getPKTypeImpl();
-        if (pk_data_type->equals(dataTypeInt64))
+        if (pk_data_type->equals(data_type_int64))
             return PKType::INT64;
-        else if (pk_data_type->equals(dataTypeUInt64))
+        else if (pk_data_type->equals(data_type_u_int64))
             return PKType::UINT64;
         return PKType::UNSPECIFIED;
     }

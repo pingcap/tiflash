@@ -22,8 +22,8 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
@@ -55,7 +55,7 @@ public:
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, &removed_entries, entries.acquireLock());
+        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, &removed_entries, nullptr, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
@@ -194,7 +194,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert some entries
-    entries.createNewExternal(PageVersion(2));
+    entries.createNewExternal(PageVersion(2), PageEntryV3{});
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -212,7 +212,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert entry after delete
-    entries.createNewExternal(PageVersion(7));
+    entries.createNewExternal(PageVersion(7), PageEntryV3{});
 
     // after re-create external page, the visible for 1~5 has changed
     ASSERT_FALSE(entries.isVisible(6));
@@ -360,8 +360,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
@@ -398,8 +398,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
@@ -430,8 +430,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
 
@@ -463,8 +463,8 @@ try
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersion(2));
-    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2), PageVersion(3));
+    entries.incrRefCount(PageVersion(2), PageVersion(4));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
     entries.createDelete(PageVersion(5));

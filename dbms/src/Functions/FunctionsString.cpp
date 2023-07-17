@@ -4914,7 +4914,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto first_argument = arguments[0];
+        const auto & first_argument = arguments[0];
         if (!first_argument->isNumber() && !first_argument->isDecimal())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),

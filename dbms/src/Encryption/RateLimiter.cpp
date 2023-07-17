@@ -83,6 +83,27 @@ inline void metricAllocBytes(LimiterType type, Int64 bytes)
     }
 }
 
+void metricPendingDuration(LimiterType type, double second)
+{
+    switch (type)
+    {
+    case LimiterType::FG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_fg_read).Observe(second);
+        break;
+    case LimiterType::BG_READ:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_bg_read).Observe(second);
+        break;
+    case LimiterType::FG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_fg_write).Observe(second);
+        break;
+    case LimiterType::BG_WRITE:
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_bg_write).Observe(second);
+        break;
+    default:
+        break;
+    }
+}
+
 inline CurrentMetrics::Increment pendingRequestMetrics(LimiterType type)
 {
     switch (type)
@@ -136,7 +157,9 @@ void WriteLimiter::request(Int64 bytes)
     Stopwatch sw_pending;
     Int64 wait_times = 0;
     auto pending_request = pendingRequestMetrics(type);
-
+    SCOPE_EXIT({
+        metricPendingDuration(type, sw_pending.elapsedSeconds());
+    });
     // request cannot be satisfied at this moment, enqueue
     Request r(bytes);
     req_queue.push_back(&r);
@@ -712,7 +735,7 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     auto msg = fmt::format("limiter {} write {} read {}", limiterCount(), writeLimiterCount(), readLimiterCount());
     if (limiterCount() < 2)
     {
-        LOG_DEBUG(log, "{} NOT need to tune.", msg);
+        // LOG_DEBUG(log, "{} NOT need to tune.", msg);
         return {0, 0, false, 0, 0, false};
     }
     LOG_INFO(log, "{} need to tune.", msg);

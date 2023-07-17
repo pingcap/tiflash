@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
@@ -37,6 +38,11 @@ namespace DB
 class DAGQueryBlock;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
+struct SubqueryForSet;
+class Join;
+class Expand2;
+using JoinPtr = std::shared_ptr<Join>;
+using Expand2Ptr = std::shared_ptr<Expand2>;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
@@ -65,11 +71,13 @@ private:
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window, bool enable_fine_grained_shuffle);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort, bool enable_fine_grained_shuffle);
+    void handleExpand2(DAGPipeline & pipeline, const tipb::Expand2 & expand2);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, const String & extra_info = "");
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr);
+    void executeExpand2(DAGPipeline & pipeline, const Expand2Ptr & expand);
     void executeWindow(
         DAGPipeline & pipeline,
         WindowDescription & window_description,
@@ -92,10 +100,7 @@ private:
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
-    DAGContext & dagContext() const
-    {
-        return *context.getDAGContext();
-    }
+    DAGContext & dagContext() const;
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;

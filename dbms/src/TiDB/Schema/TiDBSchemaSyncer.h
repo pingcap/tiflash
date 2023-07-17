@@ -34,34 +34,34 @@ namespace ErrorCodes
 extern const int FAIL_POINT_ERROR;
 };
 
+/// The schema syncer for given keyspace
 template <bool mock_getter, bool mock_mapper>
-struct TiDBSchemaSyncer : public SchemaSyncer
+class TiDBSchemaSyncer : public SchemaSyncer
 {
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
     using NameMapper = std::conditional_t<mock_mapper, MockSchemaNameMapper, SchemaNameMapper>;
 
+private:
     KVClusterPtr cluster;
 
-    static constexpr Int64 maxNumberOfDiffs = 100;
+    const KeyspaceID keyspace_id;
 
     Int64 cur_version;
 
-    std::mutex schema_mutex;
+    // for syncSchemas
+    std::mutex mutex_for_sync_schema;
+
+    // mutex for databases
+    std::shared_mutex shared_mutex_for_databases;
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     LoggerPtr log;
 
-    explicit TiDBSchemaSyncer(KVClusterPtr cluster_)
-        : cluster(std::move(cluster_))
-        , cur_version(0)
-        , log(Logger::get())
-    {}
+    TableIDMap table_id_map;
 
-    bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
-
-    Getter createSchemaGetter()
+    Getter createSchemaGetter(KeyspaceID keyspace_id)
     {
         [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
@@ -70,76 +70,48 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            return Getter(cluster.get(), tso);
+            return Getter(cluster.get(), tso, keyspace_id);
         }
     }
 
-    // just for test
-    // It clear all synced database info and reset the `cur_version` to 0.
-    // All info will fetch from the `getter` again the next time
-    // `syncSchemas` is call.
-    void reset() override
-    {
-        std::lock_guard lock(schema_mutex);
+    std::tuple<bool, DatabaseID, TableID> findDatabaseIDAndTableID(TableID physical_table_id);
 
-        databases.clear();
-        cur_version = 0;
+public:
+    TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
+        : cluster(std::move(cluster_))
+        , keyspace_id(keyspace_id_)
+        , cur_version(0)
+        , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
+        , table_id_map(log)
+    {}
+
+    /*
+     * Sync all tables' schemas based on schema diff. This method mainly update the TableID mapping of this keyspace.
+     */
+    bool syncSchemas(Context & context) override;
+
+    /*
+     * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
+     * This function will be called concurrently when the schema not matches during reading or writing
+     */
+    bool syncTableSchema(Context & context, TableID physical_table_id) override;
+
+    /*
+     * When the table is physically dropped from the TiFlash node, use this method to unregister
+     * the TableID mapping.
+     */
+    void removeTableID(TableID table_id) override
+    {
+        table_id_map.erase(table_id);
     }
 
-    std::vector<TiDB::DBInfoPtr> fetchAllDBs() override
-    {
-        auto getter = createSchemaGetter();
-        return getter.listDBs();
-    }
-
-    Int64 getCurrentVersion() override
-    {
-        std::lock_guard lock(schema_mutex);
-        return cur_version;
-    }
-
-    bool syncSchemas(Context & context) override
-    {
-        std::lock_guard lock(schema_mutex);
-
-        auto getter = createSchemaGetter();
-        Int64 version = getter.getVersion();
-        if (version <= cur_version)
-        {
-            return false;
-        }
-        Stopwatch watch;
-        SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
-
-        LOG_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
-
-        // Show whether the schema mutex is held for a long time or not.
-        GET_METRIC(tiflash_schema_applying).Set(1.0);
-        SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
-
-        GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
-        // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
-        // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
-        // been aborted.
-        // However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
-        // X-1 is aborted and we can safely ignore it.
-        // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
-        // to X-1 and try to fetch the schema diff X next time.
-        Int64 version_after_load_diff = 0;
-        if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
-        {
-            GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            version_after_load_diff = loadAllSchema(getter, version, context);
-        }
-        cur_version = version_after_load_diff;
-        GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
-        return true;
-    }
+private:
+    Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
+    Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        std::lock_guard lock(schema_mutex);
+        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
         if (it == databases.end())
@@ -149,7 +121,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
-        std::lock_guard lock(schema_mutex);
+        std::shared_lock<std::shared_mutex> lock(shared_mutex_for_databases);
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
@@ -157,119 +129,24 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
-    // Return Values
-    // - if latest schema diff is not empty, return the (latest_version)
-    // - if latest schema diff is empty, return the (latest_version - 1)
-    // - if schema_diff.regenerate_schema_map == true, need reload all schema info from TiKV, return (-1)
-    // - if error happend, return (-1)
-    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 latest_version, Context & context)
+    void dropAllSchema(Context & context) override
     {
-        if (isTooOldSchema(cur_version, latest_version))
-        {
-            return -1;
-        }
-
-        LOG_DEBUG(log, "Try load schema diffs.");
-
-        Int64 used_version = cur_version;
-        // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
-        // schema diff without any exception.
-        std::vector<std::optional<SchemaDiff>> diffs;
-        while (used_version < latest_version)
-        {
-            used_version++;
-            diffs.push_back(getter.getSchemaDiff(used_version));
-        }
-        LOG_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
-
-
-        if (diffs.empty())
-        {
-            LOG_WARNING(log, "Schema Diff is empty.");
-            return -1;
-        }
-        // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
-        // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
-        if (!diffs.back())
-        {
-            --used_version;
-            diffs.pop_back();
-        }
-
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
-
-        try
-        {
-            for (size_t diff_index = 0; diff_index < diffs.size(); ++diff_index)
-            {
-                const auto & schema_diff = diffs[diff_index];
-
-                if (!schema_diff)
-                {
-                    // If `schema diff` got empty `schema diff`(it's not the latest one, due to we check it before), we should just skip it.
-                    //
-                    // example:
-                    //  - `cur_version` is 1, `latest_version` is 10
-                    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
-                    LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
-                    continue;
-                }
-
-                if (schema_diff->regenerate_schema_map)
-                {
-                    // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
-                    LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
-                    return -1;
-                }
-
-                builder.applyDiff(*schema_diff);
-            }
-        }
-        catch (TiFlashException & e)
-        {
-            if (!e.getError().is(Errors::DDL::StaleSchema))
-            {
-                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            }
-            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-            return -1;
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
-            {
-                throw;
-            }
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-            return -1;
-        }
-        catch (Poco::Exception & e)
-        {
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {}", e.displayText());
-            return -1;
-        }
-        catch (std::exception & e)
-        {
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {}", e.what());
-            return -1;
-        }
-
-        return used_version;
+        auto getter = createSchemaGetter(keyspace_id);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map, shared_mutex_for_databases);
+        builder.dropAllSchema();
     }
 
-    Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
+    // clear all states.
+    // just for testing restart
+    void reset() override
     {
-        if (!getter.checkSchemaDiffExists(version))
         {
-            --version;
+            std::unique_lock<std::shared_mutex> lock(shared_mutex_for_databases);
+            databases.clear();
         }
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
-        builder.syncAllSchema();
-        return version;
+
+        table_id_map.clear();
+        cur_version = 0;
     }
 };
 

@@ -18,16 +18,22 @@
 
 namespace DB
 {
-bool PlainPipelineEvent::scheduleImpl()
+void PlainPipelineEvent::scheduleImpl()
 {
-    assert(pipeline);
-    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, concurrency);
-    assert(!pipeline_exec_group.empty());
-    std::vector<TaskPtr> tasks;
-    tasks.reserve(pipeline_exec_group.size());
-    for (auto & pipline_exec : pipeline_exec_group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, exec_status, shared_from_this(), std::move(pipline_exec)));
-    scheduleTasks(tasks);
-    return false;
+    RUNTIME_CHECK(pipeline);
+    auto pipeline_exec_group = pipeline->buildExecGroup(exec_context, context, concurrency);
+    RUNTIME_CHECK(!pipeline_exec_group.empty());
+    for (auto & pipeline_exec : pipeline_exec_group)
+        addTask(std::make_unique<PipelineTask>(exec_context, log->identifier(), shared_from_this(), std::move(pipeline_exec)));
 }
+
+void PlainPipelineEvent::finishImpl()
+{
+    if (auto complete_event = pipeline->complete(exec_context); complete_event)
+        insertEvent(complete_event);
+    // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_context.decActiveRefCount()` is called.
+    // So pipeline needs to be released before `exec_context.decActiveRefCount()` is called.
+    pipeline.reset();
+}
+
 } // namespace DB

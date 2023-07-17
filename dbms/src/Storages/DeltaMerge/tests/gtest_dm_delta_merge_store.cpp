@@ -24,8 +24,10 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
+#include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -40,6 +42,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
@@ -102,6 +110,10 @@ try
 {
     // create table
     ASSERT_NE(store, nullptr);
+
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
@@ -190,6 +202,10 @@ try
     // create table
     ASSERT_NE(store, nullptr);
 
+    // Write some data, or gc will not run.
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
     auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
 
     // Start a PageStorage gc and suspend it before removing dtfiles
@@ -241,6 +257,7 @@ try
                                                       false,
                                                       "test",
                                                       "t_200",
+                                                      NullspaceID,
                                                       200,
                                                       true,
                                                       *new_cols,
@@ -263,6 +280,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              "",
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -439,6 +458,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -522,6 +543,8 @@ try
                           /* num_streams= */ 1,
                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                           EMPTY_FILTER,
+                          std::vector<RuntimeFilterPtr>{},
+                          0,
                           TRACING_NAME,
                           /* keep_order= */ false,
                           /* is_fast_scan= */ false,
@@ -546,7 +569,9 @@ try
                      {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                      /* num_streams= */ 1,
                      /* max_version= */ std::numeric_limits<UInt64>::max(),
-                     filter,
+                     std::make_shared<PushDownFilter>(filter),
+                     std::vector<RuntimeFilterPtr>{},
+                     0,
                      TRACING_NAME,
                      /* keep_order= */ false,
                      /* is_fast_scan= */ false,
@@ -613,6 +638,7 @@ try
         }
         db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
         ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
         try
         {
@@ -624,7 +650,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -636,6 +661,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -689,9 +716,11 @@ try
                 col_i8_define.name,
                 col_i8_define.id));
         }
-
+        ASSERT_TRUE(store->segments.empty());
+        store->write(*db_context, db_context->getSettingsRef(), block); // Create first segment, will write PS.
         FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
-        store->write(*db_context, db_context->getSettingsRef(), block);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno); });
+        store->write(*db_context, db_context->getSettingsRef(), block); // Will not write PS.
         ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
         try
         {
@@ -703,7 +732,6 @@ try
                 throw;
         }
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
 
     {
         // read all columns from store
@@ -715,6 +743,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -764,6 +794,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -791,6 +823,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -866,6 +900,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -937,6 +973,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -958,6 +996,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1003,6 +1043,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1033,6 +1075,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -1044,6 +1088,31 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, 9)),
             }));
     }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, Empty)
+try
+{
+    ASSERT_TRUE(store->segments.empty());
+
+    auto settings = db_context->getSettings();
+    const auto & columns = store->getTableColumns();
+    BlockInputStreamPtr in = store->read(*db_context,
+                                         settings,
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                         EMPTY_FILTER,
+                                         std::vector<RuntimeFilterPtr>{},
+                                         0,
+                                         TRACING_NAME,
+                                         /* keep_order= */ false,
+                                         /* is_fast_scan= */ false,
+                                         /* expected_block_size= */ 1024)[0];
+    auto b = in->read();
+    ASSERT_FALSE(static_cast<bool>(b));
 }
 CATCH
 
@@ -1076,6 +1145,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1095,6 +1166,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1114,6 +1187,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1133,6 +1208,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1190,6 +1267,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1216,6 +1295,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1242,6 +1323,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1261,6 +1344,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1282,6 +1367,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1339,6 +1426,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1365,6 +1454,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1391,6 +1482,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1475,6 +1568,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,
@@ -1541,17 +1636,12 @@ try
 
     {
         // DDL change col from i8 -> i32
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::MODIFY_COLUMN;
-            com.data_type = col_type_after_ddl;
-            com.column_name = col_name_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"i8","O":"i8"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1564,6 +1654,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1629,18 +1721,12 @@ try
     }
 
     {
-        // DDL change delete col i8
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::DROP_COLUMN;
-            com.data_type = col_type_to_drop;
-            com.column_name = col_name_to_drop;
-            com.column_id = col_id_to_drop;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+            {"cols":[],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1653,6 +1739,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1706,17 +1794,12 @@ try
     }
 
     {
-        // DDL change add col i32
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"i8","O":"i8"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":3,"Tp":1}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"i32","O":"i32"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -1729,6 +1812,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -1767,8 +1852,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat64)
 try
 {
     const String col_name_to_add = "f64";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1778,30 +1861,14 @@ try
     }
 
     // DDL add column f64 with default value
+    // actual ddl is like: ADD COLUMN `f64` Double not null DEFAULT 1.123456
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Float64>(1.123456)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1.123456","default_bit":null,"id":2,"name":{"L":"f64","O":"f64"},"offset":0,"origin_default":"1.123456","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":22,"Tp":5}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -1813,72 +1880,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
-                              TRACING_NAME,
-                              /* keep_order= */ false,
-                              /* is_fast_scan= */ false,
-                              /* expected_block_size= */ 1024)[0];
-
-        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
-            in,
-            Strings({DMTestEnv::pk_name, col_name_to_add}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
-                createColumn<Float64>(std::vector<Float64>(num_rows_write, 1.123456)),
-            }));
-    }
-}
-CATCH
-
-TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloatDecimal64)
-try
-{
-    const String col_name_to_add = "f64";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
-
-    // write some rows before DDL
-    size_t num_rows_write = 1;
-    {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), block);
-    }
-
-    // DDL add column f64 with default value
-    {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal64(1123456), 6)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
-    }
-
-    // try read
-    {
-        auto in = store->read(*db_context,
-                              db_context->getSettingsRef(),
-                              store->getTableColumns(),
-                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                              /* num_streams= */ 1,
-                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                              EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -1899,8 +1902,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat32)
 try
 {
     const String col_name_to_add = "f32";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1910,30 +1911,14 @@ try
     }
 
     // DDL add column f32 with default value
+    // actual ddl is like: ADD COLUMN `f32` Float not null DEFAULT 1.125
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1.125","default_bit":null,"id":2,"name":{"L":"f32","O":"f32"},"offset":0,"origin_default":"1.125","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -1945,6 +1930,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -1964,8 +1951,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnInt8)
 try
 {
     const String col_name_to_add = "Int8";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int8");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -1975,30 +1960,14 @@ try
     }
 
     // DDL add column Int8 with default value
+    //actual ddl is like: ADD COLUMN `Int8` TinyInt not null DEFAULT 1
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `Int8` Int8 DEFAULT 1
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Int64>(1)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1","default_bit":null,"id":2,"name":{"L":"Int8","O":"Int8"},"offset":0,"origin_default":"1","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":1,"Flen":4,"Tp":1}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2010,6 +1979,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2029,8 +2000,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnUInt8)
 try
 {
     const String col_name_to_add = "UInt8";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("UInt8");
 
     // write some rows before DDL
     size_t num_rows_write = 1;
@@ -2040,30 +2009,14 @@ try
     }
 
     // DDL add column UInt8 with default value
+    // actual ddl is like: ADD COLUMN `UInt8` TinyInt Unsigned not null DEFAULT 1
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `UInt8` UInt8 DEFAULT 1
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1","default_bit":null,"id":2,"name":{"L":"UInt8","O":"UInt8"},"offset":0,"origin_default":"1","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":33,"Flen":3,"Tp":1}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2075,6 +2028,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2095,12 +2050,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnDateTime)
 try
 {
     const String col_name_to_add = "dt";
-    const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("MyDateTime");
-
-    MyDateTime mydatetime_val(1999, 9, 9, 12, 34, 56, 0);
-    const UInt64 mydatetime_uint = mydatetime_val.toPackedUInt();
-
     // write some rows before DDL
     size_t num_rows_write = 1;
     {
@@ -2109,25 +2058,14 @@ try
     }
 
     // DDL add column date with default value
+    // actual ddl is like: ADD COLUMN `date` DateTime DEFAULT '1999-09-09 12:34:56'
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `date` MyDateTime DEFAULT '<packed int of mydatetime>'
-            com.default_expression = makeASTFunction(
-                "CAST",
-                std::make_shared<ASTLiteral>(toField(mydatetime_uint)),
-                ASTPtr() // dummy alias
-            );
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1999-09-09 12:34:56","default_bit":null,"id":2,"name":{"L":"dt","O":"dt"},"offset":0,"origin_default":"1999-09-09 12:34:56","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":129,"Flen":19,"Tp":12}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2139,6 +2077,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2163,7 +2103,6 @@ TEST_P(DeltaMergeStoreRWTest, DDLAddColumnString)
 try
 {
     const String col_name_to_add = "string";
-    const ColId col_id_to_add = 2;
     const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("String");
 
     // write some rows before DDL
@@ -2174,30 +2113,14 @@ try
     }
 
     // DDL add column string with default value
+    // actual ddl is like: ADD COLUMN `string` VARCHAR(100) DEFAULT 'test_add_string_col'
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `string` String DEFAULT 'test_add_string_col'
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field(String("test_add_string_col")));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"test_add_string_col","default_bit":null,"id":2,"name":{"L":"string","O":"string"},"offset":0,"origin_default":"test_add_string_col","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":1,"Flen":100,"Tp":15}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2209,6 +2132,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2230,7 +2155,8 @@ try
     const String col_name_before_ddl = "i8";
     const String col_name_after_ddl = "i8_tmp";
     const ColId col_id_ddl = 2;
-    const DataTypePtr col_type = DataTypeFactory::instance().get("Int32");
+    const DataTypePtr col_type = DataTypeFactory::instance().get("Int8");
+    const DataTypePtr col_after_ddl_type = DataTypeFactory::instance().get("Int32");
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         ColumnDefine cd(col_id_ddl, col_name_before_ddl, col_type);
@@ -2263,20 +2189,14 @@ try
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
+    // actual ddl is like: rename COLUMN `i8` to `i8_tmp`
     {
-        // DDL change col name from col_name_before_ddl -> col_name_after_ddl
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::RENAME_COLUMN;
-            com.data_type = col_type;
-            com.column_name = col_name_before_ddl;
-            com.new_column_name = col_name_after_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
-        store->applyAlters(commands, std::nullopt, ignored, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"","default_bit":null,"id":2,"name":{"L":"i8_tmp","O":"i8_tmp"},"offset":0,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4097,"Flen":11,"Tp":3}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     {
@@ -2289,6 +2209,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -2301,7 +2223,7 @@ try
             const auto & col = head.getByName(col_name_after_ddl);
             ASSERT_EQ(col.name, col_name_after_ddl);
             ASSERT_EQ(col.column_id, col_id_ddl);
-            ASSERT_TRUE(col.type->equals(*col_type));
+            ASSERT_TRUE(col.type->equals(*col_after_ddl_type));
             // check old col name is not exist
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
@@ -2365,18 +2287,6 @@ try
     }
 
     {
-        // DDL change pk col name from col_name_before_ddl -> col_name_after_ddl
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::RENAME_COLUMN;
-            com.data_type = col_type;
-            com.column_name = col_name_before_ddl;
-            com.new_column_name = col_name_after_ddl;
-            com.column_id = col_id_ddl;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID ignored = 0;
         TiDB::TableInfo table_info;
         {
             static const String json_table_info = R"(
@@ -2385,7 +2295,7 @@ try
             table_info.deserialize(json_table_info);
             ASSERT_TRUE(table_info.pk_is_handle);
         }
-        store->applyAlters(commands, table_info, ignored, *db_context);
+        store->applySchemaChanges(table_info);
     }
 
     {
@@ -2406,6 +2316,8 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            std::vector<RuntimeFilterPtr>{},
+                                            0,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
                                             /* is_fast_scan= */ false,
@@ -2454,6 +2366,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,
@@ -2505,30 +2419,14 @@ try
     }
 
     // DDL add column f32 with default value
+    //actual ddl is like: ADD COLUMN `f32` Float DEFAULT 1.125
     {
-        AlterCommands commands;
-        {
-            AlterCommand com;
-            com.type = AlterCommand::ADD_COLUMN;
-            com.data_type = col_type_to_add;
-            com.column_name = col_name_to_add;
-
-            // mock default value
-            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
-            commands.emplace_back(std::move(com));
-        }
-        ColumnID col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment":"","default":"1.125","default_bit":null,"id":2,"name":{"L":"f32","O":"f32"},"offset":0,"origin_default":"1.125","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":1,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":417906423650844680}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
     }
 
     // try read
@@ -2540,6 +2438,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2582,6 +2482,8 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              std::vector<RuntimeFilterPtr>{},
+                              0,
                               TRACING_NAME,
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
@@ -2693,6 +2595,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2795,6 +2699,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2867,6 +2773,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2896,6 +2804,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2952,6 +2862,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -2989,6 +2901,8 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             std::vector<RuntimeFilterPtr>{},
+                                             0,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
@@ -3028,7 +2942,6 @@ try
                 false);
 
             store->write(*db_context, settings, block);
-
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
             auto segment_stats = store->getSegmentsStats();
@@ -3056,6 +2969,8 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                std::vector<RuntimeFilterPtr>{},
+                                                0,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
                                                 /* is_fast_scan= */ false,
@@ -3121,6 +3036,7 @@ public:
                                                   false,
                                                   "test",
                                                   DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  NullspaceID,
                                                   101,
                                                   true,
                                                   *cols,

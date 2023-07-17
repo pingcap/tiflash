@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -54,6 +56,11 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_exception_when_connect_local_tunnel[];
+} // namespace FailPoints
+
 namespace
 {
 struct GrpcExchangePacketReader : public ExchangePacketReader
@@ -101,31 +108,37 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
         assert(cq != nullptr);
     }
 
-    void init(UnaryCallback<bool> * callback) override
+    void init(GRPCKickTag * tag) override
     {
         reader = cluster->rpc_client->sendStreamRequestAsync(
             request.req->sender_meta().address(),
             &client_context,
             call,
             *cq,
-            callback);
+            tag);
     }
 
-    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override
     {
-        packet->read(reader, callback);
+        packet->read(reader, tag);
     }
 
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    void finish(::grpc::Status & status, GRPCKickTag * tag) override
     {
-        reader->Finish(&status, callback);
+        reader->Finish(&status, tag);
+    }
+
+    grpc::ClientContext * getClientContext() override
+    {
+        return &client_context;
     }
 };
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
 {
-    RUNTIME_CHECK_MSG(tunnel != nullptr, err_msg);
-    RUNTIME_CHECK_MSG(tunnel->isLocal(), "EstablishMPPConnectionLocal into a remote channel!");
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_exception_when_connect_local_tunnel);
+    RUNTIME_CHECK_MSG(tunnel != nullptr, fmt::runtime(err_msg));
+    RUNTIME_CHECK_MSG(tunnel->isLocal(), "Need a local tunnel, but get remote tunnel.");
 }
 
 } // namespace
@@ -165,13 +178,13 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 
 void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
     LoggerPtr log,
-    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs)
+    const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs)
 {
     if (disaggregated_dispatch_reqs.empty())
         throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-    for (const StorageDisaggregated::RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
+    for (const RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
     {
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {
@@ -279,13 +292,14 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
-    bool is_fine_grained)
+    bool has_remote_conn)
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained);
+    local_request_handler.recordWaitingTaskTime();
+    tunnel->connectLocalV2(source_index, local_request_handler, has_remote_conn);
 }
 
 // TODO remove it in the future
@@ -367,11 +381,11 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
+        return std::make_unique<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
     }
     else
     {
-        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+        auto reader = std::make_unique<GrpcExchangePacketReader>(request);
         reader->reader = cluster->rpc_client->sendStreamRequest(
             request.req->sender_meta().address(),
             &reader->client_context,
@@ -382,7 +396,7 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
 {
-    auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+    auto reader = std::make_unique<GrpcExchangePacketReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
         request.req->sender_meta().address(),
         &reader->client_context,
@@ -390,14 +404,14 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRe
     return reader;
 }
 
-void GRPCReceiverContext::makeAsyncReader(
+AsyncExchangePacketReaderPtr GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
-    AsyncExchangePacketReaderPtr & reader,
     grpc::CompletionQueue * cq,
-    UnaryCallback<bool> * callback) const
+    GRPCKickTag * tag) const
 {
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
-    reader->init(callback);
+    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
+    reader->init(tag);
+    return reader;
 }
 
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const

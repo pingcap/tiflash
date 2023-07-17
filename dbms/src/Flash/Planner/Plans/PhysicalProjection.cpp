@@ -23,7 +23,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -34,7 +33,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     const tipb::Projection & projection,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -50,6 +49,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     auto physical_projection = std::make_shared<PhysicalProjection>(
         executor_id,
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "projection",
@@ -63,7 +63,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     const String & column_prefix,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -71,17 +71,18 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
     NamesAndTypes schema = child->getSchema();
-    assert(final_project_aliases.size() == schema.size());
+    RUNTIME_CHECK(final_project_aliases.size() == schema.size());
     // replace column name of schema by alias.
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
-        assert(schema[i].name == final_project_aliases[i].first);
+        RUNTIME_CHECK(schema[i].name == final_project_aliases[i].first);
         schema[i].name = final_project_aliases[i].second;
     }
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "final projection",
@@ -100,7 +101,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     bool keep_session_timezone_info,
     const PhysicalPlanNodePtr & child)
 {
-    assert(child);
+    RUNTIME_CHECK(child);
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
@@ -114,12 +115,12 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
 
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
-    assert(final_project_aliases.size() == output_offsets.size());
+    RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
     NamesAndTypes schema;
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
         const auto & alias = final_project_aliases[i].second;
-        assert(!alias.empty());
+        RUNTIME_CHECK(!alias.empty());
         const auto & type = analyzer.getCurrentInputColumns()[output_offsets[i]].type;
         schema.emplace_back(alias, type);
     }
@@ -127,6 +128,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "final projection",
@@ -143,14 +145,13 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
-    if (project_actions && !project_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, project_actions, log->identifier()));
-        });
-    }
+    executeExpression(exec_context, group_builder, project_actions, log);
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)

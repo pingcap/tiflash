@@ -14,13 +14,14 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Management/ManualCompact.h>
+#include <Interpreters/Context.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>
@@ -57,7 +58,7 @@ public:
             setupStorage();
 
             // In tests let's only compact one segment.
-            db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(0)));
+            db_context->setSetting("manual_compact_more_until_ms", Field(static_cast<UInt64>(0)));
 
             // Split into 4 segments, and prepare some delta data for first 3 segments.
             helper = std::make_unique<DM::tests::MultiSegmentTestUtil>(*db_context);
@@ -101,7 +102,7 @@ public:
     void TearDown() override
     {
         storage->drop();
-        db_context->getTMTContext().getStorages().remove(TABLE_ID);
+        db_context->getTMTContext().getStorages().remove(NullspaceID, TABLE_ID);
     }
 
 protected:
@@ -307,15 +308,16 @@ CATCH
 TEST_P(BasicManualCompactTest, CompactMultiple)
 try
 {
-    db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(60 * 1000))); // Hope it's long enough!
+    db_context->setSetting("manual_compact_more_until_ms", Field(static_cast<UInt64>(60 * 1000))); // Hope it's long enough!
 
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);
+    request.set_keyspace_id(NullspaceID);
     auto response = ::kvrpcpb::CompactResponse();
     auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
-    ASSERT_FALSE(response.has_error());
-    ASSERT_FALSE(response.has_remaining());
+    ASSERT_FALSE(response.has_error()) << response.DebugString();
+    ASSERT_FALSE(response.has_remaining()) << response.DebugString();
 
     // All segments should be compacted.
     for (size_t i = 0; i < 4; ++i)
@@ -337,6 +339,7 @@ try
         auto request = ::kvrpcpb::CompactRequest();
         request.set_physical_table_id(TABLE_ID);
         request.set_logical_table_id(2);
+        request.set_keyspace_id(NullspaceID);
         auto response = ::kvrpcpb::CompactResponse();
         auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
@@ -355,6 +358,8 @@ try
         auto request = ::kvrpcpb::CompactRequest();
         request.set_physical_table_id(TABLE_ID);
         request.set_logical_table_id(2);
+        request.set_keyspace_id(NullspaceID);
+        request.set_api_version(::kvrpcpb::APIVersion::V1);
         auto response = ::kvrpcpb::CompactResponse();
         auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);

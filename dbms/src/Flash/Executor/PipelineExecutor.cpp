@@ -12,59 +12,102 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
 PipelineExecutor::PipelineExecutor(
-    const ProcessListEntryPtr & process_list_entry_,
+    const MemoryTrackerPtr & memory_tracker_,
     Context & context_,
-    const PipelinePtr & root_pipeline_)
-    : QueryExecutor(process_list_entry_, context_)
-    , root_pipeline(root_pipeline_)
+    const String & req_id)
+    : QueryExecutor(memory_tracker_, context_, req_id)
+    , exec_context(
+          // For mpp task, there is a unique identifier MPPTaskId, so MPPTaskId is used here as the query id of PipelineExecutor.
+          // But for cop/batchCop, there is no such unique identifier, so an empty value is given here, indicating that the query id of PipelineExecutor is invalid.
+          /*query_id=*/context.getDAGContext()->is_mpp_task ? context.getDAGContext()->getMPPTaskId().toString() : "",
+          req_id,
+          memory_tracker_)
+{
+    PhysicalPlan physical_plan{context, log->identifier()};
+    physical_plan.build(context.getDAGContext()->dag_request());
+    physical_plan.outputAndOptimize();
+    root_pipeline = physical_plan.toPipeline(exec_context, context);
+}
+
+void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
+    auto events = root_pipeline->toEvents(exec_context, context, context.getMaxStreams());
+    Events sources;
+    for (const auto & event : events)
+    {
+        if (event->prepare())
+            sources.push_back(event);
+    }
+    for (const auto & event : sources)
+        event->schedule();
+}
+
+void PipelineExecutor::wait()
+{
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+        exec_context.waitFor(timeout);
+    }
+    else
+    {
+        exec_context.wait();
+    }
+}
+
+void PipelineExecutor::consume(ResultHandler & result_handler)
+{
+    assert(result_handler);
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+        exec_context.consumeFor(result_handler, timeout);
+    }
+    else
+    {
+        exec_context.consume(result_handler);
+    }
 }
 
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
-    assert(root_pipeline);
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    // TODO Now the result handler for batch cop introduces io blocking, we should find a better implementation of get result sink.
-    if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(std::move(result_handler));
-
+    if (result_handler)
     {
-        auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-        Events without_input_events;
-        for (const auto & event : events)
-        {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
-        }
-        for (const auto & event : without_input_events)
-            event->schedule();
-    }
+        ///                                 ┌──get_result_sink
+        /// result_handler◄──result_queue◄──┼──get_result_sink
+        ///                                 └──get_result_sink
 
-    if (unlikely(context.isTest()))
-    {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        std::chrono::seconds timeout(15);
-        status.waitFor(timeout);
+        // The queue size is same as UnionBlockInputStream = concurrency * 5.
+        assert(root_pipeline);
+        root_pipeline->addGetResultSink(exec_context.toConsumeMode(/*queue_size=*/context.getMaxStreams() * 5));
+        scheduleEvents();
+        consume(result_handler);
     }
     else
     {
-        status.wait();
+        scheduleEvents();
+        wait();
     }
-    return status.toExecutionResult();
+    LOG_TRACE(log, "query finish with {}", exec_context.getQueryProfileInfo().toJson());
+    return exec_context.toExecutionResult();
 }
 
 void PipelineExecutor::cancel()
 {
-    status.cancel();
+    exec_context.cancel();
 }
 
 String PipelineExecutor::toString() const
@@ -82,19 +125,35 @@ int PipelineExecutor::estimateNewThreadCount()
 
 RU PipelineExecutor::collectRequestUnit()
 {
-    // TODO support collectRequestUnit
-    return 0;
+    // TODO Get cputime more accurately.
+    // Currently, it is assumed that
+    // - The size of the CPU task thread pool is equal to the number of CPU cores.
+    // - Most of the CPU computations are executed in the CPU task thread pool.
+    // Therefore, `query_profile_info.getCPUExecuteTimeNs()` is approximately equal to the actual CPU time of the query.
+    // However, once these two assumptions are broken, it will lead to inaccurate acquisition of CPU time.
+    // It may be necessary to obtain CPU time using a more accurate method, such as using system call `clock_gettime`.
+    const auto & query_profile_info = exec_context.getQueryProfileInfo();
+    auto cpu_time_ns = query_profile_info.getCPUExecuteTimeNs();
+    return toRU(ceil(cpu_time_ns));
 }
 
 Block PipelineExecutor::getSampleBlock() const
 {
+    assert(root_pipeline);
     return root_pipeline->getSampleBlock();
 }
 
 BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
 {
-    // TODO support getRuntimeStatistics
+    assert(root_pipeline);
+    auto final_plan_exec_id = root_pipeline->getFinalPlanExecId();
     BaseRuntimeStatistics runtime_statistics;
+    if (!final_plan_exec_id.empty())
+    {
+        const auto & final_profile_infos = context.getDAGContext()->getOperatorProfileInfosMap()[final_plan_exec_id];
+        for (const auto & profile_info : final_profile_infos)
+            runtime_statistics.append(*profile_info);
+    }
     return runtime_statistics;
 }
 } // namespace DB

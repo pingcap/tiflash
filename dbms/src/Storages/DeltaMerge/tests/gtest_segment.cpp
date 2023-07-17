@@ -19,6 +19,7 @@
 #include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -348,7 +349,7 @@ try
         auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
         auto delta = segment->getDelta();
         auto mem_table_set = delta->getMemTableSet();
-        WriteBatches wbs(dm_context->storage_pool);
+        WriteBatches wbs(*dm_context->storage_pool);
         auto lock = segment->mustGetUpdateLock();
         auto [memory_cf, persisted_cf] = delta->cloneAllColumnFiles(lock, *dm_context, segment->getRowKeyRange(), wbs);
         ASSERT_FALSE(memory_cf.empty());

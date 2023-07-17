@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,27 +14,31 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 #include <kvproto/mpp.pb.h>
-#include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/IOProfileInfo.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
-
 namespace DB
 {
 class Context;
@@ -48,14 +52,14 @@ using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
+struct JoinProfileInfo;
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
-    JoinPtr join_ptr;
-    BlockInputStreams non_joined_streams;
+    JoinProfileInfoPtr join_profile_info;
     BlockInputStreams join_build_streams;
+    OperatorProfileInfos join_build_profile_infos;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -122,28 +126,48 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+enum class ExecutionMode
+{
+    None,
+    Stream,
+    Pipeline,
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+    DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+
+    // for disaggregated task on write node
+    DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
 
     // for tests need to run query tasks.
-    DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
+    DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+
+    std::unordered_map<String, OperatorProfileInfos> & getOperatorProfileInfosMap();
+
+    void addOperatorProfileInfos(const String & executor_id, OperatorProfileInfos && profile_infos);
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
+
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
+
+    std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
+
+    void addInboundIOProfileInfos(const String & executor_id, IOProfileInfos && io_profile_infos);
+
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -187,6 +211,10 @@ public:
     const MPPTaskId & getMPPTaskId() const
     {
         return mpp_task_id;
+    }
+    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const
+    {
+        return disaggregated_id;
     }
 
     std::pair<bool, double> getTableScanThroughput();
@@ -264,9 +292,24 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    String getRootExecutorId();
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    const tipb::DAGRequest * dag_request;
+    RU getReadRU() const;
+
+    void switchToStreamMode()
+    {
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Stream;
+    }
+    void switchToPipelineMode()
+    {
+        RUNTIME_CHECK(execution_mode == ExecutionMode::None);
+        execution_mode = ExecutionMode::Pipeline;
+    }
+    ExecutionMode getExecutionMode() const { return execution_mode; }
+
+public:
+    DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
     String dummy_query_string;
@@ -278,13 +321,15 @@ public:
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id;
+
+    // For mpp/cop/batchcop this is the host of tidb
+    // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    bool return_executor_id{};
-    String root_executor_id = "";
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
+    /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -301,15 +346,13 @@ public:
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
-    /// Hold the order of list based executors.
-    /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
-    std::vector<String> list_based_executors_order;
-
     /// executor_id, ScanContextPtr
     /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+
+    RuntimeFilterMgr runtime_filter_mgr;
 
 private:
     void initExecutorIdToJoinIdMap();
@@ -320,20 +363,32 @@ private:
     /// Holding the table lock to make sure that the table wouldn't be dropped during the lifetime of this query, even if there are no local regions.
     /// TableLockHolders need to be released after the BlockInputStream is destroyed to prevent data read exceptions.
     TableLockHolders table_locks;
+
+    /// operator profile related
+    /// operator_profile_infos will be added to map concurrently at runtime, so a lock is needed to prevent data race.
+    std::mutex operator_profile_infos_map_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.
+    std::unordered_map<String, OperatorProfileInfos> operator_profile_infos_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
-    /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
+    /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
+    /// inbound_io_profile_infos_map is a map that maps from executor_id (table_scan / exchange_receiver) to IOProfileInfos.
+    /// IOProfileInfos are from ExchangeReceiverSourceOp, CoprocessorSourceOp and local_read_source etc.
+    std::unordered_map<String, IOProfileInfos> inbound_io_profile_infos_map;
+
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
+    // The task id for disaggregated read
+    const std::unique_ptr<DM::DisaggTaskId> disaggregated_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;
@@ -348,6 +403,15 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
+
+    // The keyspace that the DAG request from
+    const KeyspaceID keyspace_id = NullspaceID;
+
+    // Used to determine the execution mode
+    // - None: request has not been executed yet
+    // - Stream: execute with block input stream
+    // - Pipeline: execute with pipeline model
+    ExecutionMode execution_mode = ExecutionMode::None;
 };
 
 } // namespace DB

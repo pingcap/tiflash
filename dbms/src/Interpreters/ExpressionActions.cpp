@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
@@ -149,6 +147,14 @@ ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
     return a;
 }
 
+ExpressionAction ExpressionAction::convertToNullable(const std::string & col_name)
+{
+    ExpressionAction a;
+    a.type = CONVERT_TO_NULLABLE;
+    a.col_need_to_nullable = col_name;
+    return a;
+}
+
 void ExpressionAction::prepare(Block & sample_block)
 {
     /** Constant expressions should be evaluated, and put the result in sample_block.
@@ -213,7 +219,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::RightOuter)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
@@ -255,6 +261,14 @@ void ExpressionAction::prepare(Block & sample_block)
         }
         // fill one more column: groupingID.
         sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
+        break;
+    }
+    case CONVERT_TO_NULLABLE:
+    {
+        // sample block doesn't have the real column pointer, meaning sample_block.getByName(col_need_to_nullable).column will null.
+        // so expanding column if const for sample_block.getByName(col_need_to_nullable).column is meaningless.
+        if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
+            convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
         break;
     }
 
@@ -349,6 +363,16 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
+    case CONVERT_TO_NULLABLE:
+    {
+        // for expand usage, when original col is const non-null value, the inserted null value will break its const attribute in global scope.
+        if (ColumnPtr converted = block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst())
+            block.getByName(col_need_to_nullable).column = converted;
+        if (!block.getByName(col_need_to_nullable).column->isColumnNullable())
+            convertColumnToNullable(block.getByName(col_need_to_nullable));
+        break;
+    }
+
     case PROJECT:
     {
         Block new_block;
@@ -385,14 +409,6 @@ void ExpressionAction::execute(Block & block) const
     }
 }
 
-
-void ExpressionAction::executeOnTotals(Block & block) const
-{
-    if (type != JOIN)
-        execute(block);
-    else
-        join->joinTotals(block);
-}
 
 String ExpressionAction::toString() const
 {
@@ -447,7 +463,10 @@ String ExpressionAction::toString() const
                 ss << " AS " << projections[i].second;
         }
         break;
-
+    case CONVERT_TO_NULLABLE:
+        ss << "CONVERT_TO_NULLABLE(";
+        ss << col_need_to_nullable << ")";
+        break;
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }
@@ -511,38 +530,6 @@ void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
         action.execute(block);
-}
-
-void ExpressionActions::executeOnTotals(Block & block) const
-{
-    /// If there is `totals` in the subquery for JOIN, but we do not have totals, then take the block with the default values instead of `totals`.
-    if (!block)
-    {
-        bool has_totals_in_join = false;
-        for (const auto & action : actions)
-        {
-            if (action.join && action.join->hasTotals())
-            {
-                has_totals_in_join = true;
-                break;
-            }
-        }
-
-        if (has_totals_in_join)
-        {
-            for (const auto & name_and_type : input_columns)
-            {
-                auto column = name_and_type.type->createColumn();
-                column->insertDefault();
-                block.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-            }
-        }
-        else
-            return; /// There's nothing to JOIN.
-    }
-
-    for (const auto & action : actions)
-        action.executeOnTotals(block);
 }
 
 std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns)
@@ -741,15 +728,6 @@ std::string ExpressionActions::dumpActions() const
         ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
-}
-
-BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
-{
-    for (const auto & action : actions)
-        if (action.join && (action.join->needReturnNonJoinedData()))
-            return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
-
-    return {};
 }
 
 void ExpressionActionsChain::addStep()

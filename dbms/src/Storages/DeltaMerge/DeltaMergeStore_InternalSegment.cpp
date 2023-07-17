@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 
 #include <magic_enum.hpp>
 
@@ -144,8 +145,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
-    split_info.my_stable->enableDMFilesGC();
-    split_info.other_stable->enableDMFilesGC();
+    split_info.my_stable->enableDMFilesGC(dm_context);
+    split_info.other_stable->enableDMFilesGC(dm_context);
 
     SegmentPtr new_left, new_right;
     {
@@ -282,7 +283,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
     auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
     wbs.writeLogAndData();
-    merged_stable->enableDMFilesGC();
+    merged_stable->enableDMFilesGC(dm_context);
 
     SYNC_FOR("after_DeltaMergeStore::segmentMerge|prepare_merge");
 
@@ -429,7 +430,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
-    new_stable->enableDMFilesGC();
+    new_stable->enableDMFilesGC(dm_context);
 
     SegmentPtr new_segment;
     {
@@ -579,6 +580,49 @@ SegmentPtr DeltaMergeStore::segmentIngestData(
             RUNTIME_CHECK_MSG(false, "applyIngestData returns unexpected result");
         }
     }
+
+    if constexpr (DM_RUN_CHECK)
+        check(dm_context.db_context);
+
+    return new_segment;
+}
+
+SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceDataFromCheckpoint(
+    DMContext & dm_context,
+    const SegmentPtr & segment,
+    const DMFilePtr & data_file,
+    const ColumnFilePersisteds & column_file_persisteds)
+{
+    LOG_INFO(log, "ReplaceData - Begin, segment={} data_file={} column_files_num={}", segment->info(), data_file->path(), column_file_persisteds.size());
+
+    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+    SegmentPtr new_segment;
+    {
+        std::unique_lock lock(read_write_mutex);
+        if (!isSegmentValid(lock, segment))
+        {
+            LOG_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
+            return {};
+        }
+
+        auto segment_lock = segment->mustGetUpdateLock();
+        new_segment = segment->dangerouslyReplaceDataFromCheckpoint(segment_lock, dm_context, data_file, wbs, column_file_persisteds);
+
+        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
+        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+
+        wbs.writeLogAndData();
+        wbs.writeMeta();
+
+        segment->abandon(dm_context);
+        segments[segment->getRowKeyRange().getEnd()] = new_segment;
+        id_to_segment[segment->segmentId()] = new_segment;
+
+        LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+    }
+
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

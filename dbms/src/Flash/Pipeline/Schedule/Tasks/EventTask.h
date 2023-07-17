@@ -14,10 +14,8 @@
 
 #pragma once
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 
 namespace DB
 {
@@ -25,54 +23,24 @@ namespace DB
 class EventTask : public Task
 {
 public:
+    // Only used for unit test.
     EventTask(
-        MemoryTrackerPtr mem_tracker_,
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const EventPtr & event_);
 
-    ~EventTask();
+    EventTask(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const EventPtr & event_,
+        ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
 protected:
-    ExecTaskStatus executeImpl() override;
-    virtual ExecTaskStatus doExecuteImpl() = 0;
+    void finalizeImpl() override;
+    virtual void doFinalizeImpl(){};
 
-    ExecTaskStatus awaitImpl() override;
-    virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
-
-    // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalize(){};
+    UInt64 getScheduleDuration() const;
 
 private:
-    template <typename Action>
-    ExecTaskStatus doTaskAction(Action && action)
-    {
-        if (unlikely(exec_status.isCancelled()))
-        {
-            finalize();
-            return ExecTaskStatus::CANCELLED;
-        }
-        try
-        {
-            auto status = action();
-            switch (status)
-            {
-            case FINISH_STATUS:
-                finalize();
-            default:
-                return status;
-            }
-        }
-        catch (...)
-        {
-            finalize();
-            assert(event);
-            exec_status.onErrorOccurred(std::current_exception());
-            return ExecTaskStatus::ERROR;
-        }
-    }
-
-private:
-    PipelineExecutorStatus & exec_status;
     EventPtr event;
 };
 

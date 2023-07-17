@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Operators/Operator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/types.h>
 
@@ -26,9 +29,16 @@
 namespace DB
 {
 class StorageDeltaMerge;
+using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 class Context;
+struct SelectQueryInfo;
 
-using MockColumnInfo = std::pair<String, TiDB::TP>;
+struct MockColumnInfo
+{
+    String name;
+    TiDB::TP type;
+    bool nullable = true;
+};
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using TableInfo = TiDB::TableInfo;
 using CutColumnInfo = std::pair<int, int>; // <start_idx, row_num>
@@ -82,9 +92,35 @@ public:
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
-    BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
+    std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> prepareForRead(
+        Context & context,
+        Int64 table_id,
+        bool keep_order = false);
+
+    BlockInputStreamPtr getStreamFromDeltaMerge(
+        Context & context,
+        Int64 table_id,
+        const FilterConditions * filter_conditions = nullptr,
+        bool keep_order = false,
+        std::vector<int> runtime_filter_ids = std::vector<int>(),
+        int rf_max_wait_time_ms = 0);
+
+    void buildExecFromDeltaMerge(
+        PipelineExecutorContext & exec_context_,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        Int64 table_id,
+        size_t concurrency = 1,
+        bool keep_order = false,
+        const FilterConditions * filter_conditions = nullptr,
+        std::vector<int> runtime_filter_ids = std::vector<int>(),
+        int rf_max_wait_time_ms = 0);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
+
+    void addDeltaMergeTableConcurrencyHint(const String & name, size_t concurrency_hint);
+
+    size_t getDelatMergeTableConcurrencyHint(Int64 table_id);
 
     /// for exchange receiver
     void addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos);
@@ -137,6 +173,7 @@ private:
     std::unordered_map<Int64, std::shared_ptr<StorageDeltaMerge>> storage_delta_merge_map; // <table_id, StorageDeltaMerge>
     std::unordered_map<String, TableInfo> table_infos_for_delta_merge; /// <table_name, table_info>
     std::unordered_map<Int64, NamesAndTypes> names_and_types_map_for_delta_merge; /// <table_id, NamesAndTypes>
+    std::unordered_map<Int64, size_t> delta_merge_table_id_to_concurrency_hint; /// <table_id, concurrency_hint>
 
     // storage delta merge can be used in executor ut test only.
     bool use_storage_delta_merge = false;

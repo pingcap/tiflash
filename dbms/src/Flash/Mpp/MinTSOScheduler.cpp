@@ -43,7 +43,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     }
     if (isDisabled())
     {
-        LOG_INFO(log, "MinTSOScheduler is disabled!");
+        LOG_WARNING(log, "MinTSOScheduler is disabled!");
     }
     else
     {
@@ -51,7 +51,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
         {
             thread_hard_limit = 10000;
             thread_soft_limit = 5000;
-            LOG_INFO(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
+            LOG_WARNING(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
         }
         else
         {
@@ -77,51 +77,69 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTa
         return true;
     }
     const auto & id = schedule_entry.getMPPTaskId();
-    auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.query_id);
-    if (nullptr == query_task_set || !query_task_set->isInNormalState())
+    auto [query_task_set, aborted_reason] = task_manager.getGatherTaskSetWithoutLock(id.gather_id);
+    if (nullptr == query_task_set || !aborted_reason.empty())
     {
         LOG_WARNING(log, "{} is scheduled with miss or abort.", id.toString());
         return true;
     }
     bool has_error = false;
-    return scheduleImp(id.query_id, query_task_set, schedule_entry, false, has_error);
+    return scheduleImp(id.gather_id.query_id, query_task_set, schedule_entry, false, has_error);
 }
 
 /// after finishing the query, there would be no threads released soon, so the updated min-query-id query with waiting tasks should be scheduled.
 /// the cancelled query maybe hang, so trigger scheduling as needed when deleting cancelled query.
-void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & task_manager, const bool is_cancelled)
+void MinTSOScheduler::deleteQuery(const MPPQueryId & query_id, MPPTaskManager & task_manager, const bool is_cancelled, Int64 gather_id)
 {
     if (isDisabled())
     {
         return;
     }
 
-    LOG_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", query_id.toString(), query_id == min_query_id, active_set.find(query_id) != active_set.end(), active_set.size(), waiting_set.find(query_id) != waiting_set.end(), waiting_set.size());
-    active_set.erase(query_id);
-    waiting_set.erase(query_id);
-    GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
-    GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
+    bool all_gathers_deleted = true;
+    auto query = task_manager.getMPPQueryWithoutLock(query_id);
 
-    if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
+    if (query != nullptr) /// release all waiting tasks
     {
-        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(query_id);
-        if (query_task_set) /// release all waiting tasks
+        for (const auto & gather_it : query->mpp_gathers)
         {
-            while (!query_task_set->waiting_tasks.empty())
+            if (gather_id == -1 || gather_it.first.gather_id == gather_id)
             {
-                auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
-                if (task_it != query_task_set->task_map.end() && task_it->second != nullptr)
-                    task_it->second->scheduleThisTask(ScheduleState::FAILED);
-                query_task_set->waiting_tasks.pop();
-                GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                if (is_cancelled) /// cancelled queries may have waiting tasks, and finished queries haven't.
+                {
+                    while (!gather_it.second->waiting_tasks.empty())
+                    {
+                        auto * task = gather_it.second->findMPPTask(gather_it.second->waiting_tasks.front());
+                        if (task != nullptr)
+                            task->scheduleThisTask(ScheduleState::FAILED);
+                        gather_it.second->waiting_tasks.pop();
+                        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                    }
+                }
+            }
+            else
+            {
+                all_gathers_deleted = false;
             }
         }
     }
 
-    /// NOTE: if updated min_query_id query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
-    if (updateMinQueryId(query_id, true, is_cancelled ? "when cancelling it" : "as finishing it"))
+    if (all_gathers_deleted)
     {
-        scheduleWaitingQueries(task_manager);
+        LOG_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", query_id.toString(), query_id == min_query_id, active_set.find(query_id) != active_set.end(), active_set.size(), waiting_set.find(query_id) != waiting_set.end(), waiting_set.size());
+        active_set.erase(query_id);
+        waiting_set.erase(query_id);
+        GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
+        GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
+        /// NOTE: if updated min_query_id query has waiting tasks, they should be scheduled, especially when the soft-limited threads are amost used and active tasks are in resources deadlock which cannot release threads soon.
+        if (updateMinQueryId(query_id, true, is_cancelled ? "when cancelling it" : "as finishing it"))
+        {
+            scheduleWaitingQueries(task_manager);
+        }
+    }
+    else
+    {
+        LOG_DEBUG(log, "{} gather {} of query {}, and there are still some other gathers remain", is_cancelled ? "Cancelled" : "Finished", gather_id, query_id.toString());
     }
 }
 
@@ -149,8 +167,8 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
     while (!waiting_set.empty())
     {
         auto current_query_id = *waiting_set.begin();
-        auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id);
-        if (nullptr == query_task_set) /// silently solve this rare case
+        auto query = task_manager.getMPPQueryWithoutLock(current_query_id);
+        if (nullptr == query) /// silently solve this rare case
         {
             LOG_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id.toString());
             updateMinQueryId(current_query_id, true, "as it is not in the task manager.");
@@ -161,23 +179,26 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             continue;
         }
 
-        LOG_DEBUG(log, "query {} (is min = {}) with {} tasks is to be scheduled from waiting set (size = {}).", current_query_id.toString(), current_query_id == min_query_id, query_task_set->waiting_tasks.size(), waiting_set.size());
+        LOG_DEBUG(log, "query {} (is min = {}) is to be scheduled from waiting set (size = {}).", current_query_id.toString(), current_query_id == min_query_id, waiting_set.size());
         /// schedule tasks one by one
-        while (!query_task_set->waiting_tasks.empty())
+        for (auto & gather_set : query->mpp_gathers)
         {
-            auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
-            bool has_error = false;
-            if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second->getScheduleEntry(), true, has_error))
+            while (!gather_set.second->waiting_tasks.empty())
             {
-                if (has_error)
+                auto * task = gather_set.second->findMPPTask(gather_set.second->waiting_tasks.front());
+                bool has_error = false;
+                if (task != nullptr && !scheduleImp(current_query_id, gather_set.second, task->getScheduleEntry(), true, has_error))
                 {
-                    query_task_set->waiting_tasks.pop(); /// it should be pop from the waiting queue, because the task is scheduled with errors.
-                    GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                    if (has_error)
+                    {
+                        gather_set.second->waiting_tasks.pop(); /// it should be pop from the waiting queue, because the task is scheduled with errors.
+                        GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                    }
+                    return;
                 }
-                return;
+                gather_set.second->waiting_tasks.pop();
+                GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
             }
-            query_task_set->waiting_tasks.pop();
-            GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
         }
         LOG_DEBUG(log, "query {} (is min = {}) is scheduled from waiting set (size = {}).", current_query_id.toString(), current_query_id == min_query_id, waiting_set.size());
         waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
@@ -186,11 +207,11 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 }
 
 /// [directly schedule, from waiting set] * [is min_query_id query, not] * [can schedule, can't] totally 8 cases.
-bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error)
+bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPGatherTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error)
 {
     auto needed_threads = schedule_entry.getNeededThreads();
     auto check_for_new_min_tso = query_id <= min_query_id && estimated_thread_usage + needed_threads <= thread_hard_limit;
-    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || query_id <= *active_set.rbegin()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
+    auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || active_set.find(query_id) != active_set.end()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
         updateMinQueryId(query_id, false, isWaiting ? "from the waiting set" : "when directly schedule it");
@@ -202,7 +223,7 @@ bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPQueryTas
         }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        LOG_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_query_id == query_id ? "hard" : "soft", min_query_id == query_id ? thread_hard_limit : thread_soft_limit);
+        LOG_DEBUG(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_query_id == query_id ? "hard" : "soft", min_query_id == query_id ? thread_hard_limit : thread_soft_limit);
         return true;
     }
     else
@@ -234,7 +255,14 @@ bool MinTSOScheduler::scheduleImp(const MPPQueryId & query_id, const MPPQueryTas
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
-        LOG_INFO(log, "threads are unavailable for the query {} or active set is full (size =  {}), need {}, but used {} of the thread soft limit {},{} waiting set size = {}", query_id.toString(), active_set.size(), needed_threads, estimated_thread_usage, thread_soft_limit, isWaiting ? "" : " put into", waiting_set.size());
+        LOG_INFO(log, "Resource temporary not available for query {}(is first schedule: {}), available threads count are {}, available active set size = {}, "
+                      "required threads count are {}, waiting set size = {}",
+                 query_id.toString(),
+                 !isWaiting,
+                 thread_soft_limit - estimated_thread_usage,
+                 active_set_soft_limit - active_set.size(),
+                 needed_threads,
+                 waiting_set.size());
         return false;
     }
 }
@@ -260,7 +288,7 @@ bool MinTSOScheduler::updateMinQueryId(const MPPQueryId & query_id, const bool r
     if (min_query_id != old_min_query_id) /// if min_query_id == MPPTaskId::Max_Query_Id and the query_id is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
     {
         GET_METRIC(tiflash_task_scheduler, type_min_tso).Set(min_query_id.query_ts == 0 ? min_query_id.start_ts : min_query_id.query_ts);
-        LOG_INFO(log, "min_query_id query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_query_id.toString(), min_query_id.toString(), msg, estimated_thread_usage, active_set.size(), waiting_set.size());
+        LOG_DEBUG(log, "min_query_id query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_query_id.toString(), min_query_id.toString(), msg, estimated_thread_usage, active_set.size(), waiting_set.size());
     }
     return force_scheduling;
 }

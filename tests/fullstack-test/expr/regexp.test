@@ -144,14 +144,15 @@ func> wait_table test t
 mysql> set tidb_enforce_mpp=1; select regexp_replace(_utf8mb4'1', _utf8mb4'1', repl, pos, occur, match_type) as res from test.t;
 mysql> set tidb_enforce_mpp=1; select regexp_replace(_utf8mb4'1', _utf8mb4'', repl, pos, occur, match_type) as res from test.t;
 
-mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', _utf8mb4'233', 1, 1, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', _utf8mb4'xzx', 1, 1, _utf8mb4'i'), (_utf8mb4'ababc', _utf8mb4'^abc$', _utf8mb4'123', 1, 1, _utf8mb4'c');
+mysql> insert into test.t values (_utf8mb4'123', _utf8mb4'12.', _utf8mb4'233', 1, 1, _utf8mb4''), (_utf8mb4'aBb', _utf8mb4'bb', _utf8mb4'xzx', 1, 1, _utf8mb4'i'), (_utf8mb4'ababc', _utf8mb4'^abc$', _utf8mb4'123', 1, 2, _utf8mb4'c'), (_utf8mb4'seafood fool', _utf8mb4'foo(.?)', _utf8mb4'1\\1a\\18', 1, 1, _utf8mb4'');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 mysql> set tidb_enforce_mpp=1; select regexp_replace(expr, pattern, repl, 1, 1, match_type) as res from test.t;
-+-------+
-| res   |
-+-------+
-| 233   |
-| axzx  |
-| ababc |
-+-------+
++---------------+
+| res           |
++---------------+
+| 233           |
+| axzx          |
+| ababc         |
+| sea1dad8 fool |
++---------------+

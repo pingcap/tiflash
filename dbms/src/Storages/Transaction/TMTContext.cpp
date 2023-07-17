@@ -12,21 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/DNSCache.h>
+#include <Flash/Disaggregated/S3LockClient.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Etcd/Client.h>
+#include <TiDB/OwnerInfo.h>
+#include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
+#include <common/logger_useful.h>
 #include <pingcap/pd/MockPDClient.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace DB
@@ -40,7 +48,9 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
+namespace
+{
+std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
     // Doesn't need SchemaSyncer for tiflash_compute mode.
     if (disaggregated_compute_mode)
@@ -49,32 +59,77 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
     {
         // product env
         // Get DBInfo/TableInfo from TiKV, and create table with names `t_${table_id}`
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ false, /*mock_mapper*/ false>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ false, /*mock_mapper*/ false);
     }
     else if (!for_unit_test)
     {
         // mock test
         // Get DBInfo/TableInfo from MockTiDB, and create table with its display names
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ true>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ true);
     }
     // unit test.
     // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
-    return std::static_pointer_cast<SchemaSyncer>(
-        std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
+    return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ false);
 }
+
+// Print log for MPPTask which hasn't been removed for over 25 minutes.
+void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+{
+    String log_info;
+    double longest_live_time = 0;
+    for (const auto & iter : monitored_tasks)
+    {
+        auto alive_time = iter.second.elapsedSeconds();
+        if (alive_time > longest_live_time)
+            longest_live_time = alive_time;
+        if (alive_time >= 1500)
+            log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
+    }
+
+    if (!log_info.empty())
+        LOG_INFO(log, log_info);
+    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
+}
+
+void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
+{
+    std::unique_lock lock(monitor->mu, std::defer_lock);
+    while (true)
+    {
+        lock.lock();
+
+        // Check MPPTasks every 25 minutes
+        monitor->cv.wait_for(lock, std::chrono::seconds(1500));
+
+        auto snapshot = monitor->monitored_tasks;
+        if (monitor->is_shutdown)
+        {
+            lock.unlock();
+            checkLongLiveMPPTasks(snapshot, monitor->log);
+            return;
+        }
+
+        lock.unlock();
+        checkLongLiveMPPTasks(snapshot, monitor->log);
+    }
+}
+
+void startMonitorMPPTaskThread(const MPPTaskManagerPtr & manager)
+{
+    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [monitor = manager->getMPPTaskMonitor()] { monitorMPPTasks(monitor); });
+}
+} // namespace
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(context_.isDisaggregatedComputeMode() && context_.useAutoScaler() ? nullptr : std::make_shared<KVStore>(context))
+    , kvstore(context_.getSharedContextDisagg()->isDisaggregatedComputeMode() && context_.getSharedContextDisagg()->use_autoscaler ? nullptr : std::make_shared<KVStore>(context))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
     , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
                                            : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.isDisaggregatedComputeMode()))
+    , schema_sync_manager(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
@@ -85,18 +140,62 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
-{}
+{
+    startMonitorMPPTaskThread(mpp_task_manager);
+
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
+        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
+        s3gc_owner->campaignOwner(); // start campaign
+        s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
+
+        S3::S3GCConfig remote_gc_config;
+        {
+            Int64 gc_method_int = context.getSettingsRef().remote_gc_method;
+            if (gc_method_int == 1)
+            {
+                remote_gc_config.method = S3::S3GCMethod::Lifecycle;
+                LOG_INFO(Logger::get(), "Using remote_gc_method={}", magic_enum::enum_name(remote_gc_config.method));
+            }
+            else if (gc_method_int == 2)
+            {
+                remote_gc_config.method = S3::S3GCMethod::ScanThenDelete;
+                LOG_INFO(Logger::get(), "Using remote_gc_method={}", magic_enum::enum_name(remote_gc_config.method));
+            }
+            else
+            {
+                LOG_WARNING(Logger::get(), "Unknown remote gc method from settings, using default method, value={} remote_gc_method={}", gc_method_int, magic_enum::enum_name(remote_gc_config.method));
+            }
+        }
+        remote_gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
+        remote_gc_config.verify_locks = context.getSettingsRef().remote_gc_verify_consistency > 0;
+        // set the gc_method so that S3LockService can set tagging when create delmark
+        S3::ClientFactory::instance().gc_method = remote_gc_config.method;
+        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, remote_gc_config);
+    }
+}
+
+TMTContext::~TMTContext() = default;
 
 void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
 {
     if (!raft_config.pd_addrs.empty())
+    {
+        // update the client config including pd_client
         cluster->update(raft_config.pd_addrs, cluster_config);
+        if (etcd_client)
+        {
+            // update the etcd_client after pd_client get updated
+            etcd_client->update(cluster_config);
+        }
+    }
 }
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
-    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     kvstore->restore(path_pool, proxy_helper);
@@ -107,6 +206,34 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
     {
         // Only create when running with Raft threads
         background_service = std::make_unique<BackgroundService>(*this);
+    }
+}
+
+void TMTContext::shutdown()
+{
+    if (s3gc_owner)
+    {
+        // stop the campaign loop, so the S3LockService will
+        // let client retry
+        s3gc_owner->cancel();
+        s3gc_owner = nullptr;
+    }
+
+    if (s3gc_manager)
+    {
+        s3gc_manager->shutdown();
+        s3gc_manager = nullptr;
+    }
+
+    if (s3lock_client)
+    {
+        s3lock_client = nullptr;
+    }
+
+    if (background_service)
+    {
+        background_service->shutdown();
+        background_service = nullptr;
     }
 }
 
@@ -180,15 +307,20 @@ TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_orde
     return store_status.load(memory_order);
 }
 
-SchemaSyncerPtr TMTContext::getSchemaSyncer() const
+std::shared_ptr<TiDBSchemaSyncerManager> TMTContext::getSchemaSyncerManager() const
 {
     std::lock_guard lock(mutex);
-    return schema_syncer;
+    return schema_sync_manager;
 }
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
 {
     return cluster->pd_client;
+}
+
+const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
+{
+    return s3gc_owner;
 }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()
@@ -203,7 +335,7 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
@@ -271,6 +403,10 @@ UInt64 TMTContext::batchReadIndexTimeout() const
 UInt64 TMTContext::waitIndexTimeout() const
 {
     return wait_index_timeout_ms.load(std::memory_order_relaxed);
+}
+void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
+{
+    return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
 }
 Int64 TMTContext::waitRegionReadyTimeout() const
 {

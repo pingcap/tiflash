@@ -16,6 +16,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/MutableSupport.h>
@@ -33,10 +34,24 @@ extern const int INVALID_CONFIG_PARAMETER;
 TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
     TiFlashRaftConfig res;
+    // The ip/port that flash service bind to
     res.flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
+    // The ip/port that other flash server connect to
+    res.advertise_engine_addr = config.getString(
+        "flash.proxy.advertise-engine-addr",
+        config.getString("flash.proxy.engine-addr", res.flash_server_addr));
 
-    if (!config.has("raft"))
-        return res;
+    // "addr" - The raft ip/port that raft service bind to
+    // "advertise-addr" - The raft ip/port that other raft server connect to
+
+    {
+        // Check by `raft` prefix instead of check by `config.has("raft")`,
+        // because when sub keys are set from cli args, `raft` will not exist.
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys("raft", keys);
+        if (keys.empty())
+            return res;
+    }
 
     if (config.has("raft.pd_addr"))
     {

@@ -15,6 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/S3/S3Common.h>
 
 #ifndef NDEBUG
 #include <sys/stat.h>
@@ -156,6 +157,10 @@ void DMFileWriter::finalize()
     }
     if (dmfile->useMetaV2())
     {
+        if (S3::ClientFactory::instance().isEnabled())
+        {
+            dmfile->finalizeSmallColumnDataFiles(file_provider, write_limiter);
+        }
         // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
         finalizeMetaV2();
     }

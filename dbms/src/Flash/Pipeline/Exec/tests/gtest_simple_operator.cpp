@@ -12,16 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
+#include <Flash/Planner/Plans/PhysicalMockTableScan.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB::tests
 {
+namespace
+{
+class SimpleGetResultSinkOp : public SinkOp
+{
+public:
+    SimpleGetResultSinkOp(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        ResultHandler result_handler_)
+        : SinkOp(exec_context_, req_id)
+        , result_handler(std::move(result_handler_))
+    {
+        assert(result_handler);
+    }
+
+    String getName() const override
+    {
+        return "SimpleGetResultSinkOp";
+    }
+
+protected:
+    OperatorStatus writeImpl(Block && block) override
+    {
+        if (!block)
+            return OperatorStatus::FINISHED;
+
+        result_handler(block);
+        return OperatorStatus::NEED_INPUT;
+    }
+
+private:
+    ResultHandler result_handler;
+};
+} // namespace
+
 class SimpleOperatorTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -29,7 +66,7 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.context.setExecutorTest();
+        context.context->setExecutorTest();
 
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
@@ -50,21 +87,24 @@ public:
     PipelineExecPtr build(
         const std::shared_ptr<tipb::DAGRequest> & request,
         ResultHandler result_handler,
-        PipelineExecutorStatus & exec_status)
+        PipelineExecutorContext & exec_context)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
-        context.context.setDAGContext(&dag_context);
-        context.context.setMockStorage(context.mockStorage());
+        context.context->setDAGContext(&dag_context);
+        context.context->setMockStorage(context.mockStorage());
 
-        PhysicalPlan physical_plan{context.context, ""};
+        PhysicalPlan physical_plan{*context.context, ""};
         physical_plan.build(request.get());
-        assert(!result_handler.isIgnored());
-        auto plan_tree = PhysicalGetResultSink::build(std::move(result_handler), physical_plan.outputAndOptimize());
+        auto plan_tree = physical_plan.outputAndOptimize();
 
-        PipelineExecGroupBuilder group_builder{exec_status};
+        PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
+            plan->buildPipelineExecGroup(exec_context, group_builder, *context.context, /*concurrency=*/1);
+        });
+        assert(group_builder.concurrency() == 1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_context, "", result_handler));
         });
         auto result = group_builder.build();
         assert(result.size() == 1);
@@ -79,8 +119,8 @@ public:
         ResultHandler result_handler{[&blocks](const Block & block) {
             blocks.push_back(block);
         }};
-        PipelineExecutorStatus exec_status;
-        auto op_pipeline = build(request, result_handler, exec_status);
+        PipelineExecutorContext exec_context;
+        auto op_pipeline = build(request, result_handler, exec_context);
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
@@ -99,9 +139,9 @@ try
 
     ResultHandler result_handler{[](const Block &) {
     }};
-    PipelineExecutorStatus exec_status;
-    auto op_pipeline = build(request, result_handler, exec_status);
-    exec_status.cancel();
+    PipelineExecutorContext exec_context;
+    auto op_pipeline = build(request, result_handler, exec_context);
+    exec_context.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }
 CATCH

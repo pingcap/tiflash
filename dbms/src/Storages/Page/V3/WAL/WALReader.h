@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -25,9 +26,6 @@ namespace ErrorCodes
 {
 extern const int CORRUPTED_DATA;
 }
-
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 namespace PS::V3
 {
@@ -50,6 +48,8 @@ private:
     bool error_happened = false;
 };
 
+using LogReaderPtr = std::unique_ptr<LogReader>;
+
 class WALStoreReader
 {
 public:
@@ -68,6 +68,21 @@ public:
                                     PSDiskDelegatorPtr & delegator,
                                     WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
                                     const ReadLimiterPtr & read_limiter = nullptr);
+
+    static LogReaderPtr createLogReader(
+        const LogFilename & filename,
+        FileProviderPtr & provider,
+        ReportCollector * reporter,
+        WALRecoveryMode recovery_mode,
+        const ReadLimiterPtr & read_limiter,
+        LoggerPtr logger);
+
+    static String getLastRecordInLogFile(
+        const LogFilename & filename,
+        FileProviderPtr & provider,
+        WALRecoveryMode recovery_mode,
+        const ReadLimiterPtr & read_limiter,
+        LoggerPtr logger);
 
     bool remained() const;
 

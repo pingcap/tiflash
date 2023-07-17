@@ -14,26 +14,37 @@
 
 #pragma once
 
+#include <Core/Defines.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <common/types.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 struct SpillConfig
 {
 public:
-    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_cached_data_bytes_in_spiller_, size_t max_spilled_rows_per_file_, size_t max_spilled_bytes_per_file_, const FileProviderPtr & file_provider_);
+    SpillConfig(
+        const String & spill_dir_,
+        const String & spill_id_,
+        size_t max_cached_data_bytes_in_spiller_,
+        size_t max_spilled_rows_per_file_,
+        size_t max_spilled_bytes_per_file_,
+        const FileProviderPtr & file_provider_,
+        UInt64 for_all_constant_max_streams_ = 1,
+        UInt64 for_all_constant_block_size_ = DEFAULT_BLOCK_SIZE);
     String spill_dir;
     String spill_id;
     String spill_id_as_file_name_prefix;
-    /// soft limit of the max cached data bytes in spiller(used in Spiller::spillBlocksUsingBlockInputStream)
+    /// soft limit of the max cached data bytes in spiller(used in CachedSpillHandler)
     size_t max_cached_data_bytes_in_spiller;
     /// soft limit of the max rows per spilled file
     UInt64 max_spilled_rows_per_file;
     /// soft limit of the max bytes per spilled file
     UInt64 max_spilled_bytes_per_file;
     FileProviderPtr file_provider;
+
+    UInt64 for_all_constant_max_streams;
+    UInt64 for_all_constant_block_size;
 };
 } // namespace DB

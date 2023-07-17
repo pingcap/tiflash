@@ -27,11 +27,13 @@ public:
     static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
-        const LoggerPtr & log);
+        const LoggerPtr & log,
+        const FineGrainedShuffle & fine_grained_shuffle);
 
     PhysicalExchangeReceiver(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
         const Block & sample_block_,
         const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_);
@@ -48,6 +50,13 @@ public:
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
+
+private:
     Block sample_block;
 
     std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;

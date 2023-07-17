@@ -23,19 +23,23 @@ class PipelineTask : public EventTask
 {
 public:
     PipelineTask(
-        MemoryTrackerPtr mem_tracker_,
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
         const EventPtr & event_,
         PipelineExecPtr && pipeline_exec_);
 
 protected:
-    ExecTaskStatus doExecuteImpl() override;
+    ExecTaskStatus executeImpl() override;
 
-    ExecTaskStatus doAwaitImpl() override;
+    ExecTaskStatus executeIOImpl() override;
 
-    void finalize() override;
+    ExecTaskStatus awaitImpl() override;
+
+    void doFinalizeImpl() override;
 
 private:
-    PipelineExecPtr pipeline_exec;
+    PipelineExecPtr pipeline_exec_holder;
+    // To reduce the overheads of `pipeline_exec_holder.get()`
+    PipelineExec * pipeline_exec;
 };
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -22,50 +23,15 @@ namespace DB::tests
 {
 namespace
 {
-class Waiter
-{
-public:
-    Waiter(size_t init_value)
-        : counter(init_value)
-    {}
-    void notify()
-    {
-        bool last_notify = false;
-        {
-            std::lock_guard lock(mu);
-            last_notify = (--counter) == 0;
-        }
-        if (last_notify)
-            cv.notify_one();
-    }
-    void wait()
-    {
-        std::chrono::seconds timeout(15);
-        std::unique_lock lock(mu);
-        RUNTIME_CHECK(cv.wait_for(lock, timeout, [&] { return 0 == counter; }));
-    }
-
-private:
-    mutable std::mutex mu;
-    int64_t counter;
-    std::condition_variable cv;
-};
-
 class SimpleTask : public Task
 {
 public:
-    explicit SimpleTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+    explicit SimpleTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
     {}
 
-    ~SimpleTask()
-    {
-        waiter.notify();
-    }
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -73,25 +39,18 @@ protected:
     }
 
 private:
-    Waiter & waiter;
     int loop_count = 5;
 };
 
 class SimpleWaitingTask : public Task
 {
 public:
-    explicit SimpleWaitingTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+    explicit SimpleWaitingTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
     {}
 
-    ~SimpleWaitingTask()
-    {
-        waiter.notify();
-    }
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -106,7 +65,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -123,67 +82,87 @@ protected:
 
 private:
     int loop_count = 10 + random() % 10;
-    Waiter & waiter;
 };
 
-enum class TraceTaskStatus
+class SimpleBlockedTask : public Task
 {
-    initing,
-    running,
-    waiting,
+public:
+    explicit SimpleBlockedTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::IO_IN;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::IO_IN;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
 };
+
 class MemoryTraceTask : public Task
 {
 public:
-    MemoryTraceTask(MemoryTrackerPtr mem_tracker_, Waiter & waiter_)
-        : Task(std::move(mem_tracker_))
-        , waiter(waiter_)
-    {}
-
-    ~MemoryTraceTask()
+    explicit MemoryTraceTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
     {
-        waiter.notify();
+        assert(exec_context_.getMemoryTracker() != nullptr);
     }
 
     // From CurrentMemoryTracker::MEMORY_TRACER_SUBMIT_THRESHOLD
     static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
-        switch (status)
-        {
-        case TraceTaskStatus::initing:
-            status = TraceTaskStatus::waiting;
-            return ExecTaskStatus::WAITING;
-        case TraceTaskStatus::waiting:
-        {
-            status = TraceTaskStatus::running;
-            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD);
-            return ExecTaskStatus::FINISHED;
-        }
-        default:
-            __builtin_unreachable();
-        }
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
+        return ExecTaskStatus::IO_IN;
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
+        return ExecTaskStatus::WAITING;
     }
 
     ExecTaskStatus awaitImpl() override
     {
-        if (status == TraceTaskStatus::waiting)
-            CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
-        return ExecTaskStatus::RUNNING;
+        // await wouldn't call MemoryTracker.
+        return ExecTaskStatus::FINISHED;
     }
-
-private:
-    TraceTaskStatus status{TraceTaskStatus::initing};
-    Waiter & waiter;
 };
 
 class DeadLoopTask : public Task
 {
 public:
-    DeadLoopTask()
-        : Task(nullptr)
+    explicit DeadLoopTask(PipelineExecutorContext & exec_context_)
+        : Task(exec_context_)
     {}
 
 protected:
@@ -193,6 +172,11 @@ protected:
     }
 
     ExecTaskStatus awaitImpl() override
+    {
+        return ExecTaskStatus::IO_IN;
+    }
+
+    ExecTaskStatus executeIOImpl() override
     {
         return ExecTaskStatus::RUNNING;
     }
@@ -204,55 +188,54 @@ class TaskSchedulerTestRunner : public ::testing::Test
 public:
     static constexpr size_t thread_num = 5;
 
-    void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
+    static void submitAndWait(std::vector<TaskPtr> & tasks, PipelineExecutorContext & exec_context)
     {
-        TaskSchedulerConfig config{thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
-        waiter.wait();
+        std::chrono::seconds timeout(15);
+        exec_context.waitFor(timeout);
     }
 };
 
-TEST_F(TaskSchedulerTestRunner, simple_task)
+TEST_F(TaskSchedulerTestRunner, simpleTask)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        Waiter waiter(task_num);
+        PipelineExecutorContext exec_context;
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<SimpleTask>(waiter));
-        submitAndWait(tasks, waiter);
+            tasks.push_back(std::make_unique<SimpleTask>(exec_context));
+        submitAndWait(tasks, exec_context);
     }
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, simple_waiting_task)
+TEST_F(TaskSchedulerTestRunner, simpleWaitingTask)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        Waiter waiter(task_num);
+        PipelineExecutorContext exec_context;
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<SimpleWaitingTask>(waiter));
-        submitAndWait(tasks, waiter);
+            tasks.push_back(std::make_unique<SimpleWaitingTask>(exec_context));
+        submitAndWait(tasks, exec_context);
     }
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, test_memory_trace)
+TEST_F(TaskSchedulerTestRunner, testMemoryTrace)
 try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        auto tracker = MemoryTracker::create();
-        MemoryTrackerSetter memory_tracker_setter{true, tracker.get()};
-        Waiter waiter(task_num);
+        PipelineExecutorContext exec_context{"", "", MemoryTracker::create()};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<MemoryTraceTask>(tracker, waiter));
-        submitAndWait(tasks, waiter);
+            tasks.push_back(std::make_unique<MemoryTraceTask>(exec_context));
+        submitAndWait(tasks, exec_context);
         // The value of the memory tracer is not checked here because of `std::memory_order_relaxed`.
     }
 }
@@ -261,13 +244,18 @@ CATCH
 TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
-    auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
-        TaskSchedulerConfig config{task_thread_pool_size};
-        TaskScheduler task_scheduler{config};
-        std::vector<TaskPtr> tasks;
-        for (size_t i = 0; i < task_num; ++i)
-            tasks.push_back(std::make_unique<DeadLoopTask>());
-        task_scheduler.submit(tasks);
+    auto do_test = [&](size_t task_thread_pool_size, size_t task_num) {
+        PipelineExecutorContext exec_context;
+        {
+            TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
+            TaskScheduler task_scheduler{config};
+            std::vector<TaskPtr> tasks;
+            for (size_t i = 0; i < task_num; ++i)
+                tasks.push_back(std::make_unique<DeadLoopTask>(exec_context));
+            task_scheduler.submit(tasks);
+        }
+        std::chrono::seconds timeout(15);
+        exec_context.waitFor(timeout);
     };
     std::vector<size_t> thread_nums{1, 5, 10, 100};
     for (auto task_thread_pool_size : thread_nums)

@@ -18,13 +18,13 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
-#include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand2.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -54,43 +54,19 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
     if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
-        if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
-        {
-            return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
-        }
+        return physical_mock_table_scan->setFilterConditions(context, executor_id, selection);
     }
     return false;
-}
-
-void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlanNodePtr & root_node)
-{
-    auto & list_based_executors_order = dag_context.list_based_executors_order;
-    PhysicalPlanVisitor::visitPostOrder(root_node, [&](const PhysicalPlanNodePtr & plan) {
-        assert(plan);
-        if (plan->isTiDBOperator())
-        {
-            if (plan->tp() == PlanType::TableScan)
-            {
-                auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
-                if (physical_table_scan->hasFilterConditions())
-                    list_based_executors_order.push_back(physical_table_scan->getFilterConditionsId());
-                list_based_executors_order.push_back(physical_table_scan->execId());
-            }
-            else
-                list_based_executors_order.push_back(plan->execId());
-        }
-    });
 }
 } // namespace
 
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
-    assert(dag_request);
-    ExecutorIdGenerator id_generator;
+    RUNTIME_CHECK(dag_request);
     traverseExecutorsReverse(
         dag_request,
         [&](const tipb::Executor & executor) {
-            build(id_generator.generate(executor), &executor);
+            build(&executor);
             return true;
         });
 }
@@ -98,6 +74,10 @@ void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Executor * executor)
 {
     TiDBTableScan table_scan(executor, executor_id, dagContext());
+    if (!table_scan.getPushedDownFilters().empty() && unlikely(!context.getSettingsRef().dt_enable_read_thread))
+        throw Exception("Enable late materialization but disable read thread pool, please set the config `dt_enable_read_thread` of TiFlash to true,"
+                        "or disable late materialization by set tidb variable `tidb_opt_enable_late_materialization` to false.");
+    LOG_DEBUG(log, "tidb table scan has runtime filter size:{}", table_scan.getRuntimeFilterIDs().size());
     if (unlikely(context.isTest()))
         pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
     else
@@ -105,9 +85,11 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
     dagContext().table_scan_executor_id = executor_id;
 }
 
-void PhysicalPlan::build(const String & executor_id, const tipb::Executor * executor)
+void PhysicalPlan::build(const tipb::Executor * executor)
 {
-    assert(executor);
+    RUNTIME_CHECK(executor);
+    RUNTIME_CHECK(executor->has_executor_id());
+    const auto & executor_id = executor->executor_id();
     switch (executor->tp())
     {
     case tipb::ExecType::TypeLimit:
@@ -153,14 +135,13 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
         {
-            size_t fine_grained_stream_count = executor->has_fine_grained_shuffle_stream_count() ? executor->fine_grained_shuffle_stream_count() : 0;
-            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver(), fine_grained_stream_count));
+            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver(), FineGrainedShuffle(executor)));
         }
         else
         {
             // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes
             // or use one compute node to simulate MPP process.
-            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log));
+            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log, FineGrainedShuffle(executor)));
         }
         break;
     }
@@ -204,6 +185,12 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeExpand2:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -235,7 +222,7 @@ DAGContext & PhysicalPlan::dagContext() const
 
 void PhysicalPlan::pushBack(const PhysicalPlanNodePtr & plan_node)
 {
-    assert(plan_node);
+    RUNTIME_CHECK(plan_node);
     cur_plan_nodes.push_back(plan_node);
 }
 
@@ -243,7 +230,7 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 {
     RUNTIME_CHECK(!cur_plan_nodes.empty());
     PhysicalPlanNodePtr back = cur_plan_nodes.back();
-    assert(back);
+    RUNTIME_CHECK(back);
     cur_plan_nodes.pop_back();
     return back;
 }
@@ -252,7 +239,7 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 /// For batchcop/cop that without PhysicalExchangeSender or PhysicalMockExchangeSender, We need to add root final projection.
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
     {
         pushBack(root_node);
@@ -281,29 +268,26 @@ PhysicalPlanNodePtr PhysicalPlan::outputAndOptimize()
 
     RUNTIME_ASSERT(root_node, log, "root_node shouldn't be nullptr after `outputAndOptimize`");
 
-    if (!dagContext().return_executor_id)
-        fillOrderForListBasedExecutors(dagContext(), root_node);
-
     return root_node;
 }
 
 String PhysicalPlan::toString() const
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     return PhysicalPlanVisitor::visitToString(root_node);
 }
 
 void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    assert(root_node);
+    RUNTIME_CHECK(root_node);
     root_node->buildBlockInputStream(pipeline, context, max_streams);
 }
 
-PipelinePtr PhysicalPlan::toPipeline()
+PipelinePtr PhysicalPlan::toPipeline(PipelineExecutorContext & exec_context, Context & context)
 {
-    assert(root_node);
-    PipelineBuilder builder;
-    root_node->buildPipeline(builder);
+    RUNTIME_CHECK(root_node);
+    PipelineBuilder builder{log->identifier()};
+    root_node->buildPipeline(builder, context, exec_context);
     root_node.reset();
     auto pipeline = builder.build();
     auto to_string = [&]() -> String {

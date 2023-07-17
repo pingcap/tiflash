@@ -1,0 +1,67 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+  "name": "TiFlash",
+  "build": {
+    "dockerfile": "Dockerfile",
+  },
+  // "init": true,
+  "capAdd": [
+    "SYS_PTRACE",
+  ],
+  "securityOpt": [
+    "seccomp=unconfined",
+  ],
+  "mounts": [
+    // Cache Cargo downloaded deps
+    "source=${localEnv:HOME}/.cargo/registry,target=/home/dev/.cargo/registry,type=bind",
+    "source=${localEnv:HOME}/.cargo/git,target=/home/dev/.cargo/git,type=bind",
+    // Cache Rust toolchain
+    // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
+    "source=${localEnv:HOME}/.rustup,target=/home/dev/.rustup,type=bind",
+    // Cache ccache results
+    "source=${localEnv:HOME}/.cache/ccache,target=/home/dev/.cache/ccache,type=bind",
+    // Persist GitHub CLI Config locally
+    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind",
+    // VSCode Extensions
+    "source=${localEnv:HOME}/.vscode-server/extensions,target=/home/dev/.vscode-server/extensions,type=bind",
+  ],
+  // Ensure mount source directories exist.
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.cargo/registry ${localEnv:HOME}/.cargo/git ${localEnv:HOME}/.rustup ${localEnv:HOME}/.cache/ccache ${localEnv:HOME}/.config/gh ${localEnv:HOME}/.vscode-server/extensions",
+  "remoteUser": "dev",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/dev/workspace,type=bind",
+  "workspaceFolder": "/home/dev/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd", // C++ Code Completion
+        "jeff-hykin.better-cpp-syntax", // C++ Syntax
+        "matepek.vscode-catch2-test-adapter", // Run gtests in UI
+        "twxs.cmake",
+        "wayou.vscode-todo-highlight", // Highlight TODO keywords
+        "ms-vscode.cmake-tools", // CMake actions in UI
+        "bungcip.better-toml", // TOML Syntax highlighting
+        "eamodio.gitlens", // Enable more git features
+      ],
+      "settings": {
+        "git.detectSubmodulesLimit": 40,
+        "cmake.buildDirectory": "${workspaceFolder}/cmake-build-${buildType}",
+        "cmake.statusbar.visibility": "compact",
+        "cmake.statusbar.advanced": {
+          "ctest": { // We don't use ctest at all
+            "visibility": "hidden"
+          },
+          "kit": { // We rarely change the kit
+            "visibility": "icon"
+          }
+        },
+        "clangd.arguments": [
+          "--compile-commands-dir=cmake-build-Debug"
+        ],
+        "cmake.generator": "Ninja",
+        "cmake.configureOnOpen": true,
+        "testMate.cpp.test.executables": "cmake-build-*/**/gtests_*",
+        "terminal.integrated.defaultProfile.linux": "zsh",
+      }
+    }
+  }
+}

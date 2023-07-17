@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,29 +16,41 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
+#include <DataStreams/AddExtraTableIDColumnInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Functions/FunctionsConversion.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
+#include <Operators/AddExtraTableIDColumnTransformOp.h>
+#include <Operators/DMSegmentThreadSourceOp.h>
+#include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -181,18 +193,21 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  bool data_path_contains_database_name,
                                  const String & db_name_,
                                  const String & table_name_,
+                                 KeyspaceID keyspace_id_,
                                  TableID physical_table_id_,
                                  bool has_replica,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_)
+                                 const Settings & settings_,
+                                 ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
     , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
     , db_name(db_name_)
     , table_name(table_name_)
+    , keyspace_id(keyspace_id_)
     , physical_table_id(physical_table_id_)
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
@@ -200,20 +215,21 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get(fmt::format("table_id={}", physical_table_id_)))
+    , log(Logger::get(fmt::format("keyspace={} table_id={}", keyspace_id_, physical_table_id_)))
 {
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
-    NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
+    NamespaceID ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
     LOG_INFO(log, "Restore DeltaMerge Store start");
 
     storage_pool = std::make_shared<StoragePool>(global_context,
+                                                 keyspace_id,
                                                  ns_id,
                                                  *path_pool,
                                                  db_name_ + "." + table_name_);
 
-    // Restore existing dm files and set capacity for path_pool.
+    // Restore existing dm files.
     // Should be done before any background task setup.
     restoreStableFiles();
 
@@ -235,41 +251,38 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
-            !first_segment_entry.isValid())
-        {
-            auto segment_id = storage_pool->newMetaPageId();
-            if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-            {
-                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
-                {
-                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-                }
-
-                // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
-                // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
-                segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-            }
-
-            auto first_segment = Segment::newSegment( //
-                log,
-                *dm_context,
-                store_columns,
-                RowKeyRange::newAll(is_common_handle, rowkey_column_size),
-                segment_id,
-                0);
-            segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
-            id_to_segment.emplace(segment_id, first_segment);
-        }
-        else
+            first_segment_entry.isValid())
         {
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-            while (segment_id)
-            {
-                auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                segments.emplace(segment->getRowKeyRange().getEnd(), segment);
-                id_to_segment.emplace(segment_id, segment);
 
-                segment_id = segment->nextSegmentId();
+            // parallel restore segment to speed up
+            if (thread_pool)
+            {
+                auto wait_group = thread_pool->waitGroup();
+                auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
+                for (auto & segment_id : segment_ids)
+                {
+                    auto task = [this, dm_context, segment_id] {
+                        auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                        std::lock_guard lock(read_write_mutex);
+                        segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                        id_to_segment.emplace(segment_id, segment);
+                    };
+                    wait_group->schedule(task);
+                }
+
+                wait_group->wait();
+            }
+            else
+            {
+                while (segment_id != 0)
+                {
+                    auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                    segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                    id_to_segment.emplace(segment_id, segment);
+
+                    segment_id = segment->nextSegmentId();
+                }
             }
         }
     }
@@ -281,7 +294,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
+    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
@@ -307,6 +320,10 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
+        if (segments.empty())
+        {
+            return;
+        }
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
         std::stack<PageIdU64> segment_ids;
         while (segment_id != 0)
@@ -416,7 +433,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, ScanContextPtr scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -424,10 +441,11 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               *path_pool,
-                               *storage_pool,
+                               path_pool,
+                               storage_pool,
                                latest_gc_safe_point.load(std::memory_order_acquire),
-                               settings.not_compress_columns,
+                               keyspace_id,
+                               physical_table_id,
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
@@ -536,18 +554,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         while (true)
         {
             // Find the segment according to current start_key
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(start_key);
-                if (segment_it == segments.end())
-                {
-                    // todo print meaningful start row key
-                    throw Exception(fmt::format("Failed to locate segment begin with start: {}", start_key.toDebugString()), ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(start_key, /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             FAIL_POINT_PAUSE(FailPoints::pause_when_writing_to_dt_store);
 
@@ -657,19 +664,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         // Keep trying until succeeded.
         while (true)
         {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
+            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ true, /*throw_if_notfound*/ true);
 
             waitForDeleteRange(dm_context, segment);
             if (segment->hasAbandoned())
@@ -694,6 +689,12 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
+bool DeltaMergeStore::flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed)
+{
+    auto dm_context = newDMContext(context, context.getSettingsRef());
+    return flushCache(dm_context, range, try_until_succeed);
+}
+
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
     size_t sleep_ms = 5;
@@ -706,19 +707,14 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
         // Keep trying until succeeded if needed.
         while (true)
         {
-            SegmentPtr segment;
+            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ false, /*throw_if_notfound*/ false);
+            RUNTIME_CHECK(segment != nullptr || is_empty, cur_range.getStart().toDebugString());
+            // No segment need to flush.
+            if (unlikely(is_empty))
             {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
+                return true;
             }
+
             segment_range = segment->getRowKeyRange();
 
             if (segment->flushCache(*dm_context))
@@ -784,15 +780,10 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
 
     while (true)
     {
-        SegmentPtr segment;
+        auto [segment, is_empty] = getSegmentByStartKey(start_key.toRowKeyValueRef(), /*create_if_empty*/ false, /*throw_if_notfound*/ false);
+        if (unlikely(segment == nullptr))
         {
-            std::shared_lock lock(read_write_mutex);
-            const auto segment_it = segments.upper_bound(start_key.toRowKeyValueRef());
-            if (segment_it == segments.end())
-            {
-                return std::nullopt;
-            }
-            segment = segment_it->second;
+            return std::nullopt;
         }
 
         if (segment->flushCache(*dm_context))
@@ -838,18 +829,10 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
         // Keep trying until succeeded.
         while (true)
         {
-            SegmentPtr segment;
+            auto [segment, is_empty] = getSegmentByStartKey(cur_range.getStart(), /*create_if_empty*/ false, /*throw_if_notfound*/ false);
+            if (segment == nullptr)
             {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
+                return;
             }
             segment_range = segment->getRowKeyRange();
 
@@ -916,6 +899,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         EMPTY_FILTER,
@@ -938,7 +922,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 read_task_pool,
                 columns_to_read,
                 extra_table_id_index,
-                physical_table_id,
                 req_info);
         }
         else
@@ -952,16 +935,18 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 /* read_mode */ ReadMode::Raw,
-                extra_table_id_index,
-                physical_table_id,
                 req_info);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
         }
         res.push_back(stream);
     }
     return res;
 }
 
-static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, bool keep_order)
 {
     if (is_fast_scan)
     {
@@ -974,20 +959,132 @@ static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan
     return ReadMode::Normal;
 }
 
+ReadMode DeltaMergeStore::getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order, const PushDownFilterPtr & filter)
+{
+    auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+                      "Push down filters needs bitmap, push down filters is empty: {}, read mode: {}",
+                      filter == nullptr || filter->before_where == nullptr,
+                      magic_enum::enum_name(read_mode));
+    return read_mode;
+}
+
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const DB::Settings & db_settings,
                                         const ColumnDefines & columns_to_read,
                                         const RowKeyRanges & sorted_ranges,
                                         size_t num_streams,
                                         UInt64 max_version,
-                                        const RSOperatorPtr & filter,
+                                        const PushDownFilterPtr & filter,
+                                        const RuntimeFilteList & runtime_filter_list,
+                                        const int rf_max_wait_time_ms,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index,
-                                        const ScanContextPtr & scan_context)
+                                        ScanContextPtr scan_context)
+{
+    // Use the id from MPP/Coprocessor level as tracing_id
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
+    // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
+    // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
+    // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = log->getChild(log_tracing_id);
+    LOG_INFO(tracing_logger,
+             "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={} is_fast_scan={} is_push_down_filter_empty={}",
+             keep_order,
+             db_context.getSettingsRef().dt_enable_read_thread,
+             enable_read_thread,
+             is_fast_scan,
+             filter == nullptr || filter->before_where == nullptr);
+
+    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+        // TODO: Update the tracing_id before checkSegmentUpdate?
+        this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
+    };
+
+    GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
+    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        extra_table_id_index,
+        dm_context,
+        columns_to_read,
+        filter,
+        max_version,
+        expected_block_size,
+        read_mode,
+        std::move(tasks),
+        after_segment_read,
+        log_tracing_id,
+        enable_read_thread,
+        final_num_stream);
+
+    BlockInputStreams res;
+    for (size_t i = 0; i < final_num_stream; ++i)
+    {
+        BlockInputStreamPtr stream;
+        if (enable_read_thread)
+        {
+            stream = std::make_shared<UnorderedInputStream>(
+                read_task_pool,
+                filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read,
+                extra_table_id_index,
+                log_tracing_id,
+                runtime_filter_list,
+                rf_max_wait_time_ms);
+        }
+        else
+        {
+            stream = std::make_shared<DMSegmentThreadInputStream>(
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+                log_tracing_id);
+            stream = std::make_shared<AddExtraTableIDColumnInputStream>(
+                stream,
+                extra_table_id_index,
+                physical_table_id);
+        }
+        res.push_back(stream);
+    }
+    LOG_DEBUG(tracing_logger, "Read create stream done");
+
+    return res;
+}
+
+void DeltaMergeStore::read(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    const ColumnDefines & columns_to_read,
+    const RowKeyRanges & sorted_ranges,
+    size_t num_streams,
+    UInt64 max_version,
+    const PushDownFilterPtr & filter,
+    const RuntimeFilteList & runtime_filter_list,
+    const int rf_max_wait_time_ms,
+    const String & tracing_id,
+    bool keep_order,
+    bool is_fast_scan,
+    size_t expected_block_size,
+    const SegmentIdSet & read_segments,
+    size_t extra_table_id_index,
+    ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1012,37 +1109,46 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+    size_t final_num_stream = enable_read_thread
+        ? std::max(1, num_streams)
+        : std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
+        extra_table_id_index,
         dm_context,
         columns_to_read,
         filter,
         max_version,
         expected_block_size,
-        getReadMode(db_context, is_fast_scan, keep_order),
+        read_mode,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
         final_num_stream);
 
-    BlockInputStreams res;
-    for (size_t i = 0; i < final_num_stream; ++i)
+    if (enable_read_thread)
     {
-        BlockInputStreamPtr stream;
-        if (enable_read_thread)
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            stream = std::make_shared<UnorderedInputStream>(
-                read_task_pool,
-                columns_to_read,
-                extra_table_id_index,
-                physical_table_id,
-                log_tracing_id);
+            group_builder.addConcurrency(
+                std::make_unique<UnorderedSourceOp>(
+                    exec_context,
+                    read_task_pool,
+                    columns_to_read,
+                    extra_table_id_index,
+                    log_tracing_id,
+                    runtime_filter_list,
+                    rf_max_wait_time_ms));
         }
-        else
+    }
+    else
+    {
+        for (size_t i = 0; i < final_num_stream; ++i)
         {
-            stream = std::make_shared<DMSegmentThreadInputStream>(
+            group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
+                exec_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1051,15 +1157,44 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 max_version,
                 expected_block_size,
                 /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
-                extra_table_id_index,
-                physical_table_id,
-                log_tracing_id);
+                log_tracing_id));
         }
-        res.push_back(stream);
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
+                exec_context,
+                log_tracing_id,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id));
+        });
     }
-    LOG_DEBUG(tracing_logger, "Read create stream done");
 
-    return res;
+    LOG_DEBUG(tracing_logger, "Read create PipelineExec done");
+}
+
+Remote::DisaggPhysicalTableReadSnapshotPtr
+DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    const RowKeyRanges & sorted_ranges,
+    size_t num_streams,
+    const String & tracing_id,
+    const SegmentIdSet & read_segments,
+    ScanContextPtr scan_context)
+{
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = log->getChild(log_tracing_id);
+
+    // Create segment snapshots for the given key ranges. The TiFlash compute node
+    // could fetch the data segment by segment with these snapshots later.
+    // `try_split_task` is false because we need to ensure only one segment task
+    // for one segment.
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
+    GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
+    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+
+    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(KeyspaceTableID{keyspace_id, physical_table_id}, std::move(tasks));
 }
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
@@ -1443,44 +1578,93 @@ BlockPtr DeltaMergeStore::getHeader() const
     return std::atomic_load<Block>(&original_table_header);
 }
 
-void DeltaMergeStore::applyAlters(
-    const AlterCommands & commands,
-    const OptionTableInfoConstRef table_info,
-    ColumnID & max_column_id_used,
-    const Context & /* context */)
+void DeltaMergeStore::applySchemaChanges(TableInfo & table_info)
 {
     std::unique_lock lock(read_write_mutex);
 
     FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
-    for (const auto & command : commands)
+    std::unordered_map<ColumnID, int> original_columns_index_map;
+    for (size_t index = 0; index < new_original_table_columns.size(); ++index)
     {
-        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
+        original_columns_index_map[new_original_table_columns[index].id] = index;
     }
 
-    if (table_info)
+    std::set<ColumnID> new_column_ids;
+    for (const auto & column : table_info.columns)
     {
-        // Update primary keys from TiDB::TableInfo when pk_is_handle = true
-        // todo update the column name in rowkey_columns
-        std::vector<String> pk_names;
-        for (const auto & col : table_info->get().columns)
+        auto column_id = column.id;
+        new_column_ids.insert(column_id);
+        auto iter = original_columns_index_map.find(column_id);
+        if (iter == original_columns_index_map.end())
         {
-            if (col.hasPriKeyFlag())
+            // create a new column
+            ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
+            define.default_value = column.defaultValueToField();
+            new_original_table_columns.emplace_back(std::move(define));
+        }
+        else
+        {
+            // check whether we need update the column's name or type or default value
+            auto & original_column = new_original_table_columns[iter->second];
+            auto new_data_type = getDataTypeByColumnInfo(column);
+
+            if (original_column.default_value != column.defaultValueToField())
             {
-                pk_names.emplace_back(col.name);
+                original_column.default_value = column.defaultValueToField();
+            }
+
+            if (original_column.name != column.name)
+            {
+                original_column.name = column.name;
+            }
+
+            if (original_column.type->getName() != new_data_type->getName())
+            {
+                original_column.type = new_data_type;
             }
         }
-        if (table_info->get().pk_is_handle && pk_names.size() == 1)
+    }
+
+    // remove extra columns
+    auto iter = new_original_table_columns.begin();
+    while (iter != new_original_table_columns.end())
+    {
+        // remove the extra columns
+        if (iter->id == EXTRA_HANDLE_COLUMN_ID || iter->id == VERSION_COLUMN_ID || iter->id == TAG_COLUMN_ID)
         {
-            // Only update primary key name if pk is handle and there is only one column with
-            // primary key flag
-            original_table_handle_define.name = pk_names[0];
+            iter++;
+            continue;
         }
-        if (table_info.value().get().replica_info.count == 0)
+        if (new_column_ids.count(iter->id) == 0)
         {
-            replica_exist.store(false);
+            iter = new_original_table_columns.erase(iter);
         }
+        else
+        {
+            iter++;
+        }
+    }
+
+    // Update primary keys from TiDB::TableInfo when pk_is_handle = true
+    std::vector<String> pk_names;
+    for (const auto & col : table_info.columns)
+    {
+        if (col.hasPriKeyFlag())
+        {
+            pk_names.emplace_back(col.name);
+        }
+    }
+    if (table_info.pk_is_handle && pk_names.size() == 1)
+    {
+        // Only update primary key name if pk is handle and there is only one column with
+        // primary key flag
+        original_table_handle_define.name = pk_names[0];
+    }
+    if (table_info.replica_info.count == 0)
+    {
+        replica_exist.store(false);
     }
 
     auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
@@ -1501,22 +1685,58 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::listLocalStableFiles(const std::function<void(UInt64, const String &)> & handle) const
 {
-    LOG_DEBUG(log, "Loading dt files");
-
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
-    options.clean_up = true;
+    options.clean_up = true; // Clean not readable DMFiles.
     auto file_provider = global_context.getFileProvider();
     auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* page_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
-            path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
+            handle(file_id, root_path);
         }
+    }
+}
+
+void DeltaMergeStore::restoreStableFilesFromLocal() const
+{
+    auto path_delegate = path_pool->getStableDiskDelegator();
+    listLocalStableFiles([&path_delegate](UInt64 file_id, const String & root_path) {
+        // To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
+        // we just add the file to path_delegate with file_size = 0
+        // when we do DMFile::restore later, we then update the actually size of file.
+        path_delegate.addDTFile(file_id, 0, root_path);
+    });
+}
+
+// If TiFlash is running in disagg-mode, we can remove all local DMFiles directly.
+// Because they all not be written into PageStorage and no one reference them.
+void DeltaMergeStore::removeLocalStableFilesIfDisagg() const
+{
+    listLocalStableFiles([](UInt64 file_id, const String & root_path) {
+        auto path = DMFile::getPathByStatus(root_path, file_id, DMFile::Status::READABLE);
+        Poco::File file(path);
+        if (file.exists())
+        {
+            file.remove(true);
+        }
+    });
+}
+
+void DeltaMergeStore::restoreStableFiles() const
+{
+    LOG_DEBUG(log, "Loading dt files");
+
+    if (!global_context.getSharedContextDisagg()->remote_data_store)
+    {
+        restoreStableFilesFromLocal();
+    }
+    else
+    {
+        removeLocalStableFilesIfDisagg();
     }
 }
 
@@ -1528,18 +1748,19 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     bool try_split_task)
 {
     SegmentReadTasks tasks;
+    Stopwatch watch;
 
     std::shared_lock lock(read_write_mutex);
+
+    if (segments.empty())
+    {
+        return tasks;
+    }
 
     auto range_it = sorted_ranges.begin();
     auto seg_it = segments.upper_bound(range_it->getStart());
 
-    if (seg_it == segments.end())
-    {
-        throw Exception(
-            fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()),
-            ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(seg_it != segments.end(), "Failed to locate segment begin with start in range: {}", range_it->toDebugString());
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())
     {
@@ -1551,8 +1772,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
             {
                 auto segment = seg_it->second;
                 auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-                if (unlikely(!segment_snap))
-                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                RUNTIME_CHECK_MSG(segment_snap, "Failed to get segment snap");
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
             }
 
@@ -1580,7 +1800,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
-    auto tasks_before_split = tasks.size();
+    const auto tasks_before_split = tasks.size();
     if (try_split_task)
     {
         /// Try to make task number larger or equal to expected_tasks_count.
@@ -1598,7 +1818,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_DEBUG(
         tracing_logger,
-        "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
+        "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
+        watch.elapsedMilliseconds(),
         sorted_ranges.size(),
         tasks_before_split,
         tasks.size(),
@@ -1618,5 +1839,78 @@ String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
         return fmt::format("table_id={}", physical_table_id);
     }
 }
+
+std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKeyInner(const RowKeyValueRef & start_key)
+{
+    std::shared_lock lock(read_write_mutex);
+    auto seg_it = segments.upper_bound(start_key);
+    return seg_it != segments.end() ? std::pair{seg_it->second, segments.empty()} : std::pair{nullptr, segments.empty()};
+}
+
+std::pair<SegmentPtr, bool> DeltaMergeStore::getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound)
+{
+    SegmentPtr seg;
+    bool is_empty = false;
+    do
+    {
+        std::tie(seg, is_empty) = getSegmentByStartKeyInner(start_key);
+        if (likely(seg != nullptr)) // Hot and short path.
+        {
+            return {seg, is_empty};
+        }
+
+        if (create_if_empty && is_empty)
+        {
+            auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+            auto page_storage_run_mode = storage_pool->getPageStorageRunMode();
+            createFirstSegment(*dm_context, page_storage_run_mode);
+        }
+    } while (create_if_empty && is_empty);
+
+    if (throw_if_notfound)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to locate segment begin with start in range: {}", start_key.toDebugString());
+    }
+    else
+    {
+        return {nullptr, is_empty};
+    }
+}
+
+void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode)
+{
+    std::unique_lock lock(read_write_mutex);
+    if (!segments.empty())
+    {
+        return;
+    }
+
+    auto segment_id = storage_pool->newMetaPageId();
+    if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
+    {
+        RUNTIME_CHECK_MSG(
+            page_storage_run_mode != PageStorageRunMode::ONLY_V2,
+            "The first segment id should be {}, but get {}, run_mode={}",
+            DELTA_MERGE_FIRST_SEGMENT_ID,
+            segment_id,
+            magic_enum::enum_name(page_storage_run_mode));
+
+        // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
+        // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
+        segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+    }
+    LOG_INFO(log, "creating the first segment with segment_id={}", segment_id);
+
+    auto first_segment = Segment::newSegment( //
+        log,
+        dm_context,
+        store_columns,
+        RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+        segment_id,
+        0);
+    segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
+    id_to_segment.emplace(segment_id, first_segment);
+}
+
 } // namespace DM
 } // namespace DB

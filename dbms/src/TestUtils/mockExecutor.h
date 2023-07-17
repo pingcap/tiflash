@@ -17,9 +17,10 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/WindowBinder.h>
+#include <Debug/MockRuntimeFilter.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -30,8 +31,6 @@ namespace DB
 {
 namespace tests
 {
-using MockColumnInfo = std::pair<String, TiDB::TP>;
-using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItemVec = std::vector<MockOrderByItem>;
@@ -57,7 +56,7 @@ enum class DAGRequestType
 };
 
 /** Responsible for Hand write tipb::DAGRequest
-  * Use this class to mock DAGRequest, then feed the DAGRequest into 
+  * Use this class to mock DAGRequest, then feed the DAGRequest into
   * the Interpreter for test purpose.
   * The mockTable() method must called first in order to generate the table schema.
   * After construct all necessary operators in DAGRequest, call build() to generate DAGRequest。
@@ -87,8 +86,17 @@ public:
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(
+        const String & db,
+        const String & table,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
+    DAGRequestBuilder & mockTable(
+        const MockTableName & name,
+        TableInfo & table_info,
+        const MockColumnInfoVec & columns,
+        bool keep_order);
 
     DAGRequestBuilder & exchangeReceiver(const String & exchange_name, const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -114,8 +122,7 @@ public:
     }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
 
-
-    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys = {}, uint64_t fine_grained_shuffle_stream_count = 0);
 
     /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
     /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
@@ -129,10 +136,26 @@ public:
     /// @param other_conds other conditional expressions
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
     /// @param fine_grained_shuffle_stream_count decide the generated tipb executor's find_grained_shuffle_stream_count
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0);
+    /// @param is_null_aware_semi_join indicates whether to use null-aware semi join and join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    /// @param inner_index indicates use which side to build hash table
+    DAGRequestBuilder & join(
+        const DAGRequestBuilder & right,
+        tipb::JoinType tp,
+        MockAstVec join_col_exprs,
+        MockAstVec left_conds,
+        MockAstVec right_conds,
+        MockAstVec other_conds,
+        MockAstVec other_eq_conds_from_in,
+        uint64_t fine_grained_shuffle_stream_count = 0,
+        bool is_null_aware_semi_join = false,
+        int64_t inner_index = 1);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
+    }
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, mock::MockRuntimeFilter & rf, uint64_t fine_grained_shuffle_stream_count = 0)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count).appendRuntimeFilter(rf);
     }
 
 
@@ -149,6 +172,10 @@ public:
 
     // expand
     DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
+    DAGRequestBuilder & expand2(std::vector<MockAstVec> level_projection_expressions, std::vector<String> output_names, std::vector<tipb::FieldType> fps);
+
+    // runtime filter
+    DAGRequestBuilder & appendRuntimeFilter(mock::MockRuntimeFilter & rf);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }
@@ -169,10 +196,10 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
+    explicit MockDAGRequestContext(ContextPtr context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
-        , collation(-abs(collation_))
+        , collation(convertToTiDBCollation(collation_))
     {
     }
 
@@ -185,6 +212,7 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
     {
         addMockTableColumnData(db, table, columns);
@@ -192,16 +220,25 @@ public:
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint);
     void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
 
     void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
 
+    void addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
+
     /// mock column exchange receiver
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
 
-    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder scan(
+        const String & db_name,
+        const String & table_name,
+        bool keep_order = false);
+
+    DAGRequestBuilder scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids);
+
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
@@ -230,7 +267,7 @@ public:
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    Context context;
+    ContextPtr context;
     Int32 collation;
 };
 
@@ -246,8 +283,12 @@ MockWindowFrame buildDefaultRowsFrame();
 
 // expressions
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
-#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
-#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusInt", (expr1), (expr2))
+#define plusReal(expr1, expr2) makeASTFunction("plusReal", (expr1), (expr2))
+#define plusDecimal(expr1, expr2) makeASTFunction("plusDecimal", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusInt", (expr1), (expr2))
+#define minusReal(expr1, expr2) makeASTFunction("minusReal", (expr1), (expr2))
+#define minusDecimal(expr1, expr2) makeASTFunction("minusDecimal", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
@@ -255,12 +296,15 @@ MockWindowFrame buildDefaultRowsFrame();
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
+#define in(expr1, ...) makeASTFunction("in", (expr1), __VA_ARGS__)
+
 
 // Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
 #define Min(expr) makeASTFunction("min", (expr))
 #define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
+#define CountDistinct(expr) makeASTFunction("countDistinct", (expr))
 
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
@@ -272,5 +316,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Lag1(expr) makeASTFunction("Lag", (expr))
 #define Lag2(expr1, expr2) makeASTFunction("Lag", (expr1), (expr2))
 #define Lag3(expr1, expr2, expr3) makeASTFunction("Lag", (expr1), (expr2), (expr3))
+#define FirstValue(expr) makeASTFunction("FirstValue", (expr))
+#define LastValue(expr) makeASTFunction("LastValue", (expr))
 } // namespace tests
 } // namespace DB

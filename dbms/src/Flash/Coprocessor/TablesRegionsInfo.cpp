@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -42,7 +43,7 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
         return table_regions_info_map.begin()->second;
     if (table_regions_info_map.find(table_id) != table_regions_info_map.end())
         return table_regions_info_map.find(table_id)->second;
-    throw TiFlashException(fmt::format("Can't find region info for table id: {}", table_id), Errors::Coprocessor::BadRequest);
+    throw TiFlashException(Errors::Coprocessor::BadRequest, "Can't find region info for table id: {}", table_id);
 }
 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
@@ -50,7 +51,7 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
     // For tiflash_compute node, all regions will be fetched from tiflash_storage node.
     // So treat all regions as remote regions.
-    if (tmt_context.getContext().isDisaggregatedComputeMode())
+    if (tmt_context.getContext().getSharedContextDisagg()->isDisaggregatedComputeMode())
         return true;
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
@@ -59,17 +60,32 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     return meta_snap.ver != region_info.region_version;
 }
 
-static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, std::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
+/**
+  * Build local and remote regions info into `tables_region_infos` according to `regions`
+  * and `table_id`. It will also record the region_id into local_region_id_set` so that
+  * we can find the duplicated region_id among multiple partitions.
+  **/
+static void insertRegionInfoToTablesRegionInfo(
+    const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
+    Int64 table_id,
+    TablesRegionsInfo & tables_region_infos,
+    std::unordered_set<RegionID> & local_region_id_set,
+    const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
     {
-        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::genCopKeyRange(r.ranges()), nullptr);
+        RegionInfo region_info(
+            r.region_id(),
+            r.region_epoch().version(),
+            r.region_epoch().conf_ver(),
+            CoprocessorHandler::genCopKeyRange(r.ranges()),
+            nullptr);
         if (region_info.key_ranges.empty())
         {
-            throw TiFlashException(
-                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
-                Errors::Coprocessor::BadRequest);
+            throw TiFlashException(Errors::Coprocessor::BadRequest,
+                                   "Income key ranges is empty for region: {}",
+                                   region_info.region_id);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
         /// region id, only the first region will be treated as local region
@@ -80,7 +96,7 @@ static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedP
         /// 3. TiFlash will pick the right version of region for local read and others for remote read.
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
-        bool duplicated_region = local_region_id_set.count(region_info.region_id) > 0;
+        bool duplicated_region = local_region_id_set.contains(region_info.region_id);
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
             table_region_info.remote_regions.push_back(region_info);

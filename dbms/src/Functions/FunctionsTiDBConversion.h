@@ -51,7 +51,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/parseDateTimeBestEffort.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/Transaction/Collator.h>
 
@@ -943,7 +943,7 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        CastInternalType value = static_cast<CastInternalType>(v.value);
+        auto value = static_cast<CastInternalType>(v.value);
 
         if (v_scale < scale)
         {
@@ -951,9 +951,9 @@ struct TiDBConvertToDecimal
         }
         else if (v_scale > scale)
         {
-            context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            value /= scale_mul;
             const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+            auto old_value = value;
+            value /= scale_mul;
             if (need_to_round)
             {
                 if (value < 0)
@@ -961,6 +961,8 @@ struct TiDBConvertToDecimal
                 else
                     ++value;
             }
+            if (old_value != value * scale_mul)
+                context.getDAGContext()->appendWarning("Truncate in cast decimal as decimal");
         }
         else
         {

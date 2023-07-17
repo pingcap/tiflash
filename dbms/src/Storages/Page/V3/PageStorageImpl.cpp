@@ -26,6 +26,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
@@ -84,7 +85,7 @@ void PageStorageImpl::drop()
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PageIdU64 PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageIdU64 PageStorageImpl::getNormalPageIdImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -117,7 +118,7 @@ size_t PageStorageImpl::getNumberOfPages()
 }
 
 // For debugging purpose
-std::set<PageIdU64> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
+std::set<PageIdU64> PageStorageImpl::getAliveExternalPageIds(NamespaceID ns_id)
 {
     // Keep backward compatibility of this functions with v2
     if (auto ids = page_directory->getAliveExternalIds(ns_id); ids)
@@ -134,11 +135,11 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
 
     // Persist Page data to BlobStore
-    auto edit = blob_store.write(write_batch, write_limiter);
+    auto edit = blob_store.write(std::move(write_batch), write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
 
-DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageIdU64 page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceID ns_id, PageIdU64 page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -168,8 +169,9 @@ DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageIdU64 page_id
     }
 }
 
-DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+DB::Page PageStorageImpl::readImpl(NamespaceID ns_id, PageIdU64 page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -179,8 +181,9 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageIdU64 page_id, const R
     return blob_store.read(page_entry, read_limiter);
 }
 
-PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageMapU64 PageStorageImpl::readImpl(NamespaceID ns_id, const PageIdU64s & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -209,8 +212,9 @@ PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const PageIdU64s & page_
     }
 }
 
-PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageMapU64 PageStorageImpl::readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
+    GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
@@ -244,7 +248,7 @@ PageMapU64 PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageRe
     return page_map;
 }
 
-Page PageStorageImpl::readImpl(NamespaceId /*ns_id*/, const PageReadFields & /*page_field*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/, bool /*throw_on_not_exist*/)
+Page PageStorageImpl::readImpl(NamespaceID /*ns_id*/, const PageReadFields & /*page_field*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/, bool /*throw_on_not_exist*/)
 {
     throw Exception("Not support read single filed on V3", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -267,7 +271,7 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    return manager.gc(blob_store, *page_directory, write_limiter, read_limiter, log);
+    return manager.gc(blob_store, *page_directory, write_limiter, read_limiter, nullptr, log);
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
@@ -275,7 +279,7 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     manager.registerExternalPagesCallbacks(callbacks);
 }
 
-void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
+void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceID ns_id)
 {
     manager.unregisterExternalPagesCallbacks(ns_id);
     // clean all external ids ptrs

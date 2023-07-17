@@ -12,15 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 #include <Storages/Transaction/SSTReader.h>
 
+#include <magic_enum.hpp>
 #include <vector>
 
 namespace DB
 {
 bool MonoSSTReader::remained() const
 {
-    return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    auto remained = proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    if (!remained)
+    {
+        return false;
+    }
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto end = r.second.key.toString();
+        auto key = buffToStrView(proxy_helper->sst_reader_interfaces.fn_key(inner, type));
+        if (!end.empty() && key >= end)
+        {
+            if (!tail_checked)
+            {
+                LOG_DEBUG(log, "Observed extra data in tablet snapshot {} beyond {}, cf {}", Redact::keyToDebugString(key.data(), key.size()), r.second.key.toDebugString(), magic_enum::enum_name(type));
+                tail_checked = true;
+            }
+            return false;
+        }
+    }
+    return remained;
 }
 BaseBuffView MonoSSTReader::keyView() const
 {
@@ -35,11 +57,26 @@ void MonoSSTReader::next()
     return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
 }
 
-MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
+MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view, RegionRangeFilter range_)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
-{}
+    , range(range_)
+    , tail_checked(false)
+{
+    log = &Poco::Logger::get("MonoSSTReader");
+    kind = proxy_helper->sst_reader_interfaces.fn_kind(inner, view.type);
+    if (kind == SSTFormatKind::KIND_TABLET)
+    {
+        auto && r = range->comparableKeys();
+        auto start = r.first.key.toString();
+        LOG_DEBUG(log, "Seek cf {} to {}", magic_enum::enum_name(type), Redact::keyToDebugString(start.data(), start.size()));
+        if (!start.empty())
+        {
+            proxy_helper->sst_reader_interfaces.fn_seek(inner, view.type, EngineIteratorSeekType::Key, BaseBuffView{start.data(), start.size()});
+        }
+    }
+}
 
 MonoSSTReader::~MonoSSTReader()
 {

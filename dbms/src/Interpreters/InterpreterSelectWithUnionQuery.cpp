@@ -224,20 +224,13 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     }
     else
     {
-        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, BlockInputStreams{}, settings.max_threads, /*req_id=*/"");
+        result_stream = std::make_shared<UnionBlockInputStream<>>(nested_streams, BlockInputStreams{}, settings.max_threads, 0, /*req_id=*/"");
         nested_streams.clear();
     }
 
     BlockIO res;
     res.in = result_stream;
     return res;
-}
-
-
-void InterpreterSelectWithUnionQuery::ignoreWithTotals()
-{
-    for (auto & interpreter : nested_interpreters)
-        interpreter->ignoreWithTotals();
 }
 
 } // namespace DB

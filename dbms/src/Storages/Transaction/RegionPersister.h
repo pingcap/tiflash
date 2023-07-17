@@ -18,7 +18,8 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -34,7 +35,6 @@ class RegionTaskLock;
 struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
-class PageStorage;
 
 class RegionPersister final : private boost::noncopyable
 {
@@ -61,12 +61,12 @@ private:
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
 private:
-    inline std::variant<String, NamespaceId> getWriteBatchPrefix() const
+    inline std::variant<String, NamespaceID> getWriteBatchPrefix() const
     {
         switch (run_mode)
         {
         case PageStorageRunMode::UNI_PS:
-            return UniversalPageIdFormat::toSubPrefix(StorageType::KVStore);
+            return UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::KVStore, ns_id);
         default:
             return ns_id;
         }
@@ -78,7 +78,7 @@ private:
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
 
-    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
+    NamespaceID ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
     std::mutex mutex;
     LoggerPtr log;

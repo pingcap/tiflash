@@ -21,6 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Crypto/X509Certificate.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPRequestHandler.h>
@@ -30,6 +31,7 @@
 #include <Poco/Net/SecureServerSocket.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
@@ -87,8 +89,8 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
 public:
-    explicit MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
-        : collectable(collectable_)
+    explicit MetricHandler(const std::vector<std::weak_ptr<prometheus::Collectable>> & collectables_)
+        : collectables(collectables_)
     {}
 
     ~MetricHandler() override = default;
@@ -106,26 +108,29 @@ private:
     {
         auto collected_metrics = std::vector<prometheus::MetricFamily>{};
 
-        auto collect = collectable.lock();
-        if (collect)
+        for (const auto & collectable : collectables)
         {
-            auto && metrics = collect->Collect();
-            collected_metrics.insert(
-                collected_metrics.end(),
-                std::make_move_iterator(metrics.begin()),
-                std::make_move_iterator(metrics.end()));
+            auto collect = collectable.lock();
+            if (collect)
+            {
+                auto && metrics = collect->Collect();
+                collected_metrics.insert(
+                    collected_metrics.end(),
+                    std::make_move_iterator(metrics.begin()),
+                    std::make_move_iterator(metrics.end()));
+            }
         }
         return collected_metrics;
     }
 
-    std::weak_ptr<prometheus::Collectable> collectable;
+    std::vector<std::weak_ptr<prometheus::Collectable>> collectables;
 };
 
 class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
 {
 public:
-    explicit MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
-        : collectable(collectable_)
+    explicit MetricHandlerFactory(const std::vector<std::weak_ptr<prometheus::Collectable>> & collectables_)
+        : collectables(collectables_)
     {}
 
     ~MetricHandlerFactory() override = default;
@@ -137,19 +142,19 @@ public:
         {
             if (uri == "/metrics")
             {
-                return new MetricHandler(collectable);
+                return new MetricHandler(collectables);
             }
         }
         return nullptr;
     }
 
 private:
-    std::weak_ptr<prometheus::Collectable> collectable;
+    std::vector<std::weak_ptr<prometheus::Collectable>> collectables;
 };
 
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Context & global_context,
-    const std::weak_ptr<prometheus::Collectable> & collectable,
+    std::vector<std::weak_ptr<prometheus::Collectable>> collectables,
     const String & address)
 {
     auto security_config = global_context.getSecurityConfig();
@@ -175,7 +180,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
     socket.listen();
-    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
+    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectables), socket, http_params);
     return server;
 }
 
@@ -197,6 +202,7 @@ MetricsPrometheus::MetricsPrometheus(
     Context & context,
     const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
+    , path_capacity_metrics(context.getPathCapacity())
     , async_metrics(async_metrics_)
     , log(Logger::get("Prometheus"))
 {
@@ -241,6 +247,10 @@ MetricsPrometheus::MetricsPrometheus(
             const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            {
+                gateway->RegisterCollectable(tiflash_metrics.cn_process_collector);
+            }
 
             LOG_INFO(log, "Enable prometheus push mode; interval = {}; addr = {}", metrics_interval, metrics_addr);
         }
@@ -257,9 +267,14 @@ MetricsPrometheus::MetricsPrometheus(
             addr = "[" + listen_host + "]:" + metrics_port;
         else
             addr = listen_host + ":" + metrics_port;
-        if (context.getSecurityConfig()->hasTlsConfig())
+        if (context.getSecurityConfig()->hasTlsConfig() && !conf.getBool(status_disable_metrics_tls, false))
         {
-            server = getHTTPServer(context, tiflash_metrics.registry, addr);
+            std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            {
+                collectables.push_back(tiflash_metrics.cn_process_collector);
+            }
+            server = getHTTPServer(context, collectables, addr);
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
@@ -267,6 +282,10 @@ MetricsPrometheus::MetricsPrometheus(
         {
             exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
+            {
+                exposer->RegisterCollectable(tiflash_metrics.cn_process_collector);
+            }
             LOG_INFO(log, "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
     }
@@ -300,6 +319,37 @@ void MetricsPrometheus::run()
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
         tiflash_metrics.registered_current_metrics[metric]->Set(value);
     }
+
+    size_t total_size = 0;
+    {
+        // Add keyspace store usage here
+        const auto & keyspace_usage = path_capacity_metrics->getKeyspaceUsedSizes();
+        for (const auto & [keyspace_id, usage] : keyspace_usage)
+        {
+            total_size += usage;
+            if (!tiflash_metrics.registered_keypace_store_used_metrics.count(keyspace_id))
+            {
+                // Add new keyspace store usage metric
+                tiflash_metrics.registered_keypace_store_used_metrics.emplace(
+                    keyspace_id,
+                    &tiflash_metrics.registered_keypace_store_used_family->Add({{"keyspace_id", std::to_string(keyspace_id)}, {"type", "used"}}));
+            }
+            tiflash_metrics.registered_keypace_store_used_metrics[keyspace_id]->Set(usage);
+        }
+
+        for (auto & [keyspace_id, metric] : tiflash_metrics.registered_keypace_store_used_metrics)
+        {
+            if (!keyspace_usage.count(keyspace_id))
+            {
+                // Remove stale keyspace store usage metric
+                LOG_DEBUG(log, "Remove stale keyspace store usage metric: keyspace_id = {}", keyspace_id);
+                tiflash_metrics.registered_keypace_store_used_family->Remove(metric);
+                tiflash_metrics.registered_keypace_store_used_metrics.erase(keyspace_id);
+                tiflash_metrics.removeReplicaSyncRUCounter(keyspace_id);
+            }
+        }
+    }
+    tiflash_metrics.store_used_total_metric->Set(total_size);
 
     auto async_metric_values = async_metrics.getValues();
     for (const auto & metric : async_metric_values)

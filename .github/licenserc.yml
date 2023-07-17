@@ -9,6 +9,7 @@ header:
     - '.clang-format'
     - '.clang-tidy'
     - '.clangd'
+    - '.env'
     - 'Jenkinsfile'
     - 'LICENSE'
     - 'NOTICE'
@@ -38,5 +39,8 @@ header:
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'
+    - '.devcontainer/'
+    - '**/OWNERS'
+    - 'OWNERS_ALIASES'
 
   comment: on-failure

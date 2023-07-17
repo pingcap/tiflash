@@ -27,6 +27,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
+#include <Flash/Planner/Plans/PhysicalJoinBuild.h>
+#include <Flash/Planner/Plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -48,11 +50,10 @@ void recordJoinExecuteInfo(
 {
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
-    join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    join_execute_info.join_profile_info = join_ptr->profile_info;
+    RUNTIME_CHECK(join_execute_info.join_profile_info);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -64,8 +65,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const PhysicalPlanNodePtr & left,
     const PhysicalPlanNodePtr & right)
 {
-    assert(left);
-    assert(right);
+    RUNTIME_CHECK(left);
+    RUNTIME_CHECK(right);
 
     left->finalize();
     right->finalize();
@@ -73,7 +74,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const Block & left_input_header = left->getSampleBlock();
     const Block & right_input_header = right->getSampleBlock();
 
-    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
     const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
@@ -83,15 +84,15 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypes join_output_schema = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
-
     auto & dag_context = *context.getDAGContext();
 
     /// add necessary transformation if the join key is an expression
 
-    bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
+    bool is_tiflash_right_join = tiflash_join.isTiFlashRightOuterJoin();
 
+    JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
-    auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         probe_side_header,
         tiflash_join.getProbeJoinKeys(),
@@ -100,9 +101,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         is_tiflash_right_join,
         tiflash_join.getProbeConditions());
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
+    /// in TiFlash, left side is always the probe side
+    join_non_equal_conditions.left_filter_column = std::move(probe_filter_column_name);
 
     // prepare build side
-    auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         build_side_header,
         tiflash_join.getBuildJoinKeys(),
@@ -111,13 +114,32 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         is_tiflash_right_join,
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
+    /// in TiFlash, right side is always the build side
+    join_non_equal_conditions.right_filter_column = std::move(build_filter_column_name);
 
-    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
-        = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
+    tiflash_join.fillJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names, join_non_equal_conditions);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size;
-    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
+    size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
+    if (settings.enforce_enable_pipeline && max_bytes_before_external_join > 0)
+    {
+        // Currently, the pipeline model does not support disk-based join, so when enforce_enable_pipeline is true, the disk-based join will be disabled.
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
+    }
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    size_t max_block_size = settings.max_block_size;
+    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
+
+    String flag_mapped_entry_helper_name = tiflash_join.genFlagMappedEntryHelperName(left_input_header, right_input_header, join_non_equal_conditions.other_cond_expr != nullptr);
+    Names join_output_column_names;
+    for (const auto & col : join_output_schema)
+        join_output_column_names.emplace_back(col.name);
+
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
+    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
@@ -127,28 +149,34 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         log->identifier(),
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
+        max_bytes_before_external_join,
+        build_spill_config,
+        probe_spill_config,
+        settings.join_restore_concurrency,
+        join_output_column_names,
         tiflash_join.join_key_collators,
-        probe_filter_column_name,
-        build_filter_column_name,
-        other_filter_column_name,
-        other_eq_filter_from_in_column_name,
-        other_condition_expr,
-        max_block_size_for_cross_join,
-        match_helper_name);
+        join_non_equal_conditions,
+        max_block_size,
+        settings.shallow_copy_cross_probe_threshold,
+        match_helper_name,
+        flag_mapped_entry_helper_name,
+        0,
+        context.isTest(),
+        runtime_filter_list);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
     auto physical_join = std::make_shared<PhysicalJoin>(
         executor_id,
         join_output_schema,
+        fine_grained_shuffle,
         log->identifier(),
         probe_plan,
         build_plan,
         join_ptr,
         probe_side_prepare_actions,
         build_side_prepare_actions,
-        Block(join_output_schema),
-        fine_grained_shuffle);
+        Block(join_output_schema));
     return physical_join;
 }
 
@@ -158,9 +186,10 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), join_ptr->needReturnNonJoinedData());
+    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, scan_hash_map_after_probe = {}", execId(), needScanHashMapAfterProbe(join_ptr->getKind()));
+    join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
+                        probe_pipeline.streams.size());
     size_t probe_index = 0;
-    join_ptr->setProbeConcurrency(probe_pipeline.streams.size());
     for (auto & stream : probe_pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
@@ -191,12 +220,13 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();
     build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
+    join_ptr->initBuild(build_query.source->getHeader(),
+                        join_build_concurrency);
     dag_context.addSubquery(execId(), std::move(build_query));
 }
 
@@ -214,39 +244,37 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
         probe()->buildBlockInputStream(probe_pipeline, context, max_streams);
         probeSideTransform(probe_pipeline, context);
     }
-
-    doSchemaProject(pipeline);
 }
 
-void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
-{
-    /// add a project to remove all the useless column
-    NamesWithAliases schema_project_cols;
-    for (auto & c : schema)
-    {
-        /// do not need to care about duplicated column names because
-        /// it is guaranteed by its children physical plan nodes
-        schema_project_cols.emplace_back(c.name, c.name);
-    }
-    assert(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
-    assert(schema_project && !schema_project->getActions().empty());
-    executeExpression(pipeline, schema_project, log, "remove useless column after join");
-}
-
-void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
+void PhysicalJoin::buildPipeline(
+    PipelineBuilder & builder,
+    Context & context,
+    PipelineExecutorContext & exec_context)
 {
     // Break the pipeline for join build.
-    // FIXME: Should be newly created PhysicalJoinBuild.
-    auto join_build_builder = builder.breakPipeline(shared_from_this());
+    auto join_build = std::make_shared<PhysicalJoinBuild>(
+        executor_id,
+        build()->getSchema(),
+        fine_grained_shuffle,
+        log->identifier(),
+        build(),
+        join_ptr,
+        build_side_prepare_actions);
+    auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder);
+    build()->buildPipeline(join_build_builder, context, exec_context);
     join_build_builder.build();
+
     // Join probe pipeline.
-    probe()->buildPipeline(builder);
-    // FIXME: Should be newly created PhysicalJoinProbe.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    probe()->buildPipeline(builder, context, exec_context);
+    auto join_probe = std::make_shared<PhysicalJoinProbe>(
+        executor_id,
+        schema,
+        log->identifier(),
+        probe(),
+        join_ptr,
+        probe_side_prepare_actions);
+    builder.addPlanNode(join_probe);
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)

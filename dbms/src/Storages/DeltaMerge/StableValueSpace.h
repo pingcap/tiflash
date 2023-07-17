@@ -20,15 +20,15 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/Page/Page.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
 {
 namespace DM
 {
+
 struct WriteBatches;
+
 struct DMContext;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
@@ -46,6 +46,12 @@ public:
 
     static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
 
+    static StableValueSpacePtr createFromCheckpoint( //
+        DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        PageIdU64 stable_id,
+        WriteBatches & wbs);
+
     /**
      * Resets the logger by using the one from the segment.
      * Segment_log is not available when constructing, because usually
@@ -59,7 +65,7 @@ public:
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
-    void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
+    void setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context = nullptr);
 
     PageIdU64 getId() const { return id; }
     void saveMeta(WriteBatchWrapper & meta_wb);
@@ -104,7 +110,7 @@ public:
      */
     size_t getDMFilesBytes() const;
 
-    void enableDMFilesGC();
+    void enableDMFilesGC(DMContext & context);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 

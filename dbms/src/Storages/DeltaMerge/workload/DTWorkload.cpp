@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Config/TOMLConfiguration.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -30,36 +30,19 @@
 #include <Storages/DeltaMerge/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <cpptoml.h>
 
 namespace DB::DM::tests
 {
-DB::Settings createSettings(const WorkloadOptions & opts)
-{
-    DB::Settings settings;
-    if (!opts.config_file.empty())
-    {
-        auto table = cpptoml::parse_file(opts.config_file);
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
-        settings.setProfile("default", *config);
-    }
 
-    settings.dt_enable_read_thread = opts.enable_read_thread;
-    return settings;
-}
-
-DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_)
+DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_, ContextPtr context_)
     : log(&Poco::Logger::get("DTWorkload"))
+    , context(context_)
     , opts(std::make_unique<WorkloadOptions>(opts_))
     , table_info(std::make_unique<TableInfo>(table_info_))
     , handle_table(handle_table_)
     , writing_threads(opts_.write_thread_count)
     , stat(opts_.write_thread_count, opts_.read_thread_count)
 {
-    auto settings = createSettings(opts_);
-    context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs));
-
     auto v = table_info->toStrings();
     for (const auto & s : v)
     {
@@ -68,13 +51,15 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
 
     key_gen = KeyGenerator::create(opts_);
     ts_gen = std::make_unique<TimestampGenerator>();
-
+    // max page id is only updated at restart, so we need recreate page v3 before recreate table
+    context->initializeGlobalStoragePoolIfNeed(context->getPathPool());
     Stopwatch sw;
     store = std::make_unique<DeltaMergeStore>(
         *context,
         true,
         table_info->db_name,
         table_info->table_name,
+        NullspaceID,
         table_info->table_id,
         true,
         *table_info->columns,
@@ -193,7 +178,7 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
     uint64_t read_ts = ts_gen->get();
-    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, "DTWorkload", false, opts->is_fast_scan, excepted_block_size);
+    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, std::vector<RuntimeFilterPtr>(), 0, "DTWorkload", false, opts->is_fast_scan, excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());
     for (auto & stream : streams)

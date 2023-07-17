@@ -90,15 +90,19 @@ public:
 private:
     using Self = UnionBlockInputStream<mode, ignore_block>;
     static constexpr auto NAME = "Union";
+    using Payload = UnionBlockInputStreamImpl::OutputData<mode>;
 
 public:
     UnionBlockInputStream(
         BlockInputStreams inputs,
         BlockInputStreams additional_inputs_at_end,
         size_t max_threads,
+        Int64 max_buffered_bytes,
         const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(std::max(inputs.size(), additional_inputs_at_end.size()), max_threads) * 5) // reduce contention
+        : output_queue(
+            CapacityLimits(std::min(std::max(inputs.size(), additional_inputs_at_end.size()), max_threads) * 5, max_buffered_bytes),
+            [](const Payload & element) { return element.block.allocatedBytes(); }) // reduce contention
         , log(Logger::get(req_id))
         , handler(*this)
         , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
@@ -281,7 +285,6 @@ private:
     }
 
 private:
-    using Payload = UnionBlockInputStreamImpl::OutputData<mode>;
     using OutputQueue = MPMCQueue<Payload>;
 
 private:

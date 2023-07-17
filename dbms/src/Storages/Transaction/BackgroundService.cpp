@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
@@ -26,25 +28,30 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
     , background_pool(tmt.getContext().getBackgroundPool())
     , log(Logger::get())
 {
-    if (!tmt.isInitialized())
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(tmt.isInitialized(), "TMTContext is not initialized");
 
-    single_thread_task_handle = background_pool.addTask(
-        [this] {
-            tmt.getKVStore()->gcRegionPersistedCache();
-            return false;
-        },
-        false);
+    auto & global_context = tmt.getContext();
+    if (!global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        // compute node does not contains region
+        single_thread_task_handle = background_pool.addTask(
+            [this] {
+                tmt.getKVStore()->gcRegionPersistedCache();
+                return false;
+            },
+            false);
 
-    auto & global_settings = tmt.getContext().getSettingsRef();
-    storage_gc_handle = background_pool.addTask(
-        [this] { return tmt.getGCManager().work(); },
-        false,
-        /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
-    LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
+        // compute node does not contain long-live tables and segments
+        auto & global_settings = global_context.getSettingsRef();
+        storage_gc_handle = background_pool.addTask(
+            [this] { return tmt.getGCManager().work(); },
+            false,
+            /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
+        LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
+    }
 }
 
-BackgroundService::~BackgroundService()
+void BackgroundService::shutdown()
 {
     if (single_thread_task_handle)
     {
@@ -57,6 +64,11 @@ BackgroundService::~BackgroundService()
         background_pool.removeTask(storage_gc_handle);
         storage_gc_handle = nullptr;
     }
+}
+
+BackgroundService::~BackgroundService()
+{
+    shutdown();
 }
 
 } // namespace DB

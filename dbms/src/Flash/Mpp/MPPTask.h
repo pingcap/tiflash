@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Executor/QueryExecutorHolder.h>
+#include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskScheduleEntry.h>
@@ -25,7 +24,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
@@ -38,12 +37,31 @@
 namespace DB
 {
 class MPPTaskManager;
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
+class DAGContext;
+class ProcessListEntry;
 
 enum class AbortType
 {
     /// todo add ONKILL to distinguish between silent cancellation and kill
     ONCANCELLATION,
     ONERROR,
+};
+
+// This struct notify the MPPTaskManager that this MPPTask is completed destructed
+class MPPTaskMonitorHelper
+{
+public:
+    MPPTaskMonitorHelper() = default;
+
+    ~MPPTaskMonitorHelper();
+
+    void initAndAddself(MPPTaskManager * manager_, const String & task_unique_id_);
+
+private:
+    MPPTaskManager * manager = nullptr;
+    String task_unique_id;
+    bool initialized = false;
 };
 
 class MPPTask : public std::enable_shared_from_this<MPPTask>
@@ -61,7 +79,7 @@ public:
 
     const MPPTaskId & getId() const { return id; }
 
-    bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
+    bool isRootMPPTask() const;
 
     TaskStatus getStatus() const { return status.load(); }
 
@@ -106,8 +124,33 @@ private:
 
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
+    void initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry);
+
     void initExchangeReceivers();
 
+    String getErrString() const;
+    void setErrString(const String & message);
+
+    MemoryTracker * getMemoryTracker() const;
+
+    void reportStatus(const String & err_msg);
+
+private:
+    struct ProcessListEntryHolder
+    {
+        std::shared_ptr<ProcessListEntry> process_list_entry;
+        ~ProcessListEntryHolder()
+        {
+            /// Because MemoryTracker is now saved in `MPPQuery` and shared by all the mpp tasks belongs to the same mpp query,
+            /// it may not be destructed when MPPTask is destructed, so need to manually reset current_memory_tracker to nullptr at the
+            /// end of the destructor of MPPTask, otherwise, current_memory_tracker may point to a invalid memory tracker
+            current_memory_tracker = nullptr;
+        }
+    };
+    // We must ensure this member variable is put at this place to be destructed at proper time
+    MPPTaskMonitorHelper mpp_task_monitor_helper;
+
+    // To make sure dag_req is not destroyed before the mpp task ends.
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
@@ -115,22 +158,23 @@ private:
     ContextPtr context;
 
     MPPTaskManager * manager;
-    std::atomic<bool> registered{false};
+    std::atomic<bool> is_public{false};
 
     MPPTaskScheduleEntry schedule_entry;
 
+    ProcessListEntryHolder process_list_entry_holder;
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
 
-    std::shared_ptr<ProcessListEntry> process_list_entry;
-
     QueryExecutorHolder query_executor_holder;
 
     std::atomic<TaskStatus> status{INITIALIZING};
-    String err_string;
 
-    std::mutex tunnel_and_receiver_mu;
+    /// Used to protect concurrent access to `err_string`, `tunnel_set`, and `receiver_set`.
+    mutable std::mutex mtx;
+
+    String err_string;
 
     MPPTunnelSetPtr tunnel_set;
 

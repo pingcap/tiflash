@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -66,6 +67,7 @@ class MockFailedWriter : public PacketWriter
 };
 
 class MockAsyncCallData : public IAsyncCallData
+    , public GRPCKickTag
 {
 public:
     MockAsyncCallData() = default;
@@ -75,18 +77,10 @@ public:
         async_tunnel_sender = async_tunnel_sender_;
     }
 
-    grpc_call * grpcCall() override
+    std::optional<GRPCKickFunc> getGRPCKickFuncForTest() override
     {
-        return nullptr;
-    }
-
-    std::optional<GRPCKickFunc> getKickFuncForTest() override
-    {
-        return [&](KickTag * tag) {
+        return [&](GRPCKickTag *) {
             {
-                void * t;
-                bool s;
-                tag->FinalizeResult(&t, &s);
                 std::unique_lock<std::mutex> lock(mu);
                 has_msg = true;
             }
@@ -95,25 +89,28 @@ public:
         };
     }
 
+    void execute(bool) override {}
+
     void run()
     {
         while (true)
         {
-            TrackedMppDataPacketPtr res;
-            switch (async_tunnel_sender->pop(res, this))
+            TrackedMppDataPacketPtr packet;
+            auto res = async_tunnel_sender->popWithTag(packet, this);
+            switch (res)
             {
-            case GRPCSendQueueRes::OK:
+            case MPMCQueueResult::OK:
                 if (write_failed)
                 {
                     async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
                     return;
                 }
-                write_packet_vec.push_back(res->packet.data());
+                write_packet_vec.push_back(packet->packet.data());
                 break;
-            case GRPCSendQueueRes::FINISHED:
+            case MPMCQueueResult::FINISHED:
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::CANCELLED:
+            case MPMCQueueResult::CANCELLED:
                 assert(!async_tunnel_sender->getCancelReason().empty());
                 if (write_failed)
                 {
@@ -123,13 +120,17 @@ public:
                 write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
                 async_tunnel_sender->consumerFinish("");
                 return;
-            case GRPCSendQueueRes::EMPTY:
+            case MPMCQueueResult::EMPTY:
+            {
                 std::unique_lock<std::mutex> lock(mu);
                 cv.wait(lock, [&] {
                     return has_msg;
                 });
                 has_msg = false;
                 break;
+            }
+            default:
+                __builtin_unreachable();
             }
         }
     }
@@ -150,9 +151,9 @@ public:
         : live_connections(conn_num)
         , live_local_connections(0)
         , data_size_in_queue(0)
+        , received_message_queue(10, Logger::get(), &data_size_in_queue, false, 0)
         , log(Logger::get())
     {
-        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(10));
     }
 
     void connectionDone(bool meet_error, const String & local_err_msg)
@@ -167,7 +168,7 @@ public:
         }
 
         if (meet_error || copy_connection == 0)
-            msg_channels[0]->finish();
+            received_message_queue.finish();
     }
 
     void addLocalConnectionNum()
@@ -190,16 +191,16 @@ public:
         for (auto & tunnel : tunnels)
         {
             LocalRequestHandler local_request_handler(
-                nullptr,
-                [this](bool meet_error, const String & err_msg) {
-                    this->connectionDone(meet_error, err_msg);
+                [this](bool meet_error, const String & local_err_msg) {
+                    this->connectionDone(meet_error, local_err_msg);
                 },
                 [this]() {
                     this->connectionLocalDone();
                 },
                 []() {},
-                ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false);
+                "",
+                &received_message_queue);
+            tunnel->connectLocalV2(0, local_request_handler, true);
         }
     }
 
@@ -207,11 +208,12 @@ public:
     {
         while (true)
         {
-            std::shared_ptr<ReceivedMessage> recv_msg;
-            switch (msg_channels[0]->pop(recv_msg))
+            ReceivedMessagePtr data;
+            auto pop_result = received_message_queue.pop<true>(0, data);
+            switch (pop_result)
             {
             case DB::MPMCQueueResult::OK:
-                received_msgs.push_back(recv_msg);
+                received_msgs.push_back(data);
                 break;
             default:
                 return;
@@ -232,10 +234,10 @@ private:
     std::condition_variable cv;
     Int32 live_connections;
     Int32 live_local_connections;
-    std::vector<MsgChannelPtr> msg_channels;
+    std::atomic<Int64> data_size_in_queue;
+    ReceivedMessageQueue received_message_queue;
     String err_msg;
     std::vector<std::shared_ptr<ReceivedMessage>> received_msgs;
-    std::atomic<Int64> data_size_in_queue;
     LoggerPtr log;
 };
 
@@ -281,10 +283,10 @@ public:
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_sender_v2)
-            tunnel->local_tunnel_sender_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_sender_v2)
-            tunnel->local_tunnel_fine_grained_sender_v2->is_done.store(true);
+        if (tunnel->local_tunnel_v2)
+            tunnel->local_tunnel_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_local_only_v2)
+            tunnel->local_tunnel_local_only_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -588,7 +590,8 @@ try
     std::vector<std::thread> threads;
     for (size_t i = 0; i < tunnels.size(); ++i)
     {
-        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSender(), send_data_packet_num]() {
+        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSenderV2(), send_data_packet_num]() {
+            ASSERT_TRUE(sender_tunnel.get() != nullptr);
             for (size_t i = 0; i < send_data_packet_num; ++i)
                 sender_tunnel->push(newDataPacket("111"));
             sender_tunnel->finish();
@@ -632,14 +635,14 @@ try
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
-    tunnels[0]->getLocalTunnelSender()->consumerFinish("");
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getTunnelSender()), true);
+    tunnels[0]->getLocalTunnelSenderV2()->consumerFinish("");
+    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getLocalTunnelSenderV2()), true);
 
     t.join();
     auto result_size = receiver->getReceivedMsgs().size();
     GTEST_ASSERT_EQ(result_size == 2, true);
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->packet->getPacket().data(), "First");
-    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->packet->getPacket().data(), "Second");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[0]->getPacket().data(), "First");
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs()[1]->getPacket().data(), "Second");
 }
 CATCH
 
@@ -648,13 +651,14 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     setTunnelFinished(tunnels[0]);
+    ReceivedMessageQueue received_message_queue(1, Logger::get(), nullptr, false, 0);
 
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &received_message_queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
@@ -668,12 +672,13 @@ try
 {
     auto [receiver, tunnels] = prepareLocal(1);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnels[0]), true);
+    ReceivedMessageQueue queue(1, Logger::get(), nullptr, false, 0);
     LocalRequestHandler local_req_handler(
-        nullptr,
         [](bool, const String &) {},
         []() {},
         []() {},
-        ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
+        "",
+        &queue);
     tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
@@ -779,6 +784,74 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
     }
     if (tunnel != nullptr)
         tunnel->waitForFinish();
+}
+
+TEST_F(TestMPPTunnel, SyncTunnelForceWrite)
+{
+    auto writer_ptr = std::make_unique<MockPacketWriter>();
+    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+    mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.back(), "First");
+}
+
+TEST_F(TestMPPTunnel, AsyncTunnelForceWrite)
+{
+    auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
+    std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+    mpp_tunnel_ptr->connectAsync(call_data.get());
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    std::thread t(&MockAsyncCallData::run, call_data.get());
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
+
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
+}
+
+TEST_F(TestMPPTunnel, LocalTunnelForceWrite)
+{
+    auto [receiver, tunnels] = prepareLocal(1);
+    const auto & mpp_tunnel_ptr = tunnels.back();
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isWritable());
+    mpp_tunnel_ptr->forceWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
+
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->getPacket().data(), "First");
+}
+
+TEST_F(TestMPPTunnel, isWritableTimeout)
+try
+{
+    timeout = std::chrono::seconds(1);
+    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
+    while (stop_watch.elapsedSeconds() < 3 * timeout.count())
+    {
+        ASSERT_FALSE(mpp_tunnel_ptr->isWritable());
+    }
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "0000_0001 is timeout");
 }
 } // namespace tests
 } // namespace DB

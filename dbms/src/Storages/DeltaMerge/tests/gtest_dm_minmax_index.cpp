@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -29,6 +30,7 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
 namespace DB
 {
 namespace DM
@@ -48,7 +50,7 @@ protected:
 
     void SetUp() override
     {
-        context = std::make_unique<Context>(DMTestEnv::getContext());
+        context = DMTestEnv::getContext();
         if (!context->getMinMaxIndexCache())
         {
             context->setMinMaxIndexCache(5368709120);
@@ -63,7 +65,7 @@ protected:
 private:
 protected:
     // a ptr to context, we can reload context with different settings if need.
-    std::unique_ptr<Context> context;
+    ContextPtr context;
 };
 
 Attr attr(String type)
@@ -120,6 +122,7 @@ bool checkMatch(
         false,
         "test_database",
         name,
+        NullspaceID,
         /*table_id*/ next_table_id++,
         true,
         table_columns,
@@ -132,7 +135,7 @@ bool checkMatch(
     store->mergeDeltaAll(context);
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
-    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, name, false);
+    auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), std::make_shared<PushDownFilter>(filter), std::vector<RuntimeFilterPtr>{}, 0, name, false);
     auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 

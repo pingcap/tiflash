@@ -90,7 +90,7 @@ public:
     }
 
 protected:
-    ThreadPool pool{1};
+    legacy::ThreadPool pool{1};
     Poco::Event ready;
     bool started = false;
     bool first = true;

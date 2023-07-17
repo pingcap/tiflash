@@ -43,6 +43,11 @@ struct FilesChangesTracker
 {
     std::set<FileWithTimestamp> files;
 
+    bool valid() const
+    {
+        return !files.empty();
+    }
+
     void addIfExists(const std::string & path)
     {
         if (!path.empty() && Poco::File(path).exists())

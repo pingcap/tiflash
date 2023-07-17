@@ -19,6 +19,8 @@
 
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <shared_mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -42,14 +44,17 @@ public:
     ~SchemaSyncService();
 
 private:
-    bool syncSchemas();
+    bool syncSchemas(KeyspaceID keyspace_id);
 
     struct GCContext
     {
         Timestamp last_gc_safe_point = 0;
     } gc_context;
 
-    bool gc(Timestamp gc_safe_point);
+    bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
+
+    void addKeyspaceGCTasks();
+    void removeKeyspaceGCTasks();
 
 private:
     Context & context;
@@ -58,6 +63,10 @@ private:
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
+
+    mutable std::shared_mutex keyspace_map_mutex;
+    // Handles for each keyspace schema sync task.
+    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> keyspace_handle_map;
 
     LoggerPtr log;
 };

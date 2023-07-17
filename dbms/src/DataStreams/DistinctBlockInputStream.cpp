@@ -19,7 +19,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
 DistinctBlockInputStream::DistinctBlockInputStream(const BlockInputStreamPtr & input, const SizeLimits & set_size_limits, size_t limit_hint_, const Names & columns)
@@ -34,7 +34,7 @@ Block DistinctBlockInputStream::readImpl()
 {
     /// Execute until end of stream or until
     /// a block with some new records will be gotten.
-    while (1)
+    while (true)
     {
         if (no_more_rows)
             return Block();
@@ -66,14 +66,15 @@ Block DistinctBlockInputStream::readImpl()
 
         switch (data.type)
         {
-            case SetVariants::Type::EMPTY:
-                break;
-        #define M(NAME) \
-            case SetVariants::Type::NAME: \
-                buildFilter(*data.NAME, column_ptrs, filter, rows, data); \
-                break;
+            using enum SetVariants::Type;
+        case EMPTY:
+            break;
+#define M(NAME)                                                   \
+    case NAME:                                                    \
+        buildFilter(*data.NAME, column_ptrs, filter, rows, data); \
+        break;
             APPLY_FOR_SET_VARIANTS(M)
-        #undef M
+#undef M
         }
 
         /// Just go to the next block if there isn't any new record in the current one.
@@ -123,7 +124,7 @@ ColumnRawPtrs DistinctBlockInputStream::getKeyColumns(const Block & block) const
 
     for (size_t i = 0; i < columns; ++i)
     {
-        auto & column = columns_names.empty()
+        const auto & column = columns_names.empty()
             ? block.safeGetByPosition(i).column
             : block.getByName(columns_names[i]).column;
 
@@ -135,4 +136,4 @@ ColumnRawPtrs DistinctBlockInputStream::getKeyColumns(const Block & block) const
     return column_ptrs;
 }
 
-}
+} // namespace DB

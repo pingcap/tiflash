@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/Page/Page.h>
 
 namespace DB
 {
@@ -63,28 +64,30 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     return schema;
 }
 
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
+void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
 {
     CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
-    type->serializeBinaryBulkWithMultipleStreams(column, //
-                                                 [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                 offset,
-                                                 limit,
-                                                 true,
-                                                 {});
+    type->serializeBinaryBulkWithMultipleStreams(
+        column,
+        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        offset,
+        limit,
+        true,
+        {});
     compressed.next();
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows)
+void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
 {
-    ReadBufferFromMemory buf(data_buf.begin(), data_buf.size());
+    ReadBufferFromString buf(data_buf);
     CompressedReadBuffer compressed(buf);
-    type->deserializeBinaryBulkWithMultipleStreams(column, //
-                                                   [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                   rows,
-                                                   static_cast<double>(data_buf.size()) / rows,
-                                                   true,
-                                                   {});
+    type->deserializeBinaryBulkWithMultipleStreams(
+        column,
+        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        rows,
+        static_cast<double>(data_buf.size()) / rows,
+        true,
+        {});
 }
 
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)
@@ -121,6 +124,30 @@ ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, cons
         break;
     case DeltaFormat::V3:
         column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
+        break;
+    default:
+        throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+    return column_files;
+}
+
+ColumnFilePersisteds createColumnFilesFromCheckpoint( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs)
+{
+    // Check binary version
+    DeltaFormat::Version version;
+    readIntBinary(version, buf);
+
+    ColumnFilePersisteds column_files;
+    switch (version)
+    {
+    case DeltaFormat::V3:
+        column_files = createColumnFilesInV3FormatFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),

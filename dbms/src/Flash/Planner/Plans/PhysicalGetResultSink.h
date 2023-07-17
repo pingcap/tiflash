@@ -14,30 +14,30 @@
 
 #pragma once
 
-#include <Flash/Executor/ResultHandler.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Planner/Plans/PhysicalUnary.h>
 
 namespace DB
 {
-class GetResultSinkOp;
-
 class PhysicalGetResultSink : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
-        ResultHandler && result_handler,
+        const ResultQueuePtr & result_queue,
+        const LoggerPtr & log,
         const PhysicalPlanNodePtr & child);
 
     PhysicalGetResultSink(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        ResultHandler && result_handler_)
-        : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, req_id, child_)
-        , result_handler(std::move(result_handler_))
+        const ResultQueuePtr & result_queue_)
+        : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, fine_grained_shuffle_, req_id, child_)
+        , result_queue(result_queue_)
     {
-        assert(!result_handler.isIgnored());
+        assert(result_queue);
     }
 
     void finalize(const Names &) override
@@ -50,18 +50,19 @@ public:
         throw Exception("Unsupport");
     }
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
-
-private:
-    friend class GetResultSinkOp;
-
-    std::mutex mu;
-    ResultHandler result_handler;
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
     {
         throw Exception("Unsupport");
     }
+
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
+
+private:
+    ResultQueuePtr result_queue;
 };
 } // namespace DB

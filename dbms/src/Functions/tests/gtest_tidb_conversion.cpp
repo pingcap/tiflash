@@ -920,10 +920,10 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
 
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.clearWarnings();
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
@@ -953,7 +953,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-9999}), createCastTypeConstColumn("Nullable(Decimal(2, 2))")}));
 
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 
@@ -1167,10 +1167,10 @@ try
     // in default mode
     // for round test, tidb throw warnings: Truncated incorrect DECIMAL value: xxx
     // tiflash is same as mysql, don't throw warnings.
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    dag_context.clearWarnings();
 
     testNotOnlyNull<Float32, Decimal32>(12.213f, DecimalField32(1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float32, Decimal32>(-12.213f, DecimalField32(-1221, 2), std::make_tuple(9, 2));
@@ -1227,8 +1227,8 @@ try
     // TiFlash:    123.12345678912344293376
     testNotOnlyNull<Float64, Decimal256>(123.123456789123456789, DecimalField256(Decimal256(Int256("12312345678912344293376")), 20), std::make_tuple(50, 20));
 
-    dag_context->setFlags(ori_flags);
-    dag_context->clearWarnings();
+    dag_context.setFlags(ori_flags);
+    dag_context.clearWarnings();
 }
 CATCH
 
@@ -1283,7 +1283,7 @@ try
 }
 CATCH
 
-TEST_F(TestTidbConversion, castDecimalAsReal)
+TEST_F(TestTidbConversion, castDecimalAsTime)
 try
 {
     testReturnNull<Decimal64, MyDateTime>(DecimalField64(11, 1), std::make_tuple(19, 1), 6);
@@ -1305,6 +1305,75 @@ try
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(99991111111111, 6), {9999, 11, 11, 0, 0, 0, 0}, 6);
+}
+CATCH
+
+TEST_F(TestTidbConversion, truncateInCastDecimalAsDecimal)
+try
+{
+    DAGContext * dag_context = context->getDAGContext();
+    UInt64 ori_flags = dag_context->getFlags();
+    dag_context->addFlag(TiDBSQLFlags::IN_INSERT_STMT | TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT);
+    dag_context->clearWarnings();
+
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_EQ(dag_context->getWarningCount(), 4);
+    dag_context->setFlags(ori_flags);
+    dag_context->clearWarnings();
+}
+CATCH
+
+TEST_F(TestTidbConversion, castDecimalAsDecimalWithRound)
+try
+{
+    DAGContext * dag_context = context->getDAGContext();
+    UInt64 ori_flags = dag_context->getFlags();
+    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    dag_context->clearWarnings();
+
+    /// decimal32 to decimal32/64/128/256
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+
+    /// decimal64 to decimal32/64/128/256
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+
+    /// decimal128 to decimal32/64/128/256
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+
+    /// decimal256 to decimal32/64/128/256
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+
+    dag_context->setFlags(ori_flags);
+    dag_context->clearWarnings();
 }
 CATCH
 
@@ -1624,7 +1693,7 @@ TEST_F(TestTidbConversion, skipCheckOverflowIntToDeciaml)
     ASSERT_TRUE(FunctionTiDBCast<>::canSkipCheckOverflowForDecimal<DataTypeUInt64>(uint64_ptr, prec_decimal256, scale));
 }
 
-TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDeciaml)
+TEST_F(TestTidbConversion, skipCheckOverflowDecimalToDecimal)
 {
     DataTypePtr decimal32_ptr_8_3 = createDecimal(8, 3);
     DataTypePtr decimal32_ptr_8_2 = createDecimal(8, 2);
@@ -1750,10 +1819,10 @@ try
     ASSERT_FALSE(FunctionTiDBCast<>::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
 
     // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so CastInternalType should be **Int64**.
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.clearWarnings();
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
             std::make_tuple(to_prec, to_scale),
@@ -1761,7 +1830,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(9,7))")}));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 
     // case3: cast(bigint as decimal(40, 20))
     // from_prec(19) + to_scale(20) <= Decimal256::prec(40), so we **CAN** skip check overflow.
@@ -1942,8 +2011,8 @@ CATCH
 TEST_F(TestTidbConversion, castStringAsDateTime3595)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
     ColumnWithTypeAndName expect_datetime_column(
         createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}}).column,

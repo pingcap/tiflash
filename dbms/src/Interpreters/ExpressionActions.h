@@ -33,6 +33,7 @@ extern const int LOGICAL_ERROR;
 
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
+using NamesWithAliasesVec = std::vector<NamesWithAliases>;
 
 class Join;
 class Expand;
@@ -69,6 +70,8 @@ public:
         PROJECT,
 
         EXPAND,
+
+        CONVERT_TO_NULLABLE,
     };
 
     Type type;
@@ -77,6 +80,9 @@ public:
     std::string source_name;
     std::string result_name;
     DataTypePtr result_type;
+
+    /// For CONVERT_TO_NULLABLE
+    std::string col_need_to_nullable;
 
     /// For ADD_COLUMN.
     ColumnPtr added_column;
@@ -111,6 +117,7 @@ public:
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
     static ExpressionAction expandSource(GroupingSets grouping_sets);
+    static ExpressionAction convertToNullable(const std::string & col_name);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;
@@ -122,7 +129,6 @@ private:
 
     void prepare(Block & sample_block);
     void execute(Block & block) const;
-    void executeOnTotals(Block & block) const;
 };
 
 
@@ -195,19 +201,12 @@ public:
     /// Execute the expression on the block. The block must contain all the columns returned by getRequiredColumns.
     void execute(Block & block) const;
 
-    /** Execute the expression on the block of total values.
-      * Almost the same as `execute`. The difference is only when JOIN is executed.
-      */
-    void executeOnTotals(Block & block) const;
-
     /// Obtain a sample block that contains the names and types of result columns.
     const Block & getSampleBlock() const { return sample_block; }
 
     std::string dumpActions() const;
 
     static std::string getSmallestColumn(const NamesAndTypesList & columns);
-
-    BlockInputStreamPtr createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const;
 
 private:
     NamesAndTypesList input_columns;
@@ -218,6 +217,7 @@ private:
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+using ExpressionActionsPtrVec = std::vector<ExpressionActionsPtr>;
 
 
 /** The sequence of transformations over the block.

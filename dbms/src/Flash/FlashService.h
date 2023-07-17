@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Debug/MockServerInfo.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
@@ -35,12 +35,18 @@ class IServer;
 class IAsyncCallData;
 class EstablishCallData;
 class MockStorage;
+class Context;
+using ContextPtr = std::shared_ptr<Context>;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
 namespace Management
 {
 class ManualCompactManager;
 } // namespace Management
+namespace S3
+{
+class S3LockService;
+} // namespace S3
 
 class FlashService : public tikvpb::Tikv::Service
     , public std::enable_shared_from_this<FlashService>
@@ -78,6 +84,22 @@ public:
 
     grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
 
+
+    // For S3 Lock Service
+    grpc::Status tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
+
+    // The TiFlash read node call this RPC to build the disaggregated task
+    // on the TiFlash write node.
+    // It returns the serialized remote segments info to the compute node.
+    grpc::Status EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response) override;
+    // The TiFlash read node call this RPC to fetch the delta-layer data
+    // from the TiFlash write node.
+    grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
+
+    grpc::Status GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest * request, disaggregated::GetDisaggConfigResponse * response) override;
+    grpc::Status GetTiFlashSystemTable(grpc::ServerContext * grpc_context, const kvrpcpb::TiFlashSystemTableRequest * request, kvrpcpb::TiFlashSystemTableResponse * response) override;
+
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
@@ -88,19 +110,20 @@ protected:
     grpc::Status checkGrpcContext(const grpc::ServerContext * grpc_context) const;
 
     Context * context = nullptr;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log;
     bool is_async = false;
     bool enable_local_tunnel = false;
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
+    std::unique_ptr<S3::S3LockService> s3_lock_service;
 
     /// for mpp unit test.
     MockStorage * mock_storage = nullptr;
     MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+    std::unique_ptr<legacy::ThreadPool> cop_pool, batch_cop_pool;
 };
 
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>
@@ -112,6 +135,6 @@ public:
     }
     /// Return grpc::Status::OK when the connection is established.
     /// Return non-OK grpc::Status when the connection can not be established.
-    grpc::Status establishMPPConnectionAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data);
+    grpc::Status establishMPPConnectionAsync(EstablishCallData * call_data);
 };
 } // namespace DB

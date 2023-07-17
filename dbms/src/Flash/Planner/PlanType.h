@@ -36,8 +36,12 @@ struct PlanType
         TableScan = 11,
         MockTableScan = 12,
         Join = 13,
-        GetResult = 14,
-        Expand = 15,
+        AggregationBuild = 14,
+        AggregationConvergent = 15,
+        Expand = 16,
+        JoinBuild = 17,
+        JoinProbe = 18,
+        GetResult = 19,
     };
     PlanTypeEnum enum_value;
 

@@ -72,6 +72,12 @@ metapb::Peer RegionMeta::getPeer() const
     return peer;
 }
 
+void RegionMeta::setPeer(metapb::Peer && p)
+{
+    std::lock_guard lock(mutex);
+    peer = p;
+}
+
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 {
     std::lock_guard lock(mutex);
@@ -442,16 +448,27 @@ RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb:
     region_state.setRegion(std::move(region));
 }
 
-metapb::Region RegionMeta::getMetaRegion() const
+metapb::Region RegionMeta::cloneMetaRegion() const
 {
     std::lock_guard lock(mutex);
     return region_state.getRegion();
 }
 
-raft_serverpb::MergeState RegionMeta::getMergeState() const
+const metapb::Region & RegionMeta::getMetaRegion() const
+{
+    std::lock_guard lock(mutex);
+    return region_state.getRegion();
+}
+
+raft_serverpb::MergeState RegionMeta::cloneMergeState() const
 {
     std::lock_guard lock(mutex);
     return region_state.getMergeState();
 }
 
+const raft_serverpb::MergeState & RegionMeta::getMergeState() const
+{
+    std::lock_guard lock(mutex);
+    return region_state.getMergeState();
+}
 } // namespace DB

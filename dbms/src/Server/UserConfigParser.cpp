@@ -49,7 +49,7 @@ static std::string tryGetAbsolutePath(const std::string & config_path, std::stri
 ConfigReloaderPtr parseSettings(
     Poco::Util::LayeredConfiguration & config,
     const std::string & config_path,
-    std::unique_ptr<Context> & global_context,
+    const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
     std::string users_config_path = config.getString("users_config", String(1, '\0'));
@@ -66,6 +66,12 @@ ConfigReloaderPtr parseSettings(
 
     if (load_from_main_config_path)
         users_config_path = config_path;
+
+    if (users_config_path.empty())
+    {
+        global_context->setUsersConfig(new Poco::Util::LayeredConfiguration());
+        return nullptr;
+    }
 
     LOG_INFO(log, "Set users config file to: {}", users_config_path);
 

@@ -24,13 +24,13 @@
 
 # Data.
 => DBGInvoke __mock_tidb_table(default, test1, 'col_1 String, col_2 Int64')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test1)
 => DBGInvoke __put_region(4, 0, 100, default, test1)
 => DBGInvoke __put_region(5, 100, 200, default, test1)
 => DBGInvoke __put_region(6, 200, 300, default, test1)
 
 => DBGInvoke __mock_tidb_table(default, test2, 'col_1 String, col_2 Int64')
-=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __refresh_mapped_table_schema(default, test2)
 => DBGInvoke __put_region(7, 0, 100, default, test2)
 => DBGInvoke __put_region(8, 100, 200, default, test2)
 => DBGInvoke __put_region(9, 200, 300, default, test2)

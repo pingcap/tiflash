@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <common/defines.h>
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
@@ -103,7 +104,7 @@ try
             snap = page_storage->getSnapshot("");
 
         // let's compact the WAL logs
-        auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+        auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, /* force */ true);
         ASSERT_TRUE(done_snapshot);
 
         // let's try full gc, this will not trigger full gc
@@ -214,7 +215,7 @@ try
     th_gc.get();
 
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
@@ -228,7 +229,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -268,29 +269,32 @@ try
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_ps_wal_compact);
-    auto sp_gc = getSyncPoint();
-    auto th_gc = std::async([&]() {
-        auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
-        ASSERT_EQ(expectFullGCExecute(), done_full_gc);
-    });
-    // let's compact the WAL logs
-    sp_gc.waitAndPause();
-
     {
-        // the delete timing is decide by `sp_gc`
-        WriteBatch batch;
-        batch.delPage(ref_page_id2);
-        batch.delPage(ref_page_id3);
-        batch.delPage(ref_page_id4);
-        page_storage->write(std::move(batch));
+        auto sp_gc = getSyncPoint();
+        auto th_gc = std::async([&]() {
+            auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
+            ASSERT_EQ(expectFullGCExecute(), done_full_gc);
+        });
+        // let's compact the WAL logs
+        sp_gc.waitAndPause();
+
+        {
+            // the delete timing is decide by `sp_gc`
+            WriteBatch batch;
+            batch.delPage(ref_page_id2);
+            batch.delPage(ref_page_id3);
+            batch.delPage(ref_page_id4);
+            page_storage->write(std::move(batch));
+        }
+
+        // let's try full gc
+        sp_gc.next();
+        th_gc.get();
     }
 
-    // let's try full gc
-    sp_gc.next();
-    th_gc.get();
-
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
@@ -304,7 +308,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -428,7 +432,7 @@ try
     th_foreground_write.get();
 
     // wal compact again
-    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+    page_storage->page_directory->tryDumpSnapshot(nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
@@ -445,7 +449,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             for (const auto & r : e.getRecords())
             {
@@ -456,7 +460,7 @@ try
                     else if (r.page_id.low == ref_page_id4)
                         exist_id4_normal_entry = true;
                 }
-                LOG_INFO(log, PageEntriesEdit<PageIdV3Internal>::toDebugString(r));
+                LOG_INFO(log, "{}", r);
             }
         }
     }

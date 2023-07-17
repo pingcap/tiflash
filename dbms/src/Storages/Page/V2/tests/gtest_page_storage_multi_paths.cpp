@@ -20,16 +20,15 @@
 #include <Poco/Logger.h>
 #include <Poco/Path.h>
 #include <Poco/Runnable.h>
-#include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
@@ -48,7 +47,7 @@ class PageStorageMultiPathsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorageMultiPathsTest()
-        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
     static void SetUpTestCase() {}

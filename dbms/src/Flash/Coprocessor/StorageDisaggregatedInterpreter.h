@@ -17,7 +17,8 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
-#include <Interpreters/Context.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/StorageDisaggregated.h>
 
 namespace DB
@@ -43,6 +44,12 @@ public:
     {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         pipeline.streams = storage->read(Names(), SelectQueryInfo(), context, stage, 0, max_streams);
+        analyzer = std::move(storage->analyzer);
+    }
+
+    void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
+    {
+        storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
         analyzer = std::move(storage->analyzer);
     }
 

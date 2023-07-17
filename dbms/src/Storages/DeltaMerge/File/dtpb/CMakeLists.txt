@@ -13,14 +13,13 @@
 # limitations under the License.
 
 protobuf_generate_cpp(
-    dtpb_srcs dtpb_hdrs
-    dmfile.proto
+        dtpb_srcs dtpb_hdrs
+        dmfile.proto
 )
 
-add_library(dtpb ${dtpb_srcs})
-target_include_directories(dtpb PUBLIC
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${Protobuf_INCLUDE_DIR})
+add_library(dtpb
+        ${dtpb_srcs})
+target_include_directories(dtpb
+        PUBLIC ${Protobuf_INCLUDE_DIR})
 target_compile_options(dtpb
-    PRIVATE -Wno-unused-parameter
-)
+        PRIVATE -Wno-unused-parameter)

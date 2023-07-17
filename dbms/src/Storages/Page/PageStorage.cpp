@@ -17,6 +17,7 @@
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/WriteBatchWrapperImpl.h>
 
 namespace DB
 {
@@ -44,8 +45,9 @@ class PageReaderImpl : private boost::noncopyable
 public:
     static std::unique_ptr<PageReaderImpl> create(
         PageStorageRunMode run_mode_,
+        KeyspaceID keyspace_id_,
         StorageType tag_,
-        NamespaceId ns_id_,
+        NamespaceID ns_id_,
         PageStoragePtr storage_v2_,
         PageStoragePtr storage_v3_,
         UniversalPageStoragePtr uni_ps_,
@@ -80,7 +82,7 @@ class PageReaderImplNormal : public PageReaderImpl
 {
 public:
     /// Not snapshot read.
-    explicit PageReaderImplNormal(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
+    explicit PageReaderImplNormal(NamespaceID ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage(storage_)
         , read_limiter(read_limiter_)
@@ -88,7 +90,7 @@ public:
     }
 
     /// Snapshot read.
-    PageReaderImplNormal(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+    PageReaderImplNormal(NamespaceID ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage(storage_)
         , snap(snap_)
@@ -144,7 +146,7 @@ public:
     }
 
 private:
-    NamespaceId ns_id;
+    NamespaceID ns_id;
     PageStoragePtr storage;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;
@@ -155,7 +157,7 @@ class PageReaderImplMixed : public PageReaderImpl
 {
 public:
     /// Not snapshot read.
-    explicit PageReaderImplMixed(NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_)
+    explicit PageReaderImplMixed(NamespaceID ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
@@ -164,7 +166,7 @@ public:
     }
 
     /// Snapshot read.
-    PageReaderImplMixed(NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+    PageReaderImplMixed(NamespaceID ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
@@ -173,7 +175,7 @@ public:
     {
     }
 
-    PageReaderImplMixed(NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
+    PageReaderImplMixed(NamespaceID ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
@@ -337,7 +339,7 @@ private:
     }
 
 private:
-    const NamespaceId ns_id;
+    const NamespaceID ns_id;
     PageStoragePtr storage_v2;
     PageStoragePtr storage_v3;
     PageStorage::SnapshotPtr snap;
@@ -348,17 +350,17 @@ class PageReaderImplUniversal : public PageReaderImpl
 {
 public:
     /// Not snapshot read.
-    explicit PageReaderImplUniversal(StorageType tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, ReadLimiterPtr read_limiter_)
+    explicit PageReaderImplUniversal(KeyspaceID keyspace_id_, StorageType tag_, NamespaceID ns_id_, UniversalPageStoragePtr storage_, ReadLimiterPtr read_limiter_)
         : storage(storage_)
-        , prefix(UniversalPageIdFormat::toFullPrefix(tag_, ns_id_))
+        , prefix(UniversalPageIdFormat::toFullPrefix(keyspace_id_, tag_, ns_id_))
         , read_limiter(read_limiter_)
     {
     }
 
     /// Snapshot read.
-    PageReaderImplUniversal(StorageType tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+    PageReaderImplUniversal(KeyspaceID keyspace_id_, StorageType tag_, NamespaceID ns_id_, UniversalPageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
         : storage(storage_)
-        , prefix(UniversalPageIdFormat::toFullPrefix(tag_, ns_id_))
+        , prefix(UniversalPageIdFormat::toFullPrefix(keyspace_id_, tag_, ns_id_))
         , snap(snap_)
         , read_limiter(read_limiter_)
     {
@@ -447,8 +449,9 @@ private:
 
 std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
     PageStorageRunMode run_mode_,
+    KeyspaceID keyspace_id_,
     StorageType tag_,
-    NamespaceId ns_id_,
+    NamespaceID ns_id_,
     PageStoragePtr storage_v2_,
     PageStoragePtr storage_v3_,
     UniversalPageStoragePtr uni_ps_,
@@ -471,7 +474,7 @@ std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
     }
     case PageStorageRunMode::UNI_PS:
     {
-        return std::make_unique<PageReaderImplUniversal>(tag_, ns_id_, uni_ps_, snap_, read_limiter_);
+        return std::make_unique<PageReaderImplUniversal>(keyspace_id_, tag_, ns_id_, uni_ps_, snap_, read_limiter_);
     }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode_)), ErrorCodes::LOGICAL_ERROR);
@@ -484,27 +487,29 @@ std::unique_ptr<PageReaderImpl> PageReaderImpl::create(
 /// Not snapshot read.
 PageReader::PageReader(
     const PageStorageRunMode & run_mode_,
+    KeyspaceID keyspace_id_,
     StorageType tag_,
-    NamespaceId ns_id_,
+    NamespaceID ns_id_,
     PageStoragePtr storage_v2_,
     PageStoragePtr storage_v3_,
     UniversalPageStoragePtr uni_ps_,
     ReadLimiterPtr read_limiter_)
-    : impl(PageReaderImpl::create(run_mode_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, /*snap_=*/nullptr, read_limiter_))
+    : impl(PageReaderImpl::create(run_mode_, keyspace_id_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, /*snap_=*/nullptr, read_limiter_))
 {
 }
 
 /// Snapshot read.
 PageReader::PageReader(
     const PageStorageRunMode & run_mode_,
+    KeyspaceID keyspace_id_,
     StorageType tag_,
-    NamespaceId ns_id_,
+    NamespaceID ns_id_,
     PageStoragePtr storage_v2_,
     PageStoragePtr storage_v3_,
     UniversalPageStoragePtr uni_ps_,
     PageStorage::SnapshotPtr snap_,
     ReadLimiterPtr read_limiter_)
-    : impl(PageReaderImpl::create(run_mode_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, std::move(snap_), read_limiter_))
+    : impl(PageReaderImpl::create(run_mode_, keyspace_id_, tag_, ns_id_, storage_v2_, storage_v3_, uni_ps_, std::move(snap_), read_limiter_))
 {
 }
 
@@ -600,7 +605,7 @@ void PageWriter::writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_li
 
 void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const
 {
-    const auto & ns_id = write_batch.getNamespaceId();
+    const auto & ns_id = write_batch.getNamespaceID();
     WriteBatch wb_for_v2{ns_id};
     WriteBatch wb_for_put_v3{ns_id};
 

@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/WindowTestUtils.h>
+#include <TestUtils/mockExecutor.h>
 
 namespace DB::tests
 {
@@ -20,59 +23,15 @@ template <typename T>
 using Limits = std::numeric_limits<T>;
 
 // TODO Support more convenient testing framework for Window Function.
-class LeadLag : public DB::tests::ExecutorTest
+// TODO Tests with frame should be added
+class LeadLag : public DB::tests::WindowTest
 {
-    static const size_t max_concurrency_level = 10;
-
 public:
-    static constexpr auto value_col_name = "value";
-    const ASTPtr value_col = col(value_col_name);
+    const ASTPtr value_col = col(VALUE_COL_NAME);
 
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-    }
-
-    void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
-        for (auto block_size : block_sizes)
-        {
-            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));
-        }
-    }
-
-    void executeFunctionAndAssert(
-        const ColumnWithTypeAndName & result,
-        const ASTPtr & function,
-        const ColumnsWithTypeAndName & input)
-    {
-        ColumnsWithTypeAndName actual_input = input;
-        assert(actual_input.size() == 3);
-        TiDB::TP value_tp = dataTypeToTP(actual_input[2].type);
-
-        actual_input[0].name = "partition";
-        actual_input[1].name = "order";
-        actual_input[2].name = value_col_name;
-        context.addMockTable(
-            {"test_db", "test_table_for_lead_lag"},
-            {{"partition", TiDB::TP::TypeLongLong},
-             {"order", TiDB::TP::TypeLongLong},
-             {value_col_name, value_tp}},
-            actual_input);
-
-        auto request = context
-                           .scan("test_db", "test_table_for_lead_lag")
-                           .sort({{"partition", false}, {"order", false}}, true)
-                           .window(function, {"order", false}, {"partition", false}, MockWindowFrame{})
-                           .build(context);
-
-        ColumnsWithTypeAndName expect = input;
-        expect.push_back(result);
-        executeWithConcurrencyAndBlockSize(request, expect);
     }
 
     template <typename IntType>

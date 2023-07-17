@@ -61,7 +61,8 @@ public:
     }
 
     inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
-    inline const std::vector<UInt8> & getUsePacks() const { return use_packs; }
+    inline const std::vector<UInt8> & getUsePacksConst() const { return use_packs; }
+    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -239,6 +240,7 @@ private:
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
+            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
             if (!dmfile->configuration)
             {
                 auto index_buf = ReadBufferFromFileProvider(

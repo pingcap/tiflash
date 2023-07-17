@@ -21,7 +21,7 @@
 #include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 #include <condition_variable>
 #include <functional>
@@ -100,7 +100,7 @@ public:
 
     PageId getMaxId() override;
 
-    PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageId getNormalPageIdImpl(NamespaceID ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
@@ -112,19 +112,19 @@ public:
 
     size_t getNumberOfPages() override;
 
-    std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;
+    std::set<PageId> getAliveExternalPageIds(NamespaceID ns_id) override;
 
     void writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
-    DB::PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
+    DB::PageEntry getEntryImpl(NamespaceID ns_id, PageId page_id, SnapshotPtr snapshot) override;
 
-    DB::Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(NamespaceID ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMap readImpl(NamespaceID ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    PageMap readImpl(NamespaceID ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    DB::Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
+    DB::Page readImpl(NamespaceID ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 

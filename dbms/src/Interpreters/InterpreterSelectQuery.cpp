@@ -35,7 +35,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/TotalsHavingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
@@ -62,7 +61,7 @@
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
-
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/Dynamic/Var.h>
@@ -182,15 +181,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 
         getDatabaseAndTableNames(database_name, table_name);
 
-        if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
-        {
-            storage = context.getTable(database_name, table_name);
-            table_lock = storage->lockForShare(context.getCurrentQueryId());
-        }
-        else
-        {
-            getAndLockStorageWithSchemaVersion(database_name, table_name, settings.schema_version);
-        }
+        getAndLockStorageWithSchemaVersion(database_name, table_name);
     }
 
     query_analyzer = std::make_unique<ExpressionAnalyzer>(
@@ -221,96 +212,34 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 }
 
 
-void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
+void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name)
 {
+    // always sync schema first and then read table
     const String qualified_name = database_name + "." + table_name;
 
-    /// Get current schema version in schema syncer for a chance to shortcut.
-    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
-    /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
-        /// Get storage in case it's dropped then re-created.
-        // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_tmp = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
-        if (!storage_tmp)
-            return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
-
-        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
-        if (!managed_storage
-            || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DT))
-        {
-            throw Exception("Specifying schema_version for storage: " + storage_tmp->getName()
-                                + ", table: " + qualified_name + " is not allowed",
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-
-        /// Lock storage.
-        auto lock = storage_tmp->lockForShare(context.getCurrentQueryId());
-
-        /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
-        // We have three schema versions, two in TiFlash:
-        // 1. Storage: the version that this TiFlash table (storage) was last altered.
-        // 2. Global: the version that TiFlash global schema is at.
-        // And one from TiDB/TiSpark:
-        // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = managed_storage->getTableInfo().schema_version;
-        // Not allow storage > query in any case, one example is time travel queries.
-        if (storage_schema_version > query_schema_version)
-            throw TiFlashException("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version),
-                                   Errors::Table::SchemaVersionError);
-        // From now on we have storage <= query.
-        // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
-        if (schema_synced)
-            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
-        // From now on the schema was not synced.
-        // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
-        // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
-        // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
-        if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return std::make_tuple(storage_tmp, lock, storage_schema_version, true);
-        // From now on we have global < query.
-        // Return false for outer to sync and retry.
-        return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
-    };
-
-    /// Try get storage and lock once.
-    StoragePtr storage_tmp;
-    TableLockHolder lock;
-    Int64 storage_schema_version;
-    auto log_schema_version = [&](const String & result) {
-        LOG_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
-    };
-    bool ok;
     {
-        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(false);
-        if (ok)
+        auto start_time = Clock::now();
+        // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
+        // and we do not support keyspace feature for ClickHouse interface,
+        // we could use nullspace id here safely.
+        context.getTMTContext().getSchemaSyncerManager()->syncSchemas(context, NullspaceID);
+        auto storage_tmp = context.getTable(database_name, table_name);
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_tmp);
+        if (!managed_storage || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
         {
-            log_schema_version("OK, no syncing required.");
+            LOG_DEBUG(log, "{}.{} is not ManageableStorage", database_name, table_name);
             storage = storage_tmp;
-            table_lock = lock;
+            table_lock = storage->lockForShare(context.getCurrentQueryId());
             return;
         }
-    }
 
-    /// If first try failed, sync schema and try again.
-    {
-        log_schema_version("not OK, syncing schemas.");
-        auto start_time = Clock::now();
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        context.getTMTContext().getSchemaSyncerManager()->syncTableSchema(context, NullspaceID, managed_storage->getTableInfo().id);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 
-        std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(true);
-        if (ok)
-        {
-            log_schema_version("OK after syncing.");
-            storage = storage_tmp;
-            table_lock = lock;
-            return;
-        }
-
-        throw Exception("Shouldn't reach here", ErrorCodes::UNKNOWN_EXCEPTION);
+        table_lock = storage_tmp->lockForShare(context.getCurrentQueryId());
+        storage = storage_tmp;
     }
 }
 
@@ -495,21 +424,13 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         /// Now we will compose block streams that perform the necessary actions.
 
         /// Do I need to immediately finalize the aggregate functions after the aggregation?
-        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState && !query.group_by_with_totals;
+        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState;
 
         if (expressions.first_stage)
         {
             if (expressions.has_join)
             {
-                const auto & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
-                if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
-                    pipeline.streams_with_non_joined_data.push_back(expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
-                        pipeline.firstStream()->getHeader(),
-                        0,
-                        1,
-                        settings.max_block_size));
-
-                for (auto & stream : pipeline.streams) /// Applies to all sources except streams_with_non_joined_data.
+                for (auto & stream : pipeline.streams)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join, /*req_id=*/"");
             }
 
@@ -553,9 +474,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 if (!expressions.first_stage)
                     executeMergeAggregated(pipeline, aggregate_final);
 
-                if (!aggregate_final)
-                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having);
-                else if (expressions.has_having)
+                if (aggregate_final && expressions.has_having)
                     executeHaving(pipeline, expressions.before_having);
 
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -566,9 +485,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             else
             {
                 need_second_distinct_pass = query.distinct && pipeline.hasMoreThanOneStream();
-
-                if (query.group_by_with_totals && !aggregate_final)
-                    executeTotalsAndHaving(pipeline, false, nullptr);
             }
 
             if (expressions.has_order_by)
@@ -577,7 +493,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                   *  but there is no aggregation, then on the remote servers ORDER BY was made
                   *  - therefore, we merge the sorted streams from remote servers.
                   */
-                if (!expressions.first_stage && !expressions.need_aggregate && !(query.group_by_with_totals && !aggregate_final))
+                if (!expressions.first_stage && !expressions.need_aggregate)
                     executeMergeSorted(pipeline);
                 else /// Otherwise, just sort.
                     executeOrder(pipeline);
@@ -593,8 +509,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
 
             if (need_second_distinct_pass
                 || query.limit_length
-                || query.limit_by_expression_list
-                || !pipeline.streams_with_non_joined_data.empty())
+                || query.limit_by_expression_list)
             {
                 need_merge_streams = true;
             }
@@ -702,10 +617,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             required_columns,
             QueryProcessingStage::Complete,
             subquery_depth + 1);
-
-        /// If there is an aggregation in the outer query, WITH TOTALS is ignored in the subquery.
-        if (query_analyzer->hasAggregation())
-            interpreter_subquery->ignoreWithTotals();
     }
 
     const Settings & settings = context.getSettingsRef();
@@ -918,25 +829,31 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    SpillConfig spill_config(context.getTemporaryPath(), "aggregation", settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        "aggregation",
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.getFileProvider());
     Aggregator::Params params(header, keys, aggregates, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, false, spill_config, settings.max_block_size);
 
     /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    if (pipeline.streams.size() > 1)
     {
         auto stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            pipeline.streams_with_non_joined_data,
+            BlockInputStreams{},
             params,
             final,
             max_streams,
+            settings.max_buffered_bytes_in_executor,
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                 : static_cast<size_t>(settings.max_threads),
             /*req_id=*/"");
 
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
     }
     else
@@ -945,11 +862,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
 
-        if (!pipeline.streams_with_non_joined_data.empty())
-            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
-
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
 
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, /*req_id=*/""),
@@ -1009,21 +922,6 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
         stream = std::make_shared<FilterBlockInputStream>(stream, expression, query.having_expression->getColumnName(), /*req_id=*/"");
     });
 }
-
-
-void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression)
-{
-    executeUnion(pipeline);
-
-    const Settings & settings = context.getSettingsRef();
-
-    pipeline.firstStream() = std::make_shared<TotalsHavingBlockInputStream>(
-        pipeline.firstStream(),
-        expression,
-        has_having ? query.having_expression->getColumnName() : "",
-        settings.totals_mode);
-}
-
 
 void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
@@ -1156,30 +1054,22 @@ void InterpreterSelectQuery::executeDistinct(Pipeline & pipeline, bool before_or
 
 void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
 {
-    switch (pipeline.streams.size() + pipeline.streams_with_non_joined_data.size())
+    switch (pipeline.streams.size())
     {
     case 0:
-        break;
     case 1:
-    {
-        if (pipeline.streams.size() == 1)
-            break;
-        // streams_with_non_joined_data's size is 1.
-        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
-        pipeline.streams_with_non_joined_data.clear();
         break;
-    }
     default:
     {
         BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(
             pipeline.streams,
-            pipeline.streams_with_non_joined_data,
+            BlockInputStreams{},
             max_streams,
+            0,
             /*req_id=*/"");
         ;
 
         pipeline.streams.resize(1);
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
         break;
     }
@@ -1202,32 +1092,6 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
         });
     }
 }
-
-
-bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
-{
-    if (query.group_by_with_totals)
-        return true;
-
-    /** NOTE You can also check that the table in the subquery is distributed, and that it only looks at one shard.
-      * In other cases, totals will be computed on the initiating server of the query, and it is not necessary to read the data to the end.
-      */
-
-    auto query_table = query.table();
-    if (query_table)
-    {
-        const auto * ast_union = typeid_cast<const ASTSelectWithUnionQuery *>(query_table.get());
-        if (ast_union)
-        {
-            for (const auto & elem : ast_union->list_of_selects->children)
-                if (hasWithTotalsInAnySubqueryInFromClause(typeid_cast<const ASTSelectQuery &>(*elem)))
-                    return true;
-        }
-    }
-
-    return false;
-}
-
 
 void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
 {
@@ -1269,13 +1133,6 @@ void InterpreterSelectQuery::executeSubqueriesInSetsAndJoins(Pipeline & pipeline
         SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
         /*req_id=*/"");
 }
-
-
-void InterpreterSelectQuery::ignoreWithTotals()
-{
-    query.group_by_with_totals = false;
-}
-
 
 void InterpreterSelectQuery::initSettings()
 {

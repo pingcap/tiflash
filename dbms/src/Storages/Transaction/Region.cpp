@@ -15,7 +15,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -48,9 +47,9 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
     return data.removeDataByWriteIt(write_it);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
+std::optional<RegionDataReadInfo> Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error)
 {
-    return data.readDataByWriteIt(write_it, need_value);
+    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex(), hard_error);
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
@@ -58,20 +57,32 @@ DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) con
     return data.getLockInfo(query);
 }
 
-void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    return insert(NameToCF(cf), std::move(key), std::move(value));
+    return insert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(type, std::move(key), std::move(value));
+    return doInsert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    data.insert(type, std::move(key), std::move(value));
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        if (type == ColumnFamilyType::Write)
+        {
+            if (orphanKeysInfo().observeKeyFromNormalWrite(key))
+            {
+                // We can't assert the key exists in write_cf here,
+                // since it may be already written into DeltaTree.
+                return;
+            }
+        }
+    }
+    data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -478,9 +489,9 @@ Timepoint Region::lastCompactLogTime() const
     return last_compact_log_time;
 }
 
-Region::CommittedScanner Region::createCommittedScanner(bool use_lock)
+Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
 {
-    return Region::CommittedScanner(this->shared_from_this(), use_lock);
+    return Region::CommittedScanner(this->shared_from_this(), use_lock, need_value);
 }
 
 Region::CommittedRemover Region::createCommittedRemover(bool use_lock)
@@ -496,6 +507,40 @@ std::string Region::toString(bool dump_status) const
 ImutRegionRangePtr Region::getRange() const
 {
     return meta.getRange();
+}
+
+RaftstoreVer Region::getClusterRaftstoreVer()
+{
+    // In non-debug/test mode, we should assert the proxy_ptr be always not null.
+    if (likely(proxy_helper != nullptr))
+    {
+        if (likely(proxy_helper->fn_get_cluster_raftstore_version))
+        {
+            // Make debug funcs happy.
+            return proxy_helper->fn_get_cluster_raftstore_version(proxy_helper->proxy_ptr, 0, 0);
+        }
+    }
+    return RaftstoreVer::Uncertain;
+}
+
+void Region::beforePrehandleSnapshot(uint64_t region_id, std::optional<uint64_t> deadline_index)
+{
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.snapshot_index = appliedIndex();
+        data.orphan_keys_info.pre_handling = true;
+        data.orphan_keys_info.deadline_index = deadline_index;
+        data.orphan_keys_info.region_id = region_id;
+    }
+}
+
+void Region::afterPrehandleSnapshot()
+{
+    if (getClusterRaftstoreVer() == RaftstoreVer::V2)
+    {
+        data.orphan_keys_info.pre_handling = false;
+        LOG_INFO(log, "After prehandle, remains {} orphan keys [region_id={}]", data.orphan_keys_info.remainedKeyCount(), id());
+    }
 }
 
 kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
@@ -534,9 +579,10 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log,
-                      "{} need to wait learner index {}",
+                      "{} need to wait learner index {} timeout {}",
                       toString(),
-                      index);
+                      index,
+                      timeout_ms);
             auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
@@ -580,7 +626,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
@@ -631,7 +676,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     {
         return EngineStoreApplyRes::None;
     }
-
     auto & context = tmt.getContext();
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
@@ -778,12 +822,18 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     : meta(std::move(meta_))
     , log(Logger::get())
     , mapped_table_id(meta.getRange()->getMappedTableID())
+    , keyspace_id(meta.getRange()->getKeyspaceID())
     , proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const
 {
     return mapped_table_id;
+}
+
+KeyspaceID Region::getKeyspaceID() const
+{
+    return keyspace_id;
 }
 
 void Region::setPeerState(raft_serverpb::PeerState state)
@@ -800,11 +850,19 @@ UInt64 RegionRaftCommandDelegate::appliedIndex()
 {
     return meta.makeRaftCommandDelegate().applyState().applied_index();
 }
-metapb::Region Region::getMetaRegion() const
+metapb::Region Region::cloneMetaRegion() const
+{
+    return meta.cloneMetaRegion();
+}
+const metapb::Region & Region::getMetaRegion() const
 {
     return meta.getMetaRegion();
 }
-raft_serverpb::MergeState Region::getMergeState() const
+raft_serverpb::MergeState Region::cloneMergeState() const
+{
+    return meta.cloneMergeState();
+}
+const raft_serverpb::MergeState & Region::getMergeState() const
 {
     return meta.getMergeState();
 }

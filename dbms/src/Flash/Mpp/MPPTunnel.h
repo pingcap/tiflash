@@ -14,23 +14,26 @@
 
 #pragma once
 
-#include <Common/ConcurrentIOQueue.h>
+#include <Common/CapacityLimits.h>
 #include <Common/Exception.h>
+#include <Common/GRPCQueue.h>
 #include <Common/Logger.h>
+#include <Common/LooseBoundedMPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/PacketWriter.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <atomic>
+#include <type_traits>
 
 
 #pragma GCC diagnostic push
@@ -102,10 +105,13 @@ public:
     }
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
+    virtual bool forcePush(TrackedMppDataPacketPtr &&) = 0;
 
     virtual void cancelWith(const String &) = 0;
 
     virtual bool finish() = 0;
+
+    virtual bool isWritable() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -170,9 +176,9 @@ protected:
 class SyncTunnelSender : public TunnelSender
 {
 public:
-    SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    SyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(ConcurrentIOQueue<TrackedMppDataPacketPtr>(queue_size))
+        , send_queue(LooseBoundedMPMCQueue<TrackedMppDataPacketPtr>(queue_limits))
     {}
 
     ~SyncTunnelSender() override;
@@ -181,6 +187,11 @@ public:
     bool push(TrackedMppDataPacketPtr && data) override
     {
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
+    }
+
+    bool forcePush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     void cancelWith(const String & reason) override
@@ -193,36 +204,59 @@ public:
         return send_queue.finish();
     }
 
+    bool isWritable() const override
+    {
+        return send_queue.isWritable();
+    }
+
 private:
     friend class tests::TestMPPTunnel;
     void sendJob(PacketWriter * writer);
     std::shared_ptr<ThreadManager> thread_manager;
-    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
+    LooseBoundedMPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue)
         : TunnelSender(memory_tracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_size, call_, log_)
+        , queue(
+              log_,
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func, std::atomic<Int64> * data_size_in_queue)
+    AsyncTunnelSender(const CapacityLimits & queue_limits, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue, GRPCKickFunc && func)
         : TunnelSender(memoryTracker, log_, tunnel_id_, data_size_in_queue)
-        , queue(queue_size, func)
-    {}
+        , queue(
+              log_,
+              queue_limits,
+              [](const TrackedMppDataPacketPtr & element) { return element->getPacket().ByteSizeLong(); })
+    {
+        queue.setKickFuncForTest(std::move(func));
+    }
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        return queue.push(std::move(data));
+        return queue.push(std::move(data)) == MPMCQueueResult::OK;
+    }
+
+    bool forcePush(TrackedMppDataPacketPtr && data) override
+    {
+        return queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     bool finish() override
     {
         return queue.finish();
+    }
+
+    bool isWritable() const override
+    {
+        return queue.isWritable();
     }
 
     void cancelWith(const String & reason) override
@@ -235,9 +269,9 @@ public:
         return queue.getCancelReason();
     }
 
-    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
+    MPMCQueueResult popWithTag(TrackedMppDataPacketPtr & data, GRPCKickTag * new_tag)
     {
-        return queue.pop(data, new_tag);
+        return queue.popWithTag(data, new_tag);
     }
 
     void subDataSizeMetric(size_t size)
@@ -249,7 +283,8 @@ private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
 };
 
-template <bool enable_fine_grained_shuffle>
+// local_only means ExhangeReceiver receives data only from local
+template <bool local_only>
 class LocalTunnelSenderV2 : public TunnelSender
 {
 public:
@@ -280,15 +315,12 @@ public:
 
     bool push(TrackedMppDataPacketPtr && data) override
     {
-        if (unlikely(checkPacketErr(data)))
-            return false;
+        return pushImpl<false>(std::move(data));
+    }
 
-        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
-        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
-        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
-        data->switchMemTracker(local_request_handler.recv_mem_tracker);
-
-        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
+    bool forcePush(TrackedMppDataPacketPtr && data) override
+    {
+        return pushImpl<true>(std::move(data));
     }
 
     void cancelWith(const String & reason) override
@@ -302,8 +334,39 @@ public:
         return true;
     }
 
+    bool isWritable() const override
+    {
+        if constexpr (local_only)
+            return local_request_handler.isWritable();
+        else
+        {
+            std::lock_guard lock(mu);
+            return local_request_handler.isWritable();
+        }
+    }
+
 private:
     friend class tests::TestMPPTunnel;
+
+    template <bool is_force>
+    bool pushImpl(TrackedMppDataPacketPtr && data)
+    {
+        if (unlikely(checkPacketErr(data)))
+            return false;
+
+        // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
+        // is very large and causes the time of transfering data by grpc threads becomes longer, because
+        // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
+        // Adding a lock ensures that there is only one other thread competing with async reactor,
+        // so the probability of async reactor getting the lock is 1/2.
+        if constexpr (local_only)
+            return local_request_handler.write<is_force>(source_index, data);
+        else
+        {
+            std::lock_guard lock(mu);
+            return local_request_handler.write<is_force>(source_index, data);
+        }
+    }
 
     bool checkPacketErr(TrackedMppDataPacketPtr & packet)
     {
@@ -324,12 +387,14 @@ private:
         {
             consumer_state.setMsg(local_err_msg);
             local_request_handler.writeDone(meet_error, local_err_msg);
+            LOG_INFO(log, "connection for {} cost {} ms, including {} ms to wait task.", tunnel_id, local_request_handler.getTotalElapsedTime(), local_request_handler.getWaitingTaskTime());
         }
     }
 
     size_t source_index;
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
+    mutable std::mutex mu;
 };
 
 // TODO remove it in the future
@@ -339,9 +404,9 @@ public:
     using Base = TunnelSender;
     using Base::Base;
 
-    LocalTunnelSenderV1(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
+    LocalTunnelSenderV1(const CapacityLimits & queue_limits, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(queue_size)
+        , send_queue(queue_limits)
     {}
 
     TrackedMppDataPacketPtr readForLocal();
@@ -349,6 +414,11 @@ public:
     bool push(TrackedMppDataPacketPtr && data) override
     {
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
+    }
+
+    bool forcePush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.forcePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     void cancelWith(const String & reason) override
@@ -361,17 +431,22 @@ public:
         return send_queue.finish();
     }
 
+    bool isWritable() const override
+    {
+        return send_queue.isWritable();
+    }
+
 private:
     bool cancel_reason_sent = false;
-    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
+    LooseBoundedMPMCQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
 using SyncTunnelSenderPtr = std::shared_ptr<SyncTunnelSender>;
 using AsyncTunnelSenderPtr = std::shared_ptr<AsyncTunnelSender>;
-using LocalTunnelSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<false>>;
-using LocalTunnelFineGrainedSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<true>>;
 using LocalTunnelSenderV1Ptr = std::shared_ptr<LocalTunnelSenderV1>;
+using LocalTunnelSenderV2Ptr = std::shared_ptr<LocalTunnelSenderV2<false>>;
+using LocalTunnelSenderLocalOnlyV2Ptr = std::shared_ptr<LocalTunnelSenderV2<true>>;
 
 /**
  * MPPTunnel represents the sender of an exchange connection.
@@ -406,7 +481,7 @@ public:
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);
@@ -415,7 +490,7 @@ public:
     MPPTunnel(
         const String & tunnel_id_,
         std::chrono::seconds timeout_,
-        int input_steams_num_,
+        const CapacityLimits & queue_limits,
         bool is_local_,
         bool is_async_,
         const String & req_id);
@@ -426,6 +501,15 @@ public:
 
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
     void write(TrackedMppDataPacketPtr && data);
+
+    // forceWrite write a single packet to the tunnel's send queue without blocking,
+    // and need to call isReadForWrite first.
+    // ```
+    // while (!isWritable()) {}
+    // forceWrite(std::move(data));
+    // ```
+    void forceWrite(TrackedMppDataPacketPtr && data);
+    bool isWritable() const;
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();
@@ -439,7 +523,10 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void connectLocalV2(
+        size_t source_index,
+        LocalRequestHandler & local_request_handler,
+        bool has_remote_conn);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
@@ -460,8 +547,9 @@ public:
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderV1Ptr getLocalTunnelSenderV1() { return local_tunnel_sender_v1; }
-    LocalTunnelSenderV2Ptr getLocalTunnelSender() { return local_tunnel_sender_v2; }
-    LocalTunnelFineGrainedSenderV2Ptr getLocalTunnelFineGrainedSender() { return local_tunnel_fine_grained_sender_v2; }
+
+    LocalTunnelSenderV2Ptr getLocalTunnelSenderV2() { return local_tunnel_v2; }
+    LocalTunnelSenderLocalOnlyV2Ptr getLocalTunnelLocalOnlyV2() { return local_tunnel_local_only_v2; }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -474,7 +562,7 @@ private:
         Finished // Final state, no more work to do
     };
 
-    StringRef statusToString();
+    std::string_view statusToString();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
@@ -487,22 +575,26 @@ private:
 
     void updateConnProfileInfo(size_t pushed_data_size)
     {
+        std::lock_guard lock(mu);
         connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
     }
 
-    std::mutex mu;
+private:
+    mutable std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    UInt64 timeout_nanoseconds{0};
+    mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
     std::shared_ptr<MemoryTracker> mem_tracker;
-    const size_t queue_size;
+    const CapacityLimits queue_limit;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
     TunnelSenderMode mode; // Tunnel transfer data mode
@@ -511,8 +603,9 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderV1Ptr local_tunnel_sender_v1;
-    LocalTunnelSenderV2Ptr local_tunnel_sender_v2;
-    LocalTunnelFineGrainedSenderV2Ptr local_tunnel_fine_grained_sender_v2;
+    LocalTunnelSenderV2Ptr local_tunnel_v2;
+    LocalTunnelSenderLocalOnlyV2Ptr local_tunnel_local_only_v2;
+
     std::atomic<Int64> data_size_in_queue;
 };
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;

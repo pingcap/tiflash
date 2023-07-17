@@ -14,16 +14,8 @@
 
 #pragma once
 
+#include <Storages/Transaction/KeyspaceSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-#ifdef __clang__
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <pingcap/kv/Snapshot.h>
-#pragma GCC diagnostic pop
-
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -102,7 +94,7 @@ enum class SchemaActionType : Int8
     ActionAlterTTLRemove = 67,
 
 
-    // If we supporte new type from TiDB.
+    // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
     MaxRecognizedType = 68,
@@ -137,14 +129,20 @@ struct SchemaDiff
 
 struct SchemaGetter
 {
-    pingcap::kv::Snapshot snap;
+    static constexpr Int64 SchemaVersionNotExist = -1;
+
+    KeyspaceSnapshot snap;
+
+    KeyspaceID keyspace_id;
 
     LoggerPtr log;
 
-    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_)
-        : snap(cluster_, tso_)
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
+        : snap(keyspace_id_, cluster_, tso_)
+        , keyspace_id(keyspace_id_)
         , log(Logger::get())
-    {}
+    {
+    }
 
     Int64 getVersion();
 
@@ -164,9 +162,13 @@ struct SchemaGetter
 
     TiDB::TableInfoPtr getTableInfo(DatabaseID db_id, TableID table_id);
 
+    std::tuple<TiDB::DBInfoPtr, TiDB::TableInfoPtr> getDatabaseAndTableInfo(DatabaseID db_id, TableID table_id);
+
     std::vector<TiDB::DBInfoPtr> listDBs();
 
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
+
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 };
 
 } // namespace DB

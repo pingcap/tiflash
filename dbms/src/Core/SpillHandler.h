@@ -23,6 +23,7 @@
 namespace DB
 {
 class IBlockOutputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
 /// SpillHandler is used to spill blocks, currently hidden behind `Spiller::spillBlocks`
 /// and `Spiller::spillBlocksUsingBlockInputStream`, maybe need to be exposed in push model.
@@ -32,7 +33,7 @@ class SpillHandler
 {
 public:
     SpillHandler(Spiller * spiller_, size_t partition_id_);
-    void spillBlocks(const Blocks & blocks);
+    void spillBlocks(Blocks && blocks);
     void finish();
 
 private:
@@ -53,6 +54,7 @@ private:
     };
     Spiller * spiller;
     std::vector<std::unique_ptr<SpilledFile>> spilled_files;
+    UInt64 all_constant_block_rows = 0;
     size_t partition_id;
     Int64 current_spilled_file_index;
     String current_spill_file_name;
@@ -61,5 +63,4 @@ private:
     SpillDetails prev_spill_details;
     static const Int64 INVALID_CURRENT_SPILLED_FILE_INDEX = -10;
 };
-
 } // namespace DB

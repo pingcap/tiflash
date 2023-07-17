@@ -102,6 +102,15 @@ public:
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
+
+    /// Skip the packs to read next
+    /// Return the number of rows skipped.
+    /// Return 0 if it is the end of file.
+    size_t skipNextBlock();
+
+    /// Read specified rows.
+    Block readWithFilter(const IColumn::Filter & filter);
+
     Block read();
     std::string path() const
     {
@@ -109,10 +118,10 @@ public:
         // For DMFileReader, always use the readable path.
         return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     }
-    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const;
 
 private:
-    bool shouldSeek(size_t pack_id);
+    bool shouldSeek(size_t pack_id) const;
 
     void readFromDisk(ColumnDefine & column_define,
                       MutableColumnPtr & column,
@@ -126,9 +135,8 @@ private:
                     size_t pack_count,
                     size_t read_rows,
                     size_t skip_packs);
-    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const;
 
-private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnStreams column_streams{};
@@ -149,7 +157,14 @@ private:
     const UInt64 max_read_version;
 
     /// Filters
+#ifdef DBMS_PUBLIC_GTEST
+public:
     DMFilePackFilter pack_filter;
+
+private:
+#else
+    DMFilePackFilter pack_filter;
+#endif
 
     std::vector<size_t> skip_packs_by_column{};
 

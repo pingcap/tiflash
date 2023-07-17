@@ -29,9 +29,9 @@ class TestToSeconds : public DB::tests::FunctionTest
 TEST_F(TestToSeconds, TestAll)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)
     const String func_name = "tidbToSeconds";
     static auto const nullable_datetime_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(6));
@@ -92,7 +92,7 @@ try
     input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
     output_col = createColumn<Nullable<UInt64>>({{}, 86400, 62135683200ULL, 63142848000ULL, 63814435200ULL});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 

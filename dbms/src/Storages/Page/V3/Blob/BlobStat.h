@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -37,18 +36,6 @@ public:
         // After GC remove, empty files will be removed.
         READ_ONLY = 2
     };
-
-    static String blobTypeToString(BlobStatType type)
-    {
-        switch (type)
-        {
-        case BlobStatType::NORMAL:
-            return "normal";
-        case BlobStatType::READ_ONLY:
-            return "read only";
-        }
-        return "Invalid";
-    }
 
     struct BlobStat
     {

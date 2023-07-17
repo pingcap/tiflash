@@ -53,11 +53,12 @@ public:
     PhysicalProjection(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const String & extra_info_,
         const ExpressionActionsPtr & project_actions_)
-        : PhysicalUnary(executor_id_, PlanType::Projection, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::Projection, schema_, fine_grained_shuffle_, req_id, child_)
         , extra_info(extra_info_)
         , project_actions(project_actions_)
     {}
@@ -66,11 +67,16 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
+
+private:
     const String extra_info;
 
     ExpressionActionsPtr project_actions;

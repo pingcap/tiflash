@@ -17,6 +17,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 
+#include <cstring>
+
 namespace DB
 {
 using NullMap = ColumnUInt8::Container;
@@ -85,7 +87,9 @@ public:
     {
         getNestedColumn().insertManyDefaults(length);
         auto & map = getNullMapData();
-        map.resize_fill(map.size() + length, 1);
+        size_t old_size = map.size();
+        map.resize(old_size + length);
+        memset(map.data() + old_size, 1, length);
     }
 
     void popBack(size_t n) override;
@@ -98,6 +102,7 @@ public:
     void getPermutation(const ICollator & collator, bool reverse, size_t limit, int null_direction_hint, Permutation & res) const override;
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const;
     void reserve(size_t n) override;
+    void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;

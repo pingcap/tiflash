@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
@@ -28,11 +29,13 @@ PhysicalPlanNode::PhysicalPlanNode(
     const String & executor_id_,
     const PlanType & type_,
     const NamesAndTypes & schema_,
+    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id)
     : executor_id(executor_id_)
     , type(type_)
     , schema(schema_)
-    , log(Logger::get(type_.toString(), req_id))
+    , fine_grained_shuffle(fine_grained_shuffle_)
+    , log(Logger::get(req_id, type_.toString(), executor_id_))
 {}
 
 String PhysicalPlanNode::toString()
@@ -84,20 +87,38 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     if (is_restore_concurrency)
     {
         context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, context.getSettingsRef().max_buffered_bytes_in_executor, log);
     }
 }
 
-void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExecGroup(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    throw Exception("Unsupport");
+    buildPipelineExecGroupImpl(exec_context, group_builder, context, concurrency);
+    if (is_tidb_operator)
+        context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context)
 {
-    assert(childrenSize() <= 1);
+    RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder);
+        children(0)->buildPipeline(builder, context, exec_context);
     builder.addPlanNode(shared_from_this());
+}
+
+EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorContext & exec_context)
+{
+    if (getFineGrainedShuffle().enable())
+        return nullptr;
+    return doSinkComplete(exec_context);
+}
+
+EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorContext & /*exec_status*/)
+{
+    return nullptr;
 }
 } // namespace DB

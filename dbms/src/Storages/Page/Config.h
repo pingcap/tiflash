@@ -131,7 +131,7 @@ struct PageStorageConfig
     String toDebugStringV2() const
     {
         return fmt::format(
-            "PageStorageConfig {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
+            "PageStorageConfig V2 {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
             "gc_min_legacy_num: {}, gc_max_expect_legacy: {}, gc_max_valid_rate_bound: {:.3f}, prob_do_gc_when_write_is_low: {}, "
             "open_file_max_idle_time: {}}}",
             gc_min_files,
@@ -148,7 +148,7 @@ struct PageStorageConfig
     String toDebugStringV3() const
     {
         return fmt::format(
-            "PageStorageConfig V3 {{"
+            "PageStorageConfig {{"
             "blob_file_limit_size: {}, blob_spacemap_type: {}, "
             "blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
             "wal_roll_size: {}, wal_max_persisted_log_files: {}}}",

@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -52,7 +53,7 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
     LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxIdAfterRestart(), dir->sequence);
 
     if (blob_stats)
@@ -81,10 +82,26 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     return dir;
 }
 
+template <typename Trait>
+typename PageDirectoryFactory<Trait>::PageDirectoryPtr
+PageDirectoryFactory<Trait>::dangerouslyCreateFromEditWithoutWAL(const String & storage_name, PageEntriesEdit & edit)
+{
+    PageDirectoryPtr dir = std::make_unique<typename Trait::PageDirectory>(std::move(storage_name), nullptr);
+
+    loadEdit(dir, edit);
+    // Reset the `sequence` to the maximum of persisted.
+    dir->sequence = max_applied_ver.sequence;
+
+    // Remove invalid entries
+    dir->gcInMemEntries({.need_removed_entries = false});
+
+    return dir;
+}
+
 // just for test
 template <typename Trait>
 typename PageDirectoryFactory<Trait>::PageDirectoryPtr
-PageDirectoryFactory<Trait>::createFromEdit(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
+PageDirectoryFactory<Trait>::createFromEditForTest(const String & storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
@@ -105,7 +122,7 @@ PageDirectoryFactory<Trait>::createFromEdit(const String & storage_name, FilePro
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore when restore, so no need to fill removed_entries.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
 
     if (blob_stats)
     {
@@ -141,7 +158,7 @@ void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const P
             max_applied_ver = r.version;
 
         if (dump_entries)
-            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
+            LOG_INFO(Logger::get(), "{}", r);
         applyRecord(dir, r);
     }
 }
@@ -168,9 +185,9 @@ void PageDirectoryFactory<Trait>::applyRecord(
     {
         // We only need page id under specific prefix after restart.
         // If you want to add other prefix here, make sure the page id allocation space is still enough after adding it.
-        if (r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Data))
-            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Log))
-            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Meta)))
+        if (UniversalPageIdFormat::isType(r.page_id, StorageType::Data)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Log)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Meta))
         {
             dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
         }
@@ -202,7 +219,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             break;
         case EditRecordType::PUT_EXTERNAL:
         {
-            auto holder = version_list->createNewExternal(restored_version);
+            auto holder = version_list->createNewExternal(restored_version, r.entry);
             if (holder)
             {
                 *holder = r.page_id;
@@ -213,6 +230,34 @@ void PageDirectoryFactory<Trait>::applyRecord(
         case EditRecordType::PUT:
             version_list->createNewEntry(restored_version, r.entry);
             break;
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+        {
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = restored_version.sequence;
+            auto version_list_iter = iter;
+            while (true)
+            {
+                const auto & current_version_list = version_list_iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = current_version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    current_version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry);
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
+                version_list_iter = dir->mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(version_list_iter != dir->mvcc_table_directory.end());
+            }
+            break;
+        }
         case EditRecordType::DEL:
         case EditRecordType::VAR_DELETE: // nothing different from `DEL`
             version_list->createDelete(restored_version);
@@ -249,6 +294,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
 template <typename Trait>
 void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
 {
+    DataFileIdSet data_file_ids;
     while (reader->remained())
     {
         auto record = reader->next();
@@ -263,8 +309,20 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WAL
         }
 
         // apply the edit read
-        auto edit = Trait::Serializer::deserializeFrom(record.value());
-        loadEdit(dir, edit);
+        if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
+        {
+            auto edit = Trait::Serializer::deserializeFrom(record.value(), nullptr);
+            loadEdit(dir, edit);
+        }
+        else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+        {
+            auto edit = Trait::Serializer::deserializeFrom(record.value(), &data_file_ids);
+            loadEdit(dir, edit);
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
     }
 }
 

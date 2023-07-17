@@ -37,6 +37,9 @@ using BlockOutputStreamPtr = std::shared_ptr<IBlockOutputStream>;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 
+class PipelineExecutorContext;
+class PipelineExecGroupBuilder;
+
 class ASTCreateQuery;
 
 class IStorage;
@@ -142,7 +145,21 @@ public:
                                    size_t /*max_block_size*/,
                                    unsigned /*num_streams*/)
     {
-        throw Exception("Method read is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Method read(pull model) is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void read(
+        PipelineExecutorContext & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        const Names & /*column_names*/,
+        const SelectQueryInfo & /*query_info*/,
+        const Context & /*context*/,
+        size_t /*max_block_size*/,
+        unsigned /*num_streams*/)
+    {
+        throw Exception(
+            fmt::format("Method read(push model) is not supported by storage {}", getName()),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Writes the data to a table.

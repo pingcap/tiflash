@@ -122,11 +122,12 @@ raft_serverpb::MergeState & RegionState::getMutMergeState()
 
 bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
 {
+    auto k = key.getUserKey();
     // t table_id _r
-    if (key.size() >= (1 + 8 + 2) && key[0] == RecordKVFormat::TABLE_PREFIX
-        && memcmp(key.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
+    if (k.size() >= (1 + 8 + 2) && k[0] == RecordKVFormat::TABLE_PREFIX
+        && memcmp(k.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
     {
-        table_id = RecordKVFormat::getTableId(key);
+        table_id = RecordKVFormat::getTableId(k);
         return true;
     }
 
@@ -138,6 +139,7 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     , raw(std::make_shared<DecodedTiKVKey>(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key)),
           std::make_shared<DecodedTiKVKey>(ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)))
 {
+    keyspace_id = raw.first->getKeyspaceID();
     if (!computeMappedTableID(*raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
     {
         throw Exception("Illegal region range, should not happen, start key: " + ori.first.key.toDebugString()
@@ -149,6 +151,11 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
 TableID RegionRangeKeys::getMappedTableID() const
 {
     return mapped_table_id;
+}
+
+KeyspaceID RegionRangeKeys::getKeyspaceID() const
+{
+    return keyspace_id;
 }
 
 const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys() const
@@ -181,6 +188,29 @@ RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && star
     return std::make_pair(
         TiKVRangeKey::makeTiKVRangeKey<true>(std::move(start_key)),
         TiKVRangeKey::makeTiKVRangeKey<false>(std::move(end_key)));
+}
+
+RegionRangeKeys::RegionRange RegionRangeKeys::cloneRange(const RegionRange & from)
+{
+    return std::make_pair(from.first.copy(), from.second.copy());
+}
+
+std::string TiKVRangeKey::toDebugString() const
+{
+    if (this->state == MAX)
+    {
+        return "inf";
+    }
+    else if (this->state == MIN)
+    {
+        return "-inf";
+    }
+    return this->key.toDebugString();
+}
+
+std::string RegionRangeKeys::toDebugString() const
+{
+    return fmt::format("[{},{}]", this->ori.first.toDebugString(), this->ori.second.toDebugString());
 }
 
 int TiKVRangeKey::compare(const TiKVKey & tar) const

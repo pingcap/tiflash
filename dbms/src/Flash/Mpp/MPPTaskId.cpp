@@ -86,9 +86,19 @@ size_t MPPQueryIdHash::operator()(MPPQueryId const & mpp_query_id) const noexcep
     return std::hash<UInt64>()(mpp_query_id.query_ts) ^ std::hash<UInt64>()(mpp_query_id.local_query_id) ^ std::hash<UInt64>()(mpp_query_id.server_id);
 }
 
+bool MPPGatherId::operator==(const MPPGatherId & rid) const
+{
+    return gather_id == rid.gather_id && query_id == rid.query_id;
+}
+
+size_t MPPGatherIdHash::operator()(MPPGatherId const & mpp_gather_id) const noexcept
+{
+    return MPPQueryIdHash()(mpp_gather_id.query_id) ^ std::hash<UInt64>()(mpp_gather_id.gather_id);
+}
+
 String MPPTaskId::toString() const
 {
-    return isUnknown() ? "MPP<query_id:N/A,task_id:N/A>" : fmt::format("MPP<query:{},task_id:{}>", query_id.toString(), task_id);
+    return isUnknown() ? "MPP<gather_id:N/A,task_id:N/A>" : fmt::format("MPP<gather_id:{},task_id:{}>", gather_id.toString(), task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
@@ -98,6 +108,6 @@ const MPPQueryId MPPTaskId::Max_Query_Id = MPPQueryId(MAX_UINT64, MAX_UINT64, MA
 
 bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {
-    return lid.query_id == rid.query_id && lid.task_id == rid.task_id;
+    return lid.gather_id == rid.gather_id && lid.task_id == rid.task_id;
 }
 } // namespace DB

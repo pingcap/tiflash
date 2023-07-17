@@ -16,9 +16,11 @@
 
 #include <Common/Checksum.h>
 #include <Common/FieldVisitors.h>
+#include <Common/config.h>
 #include <Common/getNumberOfCPUCores.h>
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <IO/CompressedStream.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -34,7 +36,6 @@ extern const int TYPE_MISMATCH;
 extern const int UNKNOWN_LOAD_BALANCING;
 extern const int UNKNOWN_OVERFLOW_MODE;
 extern const int ILLEGAL_OVERFLOW_MODE;
-extern const int UNKNOWN_TOTALS_MODE;
 extern const int UNKNOWN_COMPRESSION_METHOD;
 extern const int CANNOT_PARSE_BOOL;
 extern const int INVALID_CONFIG_PARAMETER;
@@ -585,106 +586,6 @@ private:
     LoadBalancing value;
 };
 
-
-/// Which rows should be included in TOTALS.
-enum class TotalsMode
-{
-    /// Count HAVING for all read rows;
-    BEFORE_HAVING = 0,
-    /// Count on all rows except those that have not passed HAVING;
-    AFTER_HAVING_INCLUSIVE = 1,
-    /// Include only the rows that passed and HAVING.
-    AFTER_HAVING_EXCLUSIVE = 2,
-    /// Automatically select between INCLUSIVE and EXCLUSIVE,
-    AFTER_HAVING_AUTO = 3,
-};
-
-struct SettingTotalsMode
-{
-public:
-    bool changed = false;
-
-    SettingTotalsMode(TotalsMode x)
-        : value(x)
-    {}
-
-    operator TotalsMode() const { return value; }
-    SettingTotalsMode & operator=(TotalsMode x)
-    {
-        set(x);
-        return *this;
-    }
-
-    static TotalsMode getTotalsMode(const String & s)
-    {
-        if (s == "before_having")
-            return TotalsMode::BEFORE_HAVING;
-        if (s == "after_having_exclusive")
-            return TotalsMode::AFTER_HAVING_EXCLUSIVE;
-        if (s == "after_having_inclusive")
-            return TotalsMode::AFTER_HAVING_INCLUSIVE;
-        if (s == "after_having_auto")
-            return TotalsMode::AFTER_HAVING_AUTO;
-
-        throw Exception("Unknown totals mode: '" + s + "', must be one of 'before_having', 'after_having_exclusive', 'after_having_inclusive', 'after_having_auto'", ErrorCodes::UNKNOWN_TOTALS_MODE);
-    }
-
-    String toString() const
-    {
-        switch (value)
-        {
-        case TotalsMode::BEFORE_HAVING:
-            return "before_having";
-        case TotalsMode::AFTER_HAVING_EXCLUSIVE:
-            return "after_having_exclusive";
-        case TotalsMode::AFTER_HAVING_INCLUSIVE:
-            return "after_having_inclusive";
-        case TotalsMode::AFTER_HAVING_AUTO:
-            return "after_having_auto";
-
-        default:
-            throw Exception("Unknown TotalsMode enum value", ErrorCodes::UNKNOWN_TOTALS_MODE);
-        }
-    }
-
-    void set(TotalsMode x)
-    {
-        value = x;
-        changed = true;
-    }
-
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
-
-    void set(const String & x)
-    {
-        set(getTotalsMode(x));
-    }
-
-    void set(ReadBuffer & buf)
-    {
-        String x;
-        readBinary(x, buf);
-        set(x);
-    }
-
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
-
-    TotalsMode get() const
-    {
-        return value;
-    }
-
-private:
-    TotalsMode value;
-};
-
-
 template <bool enable_mode_any>
 struct SettingOverflowMode
 {
@@ -873,15 +774,26 @@ public:
             return CompressionMethod::LZ4HC;
         if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
-
+#if USE_QPL
+        if (lower_str == "qpl")
+            return CompressionMethod::QPL;
+        throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd', 'qpl'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#else
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+#endif
     }
 
     String toString() const
     {
+#if USE_QPL
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd", "qpl"};
+        auto compression_method_last = CompressionMethod::QPL;
+#else
         const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
+        auto compression_method_last = CompressionMethod::ZSTD;
+#endif
 
-        if (value < CompressionMethod::LZ4 || value > CompressionMethod::ZSTD)
+        if (value < CompressionMethod::LZ4 || value > compression_method_last)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
 
         return strings[static_cast<size_t>(value)];
@@ -922,6 +834,63 @@ public:
 
 private:
     CompressionMethod value;
+};
+
+struct SettingTaskQueueType
+{
+public:
+    bool changed = false;
+
+    SettingTaskQueueType(TaskQueueType x = TaskQueueType::DEFAULT)
+        : value(x)
+    {}
+
+    operator TaskQueueType() const { return value; }
+    SettingTaskQueueType & operator=(TaskQueueType x)
+    {
+        set(x);
+        return *this;
+    }
+
+    static TaskQueueType getTaskQueueType(const String & s);
+
+    String toString() const;
+
+    void set(TaskQueueType x)
+    {
+        value = x;
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        set(safeGet<const String &>(x));
+    }
+
+    void set(const String & x)
+    {
+        set(getTaskQueueType(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    TaskQueueType get() const
+    {
+        return value;
+    }
+
+private:
+    TaskQueueType value;
 };
 
 /// The setting for executing distributed subqueries inside IN or JOIN sections.

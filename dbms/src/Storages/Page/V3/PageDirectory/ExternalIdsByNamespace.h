@@ -26,9 +26,8 @@
 
 namespace DB::PS::V3
 {
-
 // A thread-safe class to manage external ids.
-// Manage all external ids by NamespaceId.
+// Manage all external ids by NamespaceID.
 template <typename Trait>
 class ExternalIdsByNamespace
 {

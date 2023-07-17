@@ -16,12 +16,12 @@
 
 ## clean up
 => DBGInvoke __drop_tidb_table(default, test_dm)
-=> drop table if exists default.test_dm
+=> DBGInvoke __refresh_schemas()
 
 ## create table and apply an empty snapshot
 => DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 String, col_2 Int64, col_3 Int64', 'col_1,col_2', 'dt')
-=> DBGInvoke __refresh_schemas()
-=> select database,name,engine from system.tables where database='default' and name='test_dm'
+=> DBGInvoke __refresh_mapped_table_schema(default, test_dm)
+=> DBGInvoke query_mapped('select tidb_database,tidb_name,engine from system.tables where database=''\$d'' and name=''\$t''', default, test_dm)
 ┌─database─┬─name────┬─engine─────┐
 │ default  │ test_dm │ DeltaMerge │
 └──────────┴─────────┴────────────┘
@@ -36,7 +36,8 @@
 => DBGInvoke __raft_insert_row_full(default, test_dm, 4,   '', 4, 0, 'test3', 3, 15)
 => DBGInvoke __raft_insert_row_full(default, test_dm, 4,   '', 4, 1, 'test4', 4, 0) -- this row is mark deleted
 => DBGInvoke __try_flush_region(4)
-=> select col_1, col_2, col_3 from default.test_dm order by _tidb_rowid
+
+=> DBGInvoke query_mapped('select col_1, col_2, col_3 from \$d.\$t order by _tidb_rowid', default, test_dm)
 ┌─col_1─┬─col_2─┬─col_3─┐
 │ test1 │     1 │    12 │
 │ test2 │     2 │    11 │
@@ -57,7 +58,7 @@
     )
 => DBGInvoke __try_flush_region(4)
 ## now we should not find rowid==3
-=> select col_1, col_2, col_3 from default.test_dm
+=> DBGInvoke query_mapped('select col_1, col_2, col_3 from \$d.\$t', default, test_dm)
 ┌─col_1─┬─col_2─┬─col_3─┐
 │ test1 │     1 │    13 │
 │ test2 │     2 │    11 │
@@ -65,5 +66,5 @@
 
 ## clean up
 => DBGInvoke __drop_tidb_table(default, test_dm)
-=> drop table if exists default.test_dm
+=> DBGInvoke __refresh_schemas()
 

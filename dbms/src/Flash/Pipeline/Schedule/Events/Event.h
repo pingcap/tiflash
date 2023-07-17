@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
@@ -34,39 +36,46 @@ class Event;
 using EventPtr = std::shared_ptr<Event>;
 using Events = std::vector<EventPtr>;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    Event(PipelineExecutorStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
-        : exec_status(exec_status_)
-        , mem_tracker(std::move(mem_tracker_))
-    {}
+    explicit Event(PipelineExecutorContext & exec_context_, const String & req_id = "");
+
     virtual ~Event() = default;
 
     void addInput(const EventPtr & input);
 
-    // schedule, onTaskFinish and finish maybe called directly in TaskScheduler,
-    // so these functions must be noexcept.
-    void schedule() noexcept;
+    void schedule();
 
-    void onTaskFinish() noexcept;
+    void onTaskFinish(const TaskProfileInfo & task_profile_info);
 
-    bool withoutInput();
+    // return true for source event.
+    bool prepare();
+
+    UInt64 getScheduleDuration() const;
+
+    UInt64 getFinishDuration() const;
 
 protected:
-    // Returns true meaning no task is scheduled.
-    virtual bool scheduleImpl() { return true; }
+    // add task ready to be scheduled.
+    void addTask(TaskPtr && task);
+
+    // Generate the tasks ready to be scheduled and use `addTask` to add the tasks.
+    virtual void scheduleImpl() {}
 
     // So far the ownership and the life-cycle of the resources are not very well-defined so we still rely on things like "A must be released before B".
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
-    void scheduleTasks(std::vector<TaskPtr> & tasks);
+    /// This method can only be called in finishImpl and is used to dynamically adjust the topology of events.
+    void insertEvent(const EventPtr & insert_event);
 
 private:
-    void finish() noexcept;
+    void scheduleTasks();
+
+    void finish();
 
     void addOutput(const EventPtr & output);
 
@@ -74,18 +83,32 @@ private:
 
     void switchStatus(EventStatus from, EventStatus to);
 
+    void assertStatus(EventStatus expect) const;
+
 protected:
-    PipelineExecutorStatus & exec_status;
+    PipelineExecutorContext & exec_context;
 
     MemoryTrackerPtr mem_tracker;
+
+    LoggerPtr log;
 
 private:
     Events outputs;
 
     std::atomic_int32_t unfinished_inputs{0};
 
+    // hold the tasks that ready to be scheduled.
+    std::vector<TaskPtr> tasks;
+
     std::atomic_int32_t unfinished_tasks{0};
 
     std::atomic<EventStatus> status{EventStatus::INIT};
+
+    // is_source is true if and only if there is no input.
+    bool is_source = true;
+
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    UInt64 schedule_duration = 0;
+    UInt64 finish_duration = 0;
 };
 } // namespace DB

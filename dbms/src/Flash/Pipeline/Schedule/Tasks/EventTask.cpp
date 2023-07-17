@@ -12,36 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
 namespace DB
 {
 EventTask::EventTask(
-    MemoryTrackerPtr mem_tracker_,
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const EventPtr & event_)
-    : Task(std::move(mem_tracker_))
-    , exec_status(exec_status_)
+    : Task(exec_context_)
     , event(event_)
 {
-    assert(event);
+    RUNTIME_CHECK(event);
 }
 
-EventTask::~EventTask()
+EventTask::EventTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const EventPtr & event_,
+    ExecTaskStatus init_status)
+    : Task(exec_context_, req_id, init_status)
+    , event(event_)
 {
-    assert(event);
-    event->onTaskFinish();
+    RUNTIME_CHECK(event);
+}
+
+void EventTask::finalizeImpl()
+{
+    doFinalizeImpl();
+    event->onTaskFinish(profile_info);
     event.reset();
 }
 
-ExecTaskStatus EventTask::executeImpl()
+UInt64 EventTask::getScheduleDuration() const
 {
-    return doTaskAction([&] { return doExecuteImpl(); });
+    return event->getScheduleDuration();
 }
-
-ExecTaskStatus EventTask::awaitImpl()
-{
-    return doTaskAction([&] { return doAwaitImpl(); });
-}
-
 } // namespace DB

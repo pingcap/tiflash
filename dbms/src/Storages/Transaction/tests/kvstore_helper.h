@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -81,8 +84,7 @@ public:
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
-        proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-            RaftStoreProxyPtr{proxy_instance.get()}));
+        proxy_helper = proxy_instance->generateProxyHelper();
         kvstore->restore(*path_pool, proxy_helper.get());
         {
             auto store = metapb::Store{};
@@ -92,7 +94,10 @@ public:
         }
     }
 
-    void TearDown() override {}
+    void TearDown() override
+    {
+        proxy_instance->clear();
+    }
 
 protected:
     KVStore & getKVS() { return *kvstore; }
@@ -100,6 +105,7 @@ protected:
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
         kvstore = std::make_unique<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
@@ -123,22 +129,50 @@ protected:
         {
             // Maybe another test has already registed, ignore exception here.
         }
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";
         TiFlashTestEnv::tryCreatePath(p);
     }
+    void startReadIndexUtils(Context & ctx)
+    {
+        if (proxy_runner)
+        {
+            return;
+        }
+        over.store(false);
+        ctx.getTMTContext().setStatusRunning();
+        // Start mock proxy in other thread
+        proxy_runner.reset(new std::thread([&]() {
+            proxy_instance->testRunNormal(over);
+        }));
+        ASSERT_EQ(kvstore->getProxyHelper(), proxy_helper.get());
+        kvstore->initReadIndexWorkers(
+            []() {
+                return std::chrono::milliseconds(10);
+            },
+            1);
+        ASSERT_NE(kvstore->read_index_worker_manager, nullptr);
+        kvstore->asyncRunReadIndexWorkers();
+    }
+    void stopReadIndexUtils()
+    {
+        kvstore->stopReadIndexWorkers();
+        kvstore->releaseReadIndexWorkers();
+        over = true;
+        proxy_instance->wakeNotifier();
+        proxy_runner->join();
+    }
 
 protected:
-    static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
-    static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 
     static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
     {
         // Drop files on disk
+        LOG_INFO(Logger::get("Test"), "Clean path {} for bootstrap", path);
         Poco::File file(path);
         if (file.exists())
             file.remove(true);
@@ -156,10 +190,14 @@ protected:
     std::string test_path;
 
     std::unique_ptr<PathPool> path_pool;
-    std::unique_ptr<KVStore> kvstore;
+    std::shared_ptr<KVStore> kvstore;
 
     std::unique_ptr<MockRaftStoreProxy> proxy_instance;
     std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
+    std::unique_ptr<std::thread> proxy_runner;
+
+    LoggerPtr log = DB::Logger::get("RegionKVStoreTest");
+    std::atomic_bool over{false};
 };
 } // namespace tests
 } // namespace DB

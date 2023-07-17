@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -28,8 +29,6 @@
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class PSDiskDelegator;
@@ -82,7 +81,7 @@ public:
 
         // Some stats for logging
         UInt64 num_records = 0;
-        UInt64 read_elapsed_ms = 0;
+        UInt64 dump_elapsed_ms = 0;
 
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
@@ -93,7 +92,7 @@ public:
         }
     };
 
-    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, bool force);
+    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, UInt64 snap_sequence, std::function<UInt64(const String & record)> max_sequence_getter, bool force);
 
     bool saveSnapshot(
         FilesSnapshot && files_snap,
@@ -114,11 +113,15 @@ private:
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        bool manual_flush);
+        bool temp_file);
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 
     void updateDiskUsage(const LogFilenameSet & log_filenames);
+
+    void removeLogFiles(const LogFilenameSet & log_filenames);
+
+    UInt64 getLogFileMaxSequence(const LogFilename & log_filename, std::function<UInt64(const String & record)> max_sequence_getter);
 
 private:
     const String storage_name;
@@ -129,6 +132,9 @@ private:
     // select next path for creating new logfile
     UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
+
+    mutable std::mutex log_file_max_sequences_cache_mutex;
+    std::unordered_map<LogFilename, UInt64> log_file_max_sequences_cache;
 
     // Cached values when `tryGetFilesSnapshot` is called
     mutable std::mutex mtx_disk_usage;

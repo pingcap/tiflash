@@ -90,6 +90,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("gc_schemas", dbgFuncGcSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
+    regSchemalessFunc("refresh_table_schema", dbgFuncRefreshTableSchema);
+    regSchemalessFunc("refresh_mapped_table_schema", dbgFuncRefreshMappedTableSchema);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
@@ -118,6 +120,8 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);
+    regSchemalessFunc("mapped_table_exists", dbgFuncTableExists);
+    regSchemalessFunc("mapped_database_exists", dbgFuncDatabaseExists);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
     regSchemalessFunc("get_tiflash_replica_count", dbgFuncGetTiflashReplicaCount);
     regSchemalessFunc("get_partition_tables_tiflash_replica_count", dbgFuncGetPartitionTablesTiflashReplicaCount);
@@ -128,7 +132,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 
-    regSchemalessFunc("get_active_threads_in_dynamic_thread_pool", dbgFuncActiveThreadsInDynamicThreadPool);
+    regSchemalessFunc("wait_until_no_temp_active_threads_in_dynamic_thread_pool", dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

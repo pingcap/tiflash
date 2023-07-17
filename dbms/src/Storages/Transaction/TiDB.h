@@ -47,6 +47,8 @@ namespace TiDB
 {
 using DB::ColumnID;
 using DB::DatabaseID;
+using DB::KeyspaceID;
+using DB::NullspaceID;
 using DB::String;
 using DB::TableID;
 using DB::Timestamp;
@@ -181,6 +183,7 @@ struct ColumnInfo
 
     ColumnID id = -1;
     String name;
+    Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
     Poco::Dynamic::Var default_bit_value;
@@ -222,12 +225,6 @@ struct ColumnInfo
     static Int64 getTimeValue(const String &);
     static Int64 getYearValue(const String &);
     static UInt64 getBitValue(const String &);
-
-private:
-    /// please be very careful when you have to use offset,
-    /// because we never update offset when DDL action changes.
-    /// Thus, our offset will not exactly correspond the order of columns.
-    Int32 offset = -1;
 };
 
 enum PartitionType
@@ -274,13 +271,21 @@ struct PartitionInfo
 struct DBInfo
 {
     DatabaseID id = -1;
+    KeyspaceID keyspace_id = NullspaceID;
     String name;
     String charset;
     String collate;
     SchemaState state;
 
     DBInfo() = default;
-    explicit DBInfo(const String & json) { deserialize(json); }
+    explicit DBInfo(const String & json, KeyspaceID keyspace_id_)
+    {
+        deserialize(json);
+        if (keyspace_id == NullspaceID)
+        {
+            keyspace_id = keyspace_id_;
+        }
+    }
 
     String serialize() const;
 
@@ -293,10 +298,10 @@ using TableInfoPtr = std::shared_ptr<TableInfo>;
 struct TiFlashReplicaInfo
 {
     UInt64 count = 0;
+    std::optional<bool> available;
 
     /// Fields below are useless for tiflash now.
     // Strings location_labels
-    // bool available
     // std::vector<Int64> available_partition_ids;
 
     Poco::JSON::Object::Ptr getJSONObject() const;
@@ -315,11 +320,6 @@ struct IndexColumnInfo
 
     String name;
     Int32 length;
-
-private:
-    /// please be very careful when you have to use offset,
-    /// because we never update offset when DDL action changes.
-    /// Thus, our offset will not exactly correspond the order of columns.
     Int32 offset;
 };
 struct IndexInfo
@@ -352,9 +352,9 @@ struct TableInfo
 
     TableInfo & operator=(const TableInfo &) = default;
 
-    explicit TableInfo(Poco::JSON::Object::Ptr json);
+    explicit TableInfo(Poco::JSON::Object::Ptr json, KeyspaceID keyspace_id_);
 
-    explicit TableInfo(const String & table_info_json);
+    explicit TableInfo(const String & table_info_json, KeyspaceID keyspace_id_);
 
     String serialize() const;
 
@@ -367,6 +367,8 @@ struct TableInfo
     // and partition ID for partition table,
     // whereas field `belonging_table_id` below actually means the table ID this partition belongs to.
     TableID id = DB::InvalidTableID;
+    // The keyspace where the table belongs to.
+    KeyspaceID keyspace_id = NullspaceID;
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;
@@ -388,15 +390,16 @@ struct TableInfo
     bool is_view = false;
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION; // TODO(hyy):can be removed after removing RegionPtrWithBlock
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED; // TODO(hyy):seems could be removed
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(ColumnID id) const;
+    KeyspaceID getKeyspaceID() const;
 
     const ColumnInfo & getColumnInfo(ColumnID id) const;
 
@@ -407,11 +410,6 @@ struct TableInfo
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 
     /// should not be called if is_common_handle = false.
-    /// when use IndexInfo, please avoid to use the offset info
-    /// the offset value may be wrong in some cases,
-    /// due to we will not update IndexInfo except RENAME DDL action,
-    /// but DDL like add column / drop column may change the offset of columns
-    /// Thus, please be very careful when you must have to use offset information !!!!!
     const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
 
     IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }

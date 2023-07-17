@@ -14,6 +14,8 @@
 
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V2
 {
 void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
@@ -48,6 +50,9 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
             break;
         case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }

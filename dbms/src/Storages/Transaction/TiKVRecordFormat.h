@@ -66,6 +66,9 @@ static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
 static const char GC_FENCE_PREFIX = 'F';
 static const char LAST_CHANGE_PREFIX = 'l';
+static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
+static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
+static const char PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX = 'F';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -155,15 +158,9 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     WriteBufferFromOwnString ss;
 
-    std::unordered_map<String, size_t> column_name_columns_index_map;
-    for (size_t i = 0; i < table_info.columns.size(); i++)
-    {
-        column_name_columns_index_map.emplace(table_info.columns[i].name, i);
-    }
     for (size_t i = 0; i < keys.size(); i++)
     {
-        auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-        DB::EncodeDatum(keys[i], table_info.columns[idx].getCodecFlag(), ss);
+        DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
     }
     return encodeAsTiKVKey(key + ss.releaseStr());
 }
@@ -212,7 +209,8 @@ inline Timestamp getTs(const TiKVKey & key)
     return decodeUInt64Desc(read<UInt64>(key.data() + key.dataSize() - 8));
 }
 
-inline TableID getTableId(const DecodedTiKVKey & key)
+template <typename T>
+inline TableID getTableId(const T & key)
 {
     return decodeInt64(read<UInt64>(key.data() + 1));
 }
@@ -222,10 +220,17 @@ inline HandleID getHandle(const DecodedTiKVKey & key)
     return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE));
 }
 
+inline std::string_view getRawTiDBPKView(const DecodedTiKVKey & key)
+{
+    auto user_key = key.getUserKey();
+    return std::string_view(user_key.data() + RAW_KEY_NO_HANDLE_SIZE, user_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+}
+
 inline RawTiDBPK getRawTiDBPK(const DecodedTiKVKey & key)
 {
-    return std::make_shared<const std::string>(key.begin() + RAW_KEY_NO_HANDLE_SIZE, key.end());
+    return std::make_shared<const std::string>(getRawTiDBPKView(key));
 }
+
 
 inline TableID getTableId(const TiKVKey & key)
 {
@@ -419,6 +424,22 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
                  * rewriting record and there must be a complete row written to tikv, just ignore it in tiflash.
                  */
             return std::nullopt;
+        case RecordKVFormat::LAST_CHANGE_PREFIX:
+        {
+            // Used to accelerate TiKV MVCC scan, useless for TiFlash.
+            UInt64 last_change_ts = readUInt64(data, len);
+            UInt64 versions_to_last_change = readVarUInt(data, len);
+            UNUSED(last_change_ts);
+            UNUSED(versions_to_last_change);
+            break;
+        }
+        case RecordKVFormat::TXN_SOURCE_PREFIX_FOR_WRITE:
+        {
+            // Used for CDC, useless for TiFlash.
+            UInt64 txn_source_prefic = readVarUInt(data, len);
+            UNUSED(txn_source_prefic);
+            break;
+        }
         default:
             throw Exception("invalid flag " + std::to_string(flag) + " in write cf", ErrorCodes::LOGICAL_ERROR);
         }

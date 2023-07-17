@@ -37,16 +37,16 @@ class SchemaSyncer
 public:
     virtual ~SchemaSyncer() = default;
 
-    /**
-     * Get current version of CH schema.
-     */
-    virtual Int64 getCurrentVersion() = 0;
-
-    /**
-     * Synchronize all schemas between TiDB and CH.
-     * @param context
+    /*
+     * Sync all tables' schemas based on schema diff, but may not apply all diffs.
      */
     virtual bool syncSchemas(Context & context) = 0;
+
+    /*
+     * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
+     * This function will be called concurrently when the schema not matches during reading or writing
+     */
+    virtual bool syncTableSchema(Context & context, TableID physical_table_id) = 0;
 
     virtual void reset() = 0;
 
@@ -54,7 +54,9 @@ public:
 
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
-    virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
+    virtual void removeTableID(TableID table_id) = 0;
+
+    virtual void dropAllSchema(Context & context) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

@@ -14,15 +14,18 @@
 
 #include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <magic_enum.hpp>
@@ -415,7 +418,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -426,7 +429,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
@@ -456,7 +459,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -466,7 +469,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
@@ -538,7 +541,7 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const Block & bl
     auto parent_path = delegator.choosePath();
     auto file_provider = db_context->getFileProvider();
 
-    WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+    WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
@@ -601,12 +604,12 @@ PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
     return segment_id;
 }
 
-size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) const
+size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(type, ns_id));
+        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(NullspaceID, type, ns_id));
     }
     else
     {
@@ -643,11 +646,11 @@ size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) 
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -663,12 +666,12 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(Namespace
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -689,8 +692,8 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
-    storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-    storage_pool = std::make_unique<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
+    storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+    storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
@@ -701,10 +704,11 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
 void SegmentTestBasic::reloadDMContext()
 {
     dm_context = std::make_unique<DMContext>(*db_context,
-                                             *storage_path_pool,
-                                             *storage_pool,
+                                             storage_path_pool,
+                                             storage_pool,
                                              /*min_version_*/ 0,
-                                             settings.not_compress_columns,
+                                             NullspaceID,
+                                             /*physical_table_id*/ 100,
                                              options.is_common_handle,
                                              1,
                                              db_context->getSettingsRef());
@@ -762,6 +766,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
+
 std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);

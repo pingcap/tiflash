@@ -20,19 +20,25 @@
 namespace DB
 {
 PipelineTask::PipelineTask(
-    MemoryTrackerPtr mem_tracker_,
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), exec_status_, event_)
-    , pipeline_exec(std::move(pipeline_exec_))
+    : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
+    , pipeline_exec_holder(std::move(pipeline_exec_))
+    , pipeline_exec(pipeline_exec_holder.get())
 {
-    assert(pipeline_exec);
+    RUNTIME_CHECK(pipeline_exec);
+    pipeline_exec->executePrefix();
 }
 
-void PipelineTask::finalize()
+void PipelineTask::doFinalizeImpl()
 {
-    pipeline_exec.reset();
+    assert(pipeline_exec);
+    pipeline_exec->executeSuffix();
+    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
+    pipeline_exec = nullptr;
+    pipeline_exec_holder.reset();
 }
 
 #define HANDLE_NOT_RUNNING_STATUS         \
@@ -44,6 +50,14 @@ void PipelineTask::finalize()
     {                                     \
         return ExecTaskStatus::CANCELLED; \
     }                                     \
+    case OperatorStatus::IO_IN:           \
+    {                                     \
+        return ExecTaskStatus::IO_IN;     \
+    }                                     \
+    case OperatorStatus::IO_OUT:          \
+    {                                     \
+        return ExecTaskStatus::IO_OUT;    \
+    }                                     \
     case OperatorStatus::WAITING:         \
     {                                     \
         return ExecTaskStatus::WAITING;   \
@@ -52,7 +66,7 @@ void PipelineTask::finalize()
 #define UNEXPECTED_OP_STATUS(op_status, function_name) \
     throw Exception(fmt::format("Unexpected op state {} at {}", magic_enum::enum_name(op_status), (function_name)));
 
-ExecTaskStatus PipelineTask::doExecuteImpl()
+ExecTaskStatus PipelineTask::executeImpl()
 {
     assert(pipeline_exec);
     auto op_status = pipeline_exec->execute();
@@ -68,15 +82,37 @@ ExecTaskStatus PipelineTask::doExecuteImpl()
     }
 }
 
-ExecTaskStatus PipelineTask::doAwaitImpl()
+ExecTaskStatus PipelineTask::executeIOImpl()
+{
+    assert(pipeline_exec);
+    auto op_status = pipeline_exec->executeIO();
+    switch (op_status)
+    {
+        HANDLE_NOT_RUNNING_STATUS
+    // After `pipeline_exec->executeIO`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
+    case OperatorStatus::HAS_OUTPUT:
+        return ExecTaskStatus::RUNNING;
+    default:
+        UNEXPECTED_OP_STATUS(op_status, "PipelineTask::execute");
+    }
+}
+
+ExecTaskStatus PipelineTask::awaitImpl()
 {
     assert(pipeline_exec);
     auto op_status = pipeline_exec->await();
     switch (op_status)
     {
         HANDLE_NOT_RUNNING_STATUS
-    // After `pipeline_exec->await`, `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
+    // After `pipeline_exec->await`,
+    // - `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`
+    // - `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`
     // And other states are unexpected.
+    case OperatorStatus::NEED_INPUT:
     case OperatorStatus::HAS_OUTPUT:
         return ExecTaskStatus::RUNNING;
     default:

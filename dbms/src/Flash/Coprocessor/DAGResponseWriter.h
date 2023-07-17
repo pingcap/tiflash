@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/Block.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
 
@@ -30,10 +31,17 @@ public:
     /// prepared with sample block
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
+
+    // For async writer, `isWritable` need to be called before calling `write`.
+    // ```
+    // while (!isWritable()) {}
+    // write(block);
+    // ```
+    virtual bool isWritable() const { throw Exception("Unsupport"); }
+
     /// flush cached blocks for batch writer
     virtual void flush() = 0;
     virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;

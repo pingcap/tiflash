@@ -34,19 +34,18 @@ public:
     PhysicalExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const std::vector<Int64> & partition_col_ids_,
         const TiDB::TiDBCollators & collators_,
         const tipb::ExchangeType & exchange_type_,
-        const FineGrainedShuffle & fine_grained_shuffle_,
         const tipb::CompressionMode & compression_mode_)
-        : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, fine_grained_shuffle_, req_id, child_)
         , partition_col_ids(partition_col_ids_)
         , partition_col_collators(collators_)
         , exchange_type(exchange_type_)
         , compression_mode(compression_mode_)
-        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -56,11 +55,16 @@ public:
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t /*concurrency*/) override;
+
+private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators partition_col_collators;
     tipb::ExchangeType exchange_type;
     tipb::CompressionMode compression_mode;
-
-    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

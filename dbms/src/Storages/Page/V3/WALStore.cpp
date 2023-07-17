@@ -29,7 +29,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
@@ -107,7 +107,7 @@ Format::LogNumberType WALStore::rollToNewLogWriter(const std::lock_guard<std::mu
 
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-    bool manual_flush)
+    bool temp_file)
 {
     String path;
 
@@ -130,7 +130,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     path += wal_folder_prefix;
 
     LogFilename log_filename = LogFilename{
-        (manual_flush ? LogFileStage::Temporary : LogFileStage::Normal),
+        (temp_file ? LogFileStage::Temporary : LogFileStage::Normal),
         new_log_lvl.first,
         new_log_lvl.second,
         0,
@@ -139,12 +139,13 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto fullname = log_filename.fullname(log_filename.stage);
     // TODO check whether the file already existed
     LOG_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
+    // if it is a temp file, we will manually sync it after writing snapshot
     auto log_writer = std::make_unique<LogWriter>(
         fullname,
         provider,
         new_log_lvl.first,
         /*recycle*/ true,
-        /*manual_flush*/ manual_flush);
+        /*manual_sync*/ temp_file);
     return {std::move(log_writer), log_filename};
 }
 
@@ -162,7 +163,7 @@ void WALStore::updateDiskUsage(const LogFilenameSet & log_filenames)
     }
 }
 
-WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_files, bool force)
+WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_files, UInt64 snap_sequence, std::function<UInt64(const String & record)> max_sequence_getter, bool force)
 {
     // First we simply check whether the number of files is enough for compaction
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
@@ -191,15 +192,23 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         log_file.reset();
     }
 
-    for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
+    // traverse in reverse order,
+    // so that once the first log file whose max sequence is smaller or equal to snap_sequence is found,
+    // we don't need to check the max sequence for the rest log files.
+    bool found_log_file_smaller_than_snap_sequence = false;
+    LogFilenameSet snap_log_files;
+    for (auto iter = persisted_log_files.rbegin(); iter != persisted_log_files.rend(); ++iter) // NOLINT
     {
         if (iter->log_num >= current_writing_log_num)
-            iter = persisted_log_files.erase(iter);
-        else
-            ++iter;
+            continue;
+        if (!found_log_file_smaller_than_snap_sequence && getLogFileMaxSequence(*iter, max_sequence_getter) > snap_sequence)
+            continue;
+
+        found_log_file_smaller_than_snap_sequence = true;
+        snap_log_files.emplace(*iter);
     }
     return WALStore::FilesSnapshot{
-        .persisted_log_files = std::move(persisted_log_files),
+        .persisted_log_files = std::move(snap_log_files),
     };
 }
 
@@ -218,13 +227,13 @@ bool WALStore::saveSnapshot(
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     // Create a temporary file for saving directory snapshot
-    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
+    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*temp_file*/ true);
 
     // TODO: split the snap into multiple records in LogFile so that the memory
     //       consumption could be more smooth.
     ReadBufferFromString payload(serialized_snap);
     compact_log->addRecord(payload, serialized_snap.size(), write_limiter, /*background*/ true);
-    compact_log->flush(write_limiter, /*background*/ true);
+    compact_log->sync();
     compact_log.reset(); // close fd explicitly before renaming file.
 
     // Rename it to be a normal log file.
@@ -241,11 +250,7 @@ bool WALStore::saveSnapshot(
     LOG_INFO(logger, "Rename log file to normal done [tempname={}] [fullname={}]", temp_fullname, normal_fullname);
 
     // Remove compacted log files.
-    for (const auto & filename : files_snap.persisted_log_files)
-    {
-        const auto log_fullname = filename.fullname(LogFileStage::Normal);
-        provider->deleteRegularFile(log_fullname, EncryptionPath(log_fullname, ""));
-    }
+    removeLogFiles(files_snap.persisted_log_files);
 
     auto get_logging_str = [&]() {
         FmtBuffer fmt_buf;
@@ -257,8 +262,8 @@ bool WALStore::saveSnapshot(
                 fb.append(arg.filename(arg.stage));
             },
             ", ");
-        fmt_buf.fmtAppend("] [read_cost={}] [num_records={}] [file={}] [size={}].",
-                          files_snap.read_elapsed_ms,
+        fmt_buf.fmtAppend("] [dump_cost={}] [num_records={}] [file={}] [size={}].",
+                          files_snap.dump_elapsed_ms,
                           files_snap.num_records,
                           normal_fullname,
                           serialized_snap.size());
@@ -269,4 +274,35 @@ bool WALStore::saveSnapshot(
     return true;
 }
 
+void WALStore::removeLogFiles(const LogFilenameSet & log_filenames)
+{
+    for (const auto & filename : log_filenames)
+    {
+        const auto log_fullname = filename.fullname(LogFileStage::Normal);
+        provider->deleteRegularFile(log_fullname, EncryptionPath(log_fullname, ""));
+    }
+    {
+        std::unique_lock<std::mutex> lock(log_file_max_sequences_cache_mutex);
+        for (const auto & filename : log_filenames)
+        {
+            log_file_max_sequences_cache.erase(filename);
+        }
+    }
+}
+
+UInt64 WALStore::getLogFileMaxSequence(const LogFilename & log_filename, std::function<UInt64(const String & record)> max_sequence_getter)
+{
+    std::unique_lock<std::mutex> lock(log_file_max_sequences_cache_mutex);
+    auto iter = log_file_max_sequences_cache.find(log_filename);
+    if (iter != log_file_max_sequences_cache.end())
+        return iter->second;
+
+    auto last_record = WALStoreReader::getLastRecordInLogFile(log_filename, provider, config.getRecoverMode(), /*read_limiter*/ nullptr, logger);
+    if (last_record.empty())
+        return 0; // empty log file
+
+    UInt64 max_sequence = max_sequence_getter(last_record);
+    log_file_max_sequences_cache.emplace(log_filename, max_sequence);
+    return max_sequence;
+}
 } // namespace DB::PS::V3
