@@ -318,6 +318,7 @@ bool castNonNullNumericColumn(const DataTypePtr & disk_type_not_null_,
     }
     else if (checkDataType<DataTypeMyDateTime>(disk_type_not_null) && checkDataType<DataTypeMyDateTime>(read_type_not_null))
     {
+        static_assert(std::is_same_v<DataTypeMyDateTime::FieldType, UInt64>, "Ensure the MyDateTime/MyTime is stored as UInt64");
         insertRangeFromWithNumericTypeCast<UInt64, UInt64>(
             disk_col_not_null,
             null_map,
