@@ -1891,7 +1891,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             }
             for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
             {
-                restore_infos.emplace_back(restore_join, std::move(restore_scan_hash_map_streams[i]), std::move(restore_build_streams[i]), std::move(restore_probe_streams[i]));
+                restore_infos.emplace_back(restore_join, i, std::move(restore_scan_hash_map_streams[i]), std::move(restore_build_streams[i]), std::move(restore_probe_streams[i]));
             }
         }
     }

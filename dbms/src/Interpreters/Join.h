@@ -50,12 +50,19 @@ using JoinPtr = std::shared_ptr<Join>;
 struct RestoreInfo
 {
     JoinPtr join;
+    size_t stream_index;
     BlockInputStreamPtr scan_hash_map_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr && scan_hash_map_stream_, BlockInputStreamPtr && build_stream_, BlockInputStreamPtr && probe_stream_)
+    RestoreInfo(
+      const JoinPtr & join_, 
+      size_t stream_index_, 
+      BlockInputStreamPtr && scan_hash_map_stream_, 
+      BlockInputStreamPtr && build_stream_, 
+      BlockInputStreamPtr && probe_stream_)
         : join(join_)
+        , stream_index(stream_index_)
         , scan_hash_map_stream(std::move(scan_hash_map_stream_))
         , build_stream(std::move(build_stream_))
         , probe_stream(std::move(probe_stream_))
