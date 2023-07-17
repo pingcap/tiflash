@@ -338,10 +338,6 @@ try
 }
 CATCH
 
-// 先写入较少的数据，让所有的数据都变成同一个 merged 文件，并且测试 restore 后成功读取
-// 写入列数较多的数据，让所有的数据都变成多个 merged 文件，并且测试 restore 后成功读取
-// 写入较多数据的，只有 index 和 mrk 在 merged 里面
-
 // test tiny data into v3, and read it
 // check all data is in 0.merged and meta
 TEST_P(DMFileTest, CheckDMFileV3WithTinyData)
@@ -696,77 +692,6 @@ void checkMergedFile(const DMFilePtr & dmfile, UInt64 merged_number, const std::
         ASSERT_EQ(merged_data, sub_data);
     }
 }
-
-// void checkMergedFiles(DMFilePtr dmfile)
-// {
-//     ASSERT_TRUE(S3::ClientFactory::instance().isEnabled()) << "S3 should be enabled is gtests";
-//     auto uploaded_files = dmfile->listFilesForUpload();
-//     auto dir = dmfile->path();
-//     std::set<String> not_uploaded_files;
-//     Poco::DirectoryIterator end;
-//     for (Poco::DirectoryIterator itr(dir); itr != end; ++itr)
-//     {
-//         auto uploaded_file_itr = std::find_if(
-//             uploaded_files.begin(),
-//             uploaded_files.end(),
-//             [&](const auto & file_with_size) {
-//                 return file_with_size.first == itr.name();
-//             });
-//         // File not be uploaded and not `NGC`.
-//         if (uploaded_file_itr == uploaded_files.end() && itr.name() != "NGC")
-//         {
-//             not_uploaded_files.insert(itr.name());
-//         }
-//     }
-//     ASSERT_EQ(not_uploaded_files.size(), dmfile->merged_sub_file_infos.size())
-//         << fmt::format("{} vs {} => {}", not_uploaded_files.size(), dmfile->merged_sub_file_infos.size(), not_uploaded_files);
-
-//     std::set<String> checked_fnames;
-//     for (const auto & [number, size] : dmfile->merged_files)
-//     {
-//         checkMergedFile(dmfile, number, not_uploaded_files, checked_fnames);
-//     }
-//     ASSERT_EQ(checked_fnames, not_uploaded_files) << fmt::format("{} vs {}", checked_fnames, not_uploaded_files);
-// }
-
-// TEST_P(DMFileTest, MoreMegedFile)
-// try
-// {
-//     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
-
-//     const size_t num_rows_write = 1280;
-
-//     DMFileBlockOutputStream::BlockProperty block_property1;
-//     block_property1.effective_num_rows = 1;
-//     block_property1.gc_hint_version = 1;
-//     block_property1.deleted_rows = 1;
-//     DMFileBlockOutputStream::BlockProperty block_property2;
-//     block_property2.effective_num_rows = 2;
-//     block_property2.gc_hint_version = 2;
-//     block_property2.deleted_rows = 2;
-//     std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
-//     block_propertys.push_back(block_property1);
-//     block_propertys.push_back(block_property2);
-
-//     Settings settings;
-//     settings.set("dt_merged_file_max_size", "1024");
-//     DMFile::updateMergeFileConfig(settings);
-//     ASSERT_EQ(DMFile::merged_file_max_size, 1024);
-//     Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
-//     Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
-//     auto mode = DMFileMode::DirectoryMetaV2;
-//     auto configuration = createConfiguration(mode);
-//     auto dmfile = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);
-//     auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
-//     stream->writePrefix();
-//     stream->write(block1, block_property1);
-//     stream->write(block2, block_property2);
-//     stream->writeSuffix();
-
-//     ASSERT_GT(dmfile->merged_files.size(), 1);
-//     checkMergedFiles(dmfile);
-// }
-// CATCH
 
 TEST_P(DMFileTest, MetaV2Broken)
 try

@@ -85,7 +85,7 @@ DMFileReader::Stream::Stream(
                 if (data_size == 0)
                     return res;
 
-                // 这边先把 memory 读取出来
+                // first read from merged file to get the raw data(contains the header)
                 auto buffer = ReadBufferFromFileProvider(
                     reader.file_provider,
                     file_path,
@@ -94,12 +94,12 @@ DMFileReader::Stream::Stream(
                     read_limiter);
                 buffer.seek(offset);
 
-                String temp_data;
-                temp_data.resize(data_size);
+                String raw_data;
+                raw_data.resize(data_size);
 
-                buffer.read(reinterpret_cast<char *>(temp_data.data()), data_size);
-
-                auto buf = createReadBufferFromData(std::move(temp_data),
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+                // read from the buffer based on the raw data
+                auto buf = createReadBufferFromData(std::move(raw_data),
                                                     reader.dmfile->colDataPath(file_name_base),
                                                     reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                                                     reader.dmfile->configuration->getChecksumAlgorithm(),
@@ -125,7 +125,6 @@ DMFileReader::Stream::Stream(
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
             PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
         }
-
         return res;
     };
 
@@ -222,8 +221,7 @@ DMFileReader::Stream::Stream(
             auto offset = info->second.offset;
             auto size = info->second.size;
 
-            // 这边先把 memory 读取出来
-
+            // first read from merged file to get the raw data(contains the header)
             auto buffer = ReadBufferFromFileProvider(
                 reader.file_provider,
                 file_path,
@@ -232,13 +230,13 @@ DMFileReader::Stream::Stream(
                 read_limiter);
             buffer.seek(offset);
 
-            String temp_data;
-            temp_data.resize(size);
+            String raw_data;
+            raw_data.resize(size);
 
-            buffer.read(reinterpret_cast<char *>(temp_data.data()), size);
-
+            buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
+            // read from the buffer based on the raw data
             buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
-                std::move(temp_data),
+                std::move(raw_data),
                 file_path,
                 reader.dmfile->getConfiguration()->getChecksumFrameLength(),
                 reader.dmfile->configuration->getChecksumAlgorithm(),
@@ -516,7 +514,6 @@ Block DMFileReader::read()
     size_t skip_rows;
 
     getSkippedRows(skip_rows);
-
     const auto & use_packs = pack_filter.getUsePacksConst();
 
     if (next_pack_id >= use_packs.size())
@@ -768,7 +765,6 @@ void DMFileReader::readFromDisk(
                 }
                 return sub_stream->buf.get();
             },
-
             read_rows,
             top_stream->avg_size_hint,
             true,

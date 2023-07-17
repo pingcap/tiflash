@@ -43,7 +43,6 @@ class DMFileWriter
 {
 public:
     using WriteBufferFromFileBasePtr = std::unique_ptr<WriteBufferFromFileBase>;
-
     struct Stream
     {
         Stream(const DMFilePtr & dmfile,
@@ -70,6 +69,7 @@ public:
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
+            , marks(std::make_shared<MarksInCompressedFile>())
         {
             if (!dmfile->useMetaV2())
             {
@@ -86,14 +86,13 @@ public:
             }
         }
 
-
         // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferPtr compressed_buf;
 
         MinMaxIndexPtr minmaxes;
 
-        MarksInCompressedFile marks; // 后面记的check一下他 initial size 的点和写入到底写了多少的问题 ; 看看要不要改成 ptr
+        MarksInCompressedFilePtr marks;
 
         WriteBufferFromFileBasePtr mark_file;
     };

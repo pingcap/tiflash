@@ -83,7 +83,6 @@ int main(int argc, char ** argv)
     DB::DataStoreS3Pool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     DB::RNRemoteReadTaskPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     DB::RNPagePreparerPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-
     DB::RNWritePageCachePool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");

@@ -17,6 +17,7 @@
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Settings.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
@@ -28,8 +29,6 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <common/logger_useful.h>
-
-#include "Encryption/WriteBufferFromFileProvider.h"
 namespace DB::DM
 {
 class DMFile;
@@ -513,6 +512,7 @@ public:
     UInt64 merged_file_max_size;
 
     void finalizeSmallFiles(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
+    // check if the size of merged file is larger then the threshold. If so, create a new merged file.
     void checkMergedFile(MergedFileWriter & writer, FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
 
     friend class DMFileWriter;

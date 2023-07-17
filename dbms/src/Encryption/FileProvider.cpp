@@ -22,7 +22,6 @@
 #include <Encryption/PosixWriteReadableFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
-#include <Storages/S3/MemoryRandomAccessFile.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/S3/S3WritableFile.h>

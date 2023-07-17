@@ -224,7 +224,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
             if (dmfile->useMetaV2())
             {
-                stream->marks.emplace_back(MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
+                stream->marks->emplace_back(MarkInCompressedFile{stream->plain_file->count(), offset_in_compressed_block});
             }
             else
             {
@@ -295,7 +295,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         if (dmfile->useMetaV2())
         {
             stream->compressed_buf->next();
-            bytes_written += stream->plain_file->getMaterializedBytes(); // bytes with header
+            stream->plain_file->next();
+            stream->plain_file->sync();
+
+            bytes_written += stream->plain_file->getMaterializedBytes();
 
             if (is_nullmap_stream(substream))
             {
@@ -305,9 +308,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             {
                 data_bytes = stream->plain_file->getMaterializedBytes();
             }
-
-            stream->plain_file->next(); // 可以调整回去
-            stream->plain_file->sync();
 
 #ifndef NDEBUG
             examine_buffer_size(*stream->plain_file, *this->file_provider);
@@ -324,15 +324,14 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                           dmfile->configuration->getChecksumAlgorithm(),
                                                                           dmfile->configuration->getChecksumFrameLength());
 
-                stream->minmaxes->write(*type, *buffer); //写入了 checksum 的 buffer，为了让他真实的写入到 merged_file 中，需要先把他 sync 出去？
+                stream->minmaxes->write(*type, *buffer);
 
                 index_bytes = buffer->getMaterializedBytes();
                 MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, index_bytes};
                 dmfile->merged_sub_file_infos[fname] = info;
 
-                merged_file.file_info.size += index_bytes; // 包含了 header
-
-                buffer->sync(); // 感觉 next 可能也够用了，后面试一下
+                merged_file.file_info.size += index_bytes;
+                buffer->next();
             }
 
             // write mark into merged_file_writer
@@ -347,17 +346,17 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                           dmfile->configuration->getChecksumFrameLength());
 
 
-                for (const auto & mark : stream->marks)
+                for (const auto & mark : *(stream->marks))
                 {
                     writeIntBinary(mark.offset_in_compressed_file, *buffer);
                     writeIntBinary(mark.offset_in_decompressed_block, *buffer);
                 }
-                size_t mark_size = buffer->getMaterializedBytes(); //包含了 header
+                size_t mark_size = buffer->getMaterializedBytes();
                 MergedSubFileInfo info{fname, merged_file.file_info.number, merged_file.file_info.size, mark_size};
                 dmfile->merged_sub_file_infos[fname] = info;
 
                 merged_file.file_info.size += mark_size;
-                buffer->sync();
+                buffer->next();
 
                 if (is_nullmap_stream(substream))
                 {
@@ -376,7 +375,6 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             stream->plain_file->next();
             stream->plain_file->sync();
             stream->mark_file->sync();
-
 #ifndef NDEBUG
             examine_buffer_size(*stream->mark_file, *this->file_provider);
             examine_buffer_size(*stream->plain_file, *this->file_provider);

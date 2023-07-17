@@ -14,9 +14,8 @@
 
 #pragma once
 
+#include <Common/Checksum.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-
-#include "Common/Checksum.h"
 
 namespace DB
 {

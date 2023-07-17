@@ -264,7 +264,6 @@ private:
                 auto offset = info->second.offset;
                 auto data_size = info->second.size;
 
-                // 这边先把 memory 读取出来
                 auto buffer = ReadBufferFromFileProvider(
                     file_provider,
                     file_path,
@@ -273,12 +272,12 @@ private:
                     read_limiter);
                 buffer.seek(offset);
 
-                String temp_data;
-                temp_data.resize(data_size);
+                String raw_data;
+                raw_data.resize(data_size);
 
-                buffer.read(reinterpret_cast<char *>(temp_data.data()), data_size);
+                buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-                auto buf = createReadBufferFromData(std::move(temp_data),
+                auto buf = createReadBufferFromData(std::move(raw_data),
                                                     dmfile->colDataPath(file_name_base),
                                                     dmfile->getConfiguration()->getChecksumFrameLength(),
                                                     dmfile->configuration->getChecksumAlgorithm(),

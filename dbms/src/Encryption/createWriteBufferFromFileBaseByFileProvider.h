@@ -24,8 +24,6 @@
 
 namespace DB
 {
-
-
 std::unique_ptr<WriteBufferFromFileBase>
 createWriteBufferFromFileBaseByWriterBuffer(
     std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,

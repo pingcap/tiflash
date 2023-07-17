@@ -18,6 +18,7 @@
 #include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -38,8 +39,6 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <filesystem>
 #include <utility>
-
-#include "Encryption/createWriteBufferFromFileBaseByFileProvider.h"
 
 namespace DB
 {

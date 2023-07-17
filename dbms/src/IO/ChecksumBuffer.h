@@ -140,8 +140,12 @@ private:
         return frame_count * frame_size + offset();
     }
 
-    // For checksum buffer, this is the real bytes(contains header) to be materialized to disk.
-    off_t getMaterializedBytes() override // 我理解这个不需要强制 sync 也是一样的大小？
+    // For checksum buffer, this is the real bytes to be materialized to disk.
+    // We normally have `materialized bytes != position in file` in the sense that,
+    // materialized bytes are referring to the real files on disk whereas position
+    // in file are to make the underlying checksum implementation opaque to above layers
+    // so that above buffers can do seek/read without knowing the existence of frame headers
+    off_t getMaterializedBytes() override
     {
         return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
     }
@@ -398,9 +402,6 @@ private:
 
     off_t doSeek(off_t offset, int whence) override
     {
-        // StackTrace stack_trace;
-        // LOG_INFO(Logger::get("RA"), "stack_trace in doseek is {}", stack_trace.toString());
-
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 

@@ -296,7 +296,6 @@ void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
 void TiFlashTestEnv::disableS3Config()
 {
     DB::S3::ClientFactory::instance().disable();
-    // DB::S3::ClientFactory::instance().shutdown();
 }
 
 void TiFlashTestEnv::enableS3Config()

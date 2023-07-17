@@ -35,7 +35,6 @@ public:
     {
         return getPositionInFile();
     }
-
     virtual void sync() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;
