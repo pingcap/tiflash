@@ -212,7 +212,6 @@ try
             EXPECT_EQ(myval2.second, 29);
         }
     }
-
 }
 CATCH
 
