@@ -36,8 +36,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // black_hole is used to consume data manually.
     // we use SCOPE_EXIT to ensure the release of memory area.
-    auto * black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
-    SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
+    auto * black_hole = reinterpret_cast<char *>(::operator new(DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    SCOPE_EXIT({ ::operator delete(black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
@@ -86,7 +86,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         file.list(sub);
         for (auto & i : sub)
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || endsWith(i, ".merged") || i == "pack" || i == "meta")
             {
                 auto full_path = fmt::format("{}/{}", prefix, i);
                 LOG_INFO(logger, "checking full_path is {}: ", full_path);
