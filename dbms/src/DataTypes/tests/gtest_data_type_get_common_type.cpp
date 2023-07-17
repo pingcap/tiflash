@@ -235,9 +235,16 @@ try
     // float64 -> float32 is lossy
     ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("Float64"), typeFromString("Float32")));
 
+    // enlarge fsp for MyDateTime is supported
+    ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("MyDateTime(3)"), typeFromString("MyDateTime(6)")));
+    // deduce fsp for MyDateTime is not supported
+    ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("MyDateTime(3)"), typeFromString("MyDateTime(0)")));
+
     // not support datetime <-> date
     ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("DateTime"), typeFromString("Date")));
     ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("Date"), typeFromString("DateTime")));
+    ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("MyDate"), typeFromString("MyDateTime(6)")));
+    ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("MyDateTime(3)"), typeFromString("MyDate")));
 
     // strings
     ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("FixedString(16)"), typeFromString("FixedString(100)")));
