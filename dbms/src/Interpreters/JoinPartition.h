@@ -124,7 +124,7 @@ public:
     void addMemoryUsage(size_t delta)
     {
         memory_usage += delta;
-        hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
+        //hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
     }
     void subMemoryUsage(size_t delta)
     {
@@ -132,7 +132,7 @@ public:
             memory_usage -= delta;
         else
             memory_usage = 0;
-        hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
+        //hash_join_spill_context->updatePartitionRevocableMemory(memory_usage, partition_index);
     }
     bool isSpill() const { return hash_join_spill_context->isPartitionSpilled(partition_index); }
     JoinMapMethod getJoinMapMethod() const { return join_map_method; }

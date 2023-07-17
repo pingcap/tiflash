@@ -40,6 +40,11 @@ bool SortSpillContext::updateRevocableMemory(Int64 new_value)
     if (!in_spillable_stage)
         return false;
     revocable_memory = new_value;
-    return enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold);
+    if (enable_spill && operator_spill_threshold > 0 && revocable_memory > static_cast<Int64>(operator_spill_threshold))
+    {
+        revocable_memory = 0;
+        return true;
+    }
+    return false;
 }
 } // namespace DB

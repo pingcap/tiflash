@@ -27,11 +27,11 @@ AggSpillContext::AggSpillContext(size_t concurrency, const SpillConfig & spill_c
         memory = 0;
 }
 
-void AggSpillContext::buildSpiller(size_t partition_num, const Block & input_schema)
+void AggSpillContext::buildSpiller(const Block & input_schema)
 {
     /// for aggregation, the input block is sorted by bucket number
     /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-    spiller = std::make_unique<Spiller>(spill_config, true, partition_num, input_schema, log);
+    spiller = std::make_unique<Spiller>(spill_config, true, 1, input_schema, log);
 }
 
 void AggSpillContext::markSpill()
@@ -48,7 +48,12 @@ bool AggSpillContext::updatePerThreadRevocableMemory(Int64 new_value, size_t thr
     if (!in_spillable_stage)
         return false;
     per_thread_revocable_memories[thread_num] = new_value;
-    return enable_spill && per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold);
+    if (enable_spill && per_thread_spill_threshold > 0 && new_value > static_cast<Int64>(per_thread_spill_threshold))
+    {
+        per_thread_revocable_memories[thread_num] = 0;
+        return true;
+    }
+    return false;
 }
 
 Int64 AggSpillContext::getTotalRevocableMemoryImpl()

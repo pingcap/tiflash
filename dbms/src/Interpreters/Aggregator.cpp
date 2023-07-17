@@ -291,7 +291,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id, size_t con
         {
             /// for aggregation, the input block is sorted by bucket number
             /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-            agg_spill_context->buildSpiller(1, header);
+            agg_spill_context->buildSpiller(header);
         }
         else
         {

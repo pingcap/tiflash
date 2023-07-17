@@ -65,11 +65,18 @@ void HashJoinSpillContext::markPartitionSpill(size_t partition_index)
     (*partition_spill_status)[partition_index] = SpillStatus::SPILL;
 }
 
-bool HashJoinSpillContext::updatePartitionRevocableMemory(Int64 new_value, size_t partition_num)
+bool HashJoinSpillContext::updatePartitionRevocableMemory(bool force_spill, size_t partition_id, Int64 new_value)
 {
-    if (!in_spillable_stage)
+    (*partition_revocable_memories)[partition_id] = new_value;
+    /// this function only trigger spill if current partition is already chosen to spill
+    /// the new partition to spill is chosen in getPartitionsToSpill
+    if ((*partition_spill_status)[partition_id] == SpillStatus::NOT_SPILL)
         return false;
-    (*partition_revocable_memories)[partition_num] = new_value;
+    if (force_spill || (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller))
+    {
+        (*partition_revocable_memories)[partition_id] = 0;
+        return true;
+    }
     return false;
 }
 
@@ -82,9 +89,14 @@ SpillConfig HashJoinSpillContext::createProbeSpillConfig(const String & spill_id
     return SpillConfig(probe_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
 }
 
-bool HashJoinSpillContext::needSpillCurrentData(size_t partition_id) const
+bool HashJoinSpillContext::needSpillCurrentData(bool force_spill, size_t partition_id) const
 {
-    return (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller);
+    if ((*partition_spill_status)[partition_id] != SpillStatus::NOT_SPILL && (force_spill || (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller)))
+    {
+        (*partition_revocable_memories)[partition_id] = 0;
+        return true;
+    }
+    return false;
 }
 
 std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
@@ -111,6 +123,7 @@ std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
         return ret;
     }
     ret.push_back(target_partition_index);
+    (*partition_revocable_memories)[target_partition_index] = 0;
     // todo return more partitions so more memory can be released
     return ret;
 }
