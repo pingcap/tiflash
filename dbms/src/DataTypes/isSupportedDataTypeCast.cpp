@@ -105,7 +105,6 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
         return from_sz <= to_sz;
     }
 
-    /// For other cases of Date and DateTime, not supported
     if (from->getTypeId() == TypeIndex::MyDateTime && to->getTypeId() == TypeIndex::MyDateTime)
     {
         const auto * const from_mydatetime = checkAndGetDataType<DataTypeMyDateTime>(from.get());
@@ -114,6 +113,7 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
         // Narrowing down the `fsp` is a lossy change, TiDB will add a temporary column and reorganize the column data as other lossy type change.
         return (from_mydatetime->getFraction() < to_mydatetime->getFraction());
     }
+    /// For other cases of Date and DateTime, not supported
     if (from->isDateOrDateTime() || to->isDateOrDateTime())
     {
         return false;
