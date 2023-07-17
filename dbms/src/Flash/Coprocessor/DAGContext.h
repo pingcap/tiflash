@@ -52,12 +52,12 @@ using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
 class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
+struct JoinProfileInfo;
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
-    JoinPtr join_ptr;
+    JoinProfileInfoPtr join_profile_info;
     BlockInputStreams join_build_streams;
     OperatorProfileInfos join_build_profile_infos;
 };
