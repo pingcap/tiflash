@@ -235,7 +235,9 @@ void Event::switchStatus(EventStatus from, EventStatus to)
         magic_enum::enum_name(to),
         magic_enum::enum_name(status.load()));
 
+#ifndef NDEBUG
     LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
+#endif // !NDEBUG
 }
 
 void Event::assertStatus(EventStatus expect) const
