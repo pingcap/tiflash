@@ -297,8 +297,6 @@ public:
     const String flag_mapped_entry_helper_name;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
-    //SpillerPtr build_spiller;
-    //SpillerPtr probe_spiller;
     HashJoinSpillContextPtr hash_join_spill_context;
 
 private:
@@ -352,7 +350,6 @@ private:
     std::list<size_t> spilled_partition_indexes;
 
     Int64 join_restore_concurrency;
-    bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
     std::vector<RestoreInfo> restore_infos;

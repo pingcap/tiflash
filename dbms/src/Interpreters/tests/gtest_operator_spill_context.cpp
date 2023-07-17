@@ -139,8 +139,8 @@ try
 {
     auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
     spill_context->init(2);
-    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(600, 0) == false);
-    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(800, 1) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(false, 0, 600) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(false, 1, 800) == false);
     auto spill_partitions = spill_context->getPartitionsToSpill();
     ASSERT_TRUE(spill_partitions.size() == 1);
     ASSERT_TRUE(spill_partitions[0] == 1);
@@ -152,8 +152,8 @@ try
 {
     auto spill_context = std::make_shared<HashJoinSpillContext>(*spill_config_ptr, *spill_config_ptr, 1000, logger);
     spill_context->init(2);
-    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(600, 0) == false);
-    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(800, 1) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(false, 0, 600) == false);
+    ASSERT_TRUE(spill_context->updatePartitionRevocableMemory(false, 1, 800) == false);
     spill_context->finishSpillableStage();
     ASSERT_TRUE(spill_context->getTotalRevocableMemory() == 0);
     auto spill_partitions = spill_context->getPartitionsToSpill();
