@@ -65,7 +65,7 @@ public:
 
     void addChild(const PipelinePtr & child);
 
-    String toTreeString() const;
+    const String & toTreeString() const;
 
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
