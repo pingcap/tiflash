@@ -57,8 +57,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         switch (status)
         {
         case ProbeStatus::PROBE:
-            block = join->joinBlock(probe_process_info);
-            if unlikely (!block)
+            if unlikely (probe_process_info.all_rows_joined_finish)
             {
                 join->finishOneProbe();
                 status = scan_hash_map_after_probe_stream
@@ -66,6 +65,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     : ProbeStatus::FINISHED;
                 break;
             }
+            block = join->joinBlock(probe_process_info);
             joined_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
@@ -100,6 +100,7 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
     {
         join->checkTypes(block);
         probe_process_info.resetBlock(std::move(block), 0);
+        assert(!probe_process_info.all_rows_joined_finish);
     }
 
     return onOutput(block);
