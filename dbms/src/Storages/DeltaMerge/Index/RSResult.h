@@ -35,6 +35,7 @@ enum class RSResult : UInt8
     None = 2, // Empty
     All = 3, // Full
 };
+using RSResults = std::vector<RSResult>;
 
 static constexpr RSResult Unknown = RSResult::Unknown;
 static constexpr RSResult Some = RSResult::Some;

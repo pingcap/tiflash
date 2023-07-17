@@ -1503,7 +1503,7 @@ try
     // make a euqal filter, check equal with 1
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
-    ASSERT_EQ(filter->roughCheck(0, param), RSResult::Some);
+    ASSERT_EQ(filter->roughCheck(0, 1, param), RSResult::All);
 }
 CATCH
 

@@ -16,10 +16,9 @@
 
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 class In : public RSOperator
 {
     Attr attr;
@@ -48,25 +47,23 @@ public:
         return s + "]}";
     };
 
-
-    RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
+    RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
         // If values is empty (for example where a in ()), all packs will not match.
         // So return none directly.
         if (values.empty())
-        {
-            return RSResult::None;
-        }
-        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
+            return RSResults(pack_count, RSResult::None);
+        RSResults results(pack_count, RSResult::Some);
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
         // TODO optimize for IN
-        RSResult res = rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
+        results = rsindex.minmax->checkEqual(start_pack, pack_count, values[0], rsindex.type);
         for (size_t i = 1; i < values.size(); ++i)
-            res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
-        return res;
+        {
+            RSResults tmp_results = rsindex.minmax->checkEqual(start_pack, pack_count, values[i], rsindex.type);
+            std::transform(results.begin(), results.end(), tmp_results.begin(), results.begin(), [](RSResult a, RSResult b) { return a || b; });
+        }
+        return results;
     }
 };
 
-
-} // namespace DM
-
-} // namespace DB
+} // namespace DB::DM
