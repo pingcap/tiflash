@@ -247,16 +247,12 @@ PipelineEvents Pipeline::toSelfEvents(PipelineExecutorContext & exec_context, Co
         auto fine_grained_exec_group = buildExecGroup(exec_context, context, concurrency);
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(exec_context, log->identifier(), std::move(pipeline_exec)));
-#ifndef NDEBUG
         LOG_DEBUG(log, "Execute in fine grained mode and generate {} fine grained pipeline event", self_events.size());
-#endif // !NDEBUG
     }
     else
     {
         self_events.push_back(std::make_shared<PlainPipelineEvent>(exec_context, log->identifier(), context, shared_from_this(), concurrency));
-#ifndef NDEBUG
         LOG_DEBUG(log, "Execute in non fine grained mode and generate one plain pipeline event");
-#endif // !NDEBUG
     }
     return {std::move(self_events), isFineGrainedMode()};
 }
