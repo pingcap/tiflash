@@ -27,8 +27,6 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Functions/FunctionHelpers.h>
 
-#include <magic_enum.hpp>
-
 namespace DB
 {
 bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
@@ -107,7 +105,7 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
         return from_sz <= to_sz;
     }
 
-    /// For Date and DateTime, not supported
+    /// For other cases of Date and DateTime, not supported
     if (from->getTypeId() == TypeIndex::MyDateTime && to->getTypeId() == TypeIndex::MyDateTime)
     {
         const auto * const from_mydatetime = checkAndGetDataType<DataTypeMyDateTime>(from.get());
