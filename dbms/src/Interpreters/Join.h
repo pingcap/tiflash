@@ -56,11 +56,11 @@ struct RestoreInfo
     BlockInputStreamPtr probe_stream;
 
     RestoreInfo(
-      const JoinPtr & join_, 
-      size_t stream_index_, 
-      BlockInputStreamPtr && scan_hash_map_stream_, 
-      BlockInputStreamPtr && build_stream_, 
-      BlockInputStreamPtr && probe_stream_)
+        const JoinPtr & join_,
+        size_t stream_index_,
+        BlockInputStreamPtr && scan_hash_map_stream_,
+        BlockInputStreamPtr && build_stream_,
+        BlockInputStreamPtr && probe_stream_)
         : join(join_)
         , stream_index(stream_index_)
         , scan_hash_map_stream(std::move(scan_hash_map_stream_))
