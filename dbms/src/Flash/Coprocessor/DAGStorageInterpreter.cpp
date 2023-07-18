@@ -1218,7 +1218,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     }
 
     /// Return: [storage, table_structure_lock]
-    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder> {
+    auto get_and_lock_storage_impl = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto table_store = tmt.getStorages().get(keyspace_id, table_id);
@@ -1267,7 +1267,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         std::vector<TableID> need_sync_table_ids;
 
-        auto [logical_table_storage, logical_table_lock] = get_and_lock_storage(schema_synced, logical_table_id);
+        auto [logical_table_storage, logical_table_lock] = get_and_lock_storage_impl(schema_synced, logical_table_id);
         if (logical_table_storage == nullptr)
         {
             need_sync_table_ids.push_back(logical_table_id);
@@ -1289,7 +1289,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         for (auto const physical_table_id : table_scan.getPhysicalTableIDs())
         {
-            auto [physical_table_storage, physical_table_lock] = get_and_lock_storage(schema_synced, physical_table_id);
+            auto [physical_table_storage, physical_table_lock] = get_and_lock_storage_impl(schema_synced, physical_table_id);
             if (physical_table_storage == nullptr)
             {
                 need_sync_table_ids.push_back(physical_table_id);
