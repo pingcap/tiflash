@@ -845,7 +845,7 @@ bool Aggregator::executeOnBlock(
 
     /** Flush data to disk if too much RAM is consumed.
       */
-    if (agg_spill_context->updatePerThreadRevocableMemory(result.revokableBytes(), thread_num))
+    if (agg_spill_context->updatePerThreadRevocableMemory(result.revocableBytes(), thread_num))
     {
         result.tryMarkNeedSpill();
     }

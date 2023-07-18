@@ -347,6 +347,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     initialized = true;
     join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     build_sample_block = sample_block;
+    setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
     if (hash_join_spill_context->isSpillEnabled())
     {
@@ -364,7 +365,6 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     }
     if (hash_join_spill_context->isSpillEnabled())
         hash_join_spill_context->buildBuildSpiller(build_sample_block);
-    setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     setSampleBlock(sample_block);
     build_side_marked_spilled_data.resize(build_concurrency);
 }
@@ -508,7 +508,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                 partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
                 if (hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->revocableBytes()))
                     blocks_to_spill = join_partition->trySpillBuildPartition(partition_lock);
-                else
+                else if (!hash_join_spill_context->isPartitionSpilled(i))
                     stored_block = join_partition->getLastBuildBlock();
                 if (stored_block != nullptr)
                 {
