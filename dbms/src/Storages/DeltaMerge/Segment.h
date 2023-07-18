@@ -666,7 +666,8 @@ public:
                                                    const RowKeyRanges & read_ranges,
                                                    const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
-                                                   size_t expected_block_size);
+                                                   size_t build_bitmap_filter_block_rows,
+                                                   size_t read_data_block_rows);
 
     BlockInputStreamPtr getLateMaterializationStream(BitmapFilterPtr && bitmap_filter,
                                                      const DMContext & dm_context,

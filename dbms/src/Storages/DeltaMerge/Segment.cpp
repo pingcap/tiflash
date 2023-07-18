@@ -724,8 +724,7 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
     case ReadMode::Raw:
         return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, clipped_block_rows);
     case ReadMode::Bitmap:
-        // getBitmapFilterInputStream will read columns by multi-stages, so we clip its block rows inside.
-        return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size, clipped_block_rows);
     default:
         return nullptr;
     }
@@ -2861,7 +2860,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                                                         const RowKeyRanges & read_ranges,
                                                         const PushDownFilterPtr & filter,
                                                         UInt64 max_version,
-                                                        size_t expected_block_size)
+                                                        size_t build_bitmap_filter_block_rows,
+                                                        size_t read_data_block_rows)
 {
     auto real_ranges = shrinkRowKeyRanges(read_ranges);
     if (real_ranges.empty())
@@ -2875,9 +2875,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
-        expected_block_size);
+        build_bitmap_filter_block_rows);
 
-    auto read_data_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
     if (filter && filter->before_where)
     {
         // if has filter conditions pushed down, use late materialization
