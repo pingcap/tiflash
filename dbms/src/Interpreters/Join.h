@@ -279,9 +279,6 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
-
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -454,6 +451,9 @@ private:
 
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
+
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
 
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
