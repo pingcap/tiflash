@@ -2869,20 +2869,13 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
 
-    // buildBitmapFilter will only read handle, version and tag.
-    const ColumnDefines build_bitmap_columns{
-        getExtraHandleColumnDefine(is_common_handle),
-        getVersionColumnDefine(),
-        getTagColumnDefine(),
-    };
-    auto build_bitmap_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, build_bitmap_columns);
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
         real_ranges,
         filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
         max_version,
-        build_bitmap_block_rows);
+        expected_block_size);
 
     auto read_data_block_rows = clipBlockRows(dm_context.db_context, expected_block_size, columns_to_read);
     if (filter && filter->before_where)
