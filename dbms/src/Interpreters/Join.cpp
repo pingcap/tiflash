@@ -1480,6 +1480,7 @@ void Join::finishOneBuild()
     if (active_build_threads == 0)
     {
         workAfterBuildFinish();
+        build_finished = true;
         build_cv.notify_all();
     }
 }
@@ -1598,7 +1599,7 @@ void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     build_cv.wait(lock, [&]() {
-        return active_build_threads == 0 || meet_error || skip_wait;
+        return build_finished || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -1615,6 +1616,7 @@ void Join::finishOneProbe()
     if (active_probe_threads == 0)
     {
         workAfterProbeFinish();
+        probe_finished = true;
         probe_cv.notify_all();
     }
 }
@@ -1623,7 +1625,7 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return active_probe_threads == 0 || meet_error || skip_wait;
+        return probe_finished || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -1632,13 +1634,13 @@ void Join::waitUntilAllProbeFinished() const
 bool Join::isAllProbeFinished() const
 {
     std::lock_guard lock(build_probe_mutex);
-    return active_probe_threads == 0 || meet_error || skip_wait;
+    return probe_finished || meet_error || skip_wait;
 }
 
 
 void Join::finishOneNonJoin(size_t partition_index)
 {
-    if likely (active_build_threads == 0 && active_probe_threads == 0)
+    if likely (build_finished && probe_finished)
     {
         /// only clear hash table if not active build/probe threads
         while (partition_index < build_concurrency)
@@ -1658,7 +1660,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     }
     else
     {
-        if unlikely (active_build_threads != 0)
+        if unlikely (!build_finished)
         {
             /// build is not finished yet, the query must be cancelled, so just return {}
             LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");

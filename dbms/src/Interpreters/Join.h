@@ -315,11 +315,13 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    std::atomic<size_t> active_build_threads;
+    size_t active_build_threads;
+    std::atomic_bool build_finished{false};
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    std::atomic<size_t> active_probe_threads;
+    size_t active_probe_threads;
+    std::atomic_bool probe_finished{false};
 
     bool skip_wait = false;
     bool meet_error = false;
