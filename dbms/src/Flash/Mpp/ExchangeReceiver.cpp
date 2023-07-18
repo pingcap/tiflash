@@ -23,8 +23,6 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelTryWriter.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Interpreters/Settings.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
@@ -67,7 +65,7 @@ using Clock = std::chrono::system_clock;
 using TimePoint = Clock::time_point;
 
 template <typename RPCContext>
-class AsyncRequestHandlerv1 : public UnaryCallback<bool>
+class AsyncRequestHandlerv1 : public GRPCKickTag
 {
 public:
     using Status = typename RPCContext::Status;
@@ -80,8 +78,7 @@ public:
         ReceivedMessageQueue * received_message_queue_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const String & req_id,
-        std::atomic<Int64> * data_size_in_queue)
+        const String & req_id)
         : rpc_context(context)
         , cq(&(GRPCCompletionQueuePool::global_instance->pickQueue()))
         , request(&req)
@@ -89,7 +86,6 @@ public:
         , received_message_queue(received_message_queue_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get(req_id, req_info))
-        , channel_writer(received_message_queue, req_info, log, data_size_in_queue, ReceiverMode::Async)
     {
         packets.resize(batch_packet_count_v1);
         for (auto & packet : packets)
@@ -99,7 +95,7 @@ public:
     }
 
     // execute will be called by RPC framework so it should be as light as possible.
-    void execute(bool & ok) override
+    void execute(bool ok) override
     {
         switch (stage)
         {
@@ -121,7 +117,7 @@ public:
             {
                 stage = AsyncRequestStagev1::WAIT_BATCH_READ;
                 read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
+                reader->read(packets[0], asGRPCKickTag());
             }
             break;
         }
@@ -132,7 +128,7 @@ public:
             if (!ok || read_packet_index == batch_packet_count_v1 || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
-                reader->read(packets[read_packet_index], thisAsUnaryCallback());
+                reader->read(packets[read_packet_index], asGRPCKickTag());
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
             notifyReactor();
@@ -161,12 +157,12 @@ public:
             else if (read_packet_index < batch_packet_count_v1)
             {
                 stage = AsyncRequestStagev1::WAIT_FINISH;
-                reader->finish(finish_status, thisAsUnaryCallback());
+                reader->finish(finish_status, asGRPCKickTag());
             }
             else
             {
                 read_packet_index = 0;
-                reader->read(packets[0], thisAsUnaryCallback());
+                reader->read(packets[0], asGRPCKickTag());
             }
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
@@ -240,7 +236,7 @@ private:
 
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
-        reader = rpc_context->makeAsyncReader(*request, cq, thisAsUnaryCallback());
+        reader = rpc_context->makeAsyncReader(*request, cq, asGRPCKickTag());
     }
 
     bool retryOrDone(String done_msg)
@@ -252,7 +248,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), this);
+            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), asGRPCKickTag());
             return true;
         }
         else
@@ -270,7 +266,7 @@ private:
             for (size_t i = 0; i < read_packet_index; ++i)
             {
                 auto & packet = packets[i];
-                if (!channel_writer.write<false>(request->source_index, packet))
+                if (!received_message_queue->pushPacket<false>(request->source_index, req_info, packet, ReceiverMode::Async))
                 {
                     return {false, "channel write fails"};
                 }
@@ -284,12 +280,6 @@ private:
         {
             return {false, getCurrentExceptionMessage(false)};
         }
-    }
-
-    // in case of potential multiple inheritances.
-    UnaryCallback<bool> * thisAsUnaryCallback()
-    {
-        return static_cast<UnaryCallback<bool> *>(this);
     }
 
     std::shared_ptr<RPCContext> rpc_context;
@@ -311,7 +301,6 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
-    ReceiverChannelWriter channel_writer;
     std::mutex mu;
 };
 
@@ -347,8 +336,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(getMaxBufferSize(source_num, settings.recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
-    , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
-    , received_message_queue(async_wait_rewrite_queue, exc_log, max_buffer_size, enable_fine_grained_shuffle_flag, output_stream_count)
+    , received_message_queue(max_buffer_size, exc_log, &data_size_in_queue, enable_fine_grained_shuffle_flag, output_stream_count)
     , live_local_connections(0)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
@@ -548,11 +536,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     async_handler_ptrs.push_back(
         std::make_unique<AsyncRequestHandler<RPCContext>>(
             &received_message_queue,
-            async_wait_rewrite_queue,
             rpc_context,
             std::move(request),
             exc_log->identifier(),
-            &data_size_in_queue,
             [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
                 this->connectionDone(meet_error, local_err_msg, log);
             }));
@@ -584,7 +570,8 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
                 [this]() {
                     this->addLocalConnectionNum();
                 },
-                ReceiverChannelWriter(&received_message_queue, req_info, local_log, getDataSizeInQueue(), ReceiverMode::Local));
+                req_info,
+                &received_message_queue);
 
             rpc_context->establishMPPConnectionLocalV2(
                 req,
@@ -607,7 +594,6 @@ void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && re
     --connection_uncreated_num;
 }
 
-
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
@@ -626,7 +612,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &received_message_queue, rpc_context, req, exc_log->identifier(), &data_size_in_queue));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &received_message_queue, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -671,7 +657,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&received_message_queue, req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
@@ -692,7 +677,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!channel_writer.write<false>(req.source_index, packet))
+                if (!received_message_queue.pushPacket<false>(req.source_index, req_info, packet, recv_mode))
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
@@ -846,9 +831,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
                 recv_msg->getReqInfo(),
                 recv_msg->getErrorPtr()->msg());
 
-        ExchangeReceiverMetric::subDataSizeMetric(
-            data_size_in_queue,
-            recv_msg->getPacket().ByteSizeLong());
         return toDecodeResult(stream_id, block_queue, header, recv_msg, decoder_ptr);
     }
     case ReceiveStatus::eof:

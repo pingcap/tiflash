@@ -113,9 +113,7 @@ void PipelineExecutor::cancel()
 String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
-    FmtBuffer buffer;
-    root_pipeline->toTreeString(buffer);
-    return buffer.toString();
+    return root_pipeline->toTreeString();
 }
 
 int PipelineExecutor::estimateNewThreadCount()
@@ -139,13 +137,21 @@ RU PipelineExecutor::collectRequestUnit()
 
 Block PipelineExecutor::getSampleBlock() const
 {
+    assert(root_pipeline);
     return root_pipeline->getSampleBlock();
 }
 
 BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
 {
-    // TODO support getRuntimeStatistics
+    assert(root_pipeline);
+    auto final_plan_exec_id = root_pipeline->getFinalPlanExecId();
     BaseRuntimeStatistics runtime_statistics;
+    if (!final_plan_exec_id.empty())
+    {
+        const auto & final_profile_infos = context.getDAGContext()->getOperatorProfileInfosMap()[final_plan_exec_id];
+        for (const auto & profile_info : final_profile_infos)
+            runtime_statistics.append(*profile_info);
+    }
     return runtime_statistics;
 }
 } // namespace DB

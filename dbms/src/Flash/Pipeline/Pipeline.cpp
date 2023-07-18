@@ -150,14 +150,25 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
         " -> ");
 }
 
-void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
+const String & Pipeline::toTreeString() const
+{
+    if (!tree_string.empty())
+        return tree_string;
+
+    FmtBuffer buffer;
+    toTreeStringImpl(buffer, 0);
+    tree_string = buffer.toString();
+    return tree_string;
+}
+
+void Pipeline::toTreeStringImpl(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
     if (!children.empty())
         buffer.append("\n");
     ++level;
     for (const auto & child : children)
-        child->toTreeString(buffer, level);
+        child->toTreeStringImpl(buffer, level);
 }
 
 void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
@@ -165,6 +176,18 @@ void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
     RUNTIME_CHECK(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(result_queue, log, plan_nodes.back());
     addPlanNode(get_result_sink);
+}
+
+String Pipeline::getFinalPlanExecId() const
+{
+    // NOLINTNEXTLINE(modernize-loop-convert)
+    for (auto it = plan_nodes.crbegin(); it != plan_nodes.crend(); ++it)
+    {
+        const auto & plan_node = *it;
+        if (plan_node->isTiDBOperator())
+            return plan_node->execId();
+    }
+    return "";
 }
 
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorContext & exec_context, Context & context, size_t concurrency)
