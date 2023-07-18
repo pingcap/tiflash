@@ -18,7 +18,6 @@
 
 namespace DB
 {
-// TODO support spill.
 HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
@@ -59,7 +58,12 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::PROBE:
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
-                join->finishOneProbe();
+                if (join->finishOneProbe(op_index))
+                {
+                    // TODO support spill.
+                    RUNTIME_CHECK(!join->hasProbeSideMarkedSpillData(op_index));
+                    join->finalizeProbe();
+                }
                 status = scan_hash_map_after_probe_stream
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;

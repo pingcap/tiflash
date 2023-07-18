@@ -227,7 +227,12 @@ bool HashJoinProbeExec::onProbeFinish()
 {
     if (join->isRestoreJoin())
         probe_stream->readSuffix();
-    join->finishOneProbe();
+    if (join->finishOneProbe(stream_index))
+    {
+        if (join->hasProbeSideMarkedSpillData(stream_index))
+            join->flushProbeSideMarkedSpillData(stream_index, /*is_the_last=*/true);
+        join->finalizeProbe();
+    }
     return !need_scan_hash_map_after_probe && !join->isEnableSpill();
 }
 

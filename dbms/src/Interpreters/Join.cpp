@@ -1635,7 +1635,7 @@ void Join::finalizeProfileInfo()
     profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
 }
 
-void Join::workAfterProbeFinish()
+void Join::workAfterProbeFinish(size_t stream_index)
 {
     finalizeProfileInfo();
 
@@ -1643,8 +1643,13 @@ void Join::workAfterProbeFinish()
     {
         // flush cached blocks for spilled partition.
         for (auto spilled_partition_index : spilled_partition_indexes)
-            spillProbeSideBlocks(spilled_partition_index, partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller));
-        probe_spiller->finishSpill();
+            markProbeSideSpillData(
+                spilled_partition_index,
+                partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller),
+                stream_index);
+        // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
+        if (getProbeSideMarkdeSpillData(stream_index).empty())
+            probe_spiller->finishSpill();
     }
 
     // If it is no longer to scan non-matched-data from the hash table, the hash table can be released.
@@ -1662,7 +1667,7 @@ void Join::waitUntilAllBuildFinished() const
         throw Exception(error_message);
 }
 
-void Join::finishOneProbe()
+bool Join::finishOneProbe(size_t stream_index)
 {
     std::unique_lock lock(build_probe_mutex);
     if (active_probe_threads == 1)
@@ -1672,10 +1677,18 @@ void Join::finishOneProbe()
     --active_probe_threads;
     if (active_probe_threads == 0)
     {
-        workAfterProbeFinish();
-        probe_finished = true;
-        probe_cv.notify_all();
+        workAfterProbeFinish(stream_index);
+        return true;
     }
+    return false;
+}
+
+void Join::finalizeProbe()
+{
+    std::unique_lock lock(build_probe_mutex);
+    assert(active_probe_threads == 0);
+    probe_finished = true;
+    probe_cv.notify_all();
 }
 
 void Join::waitUntilAllProbeFinished() const

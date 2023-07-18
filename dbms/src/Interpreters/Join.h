@@ -267,7 +267,9 @@ public:
     void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe();
+    // Return true if it is the last probe thread.
+    bool finishOneProbe(size_t stream_index);
+    void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isAllProbeFinished() const;
 
@@ -488,7 +490,7 @@ private:
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
     void workAfterBuildFinish(size_t stream_index);
-    void workAfterProbeFinish();
+    void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
 

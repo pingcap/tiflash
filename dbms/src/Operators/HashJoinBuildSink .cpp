@@ -17,19 +17,20 @@
 
 namespace DB
 {
-// TODO support spill.
 OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if unlikely (!block)
     {
         if (join_ptr->finishOneBuild(op_index))
         {
+            // TODO support spill.
             RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
             join_ptr->finalizeBuild();
         }
         return OperatorStatus::FINISHED;
     }
     join_ptr->insertFromBlock(block, op_index);
+    // TODO support spill.
     RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
     block.clear();
     return OperatorStatus::NEED_INPUT;
