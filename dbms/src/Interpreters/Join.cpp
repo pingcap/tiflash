@@ -30,7 +30,6 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
-#include <algorithm>
 #include <exception>
 #include <magic_enum.hpp>
 
