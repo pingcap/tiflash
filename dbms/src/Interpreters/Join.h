@@ -455,11 +455,8 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillAllBuildPartitions();
-    void spillAllProbePartitions();
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
-
 
     void spillMostMemoryUsedPartitionIfNeed();
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
@@ -470,6 +467,10 @@ private:
     void generateRuntimeFilterValues(const Block & block);
 
     void finalizeProfileInfo();
+
+    void finalizeNullAwareSemiFamilyBuild();
+
+    void finalizeCrossJoinBuild();
 };
 
 } // namespace DB

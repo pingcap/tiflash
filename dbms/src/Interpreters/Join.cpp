@@ -30,6 +30,7 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include <algorithm>
 #include <exception>
 #include <magic_enum.hpp>
 
@@ -1468,83 +1469,87 @@ void Join::finishOneBuild()
 void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
-    {
-        size_t null_rows_size = 0;
-        for (const auto & partition : partitions)
-        {
-            null_rows_size += partition->getRowsNotInsertedToMap()->total_size;
-        }
-        /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
-        /// Null rows are used for speeding up the check process. If the result of null-aware equal expression is NULL, the
-        /// check process can be finished.
-        /// However, if checking null rows does not get a NULL result, these null rows will be checked again in the process of
-        /// checking all blocks.
-        /// So there is a tradeoff between returning quickly and avoiding waste.
-        ///
-        /// If all rows have null key, test results at the time of writing show that the time consumed by checking null rows is
-        /// several times than that of checking all blocks, and it increases as the number of rows in the right table increases.
-        /// For example, the number of rows in right table is 2k and 20000k in left table, null rows take about 1 time as long
-        /// as all blocks. When the number of rows in right table is 5k, 1.4 times. 10k => 1.7 times. 20k => 1.9 times.
-        ///
-        /// Given that many null rows should be a rare case, let's use 2 times to simplify thinking.
-        /// So if null rows occupy 1/3 of all rows, the time consumed by null rows and all blocks are basically the same.
-        /// I choose 1/3 as the cutoff point. If null rows occupy more than 1/3, we should check all blocks directly.
-        if (unlikely(is_test))
-            null_key_check_all_blocks_directly = false;
-        else
-            null_key_check_all_blocks_directly = static_cast<double>(null_rows_size) > static_cast<double>(total_input_build_rows) / 3.0;
-    }
+        finalizeNullAwareSemiFamilyBuild();
 
     if (isCrossJoin(kind))
-    {
-        original_blocks.clear();
-        for (const auto & block : blocks)
-            original_blocks.push_back(block);
-        right_rows_to_be_added_when_matched_for_cross_join = 0;
-        for (const auto & block : original_blocks)
-            right_rows_to_be_added_when_matched_for_cross_join += block.rows();
-        if (strictness == ASTTableJoin::Strictness::Any)
-        {
-            /// for cross any join, at most 1 row is added
-            right_rows_to_be_added_when_matched_for_cross_join = std::min(right_rows_to_be_added_when_matched_for_cross_join, 1);
-        }
-        else if (blocks.size() > 1 && right_rows_to_be_added_when_matched_for_cross_join <= max_block_size)
-        {
-            /// for cross all join, if total right rows is less than max_block_size, then merge all
-            /// the right blocks into one block
-            blocks.clear();
-            auto merged_block = vstackBlocks(std::move(original_blocks));
-            original_blocks.clear();
-            blocks.push_back(merged_block);
-            original_blocks.push_back(merged_block);
-        }
-        /// since shallow_copy_probe_threshold is at least 1, if strictness is any, it will never use SHALLOW_COPY_RIGHT_BLOCK
-        cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
-            ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
-            : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
-        LOG_DEBUG(log, "Cross join will use {} probe mode", magic_enum::enum_name(cross_probe_mode));
-    }
+        finalizeCrossJoinBuild();
+
+    // set rf is ready
+    finalizeRuntimeFilter();
 
     if (isEnableSpill())
     {
-        if (hasPartitionSpilled())
-        {
-            spillAllBuildPartitions();
-            build_spiller->finishSpill();
-        }
-        for (const auto & partition : partitions)
-        {
-            if (!partition->isSpill() && partition->hasBuildData())
-                has_build_data_in_memory = true;
-        }
+        // flush cached blocks for spilled partition.
+        for (auto spilled_partition_index : spilled_partition_indexes)
+            spillBuildSideBlocks(spilled_partition_index, partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller));
+        build_spiller->finishSpill();
+        has_build_data_in_memory = std::any_of(
+            partitions.cbegin(),
+            partitions.cend(),
+            [](const auto & p) { return !p->isSpill() && p->hasBuildData(); });
     }
     else
     {
         has_build_data_in_memory = !original_blocks.empty();
     }
+}
 
-    // set rf is ready
-    finalizeRuntimeFilter();
+void Join::finalizeNullAwareSemiFamilyBuild()
+{
+    size_t null_rows_size = 0;
+    for (const auto & partition : partitions)
+    {
+        null_rows_size += partition->getRowsNotInsertedToMap()->total_size;
+    }
+    /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
+    /// Null rows are used for speeding up the check process. If the result of null-aware equal expression is NULL, the
+    /// check process can be finished.
+    /// However, if checking null rows does not get a NULL result, these null rows will be checked again in the process of
+    /// checking all blocks.
+    /// So there is a tradeoff between returning quickly and avoiding waste.
+    ///
+    /// If all rows have null key, test results at the time of writing show that the time consumed by checking null rows is
+    /// several times than that of checking all blocks, and it increases as the number of rows in the right table increases.
+    /// For example, the number of rows in right table is 2k and 20000k in left table, null rows take about 1 time as long
+    /// as all blocks. When the number of rows in right table is 5k, 1.4 times. 10k => 1.7 times. 20k => 1.9 times.
+    ///
+    /// Given that many null rows should be a rare case, let's use 2 times to simplify thinking.
+    /// So if null rows occupy 1/3 of all rows, the time consumed by null rows and all blocks are basically the same.
+    /// I choose 1/3 as the cutoff point. If null rows occupy more than 1/3, we should check all blocks directly.
+    if (unlikely(is_test))
+        null_key_check_all_blocks_directly = false;
+    else
+        null_key_check_all_blocks_directly = static_cast<double>(null_rows_size) > static_cast<double>(total_input_build_rows) / 3.0;
+}
+
+void Join::finalizeCrossJoinBuild()
+{
+    original_blocks.clear();
+    for (const auto & block : blocks)
+        original_blocks.push_back(block);
+    right_rows_to_be_added_when_matched_for_cross_join = 0;
+    for (const auto & block : original_blocks)
+        right_rows_to_be_added_when_matched_for_cross_join += block.rows();
+    if (strictness == ASTTableJoin::Strictness::Any)
+    {
+        /// for cross any join, at most 1 row is added
+        right_rows_to_be_added_when_matched_for_cross_join = std::min(right_rows_to_be_added_when_matched_for_cross_join, 1);
+    }
+    else if (blocks.size() > 1 && right_rows_to_be_added_when_matched_for_cross_join <= max_block_size)
+    {
+        /// for cross all join, if total right rows is less than max_block_size, then merge all
+        /// the right blocks into one block
+        blocks.clear();
+        auto merged_block = vstackBlocks(std::move(original_blocks));
+        original_blocks.clear();
+        blocks.push_back(merged_block);
+        original_blocks.push_back(merged_block);
+    }
+    /// since shallow_copy_probe_threshold is at least 1, if strictness is any, it will never use SHALLOW_COPY_RIGHT_BLOCK
+    cross_probe_mode = right_rows_to_be_added_when_matched_for_cross_join > shallow_copy_cross_probe_threshold
+        ? CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK
+        : CrossProbeMode::DEEP_COPY_RIGHT_BLOCK;
+    LOG_DEBUG(log, "Cross join will use {} probe mode", magic_enum::enum_name(cross_probe_mode));
 }
 
 void Join::finalizeProfileInfo()
@@ -1556,19 +1561,19 @@ void Join::finalizeProfileInfo()
 
 void Join::workAfterProbeFinish()
 {
+    finalizeProfileInfo();
+
     if (isEnableSpill())
     {
-        if (hasPartitionSpilled())
-        {
-            spillAllProbePartitions();
-            probe_spiller->finishSpill();
-            if (!needScanHashMapAfterProbe(kind))
-            {
-                releaseAllPartitions();
-            }
-        }
+        // flush cached blocks for spilled partition.
+        for (auto spilled_partition_index : spilled_partition_indexes)
+            spillProbeSideBlocks(spilled_partition_index, partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller));
+        probe_spiller->finishSpill();
     }
-    finalizeProfileInfo();
+
+    // If it is no longer to scan non-matched-data from the hash table, the hash table can be released.
+    if (!needScanHashMapAfterProbe(kind))
+        releaseAllPartitions();
 }
 
 void Join::waitUntilAllBuildFinished() const
@@ -1929,22 +1934,6 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
         {
             partition_blocks_list.emplace_back(i, std::move(partition_blocks[i]));
         }
-    }
-}
-
-void Join::spillAllBuildPartitions()
-{
-    for (size_t i = 0; i < partitions.size(); ++i)
-    {
-        spillBuildSideBlocks(i, partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller));
-    }
-}
-
-void Join::spillAllProbePartitions()
-{
-    for (size_t i = 0; i < partitions.size(); ++i)
-    {
-        spillProbeSideBlocks(i, partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller));
     }
 }
 
