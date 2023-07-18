@@ -34,6 +34,8 @@
 #include <memory>
 #include <shared_mutex>
 
+#include "Interpreters/Users.h"
+
 namespace DB
 {
 struct JoinProfileInfo
@@ -279,6 +281,9 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
+    bool hasBuildSideMarkedSpillData(size_t stream_index) const;
+    void flushBuildSideMarkedSpillData(size_t stream_index);
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -402,6 +407,11 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+    // std::vector<partition_index, Blocks>
+    using MarkdeSpillData = std::vector<std::pair<size_t, Blocks>>;
+    // the index of vector is the stream_index.
+    std::vector<MarkdeSpillData> build_side_marked_spilled_data;
+
 private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
@@ -455,10 +465,12 @@ private:
     void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
     void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
 
+    void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
 
-    void spillMostMemoryUsedPartitionIfNeed();
+    void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
     void workAfterBuildFinish();

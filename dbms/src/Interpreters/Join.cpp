@@ -366,6 +366,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
             build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     }
     setSampleBlock(sample_block);
+    build_side_marked_spilled_data.resize(build_concurrency);
 }
 
 void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
@@ -375,6 +376,23 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
         probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+}
+
+bool Join::hasBuildSideMarkedSpillData(size_t stream_index) const
+{
+    std::shared_lock lock(rwlock);
+    return !build_side_marked_spilled_data.empty() && !build_side_marked_spilled_data[stream_index].empty();
+}
+
+void Join::flushBuildSideMarkedSpillData(size_t stream_index)
+{
+    std::shared_lock lock(rwlock);
+    if (build_side_marked_spilled_data.empty() || build_side_marked_spilled_data[stream_index].empty())
+        return;
+    auto & data = build_side_marked_spilled_data[stream_index];
+    for (auto & elem : data)
+        spillBuildSideBlocks(elem.first, std::move(elem.second));
+    data.clear();
 }
 
 /// the block should be valid.
@@ -460,14 +478,14 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            spillBuildSideBlocks(i, std::move(blocks_to_spill));
+            markBuildSideSpillData(i, std::move(blocks_to_spill), stream_index);
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
         if (restore_round == 2)
             return;
 #endif
-        spillMostMemoryUsedPartitionIfNeed();
+        spillMostMemoryUsedPartitionIfNeed(stream_index);
     }
 }
 
@@ -1773,7 +1791,14 @@ void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
     probe_spiller->spillBlocks(std::move(blocks), part_id);
 }
 
-void Join::spillMostMemoryUsedPartitionIfNeed()
+void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
+{
+    assert(stream_index < build_side_marked_spilled_data.size());
+    if (!blocks.empty())
+        build_side_marked_spilled_data[stream_index].emplace_back(part_id, std::move(blocks));
+}
+
+void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 {
     Int64 target_partition_index = -1;
     size_t max_bytes = 0;
@@ -1820,7 +1845,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
     }
-    spillBuildSideBlocks(target_partition_index, std::move(blocks_to_spill));
+    markBuildSideSpillData(target_partition_index, std::move(blocks_to_spill), stream_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 

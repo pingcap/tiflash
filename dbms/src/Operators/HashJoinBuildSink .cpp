@@ -26,6 +26,7 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
     }
     join_ptr->insertFromBlock(block, op_index);
+    RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
     block.clear();
     return OperatorStatus::NEED_INPUT;
 }

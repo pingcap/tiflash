@@ -28,6 +28,8 @@ Block HashJoinBuildBlockInputStream::readImpl()
             return block;
         }
         join->insertFromBlock(block, stream_index);
+        if (join->hasBuildSideMarkedSpillData(stream_index))
+            join->flushBuildSideMarkedSpillData(stream_index);
         return block;
     }
     catch (...)
