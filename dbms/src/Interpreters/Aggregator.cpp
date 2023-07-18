@@ -899,8 +899,7 @@ void Aggregator::spill(AggregatedDataVariants & data_variants, size_t thread_num
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
     data_variants.without_key = nullptr;
-    auto size_bytes = data_variants.bytesCount();
-    agg_spill_context->updatePerThreadRevocableMemory(data_variants.revokableBytes(), thread_num);
+    agg_spill_context->updatePerThreadRevocableMemory(data_variants.revocableBytes(), thread_num);
 }
 
 template <typename Method>

@@ -724,7 +724,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         }
     }
 
-    size_t revokableBytes() const
+    size_t revocableBytes() const
     {
         if (empty())
             return 0;

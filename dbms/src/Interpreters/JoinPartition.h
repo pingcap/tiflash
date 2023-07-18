@@ -142,7 +142,7 @@ public:
         return pool;
     }
     size_t getMemoryUsage() const { return memory_usage; }
-    size_t revokableBytes() const
+    size_t revocableBytes() const
     {
         if (build_partition.rows > 0 || probe_partition.rows > 0)
             return memory_usage;
