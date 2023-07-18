@@ -24,7 +24,12 @@ Block HashJoinBuildBlockInputStream::readImpl()
         Block block = children.back()->read();
         if (!block)
         {
-            join->finishOneBuild();
+            if (join->finishOneBuild(stream_index))
+            {
+                if (join->hasBuildSideMarkedSpillData(stream_index))
+                    join->flushBuildSideMarkedSpillData(stream_index, /*is_the_last=*/true);
+                join->finalizeBuild();
+            }
             return block;
         }
         join->insertFromBlock(block, stream_index);

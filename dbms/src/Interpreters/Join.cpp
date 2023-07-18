@@ -384,15 +384,16 @@ bool Join::hasBuildSideMarkedSpillData(size_t stream_index) const
     return !build_side_marked_spilled_data.empty() && !build_side_marked_spilled_data[stream_index].empty();
 }
 
-void Join::flushBuildSideMarkedSpillData(size_t stream_index)
+void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
 {
     std::shared_lock lock(rwlock);
-    if (build_side_marked_spilled_data.empty() || build_side_marked_spilled_data[stream_index].empty())
-        return;
+    assert(!build_side_marked_spilled_data.empty() && !build_side_marked_spilled_data[stream_index].empty());
     auto & data = build_side_marked_spilled_data[stream_index];
     for (auto & elem : data)
         spillBuildSideBlocks(elem.first, std::move(elem.second));
     data.clear();
+    if (is_the_last)
+        build_spiller->finishSpill();
 }
 
 /// the block should be valid.
@@ -1469,7 +1470,7 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
     }
 }
 
-void Join::finishOneBuild()
+bool Join::finishOneBuild(size_t stream_index)
 {
     std::unique_lock lock(build_probe_mutex);
     if (active_build_threads == 1)
@@ -1479,13 +1480,21 @@ void Join::finishOneBuild()
     --active_build_threads;
     if (active_build_threads == 0)
     {
-        workAfterBuildFinish();
-        build_finished = true;
-        build_cv.notify_all();
+        workAfterBuildFinish(stream_index);
+        return true;
     }
+    return false;
 }
 
-void Join::workAfterBuildFinish()
+void Join::finalizeBuild()
+{
+    std::unique_lock lock(build_probe_mutex);
+    assert(active_build_threads == 0);
+    build_finished = true;
+    build_cv.notify_all();
+}
+
+void Join::workAfterBuildFinish(size_t stream_index)
 {
     if (isNullAwareSemiFamily(kind))
         finalizeNullAwareSemiFamilyBuild();
@@ -1500,8 +1509,13 @@ void Join::workAfterBuildFinish()
     {
         // flush cached blocks for spilled partition.
         for (auto spilled_partition_index : spilled_partition_indexes)
-            spillBuildSideBlocks(spilled_partition_index, partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller));
-        build_spiller->finishSpill();
+            markBuildSideSpillData(
+                spilled_partition_index,
+                partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller),
+                stream_index);
+        // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
+        if (build_side_marked_spilled_data.empty() && build_side_marked_spilled_data[stream_index].empty())
+            build_spiller->finishSpill();
         has_build_data_in_memory = std::any_of(
             partitions.cbegin(),
             partitions.cend(),

@@ -262,7 +262,9 @@ public:
         }
     }
 
-    void finishOneBuild();
+    // Return true if it is the last build thread.
+    bool finishOneBuild(size_t stream_index);
+    void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
     void finishOneProbe();
@@ -282,7 +284,7 @@ public:
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
-    void flushBuildSideMarkedSpillData(size_t stream_index);
+    void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -475,7 +477,7 @@ private:
     void spillMostMemoryUsedPartitionIfNeed(size_t stream_index);
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
-    void workAfterBuildFinish();
+    void workAfterBuildFinish(size_t stream_index);
     void workAfterProbeFinish();
 
     void generateRuntimeFilterValues(const Block & block);

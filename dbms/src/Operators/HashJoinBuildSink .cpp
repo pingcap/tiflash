@@ -22,7 +22,11 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
 {
     if unlikely (!block)
     {
-        join_ptr->finishOneBuild();
+        if (join_ptr->finishOneBuild(op_index))
+        {
+            RUNTIME_CHECK(!join_ptr->hasBuildSideMarkedSpillData(op_index));
+            join_ptr->finalizeBuild();
+        }
         return OperatorStatus::FINISHED;
     }
     join_ptr->insertFromBlock(block, op_index);
