@@ -1282,7 +1282,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         {
             if (need_sync_table_ids.empty())
                 return {table_storages, table_locks, need_sync_table_ids};
-            // If we need to syncSchemas, we cannot hold the lock of tables. 
+            // If we need to syncSchemas, we cannot hold the lock of tables.
             // Otherwise, may lead to deadlock
             return {{}, {}, need_sync_table_ids};
         }
@@ -1303,7 +1303,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         if (need_sync_table_ids.empty())
             return {table_storages, table_locks, need_sync_table_ids};
-        // If we need to syncSchemas, we cannot hold the lock of tables. 
+        // If we need to syncSchemas, we cannot hold the lock of tables.
         // Otherwise, may lead to deadlock
         return {{}, {}, need_sync_table_ids};
     };
