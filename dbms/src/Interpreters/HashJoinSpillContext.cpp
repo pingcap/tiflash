@@ -89,16 +89,6 @@ SpillConfig HashJoinSpillContext::createProbeSpillConfig(const String & spill_id
     return SpillConfig(probe_spill_config.spill_dir, spill_id, build_spill_config.max_cached_data_bytes_in_spiller, build_spill_config.max_spilled_rows_per_file, build_spill_config.max_spilled_bytes_per_file, build_spill_config.file_provider);
 }
 
-bool HashJoinSpillContext::needSpillCurrentData(bool force_spill, size_t partition_id) const
-{
-    if ((*partition_spill_status)[partition_id] != SpillStatus::NOT_SPILL && (force_spill || (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller)))
-    {
-        (*partition_revocable_memories)[partition_id] = 0;
-        return true;
-    }
-    return false;
-}
-
 std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
 {
     std::vector<size_t> ret;

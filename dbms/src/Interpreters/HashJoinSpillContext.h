@@ -42,11 +42,10 @@ public:
     bool isPartitionSpilled(size_t partition_index) const { return (*partition_spill_status)[partition_index] != SpillStatus::NOT_SPILL; }
     void markSpill();
     void markPartitionSpill(size_t partition_index);
-    bool updatePartitionRevocableMemory(bool force_spill, size_t partition_num, Int64 new_value);
+    bool updatePartitionRevocableMemory(bool force_spill, size_t partition_id, Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override;
     SpillConfig createBuildSpillConfig(const String & spill_id) const;
     SpillConfig createProbeSpillConfig(const String & spill_id) const;
-    bool needSpillCurrentData(bool false_spill, size_t partition_id) const;
     std::vector<size_t> getPartitionsToSpill();
 };
 
