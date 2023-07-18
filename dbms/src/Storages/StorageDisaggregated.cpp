@@ -19,9 +19,11 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
+#include <Operators/ExpressionTransformOp.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 
@@ -44,7 +46,7 @@ StorageDisaggregated::StorageDisaggregated(
 
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
-    const SelectQueryInfo & query_info,
+    const SelectQueryInfo & /*query_info*/,
     const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
@@ -53,26 +55,27 @@ BlockInputStreams StorageDisaggregated::read(
     /// S3 config is enabled on the TiFlash compute node, let's read data from S3.
     bool remote_data_read = S3::ClientFactory::instance().isEnabled();
     if (remote_data_read)
-        return readThroughS3(db_context, query_info, num_streams);
+        return readThroughS3(db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
     return readThroughExchange(num_streams);
 }
 
 void StorageDisaggregated::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Names & /*column_names*/,
     const SelectQueryInfo & /*query_info*/,
-    const Context & /*context*/,
+    const Context & db_context,
     size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    // TODO support S3
-    RUNTIME_CHECK(!S3::ClientFactory::instance().isEnabled());
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readThroughS3(exec_context, group_builder, db_context, num_streams);
 
     /// Fetch all data from write node through MPP exchange sender/receiver
-    readThroughExchange(exec_status, group_builder, num_streams);
+    readThroughExchange(exec_context, group_builder, num_streams);
 }
 
 std::vector<RequestAndRegionIDs> StorageDisaggregated::buildDispatchRequests()
@@ -108,25 +111,25 @@ BlockInputStreams StorageDisaggregated::readThroughExchange(unsigned num_streams
 }
 
 void StorageDisaggregated::readThroughExchange(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     unsigned num_streams)
 {
     std::vector<RequestAndRegionIDs> dispatch_reqs = buildDispatchRequests();
 
-    buildReceiverSources(exec_status, group_builder, dispatch_reqs, num_streams);
+    buildReceiverSources(exec_context, group_builder, dispatch_reqs, num_streams);
 
     NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
     assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // TODO: push down filter conditions to write node
-    filterConditions(exec_status, group_builder, *analyzer);
+    filterConditions(exec_context, group_builder, *analyzer);
 }
 
 std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildRemoteTableRanges()
 {
-    std::unordered_map<Int64, RegionRetryList> all_remote_regions;
+    std::unordered_map<TableID, RegionRetryList> all_remote_regions;
     for (auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & table_regions_info = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id);
@@ -152,7 +155,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     const std::vector<RemoteTableRange> & remote_table_ranges,
     const pingcap::kv::LabelFilter & label_filter)
 {
-    std::vector<Int64> physical_table_ids;
+    std::vector<TableID> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
     std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
     ranges_for_each_physical_table.reserve(remote_table_ranges.size());
@@ -187,10 +190,11 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
-    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
-    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
+    dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+    dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+    dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+    dispatch_req_meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+    dispatch_req_meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
     dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
 
@@ -307,9 +311,7 @@ void StorageDisaggregated::buildExchangeReceiver(const std::vector<RequestAndReg
         log->identifier(),
         executor_id,
         /*fine_grained_shuffle_stream_count=*/0,
-        context.getSettingsRef().local_tunnel_version,
-        context.getSettings().async_recv_version,
-        context.getSettings().recv_queue_size,
+        context.getSettingsRef(),
         dispatch_reqs);
 
     // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
@@ -344,7 +346,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
 }
 
 void StorageDisaggregated::buildReceiverSources(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const std::vector<RequestAndRegionIDs> & dispatch_reqs,
     unsigned num_streams)
@@ -355,11 +357,14 @@ void StorageDisaggregated::buildReceiverSources(
     {
         group_builder.addConcurrency(
             std::make_unique<ExchangeReceiverSourceOp>(
-                exec_status,
+                exec_context,
                 log->identifier(),
                 exchange_receiver,
                 /*stream_id=*/0));
     }
+    const String & executor_id = table_scan.getTableScanExecutorID();
+    context.getDAGContext()->addInboundIOProfileInfos(executor_id, group_builder.getCurIOProfileInfos());
+    context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
 void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
@@ -375,17 +380,18 @@ void StorageDisaggregated::filterConditions(DAGExpressionAnalyzer & analyzer, DA
 }
 
 void StorageDisaggregated::filterConditions(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     DAGExpressionAnalyzer & analyzer)
 {
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(exec_status, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        ::DB::executePushedDownFilter(exec_context, group_builder, /*remote_read_sources_start_index=*/group_builder.concurrency(), filter_conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos());
     }
 }
 
-void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(DAGExpressionAnalyzer & analyzer)
 {
     // If the column is not in the columns of pushed down filter, append a cast to the column.
     std::vector<UInt8> may_need_add_cast_column;
@@ -404,6 +410,18 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         chain.finalize();
         chain.clear();
+        return extra_cast;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+{
+    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    {
         for (auto & stream : pipeline.streams)
         {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
@@ -411,4 +429,15 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
         }
     }
 }
+
+void StorageDisaggregated::extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer)
+{
+    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), extra_cast));
+        });
+    }
+}
+
 } // namespace DB

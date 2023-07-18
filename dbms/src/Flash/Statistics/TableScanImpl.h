@@ -56,5 +56,8 @@ private:
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
+
+private:
+    void updateTableScanDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos);
 };
 } // namespace DB

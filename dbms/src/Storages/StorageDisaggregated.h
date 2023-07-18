@@ -20,7 +20,9 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -76,7 +78,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorStatus & exec_status,
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,
@@ -95,48 +97,79 @@ private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readThroughS3(
         const Context & db_context,
-        const SelectQueryInfo & query_info,
         unsigned num_streams);
-    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
-    BlockInputStreams readThroughExchange(unsigned num_streams);
-    void readThroughExchange(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
-    DM::RNRemoteReadTaskPtr buildDisaggTasks(
+    void readThroughS3(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
-        const DM::ScanContextPtr & scan_context,
-        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
-    void buildDisaggTask(
+        unsigned num_streams);
+
+    DM::Remote::RNReadTaskPtr buildReadTaskWithBackoff(
+        const Context & db_context);
+
+    DM::Remote::RNReadTaskPtr buildReadTask(
+        const Context & db_context,
+        const DM::ScanContextPtr & scan_context);
+
+    void buildReadTaskForWriteNode(
         const Context & db_context,
         const DM::ScanContextPtr & scan_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-        std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
-        std::mutex & store_read_tasks_lock);
-    std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    buildDisaggTaskForNode(
+        std::mutex & output_lock,
+        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+
+    void buildReadTaskForWriteNodeTable(
+        const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
+        const DM::DisaggTaskId & snapshot_id,
+        StoreID store_id,
+        const String & store_address,
+        const String & serialized_physical_table,
+        std::mutex & output_lock,
+        std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks);
+
+    std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);
+    DM::Remote::RNWorkersPtr buildRNWorkers(
+        const Context & db_context,
+        const DM::Remote::RNReadTaskPtr & read_task,
+        const DM::ColumnDefinesPtr & column_defines,
+        size_t num_streams);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
-        const DM::RNRemoteReadTaskPtr & remote_read_tasks,
-        const SelectQueryInfo & query_info,
+        const DM::Remote::RNReadTaskPtr & read_task,
         size_t num_streams,
         DAGPipeline & pipeline);
+    void buildRemoteSegmentSourceOps(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        const DM::Remote::RNReadTaskPtr & read_task,
+        size_t num_streams);
 
 private:
-    using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
+    using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
         const std::vector<RemoteTableRange> & remote_table_ranges,
         const pingcap::kv::LabelFilter & label_filter);
+
+    /// helper functions for building the task fetch all data from write node through MPP exchange sender/receiver
+    BlockInputStreams readThroughExchange(unsigned num_streams);
+    void readThroughExchange(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, unsigned num_streams);
     std::vector<RequestAndRegionIDs> buildDispatchRequests();
     void buildExchangeReceiver(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
-    void buildReceiverSources(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
+    void buildReceiverSources(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams);
     void filterConditions(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void filterConditions(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    void filterConditions(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
+    ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
     void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void extraCast(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder, DAGExpressionAnalyzer & analyzer);
     tipb::Executor buildTableScanTiPB();
 
     Context & context;

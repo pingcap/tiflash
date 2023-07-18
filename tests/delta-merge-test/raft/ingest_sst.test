@@ -16,18 +16,19 @@
 => DBGInvoke __clean_up_region()
 
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()
+
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
 => DBGInvoke __region_snapshot(4, 0, 1000, default, test)
 => DBGInvoke __region_ingest_sst(default, test, 4, 3, 6)
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
 │    -5 │           5 │
 └───────┴─────────────┘
 => DBGInvoke __region_ingest_sst(default, test, 4, 7, 9)
-=> select * from default.test
+=> DBGInvoke query_mapped('select * from \$d.\$t', default, test)
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
@@ -36,4 +37,4 @@
 │    -8 │           8 │
 └───────┴─────────────┘
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __refresh_schemas()

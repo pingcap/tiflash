@@ -113,6 +113,7 @@ struct QueryFragment
             {
                 MPPInfo mpp_info(
                     properties.start_ts,
+                    properties.gather_id,
                     properties.query_ts,
                     properties.server_id,
                     properties.local_query_id,
@@ -125,7 +126,7 @@ struct QueryFragment
         }
         else
         {
-            MPPInfo mpp_info(properties.start_ts, properties.query_ts, properties.server_id, properties.local_query_id, /*partition_id*/ -1, /*task_id*/ -1, /*sender_target_task_ids*/ {}, /*receiver_source_task_ids_map*/ {});
+            MPPInfo mpp_info(properties.start_ts, properties.gather_id, properties.query_ts, properties.server_id, properties.local_query_id, /*partition_id*/ -1, /*task_id*/ -1, /*sender_target_task_ids*/ {}, /*receiver_source_task_ids_map*/ {});
             ret.push_back(toQueryTask(properties, mpp_info, context));
         }
         return ret;

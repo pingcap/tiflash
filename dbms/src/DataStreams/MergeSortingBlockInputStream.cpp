@@ -45,7 +45,10 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     header_without_constants = header;
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, description);
-    spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+    if (max_bytes_before_external_sort > 0)
+    {
+        spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
+    }
 }
 
 
@@ -79,7 +82,7 @@ Block MergeSortingBlockInputStream::readImpl()
               */
             if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
             {
-                if (!spiller->hasSpilledData())
+                if (!hasSpilledData())
                 {
                     LOG_INFO(log, "Begin spill in sort");
                 }
@@ -95,10 +98,10 @@ Block MergeSortingBlockInputStream::readImpl()
             }
         }
 
-        if (isCancelledOrThrowIfKilled() || (blocks.empty() && !spiller->hasSpilledData()))
+        if (isCancelledOrThrowIfKilled() || (blocks.empty() && !hasSpilledData()))
             return Block();
 
-        if (!spiller->hasSpilledData())
+        if (!hasSpilledData())
         {
             impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log->identifier(), max_merged_block_size, limit);
         }

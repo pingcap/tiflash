@@ -16,6 +16,8 @@
 #include <Interpreters/WindowDescription.h>
 
 #include <magic_enum.hpp>
+#include <tuple>
+#include <type_traits>
 
 namespace DB
 {
@@ -83,7 +85,6 @@ void WindowTransformAction::initialWorkspaces()
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-    only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
 bool WindowBlockInputStream::returnIfCancelledOrKilled()
@@ -272,12 +273,121 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
+RowNumber WindowTransformAction::stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame)
+{
+    auto step_num = frame.begin_offset;
+    auto dist = distance(current_row, partition_start);
+
+    if (dist <= step_num)
+        return partition_start;
+
+    RowNumber result_row = current_row;
+
+    // The step happens only in a block
+    if (result_row.row >= step_num)
+    {
+        result_row.row -= step_num;
+        return result_row;
+    }
+
+    // The step happens between blocks
+    step_num -= (result_row.row + 1);
+    --result_row.block;
+    result_row.row = blockAt(result_row).rows - 1;
+    while (step_num > 0)
+    {
+        auto & block = blockAt(result_row);
+        if (block.rows > step_num)
+        {
+            result_row.row = block.rows - step_num - 1; // index, so we need to -1
+            break;
+        }
+        step_num -= block.rows;
+        --result_row.block;
+        result_row.row = blockAt(result_row).rows - 1;
+    }
+    return result_row;
+}
+
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame)
+{
+    auto step_num = frame.end_offset;
+    if (!partition_ended)
+        return std::make_tuple(RowNumber(), false);
+
+    // Range of rows is [frame_start, frame_end),
+    // and frame_end position is behind the position of the last frame row.
+    // So we need to ++n.
+    ++step_num;
+
+    auto dist = distance(partition_end, current_row);
+    RUNTIME_CHECK(dist >= 1);
+
+    // Offset is too large and the partition_end is the longest position we can reach
+    if (dist <= step_num)
+        return std::make_tuple(partition_end, true);
+
+    // Now, frame_end is impossible to reach to partition_end.
+    RowNumber frame_end_row = current_row;
+    auto & block = blockAt(frame_end_row);
+
+    // The step happens only in a block
+    if ((block.rows - frame_end_row.row - 1) >= step_num)
+    {
+        frame_end_row.row += step_num;
+        return std::make_tuple(frame_end_row, true);
+    }
+
+    // The step happens between blocks
+    step_num -= block.rows - frame_end_row.row;
+    ++frame_end_row.block;
+    frame_end_row.row = 0;
+    while (step_num > 0)
+    {
+        auto block_rows = blockAt(frame_end_row).rows;
+        if (step_num >= block_rows)
+        {
+            frame_end_row.row = 0;
+            ++frame_end_row.block;
+            step_num -= block_rows;
+            continue;
+        }
+
+        frame_end_row.row += step_num;
+        step_num = 0;
+    }
+
+    return std::make_tuple(frame_end_row, true);
+}
+
+UInt64 WindowTransformAction::distance(RowNumber left, RowNumber right)
+{
+    if (left.block == right.block)
+    {
+        RUNTIME_CHECK_MSG(left.row >= right.row, "left should always be bigger than right");
+        return left.row - right.row;
+    }
+
+    RUNTIME_CHECK_MSG(left.block > right.block, "left should always be bigger than right");
+
+    Int64 dist = left.row;
+    RowNumber tmp = left;
+    --tmp.block;
+    while (tmp.block > right.block)
+    {
+        dist += blockAt(tmp).rows;
+        --tmp.block;
+    }
+
+    dist += blockAt(right).rows - right.row;
+
+    return dist;
+}
+
 void WindowTransformAction::advanceFrameStart()
 {
     if (frame_started)
-    {
         return;
-    }
 
     switch (window_description.frame.begin_type)
     {
@@ -288,14 +398,20 @@ void WindowTransformAction::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
-        RUNTIME_CHECK_MSG(
-            only_have_pure_window,
-            "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
         frame_start = current_row;
         frame_started = true;
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+            frame_start = stepToFrameStart(current_row, window_description.frame);
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format("Frame type {}'s Offset BoundaryType is not implemented",
+                            magic_enum::enum_name(window_description.frame.type)));
+        frame_started = true;
+        break;
     default:
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
@@ -360,10 +476,6 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
     assert(frame_end.block == partition_end.block
            || frame_end.block + 1 == partition_end.block);
 
-    // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    RUNTIME_CHECK_MSG(
-        only_have_pure_window,
-        "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
     frame_end = current_row;
     advanceRowNumber(frame_end);
     frame_ended = true;
@@ -396,6 +508,16 @@ void WindowTransformAction::advanceFrameEnd()
         break;
     }
     case WindowFrame::BoundaryType::Offset:
+    {
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
+            std::tie(frame_end, frame_ended) = stepToFrameEnd(current_row, window_description.frame);
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                fmt::format("Frame type {}'s Offset BoundaryType is not implemented",
+                            magic_enum::enum_name(window_description.frame.type)));
+        break;
+    }
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
@@ -447,16 +569,6 @@ bool WindowTransformAction::onlyHaveRowNumber()
     for (const auto & workspace : workspaces)
     {
         if (workspace.window_function->getName() != "row_number")
-            return false;
-    }
-    return true;
-}
-
-bool WindowTransformAction::onlyHaveRowNumberAndRank()
-{
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
             return false;
     }
     return true;
@@ -612,7 +724,6 @@ void WindowTransformAction::tryCalculate()
         partition_start = partition_end;
         advanceRowNumber(partition_end);
         partition_ended = false;
-
         // We have to reset the frame and other pointers when the new partition starts.
         frame_start = partition_start;
         frame_end = partition_start;
@@ -678,7 +789,7 @@ RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num)
     }
 
     --prev_row_num.block;
-    assert(prev_row_num.block - first_block_number < window_blocks.size());
+    assert(prev_row_num.block < window_blocks.size() + first_block_number);
     const auto new_block_rows = blockAt(prev_row_num).rows;
     prev_row_num.row = new_block_rows - 1;
     return prev_row_num;

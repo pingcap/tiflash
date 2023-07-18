@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context_fwd.h>
 #include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
@@ -45,8 +46,8 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 class StoragePathPool;
 
-class PipelineExecutorStatus;
-struct PipelineExecGroupBuilder;
+class PipelineExecutorContext;
+class PipelineExecGroupBuilder;
 
 namespace DM
 {
@@ -288,21 +289,24 @@ public:
     std::tuple<String, PageIdU64> preAllocateIngestFile();
 
     void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
+    void removePreIngestFile(PageIdU64 file_id, bool throw_on_not_exist);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    void ingestFiles(const DMContextPtr & dm_context, //
-                     const RowKeyRange & range,
-                     const std::vector<DM::ExternalDTFileInfo> & external_files,
-                     bool clear_data_in_range);
+    /// Return the 'ingested bytes'.
+    UInt64 ingestFiles(const DMContextPtr & dm_context, //
+                       const RowKeyRange & range,
+                       const std::vector<DM::ExternalDTFileInfo> & external_files,
+                       bool clear_data_in_range);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    void ingestFiles(const Context & db_context, //
-                     const DB::Settings & db_settings,
-                     const RowKeyRange & range,
-                     const std::vector<DM::ExternalDTFileInfo> & external_files,
-                     bool clear_data_in_range)
+    /// Return the 'ingtested bytes'.
+    UInt64 ingestFiles(const Context & db_context, //
+                       const DB::Settings & db_settings,
+                       const RowKeyRange & range,
+                       const std::vector<DM::ExternalDTFileInfo> & external_files,
+                       bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestFiles(dm_context, range, external_files, clear_data_in_range);
@@ -353,6 +357,8 @@ public:
                            size_t num_streams,
                            UInt64 max_version,
                            const PushDownFilterPtr & filter,
+                           const RuntimeFilteList & runtime_filter_list,
+                           const int rf_max_wait_time_ms,
                            const String & tracing_id,
                            bool keep_order,
                            bool is_fast_scan = false,
@@ -367,7 +373,7 @@ public:
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         const DB::Settings & db_settings,
@@ -376,6 +382,8 @@ public:
         size_t num_streams,
         UInt64 max_version,
         const PushDownFilterPtr & filter,
+        const RuntimeFilteList & runtime_filter_list,
+        const int rf_max_wait_time_ms,
         const String & tracing_id,
         bool keep_order,
         bool is_fast_scan = false,
@@ -413,6 +421,7 @@ public:
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
+    /// This function is only used for test.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -439,11 +448,8 @@ public:
      */
     std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
 
-    /// Apply DDL `commands` on `table_columns`
-    void applyAlters(const AlterCommands & commands, //
-                     OptionTableInfoConstRef table_info,
-                     ColumnID & max_column_id_used,
-                     const Context & context);
+    /// Apply schema change on `table_columns`
+    void applySchemaChanges(TableInfo & table_info);
 
     ColumnDefinesPtr getStoreColumns() const
     {
@@ -671,8 +677,10 @@ private:
 
     bool handleBackgroundTask(bool heavy);
 
-    void restoreStableFiles();
-    void restoreStableFilesFromLocal();
+    void listLocalStableFiles(const std::function<void(UInt64, const String &)> & handle) const;
+    void restoreStableFiles() const;
+    void restoreStableFilesFromLocal() const;
+    void removeLocalStableFilesIfDisagg() const;
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
@@ -680,15 +688,17 @@ private:
                                           const SegmentIdSet & read_segments = {},
                                           bool try_split_task = true);
 
-private:
-    void dropAllSegments(bool keep_first_segment);
-    String getLogTracingId(const DMContext & dm_ctx);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
 public:
 #endif
+    void dropAllSegments(bool keep_first_segment);
+    String getLogTracingId(const DMContext & dm_ctx);
+    // Returns segment that contains start_key and whether 'segments' is empty.
+    std::pair<SegmentPtr, bool> getSegmentByStartKeyInner(const RowKeyValueRef & start_key);
+    std::pair<SegmentPtr, bool> getSegmentByStartKey(const RowKeyValueRef & start_key, bool create_if_empty, bool throw_if_notfound);
+    void createFirstSegment(DM::DMContext & dm_context, PageStorageRunMode page_storage_run_mode);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

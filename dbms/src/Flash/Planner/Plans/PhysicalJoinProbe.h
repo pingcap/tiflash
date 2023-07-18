@@ -36,13 +36,13 @@ public:
         , prepare_actions(prepare_actions_)
     {}
 
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
+private:
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
 
-private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 
 private:

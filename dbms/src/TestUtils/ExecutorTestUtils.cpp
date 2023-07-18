@@ -14,6 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Pipeline/Pipeline.h>
@@ -23,6 +24,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <gtest/gtest.h>
 
 #include <functional>
 
@@ -51,6 +53,11 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type)
         return TiDB::TP::TypeFloat;
     case TypeIndex::Float64:
         return TiDB::TP::TypeDouble;
+    case TypeIndex::Decimal32:
+    case TypeIndex::Decimal64:
+    case TypeIndex::Decimal128:
+    case TypeIndex::Decimal256:
+        return TiDB::TP::TypeDecimal;
     default:
         throw Exception("Unsupport type");
     }
@@ -279,11 +286,13 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 void ExecutorTest::enablePlanner(bool is_enable) const
 {
     context.context->setSetting("enable_planner", is_enable ? "true" : "false");
+    enablePipeline(false);
 }
 
 void ExecutorTest::enablePipeline(bool is_enable) const
 {
     context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
+    context.context->setSetting("enforce_enable_pipeline", is_enable ? "true" : "false");
 }
 
 // ywq todo rename
@@ -328,25 +337,33 @@ void ExecutorTest::testForExecutionSummary(
     ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
     statistics_collector.initialize(&dag_context);
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+    bool enable_planner = context.context->getSettingsRef().enable_planner;
+    bool enable_pipeline = context.context->getSettingsRef().enable_pipeline || context.context->getSettingsRef().enforce_enable_pipeline;
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
     for (const auto & summary : summaries)
     {
         ASSERT_TRUE(summary.has_executor_id()) << "\n"
-                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                                               << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         auto it = expect.find(summary.executor_id());
         ASSERT_TRUE(it != expect.end())
             << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
-            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+            << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.first != not_check_rows)
             ASSERT_EQ(summary.num_produced_rows(), it->second.first)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
         if (it->second.second != not_check_concurrency)
             ASSERT_EQ(summary.concurrency(), it->second.second)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
-        // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
+                << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, DEFAULT_BLOCK_SIZE);
+
+        // Normally, `summary.time_processed_ns` should always be less than or equal to the execution time of the `executeStream`.
+        // However, sometimes the check fails in CI.
+        // TODO check time_processed_ns here.
+        // ASSERT_LE(summary.time_processed_ns(), time_ns_used of executeStream(&dag_context));
+
+        // num_iterations and tiflash_scan_context are not checked here.
     }
 }
 

@@ -29,6 +29,7 @@
 #include <TiDB/OwnerInfo.h>
 #include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <pingcap/pd/MockPDClient.h>
@@ -47,7 +48,9 @@ const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
 const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
-static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
+namespace
+{
+std::shared_ptr<TiDBSchemaSyncerManager> createSchemaSyncer(bool exist_pd_addr, bool for_unit_test, const KVClusterPtr & cluster, bool disaggregated_compute_mode)
 {
     // Doesn't need SchemaSyncer for tiflash_compute mode.
     if (disaggregated_compute_mode)
@@ -56,21 +59,66 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
     {
         // product env
         // Get DBInfo/TableInfo from TiKV, and create table with names `t_${table_id}`
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ false, /*mock_mapper*/ false>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ false, /*mock_mapper*/ false);
     }
     else if (!for_unit_test)
     {
         // mock test
         // Get DBInfo/TableInfo from MockTiDB, and create table with its display names
-        return std::static_pointer_cast<SchemaSyncer>(
-            std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ true>>(cluster));
+        return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ true);
     }
     // unit test.
     // Get DBInfo/TableInfo from MockTiDB, but create table with names `t_${table_id}`
-    return std::static_pointer_cast<SchemaSyncer>(
-        std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
+    return std::make_shared<TiDBSchemaSyncerManager>(cluster, /*mock_getter*/ true, /*mock_mapper*/ false);
 }
+
+// Print log for MPPTask which hasn't been removed for over 25 minutes.
+void checkLongLiveMPPTasks(const std::unordered_map<String, Stopwatch> & monitored_tasks, const LoggerPtr & log)
+{
+    String log_info;
+    double longest_live_time = 0;
+    for (const auto & iter : monitored_tasks)
+    {
+        auto alive_time = iter.second.elapsedSeconds();
+        if (alive_time > longest_live_time)
+            longest_live_time = alive_time;
+        if (alive_time >= 1500)
+            log_info = fmt::format("{} <MPPTask is alive for {} secs, {}>", log_info, alive_time, iter.first);
+    }
+
+    if (!log_info.empty())
+        LOG_INFO(log, log_info);
+    GET_METRIC(tiflash_mpp_task_monitor, type_longest_live_time).Set(longest_live_time);
+}
+
+void monitorMPPTasks(std::shared_ptr<MPPTaskMonitor> monitor)
+{
+    std::unique_lock lock(monitor->mu, std::defer_lock);
+    while (true)
+    {
+        lock.lock();
+
+        // Check MPPTasks every 25 minutes
+        monitor->cv.wait_for(lock, std::chrono::seconds(1500));
+
+        auto snapshot = monitor->monitored_tasks;
+        if (monitor->is_shutdown)
+        {
+            lock.unlock();
+            checkLongLiveMPPTasks(snapshot, monitor->log);
+            return;
+        }
+
+        lock.unlock();
+        checkLongLiveMPPTasks(snapshot, monitor->log);
+    }
+}
+
+void startMonitorMPPTaskThread(const MPPTaskManagerPtr & manager)
+{
+    newThreadManager()->scheduleThenDetach(false, "MPPTask-Moniter", [monitor = manager->getMPPTaskMonitor()] { monitorMPPTasks(monitor); });
+}
+} // namespace
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
@@ -81,7 +129,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
                                            : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
+    , schema_sync_manager(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
@@ -93,10 +141,12 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
+    startMonitorMPPTaskThread(mpp_task_manager);
+
     if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
-        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_addr, etcd_client);
+        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.advertise_engine_addr, etcd_client);
         s3gc_owner->campaignOwner(); // start campaign
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
@@ -257,10 +307,10 @@ TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_orde
     return store_status.load(memory_order);
 }
 
-SchemaSyncerPtr TMTContext::getSchemaSyncer() const
+std::shared_ptr<TiDBSchemaSyncerManager> TMTContext::getSchemaSyncerManager() const
 {
     std::lock_guard lock(mutex);
-    return schema_syncer;
+    return schema_sync_manager;
 }
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
@@ -353,6 +403,10 @@ UInt64 TMTContext::batchReadIndexTimeout() const
 UInt64 TMTContext::waitIndexTimeout() const
 {
     return wait_index_timeout_ms.load(std::memory_order_relaxed);
+}
+void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
+{
+    return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
 }
 Int64 TMTContext::waitRegionReadyTimeout() const
 {

@@ -24,12 +24,12 @@ class FilterTransformOp : public TransformOp
 {
 public:
     FilterTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Block & input_header,
         const ExpressionActionsPtr & expression,
         const String & filter_column_name)
-        : TransformOp(exec_status_, req_id)
+        : TransformOp(exec_context_, req_id)
         , filter_transform_action(input_header, expression, filter_column_name)
     {}
 

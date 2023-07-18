@@ -50,14 +50,14 @@ public:
 
     size_t getSourceNum() const { return source_num; };
 
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
+private:
+    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & /*context*/,
         size_t /*concurrency*/) override;
-
-private:
-    void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
 private:
     Block sample_block;

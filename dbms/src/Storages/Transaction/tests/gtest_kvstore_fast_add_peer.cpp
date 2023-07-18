@@ -174,7 +174,7 @@ void persistAfterWrite(Context & ctx, KVStore & kvs, std::unique_ptr<MockRaftSto
     proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
     auto region = proxy_instance->getRegion(region_id);
     auto wb = region->persistMeta();
-    page_storage->write(std::move(wb), nullptr);
+    page_storage->write(std::move(wb));
     // There shall be data to flush.
     ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
     ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
@@ -189,7 +189,7 @@ try
     KVStore & kvs = getKVS();
     auto page_storage = global_context.getWriteNodePageStorage();
 
-    proxy_instance->bootstrap(kvs, global_context.getTMTContext(), region_id, std::nullopt);
+    proxy_instance->bootstrapWithRegion(kvs, global_context.getTMTContext(), region_id, std::nullopt);
     auto region = proxy_instance->getRegion(region_id);
     auto store_id = kvs.getStore().store_id.load();
     region->addPeer(store_id, peer_id, metapb::PeerRole::Learner);

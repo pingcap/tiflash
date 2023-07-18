@@ -65,14 +65,14 @@ void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipel
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+void PhysicalMockExchangeReceiver::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
     for (auto & mock_stream : mock_streams)
-        group_builder.addConcurrency(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_stream));
+        group_builder.addConcurrency(std::make_unique<BlockInputStreamSourceOp>(exec_context, log->identifier(), mock_stream));
 }
 
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)

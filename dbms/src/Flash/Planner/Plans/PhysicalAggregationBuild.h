@@ -20,6 +20,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB
 {
@@ -47,16 +48,20 @@ public:
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
         , aggregate_context(aggregate_context_)
-    {}
+    {
+        // The profile info of Aggregation is collected by PhysicalAggregationConvergent,
+        // so calling notTiDBoPerator for PhysicalAggregationBuild to skip collecting profile info.
+        notTiDBOperator();
+    }
 
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus & exec_status,
+private:
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
 
-private:
-    EventPtr doSinkComplete(PipelineExecutorStatus & exec_status) override;
+    EventPtr doSinkComplete(PipelineExecutorContext & exec_context) override;
 
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 
@@ -67,5 +72,7 @@ private:
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     AggregateContextPtr aggregate_context;
+
+    OperatorProfileInfos profile_infos;
 };
 } // namespace DB

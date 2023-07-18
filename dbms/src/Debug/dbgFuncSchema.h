@@ -32,6 +32,16 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 //   ./storage-client.sh "DBGInvoke refresh_schemas()"
 void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Refresh the schema for a table.
+// Usage:
+//  ./storage-client.sh "DBGInvoke refresh_table_schema(db_name, table_name)"
+void dbgFuncRefreshTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Refresh the schema for a table.
+// Usage:
+//  ./storage-client.sh "DBGInvoke refresh_mapped_table_schema(db_name, table_name)" // the db_name and table_name is just for tiflash
+void dbgFuncRefreshMappedTableSchema(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 // Trigger gc on all databases / tables.
 // Usage:
 //   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"

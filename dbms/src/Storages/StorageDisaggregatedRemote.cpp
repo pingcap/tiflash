@@ -29,9 +29,6 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
-#include <Flash/Disaggregated/RNPagePreparer.h>
-#include <Flash/Disaggregated/RNPageReceiver.h>
-#include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -40,11 +37,14 @@
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
-#include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentSourceOp.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDisaggregated.h>
+#include <Storages/StorageDisaggregatedHelpers.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -59,33 +59,12 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <magic_enum.hpp>
 #include <numeric>
-
-namespace pingcap::kv
-{
-// The rpc trait
-template <>
-struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
-{
-    using RequestType = disaggregated::EstablishDisaggTaskRequest;
-    using ResultType = disaggregated::EstablishDisaggTaskResponse;
-
-    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
-
-    static ::grpc::Status doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        ResultType * res)
-    {
-        return client->stub->EstablishDisaggTask(context, req, res);
-    }
-};
-} // namespace pingcap::kv
+#include <unordered_set>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
@@ -93,60 +72,16 @@ extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 
 BlockInputStreams StorageDisaggregated::readThroughS3(
     const Context & db_context,
-    const SelectQueryInfo & query_info,
     unsigned num_streams)
 {
-    using namespace pingcap;
-
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-
-    DM::RNRemoteReadTaskPtr remote_read_tasks;
-
-    double total_backoff_seconds = 0.0;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
-    });
-
-    kv::Backoffer bo(kv::copNextMaxBackoff);
-    while (true)
-    {
-        // TODO: We could only retry failed stores.
-
-        try
-        {
-            auto remote_table_ranges = buildRemoteTableRanges();
-            // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
-            auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
-            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
-            RUNTIME_CHECK(!batch_cop_tasks.empty());
-
-            // Fetch the remote segment read tasks from write nodes
-            remote_read_tasks = buildDisaggTasks(
-                db_context,
-                scan_context,
-                batch_cop_tasks);
-
-            break;
-        }
-        catch (DB::Exception & e)
-        {
-            if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
-                throw;
-
-            Stopwatch w_backoff;
-            SCOPE_EXIT({
-                total_backoff_seconds += w_backoff.elapsedSeconds();
-            });
-
-            LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
-        }
-    }
-
+    auto read_task = buildReadTaskWithBackoff(db_context);
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, remote_read_tasks, query_info, num_streams, pipeline);
+    buildRemoteSegmentInputStreams(
+        db_context,
+        read_task,
+        num_streams,
+        pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -164,54 +99,137 @@ BlockInputStreams StorageDisaggregated::readThroughS3(
     return pipeline.streams;
 }
 
-
-DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
+void StorageDisaggregated::readThroughS3(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
-    const DM::ScanContextPtr & scan_context,
-    const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
+    unsigned num_streams)
 {
-    size_t tasks_n = batch_cop_tasks.size();
+    auto read_task = buildReadTaskWithBackoff(db_context);
 
-    std::mutex store_read_tasks_lock;
-    std::vector<DM::RNRemoteStoreReadTaskPtr> store_read_tasks;
-    store_read_tasks.reserve(tasks_n);
+    buildRemoteSegmentSourceOps(
+        exec_context,
+        group_builder,
+        db_context,
+        read_task,
+        num_streams);
 
+    NamesAndTypes source_columns;
+    auto header = group_builder.getCurrentHeader();
+    source_columns.reserve(header.columns());
+    for (const auto & col : header)
+        source_columns.emplace_back(col.name, col.type);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+
+    // Handle duration type column
+    extraCast(exec_context, group_builder, *analyzer);
+    // Handle filter
+    filterConditions(exec_context, group_builder, *analyzer);
+}
+
+DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
+{
+    using namespace pingcap;
+
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
+    DM::Remote::RNReadTaskPtr read_task;
+
+    double total_backoff_seconds = 0.0;
+    SCOPE_EXIT({
+        // This metric is per-read.
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
+    });
+
+    kv::Backoffer bo(kv::copNextMaxBackoff);
+    while (true)
+    {
+        // TODO: We could only retry failed stores.
+
+        try
+        {
+            // Fetch the remote segment read tasks from write nodes
+            read_task = buildReadTask(db_context, scan_context);
+            break;
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
+                throw;
+
+            Stopwatch w_backoff;
+            SCOPE_EXIT({
+                total_backoff_seconds += w_backoff.elapsedSeconds();
+            });
+
+            LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
+            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+        }
+    }
+
+    return read_task;
+}
+
+DM::Remote::RNReadTaskPtr StorageDisaggregated::buildReadTask(
+    const Context & db_context,
+    const DM::ScanContextPtr & scan_context)
+{
+    std::vector<pingcap::coprocessor::BatchCopTask> batch_cop_tasks;
+
+    // First split the read task for different write nodes.
+    // For each write node, a BatchCopTask is built.
+    {
+        auto remote_table_ranges = buildRemoteTableRanges();
+        // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
+        auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+        batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
+        RUNTIME_CHECK(!batch_cop_tasks.empty());
+    }
+
+    std::mutex output_lock;
+    std::vector<DM::Remote::RNReadSegmentTaskPtr> output_seg_tasks;
+
+    // Then, for each BatchCopTask, let's build read tasks concurrently.
     auto thread_manager = newThreadManager();
-    const auto & executor_id = table_scan.getTableScanExecutorID();
-    const DM::DisaggTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
-
     for (const auto & cop_task : batch_cop_tasks)
     {
         thread_manager->schedule(
             true,
-            "BuildDisaggTask",
+            "buildReadTaskForWriteNode",
             [&] {
-                buildDisaggTask(
+                buildReadTaskForWriteNode(
                     db_context,
                     scan_context,
                     cop_task,
-                    store_read_tasks,
-                    store_read_tasks_lock);
+                    output_lock,
+                    output_seg_tasks);
             });
     }
 
-    // The first exception will be thrown out.
+    // Let's wait for all threads to finish. Otherwise local variable references will be invalid.
+    // The first exception will be thrown out if any, after all threads are finished, which is safe.
     thread_manager->wait();
 
-    return std::make_shared<DM::RNRemoteReadTask>(std::move(store_read_tasks));
+    // Do some integrity checks for the build seg tasks. For example, we should not
+    // ever read from the same store+table+segment multiple times.
+    {
+        // TODO
+    }
+
+    return DM::Remote::RNReadTask::create(output_seg_tasks);
 }
 
-/// Note: This function runs concurrently when there are multiple Write Nodes.
-void StorageDisaggregated::buildDisaggTask(
+void StorageDisaggregated::buildReadTaskForWriteNode(
     const Context & db_context,
     const DM::ScanContextPtr & scan_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-    std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
-    std::mutex & store_read_tasks_lock)
+    std::mutex & output_lock,
+    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
 {
     Stopwatch watch;
 
-    auto req = buildDisaggTaskForNode(db_context, batch_cop_task);
+    auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
 
     auto * cluster = context.getTMTContext().getKVCluster();
     auto call = pingcap::kv::RpcCall<disaggregated::EstablishDisaggTaskRequest>(req);
@@ -251,34 +269,7 @@ void StorageDisaggregated::buildDisaggTask(
                 batch_cop_task.store_addr,
                 retry_regions);
 
-            auto retry_from_region_infos = [&retry_regions, &cluster](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
-                for (const auto & region : region_infos)
-                {
-                    if (retry_regions.contains(region.region_id()))
-                    {
-                        auto region_ver_id = pingcap::kv::RegionVerID(
-                            region.region_id(),
-                            region.region_epoch().conf_ver(),
-                            region.region_epoch().version());
-                        cluster->region_cache->dropRegion(region_ver_id);
-                        retry_regions.erase(region.region_id());
-                        if (retry_regions.empty())
-                            break;
-                    }
-                }
-            };
-
-            // non-partition table
-            retry_from_region_infos(req->regions());
-            // partition table
-            for (const auto & table_region : req->table_regions())
-            {
-                if (retry_regions.empty())
-                    break;
-                retry_from_region_infos(table_region.regions());
-            }
-
-            RUNTIME_CHECK_MSG(retry_regions.empty(), "Failed to drop regions {} from the cache", retry_regions);
+            dropRegionCache(cluster->region_cache, req, std::move(retry_regions));
 
             throw Exception(
                 error.msg(),
@@ -304,7 +295,7 @@ void StorageDisaggregated::buildDisaggTask(
             std::vector<kv::LockPtr> locks{};
             for (const auto & lock_info : error.locked())
                 locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
-            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
+            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.gather_id.query_id.start_ts, locks, pushed);
 
             // TODO: Use `pushed` to bypass large txn.
             LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
@@ -334,39 +325,73 @@ void StorageDisaggregated::buildDisaggTask(
         }
     }
 
-    // Parse the resp and gen tasks on read node
-    std::vector<DM::RNRemotePhysicalTableReadTaskPtr> remote_seg_tasks;
-    remote_seg_tasks.reserve(resp->tables_size());
-    for (const auto & physical_table : resp->tables())
+    // Now we have successfully established disaggregated read for this write node.
+    // Let's parse the result and generate actual segment read tasks.
+    // There may be multiple tables, so we concurrently build tasks for these tables.
+    auto thread_manager = newThreadManager();
+    for (const auto & serialized_physical_table : resp->tables())
     {
-        DB::DM::RemotePb::RemotePhysicalTable table;
-        auto parse_ok = table.ParseFromString(physical_table);
-        RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
-
-        Stopwatch w_build_table_task;
-
-        const auto task = DM::RNRemotePhysicalTableReadTask::buildFrom(
-            db_context,
-            scan_context,
-            resp->store_id(),
-            batch_cop_task.store_addr,
-            snapshot_id,
-            table,
-            log);
-        remote_seg_tasks.emplace_back(task);
-
-        LOG_DEBUG(
-            log,
-            "Build RNRemotePhysicalTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={}",
-            w_build_table_task.elapsedSeconds(),
-            resp->store_id(),
-            batch_cop_task.store_addr,
-            table.segments().size());
+        thread_manager->schedule(
+            true,
+            "buildReadTaskForWriteNodeTable",
+            [&] {
+                buildReadTaskForWriteNodeTable(
+                    db_context,
+                    scan_context,
+                    snapshot_id,
+                    resp->store_id(),
+                    req->address(),
+                    serialized_physical_table,
+                    output_lock,
+                    output_seg_tasks);
+            });
     }
-    std::unique_lock lock(store_read_tasks_lock);
-    store_read_tasks.emplace_back(std::make_shared<DM::RNRemoteStoreReadTask>(resp->store_id(), remote_seg_tasks));
+    thread_manager->wait();
+}
 
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_task).Observe(watch.elapsedSeconds());
+void StorageDisaggregated::buildReadTaskForWriteNodeTable(
+    const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
+    const DM::DisaggTaskId & snapshot_id,
+    StoreID store_id,
+    const String & store_address,
+    const String & serialized_physical_table,
+    std::mutex & output_lock,
+    std::vector<DM::Remote::RNReadSegmentTaskPtr> & output_seg_tasks)
+{
+    DB::DM::RemotePb::RemotePhysicalTable table;
+    auto parse_ok = table.ParseFromString(serialized_physical_table);
+    RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
+
+    auto thread_manager = newThreadManager();
+    auto n = static_cast<size_t>(table.segments().size());
+
+    auto table_tracing_logger = log->getChild(fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
+    for (size_t idx = 0; idx < n; ++idx)
+    {
+        const auto & remote_seg = table.segments(idx);
+
+        thread_manager->schedule(
+            true,
+            "buildRNReadSegmentTask",
+            [&] {
+                auto seg_read_task = DM::Remote::RNReadSegmentTask::buildFromEstablishResp(
+                    table_tracing_logger,
+                    db_context,
+                    scan_context,
+                    remote_seg,
+                    snapshot_id,
+                    store_id,
+                    store_address,
+                    table.keyspace_id(),
+                    table.table_id());
+
+                std::lock_guard lock(output_lock);
+                output_seg_tasks.push_back(seg_read_task);
+            });
+    }
+
+    thread_manager->wait();
 }
 
 /**
@@ -378,7 +403,7 @@ void StorageDisaggregated::buildDisaggTask(
  * Similar to `StorageDisaggregated::buildDispatchMPPTaskRequest`
  */
 std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-StorageDisaggregated::buildDisaggTaskForNode(
+StorageDisaggregated::buildEstablishDisaggTaskReq(
     const Context & db_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
@@ -386,10 +411,11 @@ StorageDisaggregated::buildDisaggTaskForNode(
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
         disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
-        meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
-        meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
-        meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
-        meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
+        meta->set_start_ts(sender_target_mpp_task_id.gather_id.query_id.start_ts);
+        meta->set_query_ts(sender_target_mpp_task_id.gather_id.query_id.query_ts);
+        meta->set_server_id(sender_target_mpp_task_id.gather_id.query_id.server_id);
+        meta->set_local_query_id(sender_target_mpp_task_id.gather_id.query_id.local_query_id);
+        meta->set_gather_id(sender_target_mpp_task_id.gather_id.gather_id);
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
         meta->set_executor_id(table_scan.getTableScanExecutorID());
@@ -410,7 +436,6 @@ StorageDisaggregated::buildDisaggTaskForNode(
         tipb::DAGRequest table_scan_req;
         table_scan_req.set_time_zone_name(dag_req->time_zone_name());
         table_scan_req.set_time_zone_offset(dag_req->time_zone_offset());
-        // TODO: enable exec summary collection
         table_scan_req.set_collect_execution_summaries(false);
         table_scan_req.set_flags(dag_req->flags());
         table_scan_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
@@ -447,6 +472,8 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         filter_conditions.conditions,
         table_scan.getPushedDownFilters(),
         table_scan.getColumns(),
+        std::vector<int>{},
+        0,
         db_context.getTimezoneInfo());
     auto create_attr_by_column_id = [defines = columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
@@ -463,44 +490,13 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     return rs_operator;
 }
 
-void StorageDisaggregated::buildRemoteSegmentInputStreams(
+DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(
     const Context & db_context,
-    const DM::RNRemoteReadTaskPtr & remote_read_tasks,
-    const SelectQueryInfo &,
-    size_t num_streams,
-    DAGPipeline & pipeline)
+    const DM::Remote::RNReadTaskPtr & read_task,
+    const DM::ColumnDefinesPtr & column_defines,
+    size_t num_streams)
 {
-    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
-    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
-    // TODO: We can reduce max io_concurrency to numSegments.
-
     const auto & executor_id = table_scan.getTableScanExecutorID();
-    // Build a RNPageReceiver to fetch the pages from all write nodes
-    auto * kv_cluster = db_context.getTMTContext().getKVCluster();
-    auto receiver_ctx = std::make_unique<GRPCPagesReceiverContext>(remote_read_tasks, kv_cluster);
-    auto page_receiver = std::make_shared<RNPageReceiver>(
-        std::move(receiver_ctx),
-        /*source_num_=*/remote_read_tasks->numSegments(),
-        num_streams,
-        log->identifier(),
-        executor_id);
-
-    bool do_prepare = false;
-
-    // Build the input streams to read blocks from remote segments
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto page_preparer = std::make_shared<RNPagePreparer>(
-        remote_read_tasks,
-        page_receiver,
-        column_defines,
-        num_streams,
-        log->identifier(),
-        executor_id,
-        do_prepare);
-
-    const UInt64 read_tso = sender_target_mpp_task_id.query_id.start_ts;
-    constexpr std::string_view extra_info = "disaggregated compute node remote segment reader";
-    pipeline.streams.reserve(num_streams);
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
     auto push_down_filter = StorageDeltaMerge::buildPushDownFilter(
@@ -510,30 +506,57 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         *column_defines,
         db_context,
         log);
-    auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+    const auto read_mode = DM::DeltaMergeStore::getReadMode(db_context, table_scan.isFastScan(), table_scan.keepOrder(), push_down_filter);
+    const UInt64 read_tso = sender_target_mpp_task_id.gather_id.query_id.start_ts;
+    LOG_INFO(
+        log,
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
+        magic_enum::enum_name(read_mode),
+        table_scan.isFastScan(),
+        table_scan.keepOrder(),
+        read_task->segment_read_tasks.size(),
+        num_streams);
 
-    auto sub_streams_size = io_concurrency / num_streams;
+    return DM::Remote::RNWorkers::create(
+        db_context,
+        {
+            .log = log->getChild(executor_id),
+            .read_task = read_task,
+            .columns_to_read = column_defines,
+            .read_tso = read_tso,
+            .push_down_filter = push_down_filter,
+            .read_mode = read_mode,
+            .cluster = db_context.getTMTContext().getKVCluster(),
+        },
+        num_streams);
+}
+
+void StorageDisaggregated::buildRemoteSegmentInputStreams(
+    const Context & db_context,
+    const DM::Remote::RNReadTaskPtr & read_task,
+    size_t num_streams,
+    DAGPipeline & pipeline)
+{
+    const auto & executor_id = table_scan.getTableScanExecutorID();
+
+    // Build the input streams to read blocks from remote segments
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
+
+    RUNTIME_CHECK(num_streams > 0, num_streams);
+    pipeline.streams.reserve(num_streams);
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
-        // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
-        // As a result, we will have N * M IO concurrency (N = num_streams, M = sub_streams_size).
-
-        auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
-            db_context,
-            remote_read_tasks,
-            page_preparer,
-            column_defines,
-            read_tso,
-            sub_streams_size,
-            extra_table_id_index,
-            push_down_filter,
-            extra_info,
-            /*tracing_id*/ log->identifier(),
-            read_mode);
-        RUNTIME_CHECK(!sub_streams.empty(), sub_streams.size(), sub_streams_size);
-
-        auto union_stream = std::make_shared<UnionBlockInputStream<>>(sub_streams, BlockInputStreams{}, sub_streams_size, /*req_id=*/"");
-        pipeline.streams.emplace_back(std::move(union_stream));
+        auto stream = DM::Remote::RNSegmentInputStream::create({
+            .debug_tag = log->identifier(),
+            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
+            // because we want to extend the lifetime of the WorkerPtr until read is finished.
+            // Also, we want to start the Worker after the read.
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        });
+        pipeline.streams.emplace_back(stream);
     }
 
     auto * dag_context = db_context.getDAGContext();
@@ -543,6 +566,35 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
     });
+}
+
+void StorageDisaggregated::buildRemoteSegmentSourceOps(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const Context & db_context,
+    const DM::Remote::RNReadTaskPtr & read_task,
+    size_t num_streams)
+{
+    // Build the input streams to read blocks from remote segments
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto workers = buildRNWorkers(db_context, read_task, column_defines, num_streams);
+
+    RUNTIME_CHECK(num_streams > 0, num_streams);
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        group_builder.addConcurrency(DM::Remote::RNSegmentSourceOp::create({
+            .debug_tag = log->identifier(),
+            .exec_context = exec_context,
+            // Note: We intentionally pass the whole worker, instead of worker->getReadyChannel()
+            // because we want to extend the lifetime of the WorkerPtr until read is finished.
+            // Also, we want to start the Worker after the read.
+            .workers = workers,
+            .columns_to_read = *column_defines,
+            .extra_table_id_index = extra_table_id_index,
+        }));
+    }
+    db_context.getDAGContext()->addInboundIOProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurIOProfileInfos());
+    db_context.getDAGContext()->addOperatorProfileInfos(table_scan.getTableScanExecutorID(), group_builder.getCurProfileInfos());
 }
 
 } // namespace DB

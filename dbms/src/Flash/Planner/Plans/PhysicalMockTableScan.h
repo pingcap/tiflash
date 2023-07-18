@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/SourceOp_fwd.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -44,7 +43,8 @@ public:
         const Block & sample_block_,
         const BlockInputStreams & mock_streams_,
         Int64 table_id_,
-        bool keep_order_);
+        bool keep_order_,
+        const std::vector<Int32> & runtime_filter_ids_);
 
     void finalize(const Names & parent_require) override;
 
@@ -59,18 +59,16 @@ public:
 
     const String & getFilterConditionsId() const;
 
-    Int64 getLogicalTableID() const;
-
-    void updateStreams(Context & context);
-
-    void buildPipelineExecGroup(
-        PipelineExecutorStatus &,
-        PipelineExecGroupBuilder & group_builder,
-        Context &,
-        size_t) override;
-
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext &,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t) override;
+
+    void buildRuntimeFilterInLocalStream(Context & context);
 
 private:
     FilterConditions filter_conditions;
@@ -78,10 +76,12 @@ private:
 
     BlockInputStreams mock_streams;
 
-
     const Int64 table_id;
+
     const bool keep_order;
 
-    SourceOps source_ops;
+    std::vector<Int32> runtime_filter_ids;
+
+    const int rf_max_wait_time_ms = 10000;
 };
 } // namespace DB

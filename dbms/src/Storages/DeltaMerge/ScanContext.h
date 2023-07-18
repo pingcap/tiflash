@@ -48,6 +48,7 @@ public:
     std::atomic<uint64_t> total_remote_region_num{0};
     std::atomic<uint64_t> total_local_region_num{0};
 
+    std::atomic<uint64_t> total_user_read_bytes{0};
 
     ScanContext() = default;
 
@@ -62,6 +63,7 @@ public:
         total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
         total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
+        total_user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -76,6 +78,7 @@ public:
         tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
         tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
+        tiflash_scan_context_pb.set_total_user_read_bytes(total_user_read_bytes);
         return tiflash_scan_context_pb;
     }
 
@@ -90,6 +93,7 @@ public:
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ns;
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
+        total_user_read_bytes += other.total_user_read_bytes;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -103,6 +107,14 @@ public:
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;
         total_local_region_num += other.total_local_region_num();
         total_remote_region_num += other.total_remote_region_num();
+        total_user_read_bytes += other.total_user_read_bytes();
+    }
+
+    // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control
+    // For Read I/O, 1/64 RU per KB.
+    double getReadRU() const
+    {
+        return static_cast<double>(total_user_read_bytes) / 1024.0 / 64.0;
     }
 };
 

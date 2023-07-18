@@ -17,10 +17,10 @@
 namespace DB
 {
 WindowTransformOp::WindowTransformOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const String & req_id_,
     const WindowDescription & window_description_)
-    : TransformOp(exec_status_, req_id_)
+    : TransformOp(exec_context_, req_id_)
     , window_description(window_description_)
 {}
 
@@ -31,7 +31,7 @@ void WindowTransformOp::transformHeaderImpl(Block & header_)
     header_ = action->output_header;
 }
 
-void WindowTransformOp::operateSuffix()
+void WindowTransformOp::operateSuffixImpl()
 {
     if likely (action)
         action->cleanUp();

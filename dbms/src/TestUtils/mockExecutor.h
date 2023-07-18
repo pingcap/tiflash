@@ -17,6 +17,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/WindowBinder.h>
+#include <Debug/MockRuntimeFilter.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Interpreters/Context_fwd.h>
@@ -152,6 +153,10 @@ public:
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
     }
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, mock::MockRuntimeFilter & rf, uint64_t fine_grained_shuffle_stream_count = 0)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count).appendRuntimeFilter(rf);
+    }
 
 
     // aggregation
@@ -167,6 +172,10 @@ public:
 
     // expand
     DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
+    DAGRequestBuilder & expand2(std::vector<MockAstVec> level_projection_expressions, std::vector<String> output_names, std::vector<tipb::FieldType> fps);
+
+    // runtime filter
+    DAGRequestBuilder & appendRuntimeFilter(mock::MockRuntimeFilter & rf);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }
@@ -211,10 +220,13 @@ public:
 
     /// mock DeltaMerge table scan
     void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockDeltaMerge(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint);
     void addMockDeltaMerge(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
 
     void addMockDeltaMergeSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
     void addMockDeltaMergeData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+
+    void addMockDeltaMergeTableConcurrencyHint(const MockTableName & name, size_t concurrency_hint);
 
     /// mock column exchange receiver
     void addExchangeReceiver(const String & name, const MockColumnInfoVec & columnInfos, const ColumnsWithTypeAndName & columns, size_t fine_grained_stream_count = 0, const MockColumnInfoVec & partition_column_infos = {});
@@ -224,6 +236,9 @@ public:
         const String & db_name,
         const String & table_name,
         bool keep_order = false);
+
+    DAGRequestBuilder scan(const String & db_name, const String & table_name, const std::vector<int> & rf_ids);
+
     DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
@@ -268,8 +283,12 @@ MockWindowFrame buildDefaultRowsFrame();
 
 // expressions
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
-#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
-#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusInt", (expr1), (expr2))
+#define plusReal(expr1, expr2) makeASTFunction("plusReal", (expr1), (expr2))
+#define plusDecimal(expr1, expr2) makeASTFunction("plusDecimal", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusInt", (expr1), (expr2))
+#define minusReal(expr1, expr2) makeASTFunction("minusReal", (expr1), (expr2))
+#define minusDecimal(expr1, expr2) makeASTFunction("minusDecimal", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
@@ -277,6 +296,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
+#define in(expr1, ...) makeASTFunction("in", (expr1), __VA_ARGS__)
+
 
 // Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))

@@ -23,11 +23,11 @@ class GeneratedColumnPlaceHolderTransformOp : public TransformOp
 {
 public:
     GeneratedColumnPlaceHolderTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const Block & input_header,
         const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos_)
-        : TransformOp(exec_status_, req_id)
+        : TransformOp(exec_context_, req_id)
         , action(input_header, generated_column_infos_)
     {}
 
@@ -38,7 +38,7 @@ protected:
 
     void transformHeaderImpl(Block & header_) override;
 
-    void operatePrefix() override;
+    void operatePrefixImpl() override;
 
 private:
     GeneratedColumnPlaceHolderTransformAction action;

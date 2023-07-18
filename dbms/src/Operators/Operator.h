@@ -16,6 +16,8 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Operators/IOProfileInfo.h>
+#include <Operators/OperatorProfileInfo.h>
 
 #include <memory>
 
@@ -36,7 +38,8 @@ enum class OperatorStatus
     /// waiting status
     WAITING,
     /// io status
-    IO,
+    IO_IN,
+    IO_OUT,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     NEED_INPUT,
@@ -44,15 +47,13 @@ enum class OperatorStatus
     HAS_OUTPUT,
 };
 
-// TODO support operator profile info like `BlockStreamProfileInfo`.
-
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Operator
 {
 public:
-    Operator(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : exec_status(exec_status_)
+    Operator(PipelineExecutorContext & exec_context_, const String & req_id)
+        : exec_context(exec_context_)
         , log(Logger::get(req_id))
     {}
 
@@ -60,16 +61,13 @@ public:
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus executeIO();
-    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
-    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
-    virtual bool isAwaitable() const { return false; }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
-    virtual void operatePrefix() {}
-    virtual void operateSuffix() {}
+    void operatePrefix();
+    void operateSuffix();
 
     virtual String getName() const = 0;
 
@@ -87,18 +85,34 @@ public:
         header = header_;
     }
 
+    const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
+
+    virtual IOProfileInfoPtr getIOProfileInfo() const { throw Exception("Unsupport"); }
+
 protected:
-    PipelineExecutorStatus & exec_status;
+    virtual void operatePrefixImpl() {}
+    virtual void operateSuffixImpl() {}
+
+    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
+
+    virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+
+protected:
+    PipelineExecutorContext & exec_context;
     const LoggerPtr log;
     Block header;
+
+    OperatorProfileInfoPtr profile_info_ptr = std::make_shared<OperatorProfileInfo>();
+    // To reduce the overheads of `profile_info_ptr.get()`
+    OperatorProfileInfo & profile_info = *profile_info_ptr;
 };
 
 // The running status returned by Source can only be `HAS_OUTPUT`.
 class SourceOp : public Operator
 {
 public:
-    SourceOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    SourceOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     // read will inplace the block when return status is HAS_OUTPUT;
     // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
@@ -112,8 +126,8 @@ using SourceOps = std::vector<SourceOpPtr>;
 class TransformOp : public Operator
 {
 public:
-    TransformOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    TransformOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
@@ -141,8 +155,8 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    SinkOp(PipelineExecutorStatus & exec_status_, const String & req_id)
-        : Operator(exec_status_, req_id)
+    SinkOp(PipelineExecutorContext & exec_context_, const String & req_id)
+        : Operator(exec_context_, req_id)
     {}
     OperatorStatus prepare();
     virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }

@@ -108,24 +108,24 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
         assert(cq != nullptr);
     }
 
-    void init(UnaryCallback<bool> * callback) override
+    void init(GRPCKickTag * tag) override
     {
         reader = cluster->rpc_client->sendStreamRequestAsync(
             request.req->sender_meta().address(),
             &client_context,
             call,
             *cq,
-            callback);
+            tag);
     }
 
-    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override
     {
-        packet->read(reader, callback);
+        packet->read(reader, tag);
     }
 
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    void finish(::grpc::Status & status, GRPCKickTag * tag) override
     {
-        reader->Finish(&status, callback);
+        reader->Finish(&status, tag);
     }
 
     grpc::ClientContext * getClientContext() override
@@ -292,7 +292,6 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
-    bool is_fine_grained,
     bool has_remote_conn)
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
@@ -300,7 +299,7 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
     local_request_handler.recordWaitingTaskTime();
-    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained, has_remote_conn);
+    tunnel->connectLocalV2(source_index, local_request_handler, has_remote_conn);
 }
 
 // TODO remove it in the future
@@ -408,10 +407,10 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRe
 AsyncExchangePacketReaderPtr GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     grpc::CompletionQueue * cq,
-    UnaryCallback<bool> * callback) const
+    GRPCKickTag * tag) const
 {
     auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
-    reader->init(callback);
+    reader->init(tag);
     return reader;
 }
 

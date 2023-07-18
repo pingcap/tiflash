@@ -29,9 +29,9 @@ struct DAGPipeline;
 class Context;
 class DAGContext;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
-struct PipelineExecGroupBuilder;
+class PipelineExecGroupBuilder;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
@@ -65,20 +65,20 @@ public:
 
     virtual size_t childrenSize() const = 0;
 
-    virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
+    void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void buildPipelineExecGroup(
-        PipelineExecutorStatus & /*exec_status*/,
-        PipelineExecGroupBuilder & /*group_builder*/,
-        Context & /*context*/,
-        size_t /*concurrency*/);
+    void buildPipelineExecGroup(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t concurrency);
 
     virtual void buildPipeline(
         PipelineBuilder & /*builder*/,
         Context & /*context*/,
-        PipelineExecutorStatus & /*exec_status*/);
+        PipelineExecutorContext & /*exec_status*/);
 
-    EventPtr sinkComplete(PipelineExecutorStatus & exec_status);
+    EventPtr sinkComplete(PipelineExecutorContext & exec_context);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -100,9 +100,18 @@ public:
 
 protected:
     /// Used for non-fine grained shuffle sink plan node to trigger two-stage execution logic.
-    virtual EventPtr doSinkComplete(PipelineExecutorStatus & /*exec_status*/);
+    virtual EventPtr doSinkComplete(PipelineExecutorContext & /*exec_status*/);
 
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
+
+    virtual void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        Context & /*context*/,
+        size_t /*concurrency*/)
+    {
+        throw Exception("Unsupported");
+    }
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

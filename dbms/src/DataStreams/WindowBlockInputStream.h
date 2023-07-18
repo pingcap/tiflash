@@ -71,6 +71,16 @@ struct RowNumber
 /* Implementation details.*/
 struct WindowTransformAction
 {
+private:
+    // Used for calculating the frame start
+    RowNumber stepToFrameStart(const RowNumber & current_row, const WindowFrame & frame);
+    // Used for calculating the frame end
+    std::tuple<RowNumber, bool> stepToFrameEnd(const RowNumber & current_row, const WindowFrame & frame);
+
+    // distance is left - right.
+    UInt64 distance(RowNumber left, RowNumber right);
+
+public:
     WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
 
     void cleanUp();
@@ -157,8 +167,6 @@ struct WindowTransformAction
 
     bool onlyHaveRowNumber();
 
-    bool onlyHaveRowNumberAndRank();
-
     Int64 getPartitionEndRow(size_t block_rows);
 
     void appendInfo(FmtBuffer & buffer) const;
@@ -236,7 +244,6 @@ struct WindowTransformAction
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
-    bool only_have_pure_window = false;
 };
 
 class WindowBlockInputStream : public IProfilingBlockInputStream

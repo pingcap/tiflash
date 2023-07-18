@@ -91,6 +91,10 @@ void initThreadPool()
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);
+    RNWritePageCachePool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
 }
 
 void initReadThread()

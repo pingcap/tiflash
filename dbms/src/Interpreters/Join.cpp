@@ -30,6 +30,7 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include <exception>
 #include <magic_enum.hpp>
 
 namespace DB
@@ -135,7 +136,8 @@ Join::Join(
     const String & match_helper_name_,
     const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
-    bool is_test_)
+    bool is_test_,
+    const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
     : restore_round(restore_round_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
@@ -152,6 +154,7 @@ Join::Join(
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
+    , runtime_filter_list(runtime_filter_list_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
@@ -345,20 +348,21 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
-    build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     if (max_bytes_before_external_join > 0)
     {
         if (join_map_method == JoinMapMethod::CROSS)
         {
             /// todo support spill for cross join
             max_bytes_before_external_join = 0;
-            LOG_WARNING(log, "Cross join does not support spilling, so set max_bytes_before_external_join = 0");
+            LOG_WARNING(log, "Join does not support spill, reason: cross join spill is not supported");
         }
         if (isNullAwareSemiFamily(kind))
         {
             max_bytes_before_external_join = 0;
-            LOG_WARNING(log, "null aware join does not support spilling, so set max_bytes_before_external_join = 0");
+            LOG_WARNING(log, "Join does not support spill, reason: null aware join spill is not supported");
         }
+        if (max_bytes_before_external_join > 0)
+            build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     }
     setSampleBlock(sample_block);
 }
@@ -368,7 +372,8 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     std::unique_lock lock(rwlock);
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
-    probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+    if (max_bytes_before_external_join > 0)
+        probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
 }
 
 /// the block should be valid.
@@ -454,7 +459,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            build_spiller->spillBlocks(std::move(blocks_to_spill), i);
+            spillBuildSideBlocks(i, std::move(blocks_to_spill));
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
@@ -575,6 +580,28 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             assert(partitions[stream_index]->getPartitionPool() != nullptr);
         /// Fill the hash table.
         JoinPartition::insertBlockIntoMaps(partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, getBuildConcurrency(), enable_fine_grained_shuffle, enable_join_spill);
+    }
+
+    // generator in runtime filter
+    generateRuntimeFilterValues(block);
+}
+
+void Join::generateRuntimeFilterValues(const Block & block)
+{
+    LOG_DEBUG(log, "begin to generate rf values for one block in join id, block rows:{}", block.rows());
+    for (const auto & rf : runtime_filter_list)
+    {
+        auto column_with_type_and_name = block.getByName(rf->getSourceColumnName());
+        LOG_DEBUG(log, "update rf values in join, values size:{}", column_with_type_and_name.column->size());
+        rf->updateValues(column_with_type_and_name, log);
+    }
+}
+
+void Join::finalizeRuntimeFilter()
+{
+    for (const auto & rf : runtime_filter_list)
+    {
+        rf->finalize(log);
     }
 }
 
@@ -979,7 +1006,11 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
         RUNTIME_CHECK_MSG(!block.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
-        added_columns.back()->reserve(rows);
+        if (src_column.type && src_column.type->haveMaximumSizeOfValue())
+        {
+            // todo figure out more accurate `rows`
+            added_columns.back()->reserve(rows);
+        }
         right_indexes.push_back(num_columns_to_skip + i);
     }
 
@@ -989,6 +1020,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info) const
     if (useRowFlaggedHashMap(kind, has_other_condition))
     {
         flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
+        // todo figure out more accurate `rows`
         flag_mapped_entry_helper_column->reserve(rows);
     }
 
@@ -1510,6 +1542,16 @@ void Join::workAfterBuildFinish()
     {
         has_build_data_in_memory = !original_blocks.empty();
     }
+
+    // set rf is ready
+    finalizeRuntimeFilter();
+}
+
+void Join::finalizeProfileInfo()
+{
+    profile_info->is_spill_enabled = isEnableSpill();
+    profile_info->is_spilled = isSpilled();
+    profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
 }
 
 void Join::workAfterProbeFinish()
@@ -1526,6 +1568,7 @@ void Join::workAfterProbeFinish()
             }
         }
     }
+    finalizeProfileInfo();
 }
 
 void Join::waitUntilAllBuildFinished() const
@@ -1715,6 +1758,16 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
+void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && blocks)
+{
+    build_spiller->spillBlocks(std::move(blocks), part_id);
+}
+
+void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
+{
+    probe_spiller->spillBlocks(std::move(blocks), part_id);
+}
+
 void Join::spillMostMemoryUsedPartitionIfNeed()
 {
     Int64 target_partition_index = -1;
@@ -1762,7 +1815,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
     }
-    build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
+    spillBuildSideBlocks(target_partition_index, std::move(blocks_to_spill));
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 
@@ -1790,70 +1843,63 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         throw Exception(error_message);
     try
     {
-        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_scan_hash_map_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_scan_hash_map_streams.size()));
-        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_scan_hash_map_streams.size());
-        auto get_back_stream = [](BlockInputStreams & streams) {
-            BlockInputStreamPtr stream = streams.back();
-            streams.pop_back();
-            return stream;
-        };
-        if (!restore_build_streams.empty())
+        while (true)
         {
-            auto build_stream = get_back_stream(restore_build_streams);
-            auto probe_stream = get_back_stream(restore_probe_streams);
-            auto scan_hash_map_stream = get_back_stream(restore_scan_hash_map_streams);
-            if (restore_build_streams.empty())
+            LOG_TRACE(log, "restore_infos {}", restore_infos.size());
+            if (!restore_infos.empty())
             {
-                spilled_partition_indexes.pop_front();
+                auto restore_info = std::move(restore_infos.back());
+                restore_infos.pop_back();
+                if (restore_infos.empty())
+                {
+                    spilled_partition_indexes.pop_front();
+                }
+                return restore_info;
             }
-            return RestoreInfo{restore_join, std::move(scan_hash_map_stream), std::move(build_stream), std::move(probe_stream)};
-        }
-        if (spilled_partition_indexes.empty())
-        {
-            return {};
-        }
-        auto spilled_partition_index = spilled_partition_indexes.front();
-        RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
-        if (restore_join_build_concurrency <= 0)
-            restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
-        /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
-        assert(restore_join_build_concurrency >= 2);
-        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
-        restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
-        RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
-        auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
-        restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
-        restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
-        restore_join->setInitActiveBuildThreads();
-        restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
-        for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-        {
-            restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
-        }
-        auto build_stream = get_back_stream(restore_build_streams);
-        auto probe_stream = get_back_stream(restore_probe_streams);
-        if (restore_build_streams.empty())
-        {
-            spilled_partition_indexes.pop_front();
-        }
-        if (needScanHashMapAfterProbe(kind))
-        {
+            if (spilled_partition_indexes.empty())
+            {
+                return {};
+            }
+
+            // build new restore infos.
+            auto spilled_partition_index = spilled_partition_indexes.front();
+            RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
+            if (restore_join_build_concurrency <= 0)
+                restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
+            /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
+            assert(restore_join_build_concurrency >= 2);
+            LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
+            auto restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+            RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
+            auto restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+            auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
+            restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
+            restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
+            restore_join->setInitActiveBuildThreads();
+            restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-                restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
+            {
+                restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
+            }
+            BlockInputStreams restore_scan_hash_map_streams;
+            restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
+            if (needScanHashMapAfterProbe(kind))
+            {
+                auto header = restore_probe_streams.back()->getHeader();
+                for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+                    restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(header, i, restore_join_build_concurrency, max_block_size_);
+            }
+            for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
+            {
+                restore_infos.emplace_back(restore_join, std::move(restore_scan_hash_map_streams[i]), std::move(restore_build_streams[i]), std::move(restore_probe_streams[i]));
+            }
         }
-        auto scan_hash_map_streams = get_back_stream(restore_scan_hash_map_streams);
-        return RestoreInfo{restore_join, std::move(scan_hash_map_streams), std::move(build_stream), std::move(probe_stream)};
     }
     catch (...)
     {
-        restore_build_streams.clear();
-        restore_probe_streams.clear();
-        restore_scan_hash_map_streams.clear();
-        auto err_message = getCurrentExceptionMessage(false, true);
-        meetErrorImpl(err_message, lock);
-        throw Exception(err_message);
+        restore_infos.clear();
+        meetErrorImpl(getCurrentExceptionMessage(false, true), lock);
+        std::rethrow_exception(std::current_exception());
     }
 }
 
@@ -1877,7 +1923,7 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
         }
         if (need_spill)
         {
-            probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
+            spillProbeSideBlocks(i, std::move(blocks_to_spill));
         }
         else
         {
@@ -1890,7 +1936,7 @@ void Join::spillAllBuildPartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        build_spiller->spillBlocks(partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller), i);
+        spillBuildSideBlocks(i, partitions[i]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller));
     }
 }
 
@@ -1898,7 +1944,7 @@ void Join::spillAllProbePartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        probe_spiller->spillBlocks(partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller), i);
+        spillProbeSideBlocks(i, partitions[i]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller));
     }
 }
 

@@ -20,7 +20,7 @@
 
 namespace DB::tests
 {
-DAGProperties getDAGPropertiesForTest(int server_num);
+DAGProperties getDAGPropertiesForTest(int server_num, int local_query_id = -1, int tidb_server_id = -1, int query_ts = -1, int gather_id = -1);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -77,15 +77,22 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
-    std::tuple<MPPQueryId, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
+    BlockInputStreamPtr prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties);
 
-    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    std::vector<QueryTask> prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties);
+
+    static void setCancelTest();
+
+    static ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties);
     ColumnsWithTypeAndName buildAndExecuteMPPTasks(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
     static ::testing::AssertionResult assertQueryCancelled(const MPPQueryId & query_id);
     static ::testing::AssertionResult assertQueryActive(const MPPQueryId & query_id);
+
+    static ::testing::AssertionResult assertGatherCancelled(const MPPGatherId & gather_id);
+    static ::testing::AssertionResult assertGatherActive(const MPPGatherId & gather_id);
 
     static String queryInfo(size_t server_id);
 
@@ -95,12 +102,12 @@ protected:
     static MPPTestMeta test_meta;
 };
 
-#define ASSERT_MPPTASK_EQUAL(tasks, properties, expected_cols)                                                                              \
-    do                                                                                                                                      \
-    {                                                                                                                                       \
-        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
-        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(expected_cols, executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap())); \
+#define ASSERT_MPPTASK_EQUAL(tasks, properties, expected_cols)                      \
+    do                                                                              \
+    {                                                                               \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                            \
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage()); \
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeMPPTasks(tasks, properties));    \
     } while (0)
 
 
@@ -111,8 +118,8 @@ protected:
         {                                                                      \
             (properties).mpp_partition_num = i;                                \
             MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
-            auto tasks = (builder).buildMPPTasks(context, properties);         \
-            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);              \
+            auto mpp_tasks = (builder).buildMPPTasks(context, properties);     \
+            ASSERT_MPPTASK_EQUAL(mpp_tasks, properties, expect_cols);          \
         }                                                                      \
     } while (0)
 

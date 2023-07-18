@@ -58,15 +58,15 @@ void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+void PhysicalFilter::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_context, log->identifier(), input_header, before_filter_actions, filter_column));
     });
 }
 

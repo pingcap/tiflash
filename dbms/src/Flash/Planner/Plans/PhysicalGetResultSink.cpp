@@ -32,14 +32,14 @@ PhysicalPlanNodePtr PhysicalGetResultSink::build(
         result_queue);
 }
 
-void PhysicalGetResultSink::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+void PhysicalGetResultSink::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), result_queue));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_context, log->identifier(), result_queue));
     });
 }
 } // namespace DB

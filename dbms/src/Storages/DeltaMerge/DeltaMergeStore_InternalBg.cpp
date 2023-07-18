@@ -275,11 +275,16 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
-    // Generate place delta index tasks
-    for (auto & [end, segment] : segments)
+    // Under disagg mode, a write node could serve large amount of data, place delta index tasks
+    // after restart is useless and waste of S3 reading. Only do it when deployed non-disagg mode.
+    if (global_context.getSharedContextDisagg()->notDisaggregatedMode())
     {
-        (void)end;
-        checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        // Generate place delta index tasks
+        for (auto & [end, segment] : segments)
+        {
+            (void)end;
+            checkSegmentUpdate(dm_context, segment, ThreadType::Init);
+        }
     }
 
     // Wake up to do place delta index tasks.
@@ -339,6 +344,7 @@ bool DeltaMergeStore::updateGCSafePoint()
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(
             pd_client,
+            keyspace_id,
             /* ignore_cache= */ false,
             global_context.getSettingsRef().safe_point_update_interval_seconds);
         latest_gc_safe_point.store(safe_point, std::memory_order_release);
@@ -822,11 +828,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     {
         std::shared_lock lock(read_write_mutex);
         // avoid gc on empty tables
-        if (segments.size() == 1)
+        if (segments.empty() || (segments.size() == 1 && segments.begin()->second->getEstimatedRows() == 0))
         {
-            const auto & seg = segments.begin()->second;
-            if (seg->getEstimatedRows() == 0)
-                return 0;
+            return 0;
         }
     }
 

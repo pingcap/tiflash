@@ -1134,6 +1134,31 @@ String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
     return and_arg_names.size() == 1 ? and_arg_names[0] : applyFunction("and", and_arg_names, last_step.actions, nullptr);
 }
 
+void DAGExpressionAnalyzer::appendRuntimeFilterProperties(RuntimeFilterPtr & runtime_filter)
+{
+    NameAndTypePair name_and_type;
+    name_and_type = getColumnNameAndTypeForColumnExpr(runtime_filter->getSourceExpr(), getCurrentInputColumns());
+    runtime_filter->setSourceColumnName(name_and_type.name);
+    Block header;
+    std::shared_ptr<Set> in_values_set;
+    const auto & settings = context.getSettingsRef();
+    switch (runtime_filter->getRFType())
+    {
+    case tipb::IN:
+        in_values_set = std::make_shared<Set>(
+            SizeLimits(settings.rf_max_in_value_set, settings.max_bytes_in_set, settings.set_overflow_mode),
+            TiDB::TiDBCollators{getCollatorFromExpr(runtime_filter->getSourceExpr())});
+        header.insert(ColumnWithTypeAndName(name_and_type.type->createColumn(), name_and_type.type, "_" + toString(1)));
+        in_values_set->setHeader(header);
+        runtime_filter->setINValuesSet(in_values_set);
+        break;
+    case tipb::MIN_MAX:
+    case tipb::BLOOM_FILTER:
+        // todo
+        break;
+    }
+}
+
 void DAGExpressionAnalyzer::appendCastAfterWindow(
     const ExpressionActionsPtr & actions,
     const tipb::Window & window,
@@ -1484,6 +1509,17 @@ void DAGExpressionAnalyzer::makeExplicitSet(
 
     auto remaining_exprs = set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
+}
+
+void DAGExpressionAnalyzer::addNullableActionForColumnRef(const tipb::Expr & expr, const ExpressionActionsPtr & actions) const
+{
+    if (isColumnExpr(expr))
+    {
+        auto col = getColumnNameAndTypeForColumnExpr(expr, getCurrentInputColumns());
+        if (!col.type->isNullable() && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0))
+            // when the original col is not null and current columnRef is nullable, add convert nullable action here.
+            actions->add(ExpressionAction::convertToNullable(col.name));
+    }
 }
 
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const ExpressionActionsPtr & actions, bool output_as_uint8_type)

@@ -23,7 +23,7 @@ class HashJoinProbeTransformOp : public TransformOp
 {
 public:
     HashJoinProbeTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_,
         size_t scan_hash_map_after_probe_stream_index_,
@@ -42,11 +42,9 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
-    bool isAwaitable() const override { return true; }
-
     void transformHeaderImpl(Block & header_) override;
 
-    void operateSuffix() override;
+    void operateSuffixImpl() override;
 
 private:
     void probeOnTransform(Block & block);

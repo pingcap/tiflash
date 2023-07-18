@@ -252,11 +252,11 @@ std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs pk_col_
         for (auto pk_col_id : pk_col_ids)
         {
             TiDB::IndexColumnInfo index_column_info;
-            for (auto & column : table_info.columns)
+            for (size_t pos = 0; pos < table_info.columns.size(); pos++)
             {
-                if (column.id == pk_col_id)
+                if (table_info.columns[pos].id == pk_col_id)
                 {
-                    index_column_info.name = column.name;
+                    index_column_info.offset = pos;
                     break;
                 }
             }

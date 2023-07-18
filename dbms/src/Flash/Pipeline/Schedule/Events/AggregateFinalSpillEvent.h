@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB
 {
@@ -25,17 +26,19 @@ class AggregateFinalSpillEvent : public Event
 {
 public:
     AggregateFinalSpillEvent(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         AggregateContextPtr agg_context_,
-        std::vector<size_t> indexes_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        std::vector<size_t> indexes_,
+        OperatorProfileInfos profile_infos_)
+        : Event(exec_context_, req_id)
         , agg_context(std::move(agg_context_))
         , indexes(std::move(indexes_))
+        , profile_infos(std::move(profile_infos_))
     {
         assert(agg_context);
         assert(!indexes.empty());
+        assert(!profile_infos.empty());
     }
 
 protected:
@@ -46,5 +49,7 @@ protected:
 private:
     AggregateContextPtr agg_context;
     std::vector<size_t> indexes;
+
+    OperatorProfileInfos profile_infos;
 };
 } // namespace DB

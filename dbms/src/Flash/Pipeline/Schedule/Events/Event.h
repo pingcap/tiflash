@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
@@ -35,19 +36,13 @@ class Event;
 using EventPtr = std::shared_ptr<Event>;
 using Events = std::vector<EventPtr>;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    Event(
-        PipelineExecutorStatus & exec_status_,
-        MemoryTrackerPtr mem_tracker_,
-        const String & req_id = "")
-        : exec_status(exec_status_)
-        , mem_tracker(std::move(mem_tracker_))
-        , log(Logger::get(req_id))
-    {}
+    explicit Event(PipelineExecutorContext & exec_context_, const String & req_id = "");
+
     virtual ~Event() = default;
 
     void addInput(const EventPtr & input);
@@ -58,6 +53,10 @@ public:
 
     // return true for source event.
     bool prepare();
+
+    UInt64 getScheduleDuration() const;
+
+    UInt64 getFinishDuration() const;
 
 protected:
     // add task ready to be scheduled.
@@ -84,10 +83,10 @@ private:
 
     void switchStatus(EventStatus from, EventStatus to);
 
-    void assertStatus(EventStatus expect);
+    void assertStatus(EventStatus expect) const;
 
 protected:
-    PipelineExecutorStatus & exec_status;
+    PipelineExecutorContext & exec_context;
 
     MemoryTrackerPtr mem_tracker;
 
@@ -107,5 +106,9 @@ private:
 
     // is_source is true if and only if there is no input.
     bool is_source = true;
+
+    Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
+    UInt64 schedule_duration = 0;
+    UInt64 finish_duration = 0;
 };
 } // namespace DB

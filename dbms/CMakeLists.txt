@@ -254,6 +254,11 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+if (USE_QPL)
+    target_link_libraries (dbms ${QPL_LIBRARY})
+    target_include_directories (dbms PRIVATE ${QPL_INCLUDE_DIR})
+endif ()
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (tiflash_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (tiflash_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -383,4 +388,4 @@ add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" XML Foundation JSON)
 
-message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
+message (STATUS "Will build TiFlash ${TIFLASH_RELEASE_VERSION}")

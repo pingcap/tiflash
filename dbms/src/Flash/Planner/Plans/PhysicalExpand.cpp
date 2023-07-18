@@ -76,13 +76,13 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
     executeExpression(child_pipeline, expand_actions, log, expand_extra_info);
 }
 
-void PhysicalExpand::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+void PhysicalExpand::buildPipelineExecGroupImpl(
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    executeExpression(exec_status, group_builder, expand_actions, log);
+    executeExpression(exec_context, group_builder, expand_actions, log);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

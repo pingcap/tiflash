@@ -22,35 +22,40 @@
 namespace DB
 {
 /**
- *    CANCELLED/ERROR/FINISHED
- *               ▲
- *               │
- *  ┌────────────────────────┐
- *  │     ┌──►RUNNING◄──┐    │
- *  │     │             │    │
- *  │     ▼             ▼    │
- *  │ WATITING◄────────►IO   │
- *  └────────────────────────┘
+ *           CANCELLED/ERROR/FINISHED
+ *                      ▲
+ *                      │
+ *         ┌───────────────────────────────┐
+ *         │     ┌──►RUNNING◄──┐           │
+ * INIT───►│     │             │           │
+ *         │     ▼             ▼           │
+ *         │ WATITING◄────────►IO_IN/OUT   │
+ *         └───────────────────────────────┘
  */
 enum class ExecTaskStatus
 {
-    INIT,
     WAITING,
     RUNNING,
-    IO,
+    IO_IN,
+    IO_OUT,
     FINISHED,
     ERROR,
     CANCELLED,
 };
 
+class PipelineExecutorContext;
+
 class Task
 {
 public:
-    Task();
+    Task(PipelineExecutorContext & exec_context_, const String & req_id, ExecTaskStatus init_status = ExecTaskStatus::RUNNING);
 
-    Task(MemoryTrackerPtr mem_tracker_, const String & req_id);
+    // Only used for unit test.
+    explicit Task(PipelineExecutorContext & exec_context_);
 
     virtual ~Task();
+
+    ExecTaskStatus getStatus() const { return task_status; }
 
     ExecTaskStatus execute();
 
@@ -68,11 +73,13 @@ public:
         assert(0 == CurrentMemoryTracker::getLocalDeltaMemory());
         current_memory_tracker = mem_tracker_ptr;
     }
-    ALWAYS_INLINE void endTraceMemory()
+    ALWAYS_INLINE static void endTraceMemory()
     {
         CurrentMemoryTracker::submitLocalDeltaMemory();
         current_memory_tracker = nullptr;
     }
+
+    const String & getQueryId() const;
 
 public:
     LoggerPtr log;
@@ -95,13 +102,15 @@ public:
     // level of multi-level feedback queue.
     size_t mlfq_level{0};
 
-protected:
+private:
+    PipelineExecutorContext & exec_context;
+
     // To ensure that the memory tracker will not be destructed prematurely and prevent crashes due to accessing invalid memory tracker pointers.
     MemoryTrackerPtr mem_tracker_holder;
-    // To reduce the overheads of `mem_tracker.get()`
+    // To reduce the overheads of `mem_tracker_holder.get()`
     MemoryTracker * mem_tracker_ptr;
 
-    ExecTaskStatus task_status{ExecTaskStatus::INIT};
+    ExecTaskStatus task_status;
 
     bool is_finalized = false;
 };

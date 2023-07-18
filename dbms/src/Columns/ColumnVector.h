@@ -128,7 +128,7 @@ inline UInt64 unionCastToUInt64(Float64 x)
     union
     {
         Float64 src;
-        UInt64 res;
+        UInt64 res{};
     };
 
     src = x;
@@ -141,7 +141,7 @@ inline UInt64 unionCastToUInt64(Float32 x)
     union
     {
         Float32 src;
-        UInt64 res;
+        UInt64 res{};
     };
 
     res = 0;
@@ -149,20 +149,20 @@ inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
-template <typename targetType, typename encodeType>
-inline targetType decodeInt(const char * pos)
+template <typename TargetType, typename EncodeType>
+inline TargetType decodeInt(const char * pos)
 {
-    if constexpr (std::is_same_v<targetType, Null>)
+    if constexpr (std::is_same_v<TargetType, Null>)
     {
         return Null{};
     }
-    else if constexpr (is_signed_v<targetType>)
+    else if constexpr (is_signed_v<TargetType>)
     {
-        return static_cast<targetType>(static_cast<std::make_signed_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+        return static_cast<TargetType>(static_cast<std::make_signed_t<EncodeType>>(readLittleEndian<EncodeType>(pos)));
     }
     else
     {
-        return static_cast<targetType>(static_cast<std::make_unsigned_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+        return static_cast<TargetType>(static_cast<std::make_unsigned_t<EncodeType>>(readLittleEndian<EncodeType>(pos)));
     }
 }
 
@@ -249,7 +249,7 @@ public:
             {
                 throw Exception("Invalid float value length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
             }
-            constexpr UInt64 SIGN_MASK = UInt64(1) << 63;
+            constexpr UInt64 SIGN_MASK = static_cast<UInt64>(1) << 63;
             auto num = readBigEndian<UInt64>(raw_value.c_str() + cursor);
             if (num & SIGN_MASK)
                 num ^= SIGN_MASK;

@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -32,7 +31,7 @@ class DMSegmentThreadSourceOp : public SourceOp
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const DM::DMContextPtr & dm_context_,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         DM::AfterSegmentRead after_segment_read_,
@@ -41,15 +40,15 @@ public:
         UInt64 max_version_,
         size_t expected_block_size_,
         DM::ReadMode read_mode_,
-        int extra_table_id_index,
-        TableID physical_table_id,
         const String & req_id);
 
     String getName() const override;
 
-    void operateSuffix() override;
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
+    void operateSuffixImpl() override;
+
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus executeIOImpl() override;
@@ -70,12 +69,10 @@ private:
 
     DM::SegmentPtr cur_segment;
 
-    // TODO: Remove this action from this operator.
-    //       Instead use AddExtraTableIDColumnTransformOp in the outside.
-    AddExtraTableIDColumnTransformAction action;
-
     FilterPtr filter_ignored = nullptr;
     std::optional<Block> t_block;
+
+    size_t total_rows = 0;
 };
 
 } // namespace DB

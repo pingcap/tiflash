@@ -50,11 +50,10 @@ void recordJoinExecuteInfo(
 {
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
-    join_execute_info.join_ptr = join_ptr;
-    RUNTIME_CHECK(join_execute_info.join_ptr);
+    join_execute_info.join_profile_info = join_ptr->profile_info;
+    RUNTIME_CHECK(join_execute_info.join_profile_info);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
-
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -128,8 +127,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         max_bytes_before_external_join = 0;
         LOG_WARNING(log, "Pipeline model does not support disk-based join, so set max_bytes_before_external_join = 0");
     }
-    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
-    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider(), settings.max_threads, settings.max_block_size);
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
@@ -137,6 +136,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     Names join_output_column_names;
     for (const auto & col : join_output_schema)
         join_output_column_names.emplace_back(col.name);
+
+    auto runtime_filter_list = tiflash_join.genRuntimeFilterList(context, build_side_header, log);
+    LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
+    context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
+
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
@@ -157,7 +161,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         match_helper_name,
         flag_mapped_entry_helper_name,
         0,
-        context.isTest());
+        context.isTest(),
+        runtime_filter_list);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
@@ -215,7 +220,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     };
     build_streams(build_pipeline.streams);
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, context.getSettingsRef().max_buffered_bytes_in_executor, log, /*ignore_block=*/!context.isTest(), "for join");
 
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();
@@ -244,7 +249,7 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
 void PhysicalJoin::buildPipeline(
     PipelineBuilder & builder,
     Context & context,
-    PipelineExecutorStatus & exec_status)
+    PipelineExecutorContext & exec_context)
 {
     // Break the pipeline for join build.
     auto join_build = std::make_shared<PhysicalJoinBuild>(
@@ -257,11 +262,11 @@ void PhysicalJoin::buildPipeline(
         build_side_prepare_actions);
     auto join_build_builder = builder.breakPipeline(join_build);
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder, context, exec_status);
+    build()->buildPipeline(join_build_builder, context, exec_context);
     join_build_builder.build();
 
     // Join probe pipeline.
-    probe()->buildPipeline(builder, context, exec_status);
+    probe()->buildPipeline(builder, context, exec_context);
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         schema,

@@ -19,6 +19,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <fmt/core.h>
 
+#include <memory>
 #include <unordered_map>
 
 namespace DB::PS::V3
@@ -67,7 +68,8 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
 
 CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     universal::PageEntriesEdit & edits,
-    const CPFilesWriter::CompactOptions & options)
+    const CPFilesWriter::CompactOptions & options,
+    bool manifest_only)
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
@@ -132,6 +134,11 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
         }
 
         assert(rec_edit.type == EditRecordType::VAR_ENTRY);
+        // No need to read and write page data for the manifest only checkpoint.
+        if (manifest_only)
+        {
+            continue;
+        }
         bool is_compaction = false;
         if (rec_edit.entry.checkpoint_info.has_value())
         {
@@ -161,33 +168,42 @@ CPDataDumpStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
         // 2. For entry edits without the checkpoint info, or it is stored on an existing data file that needs compact,
         // write the entry data to the data file, and assign a new checkpoint info.
-        auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
-        RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
-        auto data_location = data_writer->write(
-            rec_edit.page_id,
-            rec_edit.version,
-            page.data.begin(),
-            page.data.size());
-        // the page data size uploaded in this checkpoint
-        write_down_stats.num_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
-        current_write_size += data_location.size_in_file;
-        RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
-        bool is_local_data_reclaimed = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;
-        rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
-            .data_location = data_location,
-            .is_valid = true,
-            .is_local_data_reclaimed = is_local_data_reclaimed,
-        };
-        locked_files.emplace(*data_location.data_file_id);
-        if (is_compaction)
+        try
         {
-            write_down_stats.compact_data_bytes += rec_edit.entry.size;
-            write_down_stats.num_pages_compact += 1;
+            auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
+            RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
+            auto data_location = data_writer->write(
+                rec_edit.page_id,
+                rec_edit.version,
+                page.data.begin(),
+                page.data.size());
+            // the page data size uploaded in this checkpoint
+            write_down_stats.num_bytes[static_cast<size_t>(id_storage_type)] += rec_edit.entry.size;
+            current_write_size += data_location.size_in_file;
+            RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
+            bool is_local_data_reclaimed = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;
+            rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
+                .data_location = data_location,
+                .is_valid = true,
+                .is_local_data_reclaimed = is_local_data_reclaimed,
+            };
+            locked_files.emplace(*data_location.data_file_id);
+            if (is_compaction)
+            {
+                write_down_stats.compact_data_bytes += rec_edit.entry.size;
+                write_down_stats.num_pages_compact += 1;
+            }
+            else
+            {
+                write_down_stats.incremental_data_bytes += rec_edit.entry.size;
+                write_down_stats.num_pages_incremental += 1;
+            }
         }
-        else
+        catch (...)
         {
-            write_down_stats.incremental_data_bytes += rec_edit.entry.size;
-            write_down_stats.num_pages_incremental += 1;
+            LOG_ERROR(log, "failed to read page, record={}", rec_edit);
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
         }
     }
 

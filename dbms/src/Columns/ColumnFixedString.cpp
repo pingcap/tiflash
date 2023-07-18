@@ -59,13 +59,7 @@ MutableColumnPtr ColumnFixedString::cloneResized(size_t size) const
 void ColumnFixedString::insert(const Field & x)
 {
     const auto & s = DB::get<const String &>(x);
-
-    if (s.size() > n)
-        throw Exception("Too large string '" + s + "' for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
-
-    size_t old_size = chars.size();
-    chars.resize_fill(old_size + n);
-    memcpy(&chars[old_size], s.data(), s.size());
+    insertData(s.data(), s.size());
 }
 
 void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
@@ -112,8 +106,9 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
         throw Exception("Too large string for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
 
     size_t old_size = chars.size();
-    chars.resize_fill(old_size + n);
-    memcpy(&chars[old_size], pos, length);
+    chars.resize(old_size + n);
+    memcpy(chars.data() + old_size, pos, length);
+    memset(chars.data() + old_size + length, 0, n - length);
 }
 
 StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const

@@ -25,10 +25,10 @@ protected:
     const char * url1 = "https://go.mail/folder-1/online/ru-en/#lingvo/#1О 50000&price_ashka/rav4/page=/check.xml";
     const char * url2 = "http://saint-peters-total=меньше 1000-rublyayusche/catalogue/kolasuryat-v-2-kadyirovka-personal/serial_id=0&input_state/apartments/mokrotochki.net/upravda.ru/yandex.ru/GameMain.aspx?mult]/on/orders/50195&text=мыс и орелка в Балаш смотреть онлайн бесплатно в хорошем камбалакс&lr=20030393833539353862643188&op_promo=C-Teaser_id=06d162.html";
 
-    const char * url1_repl = "a$12$13";
+    const char * url1_repl = "a\\12\\13";
     const char * url1_res = "ago.mail2go.mail3";
 
-    const char * url2_repl = "aaa$1233";
+    const char * url2_repl = "aaa\\1233";
     const char * url2_res = "aaasaint-peters-total=меньше 1000-rublyayusche233";
 
     const char * url_pat = "^https?://(?:www\\.)?([^/]+)/.*$";
@@ -94,7 +94,7 @@ struct RegexpReplaceCase
         std::vector<std::vector<UInt8>> & null_map,
         std::vector<String> & exprs,
         std::vector<String> & pats,
-        std::vector<String> repls,
+        std::vector<String> & repls,
         std::vector<Int64> & positions,
         std::vector<Int64> & occurs,
         std::vector<String> & match_types)
@@ -289,12 +289,24 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", "121212", "1.", "aa", 1, 3, ""},
                       {"121212", "121212", "1.", "aa", 1, 4, ""},
-                      {"sea1dad8 1lal8", "seafood fool", "foo(.?)", "1$1a$18", 1, 0, ""},
+                      {"sea1dad8 1lal8", "seafood fool", "foo(.?)", "1\\1a\\18", 1, 0, ""},
                       {"啊ah好a哈哈", "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", "啊a哈a哈哈", "哈", "h好", 4, 5, ""},
                       {"aa", "\n", ".", "aa", 1, 0, "s"},
-                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"}};
+                      {"12aa34", "12\n34", ".", "aa", 3, 1, "s"},
+                      {R"(\+overflow+stack+overflow+stack)", "stackoverflow", "(.{5})(.*)", R"(\\+\2+\1+\2+\1\)", 1, 0, ""},
+                      {R"(\i\h-g\f-e\d-c\b-a\ \I\H-G\F-E\D-C\B-A\)", "fooabcdefghij fooABCDEFGHIJ", "foo(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)", R"(\\\9\\\8-\7\\\6-\5\\\4-\3\\\2-\1\\)", 1, 0, ""},
+                      {"apbc", "abc", "\\d*", "p", 1, 2, ""},
+                      {"abcp", "abc", "\\d*", "p", 1, 4, ""},
+                      {"papbpcp", "abc", "\\d*", "p", 1, 0, ""},
+                      {"abcp", "abc", "\\d*$", "p", 1, 1, ""},
+                      {"我p们", "我们", "\\d*", "p", 1, 2, ""},
+                      {"p我p们p", "我们", "\\d*", "p", 1, 0},
+                      {"我们p", "我们", "\\d*", "p", 1, 3},
+                      {"p", "123", "(123)||(^$)", "p", 1, 1, ""},
+                      {"123p", "123", "(123)||(^$)", "p", 1, 2, ""},
+                      {"pp", "123", "(123)||(^$)", "p", 1, 0, ""}};
         RegexpReplaceCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, repls, positions, occurs, match_types);
         results = getResultVec<String>(test_cases);
         ASSERT_COLUMN_EQ(createColumn<String>(results),
@@ -316,7 +328,7 @@ TEST_F(RegexpReplace, RegexpReplaceTest)
                       {"12aa12", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 2, ""},
                       {"1212aa", {0, 1, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 3, ""},
                       {"121212", {0, 0, 0, 0, 0, 0}, "121212", "1.", "aa", 1, 4, ""},
-                      {"seafood 1lal8", {0, 0, 0, 0, 0, 0}, "seafood fool", "foo(.?)", "1$1a$18", 1, 2, ""},
+                      {"seafood 1lal8", {0, 0, 0, 0, 0, 0}, "seafood fool", "foo(.?)", "1\\1a\\18", 1, 2, ""},
                       {"啊ah好a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 1, 1, ""},
                       {"啊a哈ah好哈", {0, 0, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 1, ""},
                       {"啊a哈a哈哈", {0, 1, 0, 0, 0, 0}, "啊a哈a哈哈", "哈", "h好", 4, 5, ""},

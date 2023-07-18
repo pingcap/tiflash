@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
@@ -149,6 +147,14 @@ ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
     return a;
 }
 
+ExpressionAction ExpressionAction::convertToNullable(const std::string & col_name)
+{
+    ExpressionAction a;
+    a.type = CONVERT_TO_NULLABLE;
+    a.col_need_to_nullable = col_name;
+    return a;
+}
+
 void ExpressionAction::prepare(Block & sample_block)
 {
     /** Constant expressions should be evaluated, and put the result in sample_block.
@@ -257,6 +263,14 @@ void ExpressionAction::prepare(Block & sample_block)
         sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
         break;
     }
+    case CONVERT_TO_NULLABLE:
+    {
+        // sample block doesn't have the real column pointer, meaning sample_block.getByName(col_need_to_nullable).column will null.
+        // so expanding column if const for sample_block.getByName(col_need_to_nullable).column is meaningless.
+        if (!sample_block.getByName(col_need_to_nullable).type->isNullable())
+            convertColumnToNullable(sample_block.getByName(col_need_to_nullable));
+        break;
+    }
 
     case PROJECT:
     {
@@ -346,6 +360,16 @@ void ExpressionAction::execute(Block & block) const
     case EXPAND:
     {
         expand->replicateAndFillNull(block);
+        break;
+    }
+
+    case CONVERT_TO_NULLABLE:
+    {
+        // for expand usage, when original col is const non-null value, the inserted null value will break its const attribute in global scope.
+        if (ColumnPtr converted = block.getByName(col_need_to_nullable).column->convertToFullColumnIfConst())
+            block.getByName(col_need_to_nullable).column = converted;
+        if (!block.getByName(col_need_to_nullable).column->isColumnNullable())
+            convertColumnToNullable(block.getByName(col_need_to_nullable));
         break;
     }
 
@@ -439,7 +463,10 @@ String ExpressionAction::toString() const
                 ss << " AS " << projections[i].second;
         }
         break;
-
+    case CONVERT_TO_NULLABLE:
+        ss << "CONVERT_TO_NULLABLE(";
+        ss << col_need_to_nullable << ")";
+        break;
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }

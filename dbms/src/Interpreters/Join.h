@@ -21,17 +21,29 @@
 #include <Common/Logger.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/RuntimeFilter.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Coprocessor/RuntimeFilterMgr.h>
+#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <memory>
 #include <shared_mutex>
 
 namespace DB
 {
+struct JoinProfileInfo
+{
+    UInt64 peak_build_bytes_usage = 0;
+    bool is_spill_enabled = false;
+    bool is_spilled = false;
+};
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
+
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -151,7 +163,8 @@ public:
          const String & match_helper_name_ = "",
          const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
-         bool is_test = true);
+         bool is_test = true,
+         const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
 
     size_t restore_round;
 
@@ -195,6 +208,8 @@ public:
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
+    void finalizeRuntimeFilter();
+
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
@@ -232,6 +247,10 @@ public:
         skip_wait = true;
         probe_cv.notify_all();
         build_cv.notify_all();
+        for (const auto & rf : runtime_filter_list)
+        {
+            rf->cancel(log, "Join has been cancelled.");
+        }
     }
 
     void finishOneBuild();
@@ -253,6 +272,9 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
     static const String flag_mapped_entry_helper_prefix;
@@ -264,8 +286,7 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
-    SpillerPtr build_spiller;
-    SpillerPtr probe_spiller;
+    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -301,6 +322,9 @@ private:
     const JoinNonEqualConditions non_equal_conditions;
 
     size_t max_block_size;
+    /// Runtime Filter, optional
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -320,9 +344,10 @@ private:
     bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
-    BlockInputStreams restore_build_streams;
-    BlockInputStreams restore_probe_streams;
-    BlockInputStreams restore_scan_hash_map_streams;
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
+
+    std::vector<RestoreInfo> restore_infos;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;
@@ -342,7 +367,6 @@ private:
     size_t right_rows_to_be_added_when_matched_for_cross_join = 0;
     size_t shallow_copy_cross_probe_threshold;
 
-private:
     JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
@@ -374,6 +398,7 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
+private:
     /** Set information about structure of right hand of JOIN (joined data).
       * You must call this method before subsequent calls to insertFromBlock.
       */
@@ -434,6 +459,10 @@ private:
 
     void workAfterBuildFinish();
     void workAfterProbeFinish();
+
+    void generateRuntimeFilterValues(const Block & block);
+
+    void finalizeProfileInfo();
 };
 
 } // namespace DB

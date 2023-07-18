@@ -25,7 +25,7 @@ class AggregateConvergentSourceOp : public SourceOp
 {
 public:
     AggregateConvergentSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const AggregateContextPtr & agg_context_,
         size_t index_,
         const String & req_id);
@@ -35,9 +35,9 @@ public:
         return "AggregateConvergentSourceOp";
     }
 
-    void operateSuffix() override;
-
 protected:
+    void operateSuffixImpl() override;
+
     OperatorStatus readImpl(Block & block) override;
 
 private:

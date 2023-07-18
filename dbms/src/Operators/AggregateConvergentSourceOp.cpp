@@ -18,11 +18,11 @@
 namespace DB
 {
 AggregateConvergentSourceOp::AggregateConvergentSourceOp(
-    PipelineExecutorStatus & exec_status_,
+    PipelineExecutorContext & exec_context_,
     const AggregateContextPtr & agg_context_,
     size_t index_,
     const String & req_id)
-    : SourceOp(exec_status_, req_id)
+    : SourceOp(exec_context_, req_id)
     , agg_context(agg_context_)
     , index(index_)
 {
@@ -36,7 +36,7 @@ OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-void AggregateConvergentSourceOp::operateSuffix()
+void AggregateConvergentSourceOp::operateSuffixImpl()
 {
     LOG_DEBUG(log, "finish read {} rows from aggregate context", total_rows);
 }
