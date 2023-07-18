@@ -283,6 +283,10 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
+    // std::vector<partition_index, Blocks>
+    using MarkdeSpillData = std::vector<std::pair<size_t, Blocks>>;
+    MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index);
+    const MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index) const;
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
     void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
@@ -411,8 +415,6 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
-    // std::vector<partition_index, Blocks>
-    using MarkdeSpillData = std::vector<std::pair<size_t, Blocks>>;
     // the index of vector is the stream_index.
     std::vector<MarkdeSpillData> build_side_marked_spilled_data;
 

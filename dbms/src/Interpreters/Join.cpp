@@ -378,17 +378,29 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
         probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
 }
 
+Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_index)
+{
+    assert(stream_index < build_side_marked_spilled_data.size());
+    return build_side_marked_spilled_data[stream_index];
+}
+
+const Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_index) const
+{
+    assert(stream_index < build_side_marked_spilled_data.size());
+    return build_side_marked_spilled_data[stream_index];
+}
+
 bool Join::hasBuildSideMarkedSpillData(size_t stream_index) const
 {
     std::shared_lock lock(rwlock);
-    return !build_side_marked_spilled_data.empty() && !build_side_marked_spilled_data[stream_index].empty();
+    return !getBuildSideMarkdeSpillData(stream_index).empty();
 }
 
 void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
 {
     std::shared_lock lock(rwlock);
-    assert(!build_side_marked_spilled_data.empty() && !build_side_marked_spilled_data[stream_index].empty());
-    auto & data = build_side_marked_spilled_data[stream_index];
+    auto & data = getBuildSideMarkdeSpillData(stream_index);
+    assert(!data.empty());
     for (auto & elem : data)
         spillBuildSideBlocks(elem.first, std::move(elem.second));
     data.clear();
@@ -1514,7 +1526,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
                 partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller),
                 stream_index);
         // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
-        if (build_side_marked_spilled_data.empty() && build_side_marked_spilled_data[stream_index].empty())
+        if (getBuildSideMarkdeSpillData(stream_index).empty())
             build_spiller->finishSpill();
         has_build_data_in_memory = std::any_of(
             partitions.cbegin(),
@@ -1809,9 +1821,8 @@ void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
 
 void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
 {
-    assert(stream_index < build_side_marked_spilled_data.size());
     if (!blocks.empty())
-        build_side_marked_spilled_data[stream_index].emplace_back(part_id, std::move(blocks));
+        getBuildSideMarkdeSpillData(stream_index).emplace_back(part_id, std::move(blocks));
 }
 
 void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
