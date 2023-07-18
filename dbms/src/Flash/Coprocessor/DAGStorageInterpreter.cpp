@@ -1280,8 +1280,11 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         if (!table_scan.isPartitionTableScan())
         {
-            return {table_storages, table_locks, need_sync_table_ids};
+            if (need_sync_table_ids.empty())
+                return {table_storages, table_locks, need_sync_table_ids};
+            return {{}, {}, need_sync_table_ids};
         }
+
         for (auto const physical_table_id : table_scan.getPhysicalTableIDs())
         {
             auto [physical_table_storage, physical_table_lock] = get_and_lock_storage(schema_synced, physical_table_id);
@@ -1295,7 +1298,10 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
                 table_locks.emplace_back(std::move(physical_table_lock));
             }
         }
-        return {table_storages, table_locks, need_sync_table_ids};
+
+        if (need_sync_table_ids.empty())
+            return {table_storages, table_locks, need_sync_table_ids};
+        return {{}, {}, need_sync_table_ids};
     };
 
     auto sync_schema = [&](TableID table_id) {
