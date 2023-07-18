@@ -50,14 +50,8 @@ public:
     {
         RSResults res(pack_count, RSResult::None);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res);
-        // TODO optimize for IN
-        res = rsindex.minmax->checkEqual(start_pack, pack_count, values[0], rsindex.type);
+        res = rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
         std::transform(res.begin(), res.end(), res.begin(), [](RSResult r) { return !r; });
-        for (size_t i = 1; i < values.size(); ++i)
-        {
-            auto tmp = rsindex.minmax->checkEqual(start_pack, pack_count, values[i], rsindex.type);
-            std::transform(tmp.begin(), tmp.end(), res.begin(), res.begin(), [](RSResult r1, RSResult r2) { return r1 && !r2; });
-        }
         return res;
     }
 };

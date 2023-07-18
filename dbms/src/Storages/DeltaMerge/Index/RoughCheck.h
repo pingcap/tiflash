@@ -57,6 +57,25 @@ inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & 
 }
 
 template <typename T>
+inline RSResult checkIn(const std::vector<Field> & values, const DataTypePtr & type, const T & min, const T & max, const UInt8 has_null)
+{
+    RSResult result = None;
+    for (const auto & v : values)
+    {
+        if (result == All)
+            break;
+        if (v.isNull())
+        {
+            if (has_null)
+                result = Some;
+            continue;
+        }
+        result = result || checkEqual(v, type, min, max);
+    }
+    return result;
+}
+
+template <typename T>
 inline RSResult checkGreater(const Field & v, const DataTypePtr & type, const T & min, const T & max)
 {
     if (!IS_LEGAL(v, min))

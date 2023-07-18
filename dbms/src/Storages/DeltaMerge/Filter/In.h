@@ -55,14 +55,7 @@ public:
             return RSResults(pack_count, RSResult::None);
         RSResults results(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, results);
-        // TODO optimize for IN
-        results = rsindex.minmax->checkEqual(start_pack, pack_count, values[0], rsindex.type);
-        for (size_t i = 1; i < values.size(); ++i)
-        {
-            RSResults tmp_results = rsindex.minmax->checkEqual(start_pack, pack_count, values[i], rsindex.type);
-            std::transform(results.begin(), results.end(), tmp_results.begin(), results.begin(), [](RSResult a, RSResult b) { return a || b; });
-        }
-        return results;
+        return rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
     }
 };
 
