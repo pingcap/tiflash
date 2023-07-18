@@ -376,6 +376,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_sample_block = sample_block;
     if (max_bytes_before_external_join > 0)
         probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+    probe_side_marked_spilled_data.resize(probe_concurrency);
 }
 
 Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_index)
@@ -406,6 +407,36 @@ void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
     data.clear();
     if (is_the_last)
         build_spiller->finishSpill();
+}
+
+Join::MarkdeSpillData & Join::getProbeSideMarkdeSpillData(size_t stream_index)
+{
+    assert(stream_index < probe_side_marked_spilled_data.size());
+    return probe_side_marked_spilled_data[stream_index];
+}
+
+const Join::MarkdeSpillData & Join::getProbeSideMarkdeSpillData(size_t stream_index) const
+{
+    assert(stream_index < probe_side_marked_spilled_data.size());
+    return probe_side_marked_spilled_data[stream_index];
+}
+
+bool Join::hasProbeSideMarkedSpillData(size_t stream_index) const
+{
+    std::shared_lock lock(rwlock);
+    return !getProbeSideMarkdeSpillData(stream_index).empty();
+}
+
+void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
+{
+    std::shared_lock lock(rwlock);
+    auto & data = getProbeSideMarkdeSpillData(stream_index);
+    assert(!data.empty());
+    for (auto & elem : data)
+        spillProbeSideBlocks(elem.first, std::move(elem.second));
+    data.clear();
+    if (is_the_last)
+        probe_spiller->finishSpill();
 }
 
 /// the block should be valid.
@@ -1825,6 +1856,12 @@ void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t strea
         getBuildSideMarkdeSpillData(stream_index).emplace_back(part_id, std::move(blocks));
 }
 
+void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
+{
+    if (!blocks.empty())
+        getProbeSideMarkdeSpillData(stream_index).emplace_back(part_id, std::move(blocks));
+}
+
 void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 {
     Int64 target_partition_index = -1;
@@ -1960,7 +1997,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
     }
 }
 
-void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list)
+void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index)
 {
     Blocks partition_blocks = dispatchBlock(key_names_left, block);
     for (size_t i = 0; i < partition_blocks.size(); ++i)
@@ -1980,7 +2017,7 @@ void Join::dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_
         }
         if (need_spill)
         {
-            spillProbeSideBlocks(i, std::move(blocks_to_spill));
+            markProbeSideSpillData(i, std::move(blocks_to_spill), stream_index);
         }
         else
         {

@@ -105,7 +105,11 @@ PartitionBlock HashJoinProbeExec::getProbeBlock()
             {
                 auto new_block = probe_stream->read();
                 if (new_block)
-                    join->dispatchProbeBlock(new_block, probe_partition_blocks);
+                {
+                    join->dispatchProbeBlock(new_block, probe_partition_blocks, stream_index);
+                    if (join->hasProbeSideMarkedSpillData(stream_index))
+                        join->flushProbeSideMarkedSpillData(stream_index);
+                }
                 else
                     return {};
             }

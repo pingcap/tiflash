@@ -213,7 +213,7 @@ public:
 
     std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
-    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list);
+    void dispatchProbeBlock(Block & block, PartitionBlocks & partition_blocks_list, size_t stream_index);
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
@@ -285,10 +285,16 @@ public:
 
     // std::vector<partition_index, Blocks>
     using MarkdeSpillData = std::vector<std::pair<size_t, Blocks>>;
+
     MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index);
     const MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index) const;
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
     void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+
+    MarkdeSpillData & getProbeSideMarkdeSpillData(size_t stream_index);
+    const MarkdeSpillData & getProbeSideMarkdeSpillData(size_t stream_index) const;
+    bool hasProbeSideMarkedSpillData(size_t stream_index) const;
+    void flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
@@ -417,6 +423,7 @@ private:
 
     // the index of vector is the stream_index.
     std::vector<MarkdeSpillData> build_side_marked_spilled_data;
+    std::vector<MarkdeSpillData> probe_side_marked_spilled_data;
 
 private:
     /** Set information about structure of right hand of JOIN (joined data).
@@ -472,6 +479,7 @@ private:
     void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
 
     void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
+    void markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
 
     /// use lock as the argument to force the caller acquire the lock before call them
     void releaseAllPartitions();
