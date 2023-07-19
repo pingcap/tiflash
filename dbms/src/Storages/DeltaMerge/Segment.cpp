@@ -2918,8 +2918,8 @@ size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t e
     else
     {
         auto row_bytes = std::max(1, stable->avgRowBytes(read_columns)); // Avoid row_bytes to be 0.
-        auto rows = std::max(1, max_block_bytes / row_bytes); // Avoid rows to be 0.
-        rows = std::ceil(static_cast<double>(rows) / pack_rows) * pack_rows; // Align with pack and at least read one pack.
+        auto rows = max_block_bytes / row_bytes;
+        rows = std::max(rows / pack_rows * pack_rows, pack_rows); // Align down with pack rows and at least read one pack.
         return std::min(expected_block_rows, rows);
     }
 }
