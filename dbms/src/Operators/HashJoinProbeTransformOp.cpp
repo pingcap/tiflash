@@ -17,9 +17,6 @@
 
 #include <magic_enum.hpp>
 
-#include "Operators/Operator.h"
-#include "Operators/ProbeTransformExec.h"
-
 namespace DB
 {
 HashJoinProbeTransformOp::HashJoinProbeTransformOp(

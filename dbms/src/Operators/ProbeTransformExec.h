@@ -16,8 +16,6 @@
 
 #include <Interpreters/Join.h>
 
-#include "Core/Block.h"
-
 namespace DB
 {
 class ProbeTransformExec;
