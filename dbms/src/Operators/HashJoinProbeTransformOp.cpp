@@ -138,6 +138,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
 
 bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
 {
+    assert(probe_process_info.all_rows_joined_finish);
     if (!probe_partition_blocks.empty())
     {
         auto partition_block = std::move(probe_partition_blocks.front());
@@ -148,6 +149,15 @@ bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
     }
     return false;
 }
+
+#define DISPATCH_BLOCK(disptach_block)                                      \
+    assert(probe_partition_blocks.empty());                                 \
+    probe_transform->dispatchBlock(disptach_block, probe_partition_blocks); \
+    auto fill_ret = fillProcessInfoFromPartitoinBlocks();                   \
+    if (probe_transform->hasMarkedSpillData())                              \
+        return OperatorStatus::IO_OUT;                                      \
+    if (!fill_ret)                                                          \
+        return OperatorStatus::NEED_INPUT;
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
@@ -164,13 +174,7 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
         }
         else
         {
-            assert(probe_partition_blocks.empty());
-            probe_transform->dispatchBlock(block, probe_partition_blocks);
-            auto fill_ret = fillProcessInfoFromPartitoinBlocks();
-            if (probe_transform->hasMarkedSpillData())
-                return OperatorStatus::IO_OUT;
-            if (!fill_ret)
-                return OperatorStatus::NEED_INPUT;
+            DISPATCH_BLOCK(block);
         }
     }
 
@@ -193,19 +197,15 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
             auto restore_ret = probe_transform->popProbeRestoreBlock();
             if (likely(restore_ret))
             {
-                assert(probe_partition_blocks.empty());
-                probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
-                auto fill_ret = fillProcessInfoFromPartitoinBlocks();
-                if (probe_transform->hasMarkedSpillData())
-                    return OperatorStatus::IO_OUT;
-                if (!fill_ret)
-                    return OperatorStatus::NEED_INPUT;
+                DISPATCH_BLOCK(restore_ret);
             }
         }
     }
 
     return onOutput(block);
 }
+
+#undef DISPATCH_BLOCK
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
