@@ -61,6 +61,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         switch (status)
         {
         case ProbeStatus::PROBE:
+        case ProbeStatus::RESTORE_PROBE:
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
                 if (probe_transform->finishOneProbe())
@@ -125,7 +126,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
-                status = ProbeStatus::PROBE;
+                status = ProbeStatus::RESTORE_PROBE;
                 break;
             }
             return OperatorStatus::WAITING;
@@ -183,6 +184,25 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
         if (!fillProcessInfoFromPartitoinBlocks())
             return OperatorStatus::NEED_INPUT;
     }
+    else if (status == ProbeStatus::RESTORE_PROBE && probe_process_info.all_rows_joined_finish)
+    {
+        if (!fillProcessInfoFromPartitoinBlocks())
+        {
+            if (!probe_transform->isProbeRestoreReady())
+                return OperatorStatus::WAITING;
+            auto restore_ret = probe_transform->popProbeRestoreBlock();
+            if (likely(restore_ret))
+            {
+                assert(probe_partition_blocks.empty());
+                probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
+                auto fill_ret = fillProcessInfoFromPartitoinBlocks();
+                if (probe_transform->hasMarkedSpillData())
+                    return OperatorStatus::IO_OUT;
+                if (!fill_ret)
+                    return OperatorStatus::NEED_INPUT;
+            }
+        }
+    }
 
     return onOutput(block);
 }
@@ -212,6 +232,8 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         {
             return OperatorStatus::WAITING;
         }
+    case ProbeStatus::RESTORE_PROBE:
+        return probe_transform->isProbeRestoreReady() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
@@ -222,6 +244,7 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
     switch (status)
     {
     case ProbeStatus::PROBE:
+    case ProbeStatus::RESTORE_PROBE:
         probe_transform->flushMarkedSpillData();
         return OperatorStatus::NEED_INPUT;
     case ProbeStatus::PROBE_FINAL_SPILL:

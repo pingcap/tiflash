@@ -73,6 +73,7 @@ private:
         READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
         GET_RESTORE_JOIN, /// try to get restore join
         RESTORE_BUILD, /// build for restore join
+        RESTORE_PROBE, /// probe for restore join
         FINISHED, /// the final state
     };
     ProbeStatus status{ProbeStatus::PROBE};

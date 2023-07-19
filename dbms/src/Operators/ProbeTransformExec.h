@@ -16,6 +16,8 @@
 
 #include <Interpreters/Join.h>
 
+#include "Core/Block.h"
+
 namespace DB
 {
 class ProbeTransformExec;
@@ -55,6 +57,26 @@ public:
     // For restore build stage
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
+    // For restore probe stage
+    bool isProbeRestoreReady()
+    {
+        if (unlikely(is_probe_restore_done))
+            return true;
+        if (probe_restore_block)
+            return true;
+        return false;
+    }
+
+    Block popProbeRestoreBlock()
+    {
+        Block ret;
+        if (unlikely(is_probe_restore_done))
+            return ret;
+        assert(probe_restore_block);
+        std::swap(ret, probe_restore_block);
+        return ret;
+    }
+
     bool isSpilled() const { return join->isSpilled(); }
 
     ProbeTransformExecPtr tryGetRestoreExec();
@@ -71,5 +93,8 @@ private:
     const UInt64 max_block_size;
 
     ProbeTransformExecPtr parent;
+
+    Block probe_restore_block;
+    bool is_probe_restore_done = false;
 };
 } // namespace DB
