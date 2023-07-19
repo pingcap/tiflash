@@ -130,7 +130,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersio
     .identifier = 5,
 };
 
-
+// STORAGE_FORMAT_V100 is used for S3 only
 inline static const StorageFormatVersion STORAGE_FORMAT_V100 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
     .dm_file = DMFileFormat::V3,
