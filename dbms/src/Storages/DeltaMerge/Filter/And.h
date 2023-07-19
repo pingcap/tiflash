@@ -33,7 +33,7 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        RSResults res(pack_count, RSResult::Some);
+        RSResults res(pack_count, RSResult::All); // All && X = X
         for (const auto & child : children)
         {
             const auto tmp = child->roughCheck(start_pack, pack_count, param);
