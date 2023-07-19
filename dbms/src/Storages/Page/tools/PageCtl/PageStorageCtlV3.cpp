@@ -31,9 +31,6 @@
 #include <magic_enum.hpp>
 #include <unordered_set>
 
-#include "Storages/Page/V3/Universal/UniversalPageId.h"
-#include "common/types.h"
-
 namespace DB::PS::V3
 {
 extern "C" {
