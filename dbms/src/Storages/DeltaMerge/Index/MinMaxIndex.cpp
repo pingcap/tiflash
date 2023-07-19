@@ -174,7 +174,8 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
                                        + " vs. actual: " + std::to_string(bytes_read),
                                    Errors::DeltaTree::Internal);
     }
-    return std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
+    // NOLINTNEXTLINE (call private constructor of MinMaxIndex to build shared_ptr)
+    return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
 }
 
 std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
