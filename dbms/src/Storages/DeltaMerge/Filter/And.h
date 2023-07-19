@@ -33,13 +33,11 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        auto res = children[0]->roughCheck(start_pack, pack_count, param);
-        if (std::find(res.begin(), res.end(), None) != res.end())
-            return res;
-        for (size_t i = 1; i < children.size(); ++i)
+        RSResults res(pack_count, RSResult::Some);
+        for (const auto & child : children)
         {
-            auto tmp = children[i]->roughCheck(start_pack, pack_count, param);
-            std::transform(res.begin(), res.end(), tmp.begin(), res.begin(), [](const auto a, const auto b) { return a && b; });
+            const auto tmp = child->roughCheck(start_pack, pack_count, param);
+            std::transform(res.begin(), res.end(), tmp.cbegin(), res.begin(), [](const auto a, const auto b) { return a && b; });
         }
         return res;
     }

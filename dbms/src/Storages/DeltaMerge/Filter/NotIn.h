@@ -51,7 +51,7 @@ public:
         RSResults res(pack_count, RSResult::None);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res);
         res = rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
-        std::transform(res.begin(), res.end(), res.begin(), [](RSResult r) { return !r; });
+        std::transform(res.begin(), res.end(), res.begin(), [](RSResult result) { return !result; });
         return res;
     }
 };

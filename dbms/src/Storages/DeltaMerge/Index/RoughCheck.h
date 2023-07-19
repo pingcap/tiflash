@@ -67,7 +67,7 @@ inline RSResult checkIn(const std::vector<Field> & values, const DataTypePtr & t
         if (v.isNull())
         {
             if (has_null)
-                result = Some;
+                result = result || Some;
             continue;
         }
         result = result || checkEqual(v, type, min, max);
