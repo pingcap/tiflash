@@ -181,7 +181,6 @@ bool S3RandomAccessFile::initialize()
     bool request_succ = false;
     Aws::S3::Model::GetObjectRequest req;
     req.SetRange(readRangeOfObject());
-    LOG_INFO(Logger::get("hyy"), "readRangeOfObject is {}", readRangeOfObject());
     client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     while (cur_retry < max_retry)
     {
