@@ -42,6 +42,8 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
+    OperatorStatus executeIOImpl() override;
+
     void transformHeaderImpl(Block & header_) override;
 
     void operateSuffixImpl() override;
@@ -49,10 +51,13 @@ protected:
 private:
     OperatorStatus onOutput(Block & block);
 
+    bool fillProcessInfoFromPartitoinBlocks();
+
 private:
     JoinPtr join;
 
     ProbeProcessInfo probe_process_info;
+    PartitionBlocks probe_partition_blocks;
 
     size_t op_index;
 

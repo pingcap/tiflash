@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/HashJoinProbeTransformOp.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 
 #include <magic_enum.hpp>
 
@@ -96,15 +97,42 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
     }
 }
 
+bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
+{
+    if (!probe_partition_blocks.empty())
+    {
+        auto partition_block = std::move(probe_partition_blocks.front());
+        probe_partition_blocks.pop_front();
+        join->checkTypes(partition_block.block);
+        probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
+        return true;
+    }
+    return false;
+}
+
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
     if likely (block)
     {
-        join->checkTypes(block);
-        probe_process_info.resetBlock(std::move(block), 0);
-        assert(!probe_process_info.all_rows_joined_finish);
+        /// Even if spill is enabled, if spill is not triggered during build,
+        /// there is no need to dispatch probe block
+        if (!join->isSpilled())
+        {
+            join->checkTypes(block);
+            probe_process_info.resetBlock(std::move(block), 0);
+        }
+        else
+        {
+            assert(probe_partition_blocks.empty());
+            join->dispatchProbeBlock(block, probe_partition_blocks, op_index);
+            auto fill_ret = fillProcessInfoFromPartitoinBlocks();
+            if (join->hasProbeSideMarkedSpillData(op_index))
+                return OperatorStatus::IO_OUT;
+            if (!fill_ret)
+                return OperatorStatus::NEED_INPUT;
+        }
     }
 
     return onOutput(block);
@@ -113,7 +141,10 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
-        return OperatorStatus::NEED_INPUT;
+    {
+        if (!fillProcessInfoFromPartitoinBlocks())
+            return OperatorStatus::NEED_INPUT;
+    }
 
     return onOutput(block);
 }
@@ -132,6 +163,15 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         {
             return OperatorStatus::WAITING;
         }
+    }
+    return OperatorStatus::NEED_INPUT;
+}
+
+OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
+{
+    if likely (status == ProbeStatus::PROBE)
+    {
+        join->flushProbeSideMarkedSpillData(op_index);
     }
     return OperatorStatus::NEED_INPUT;
 }
