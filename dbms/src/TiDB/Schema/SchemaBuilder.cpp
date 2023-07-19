@@ -215,10 +215,26 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::DropTablePartition:
     case SchemaActionType::TruncateTablePartition:
     case SchemaActionType::ActionReorganizePartition:
-    case SchemaActionType::ActionRemovePartitioning:
-    case SchemaActionType::ActionAlterTablePartitioning:
     {
         applyPartitionDiff(diff.schema_id, diff.table_id);
+        break;
+    }
+    case SchemaActionType::ActionAlterTablePartitioning:
+    {
+        if (diff.table_id == diff.old_table_id)
+        {
+            applyPartitionDiff(diff.schema_id, diff.table_id);
+        }
+        else
+        {
+            applyCreateTable(diff.schema_id, diff.table_id);
+        }
+        break;
+    }
+    case SchemaActionType::ActionRemovePartitioning:
+    {
+        /// The new non-partitioned table will have a new id
+        applyCreateTable(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::ExchangeTablePartition:
