@@ -16,6 +16,7 @@
 
 #include <Interpreters/Join.h>
 #include <Operators/Operator.h>
+#include <Operators/ProbeTransformExec.h>
 
 namespace DB
 {
@@ -54,14 +55,12 @@ private:
     bool fillProcessInfoFromPartitoinBlocks();
 
 private:
-    JoinPtr join;
+    JoinPtr origin_join;
+
+    ProbeTransformExecPtr probe_transform;
 
     ProbeProcessInfo probe_process_info;
     PartitionBlocks probe_partition_blocks;
-
-    size_t op_index;
-
-    BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     size_t joined_rows = 0;
     size_t scan_hash_map_rows = 0;
@@ -69,7 +68,9 @@ private:
     enum class ProbeStatus
     {
         PROBE, /// probe data
+        PROBE_FINAL_SPILL, /// final spill for probe data
         WAIT_PROBE_FINISH, /// wait probe finish
+        GET_RESTORE_JOIN, /// try to get restore join
         READ_SCAN_HASH_MAP_DATA, /// output scan hash map after probe data
         FINISHED, /// the final state
     };

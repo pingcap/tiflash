@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/HashJoinProbeTransformOp.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Operators/HashJoinProbeTransformOp.h>
 
 #include <magic_enum.hpp>
+
+#include "Operators/ProbeTransformExec.h"
 
 namespace DB
 {
@@ -27,22 +29,23 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     size_t max_block_size,
     const Block & input_header)
     : TransformOp(exec_context_, req_id)
-    , join(join_)
+    , origin_join(join_)
     , probe_process_info(max_block_size)
-    , op_index(op_index_)
 {
-    RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
-    RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
+    RUNTIME_CHECK_MSG(origin_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
-    if (needScanHashMapAfterProbe(join->getKind()))
-        scan_hash_map_after_probe_stream = join->createScanHashMapAfterProbeStream(input_header, op_index, join->getProbeConcurrency(), max_block_size);
+    BlockInputStreamPtr scan_hash_map_after_probe_stream;
+    if (needScanHashMapAfterProbe(origin_join->getKind()))
+        scan_hash_map_after_probe_stream = origin_join->createScanHashMapAfterProbeStream(input_header, op_index_, origin_join->getProbeConcurrency(), max_block_size);
+    probe_transform = std::make_shared<ProbeTransformExec>(exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
 {
     ProbeProcessInfo header_probe_process_info(0);
     header_probe_process_info.resetBlock(std::move(header_));
-    header_ = join->joinBlock(header_probe_process_info, true);
+    header_ = origin_join->joinBlock(header_probe_process_info, true);
 }
 
 void HashJoinProbeTransformOp::operateSuffixImpl()
@@ -59,38 +62,66 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::PROBE:
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
-                if (join->finishOneProbe(op_index))
+                if (probe_transform->finishOneProbe())
                 {
-                    // TODO support spill.
-                    RUNTIME_CHECK(!join->hasProbeSideMarkedSpillData(op_index));
-                    join->finalizeProbe();
+                    if (probe_transform->hasMarkedSpillData())
+                    {
+                        status = ProbeStatus::PROBE_FINAL_SPILL;
+                        break;
+                    }
+                    probe_transform->finalizeProbe();
                 }
-                status = scan_hash_map_after_probe_stream
+                status = probe_transform->needScanHashMapAfterProbe() && !probe_transform->isSpilled()
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
                 break;
             }
-            block = join->joinBlock(probe_process_info);
+            block = probe_transform->joinBlock(probe_process_info);
             joined_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::PROBE_FINAL_SPILL:
+            return OperatorStatus::IO_OUT;
         case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-            block = scan_hash_map_after_probe_stream->read();
+            block = probe_transform->scanNonJoined();
             if unlikely (!block)
             {
-                scan_hash_map_after_probe_stream->readSuffix();
-                status = ProbeStatus::FINISHED;
+                probe_transform->endNonJoined();
+                status = probe_transform->isSpilled() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
                 break;
             }
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (join->isAllProbeFinished())
+            if (probe_transform->isAllProbeFinished())
             {
-                status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
-                scan_hash_map_after_probe_stream->readPrefix();
+                if (probe_transform->needScanHashMapAfterProbe())
+                {
+                    probe_transform->startNonJoined();
+                    status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                }
+                else if (probe_transform->isSpilled())
+                {
+                    status = ProbeStatus::GET_RESTORE_JOIN;
+                }
+                else
+                {
+                    status = ProbeStatus::FINISHED;
+                }
                 break;
             }
             return OperatorStatus::WAITING;
+        case ProbeStatus::GET_RESTORE_JOIN:
+            if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
+            {
+                probe_transform = restore_exec;
+                // TODO
+                status = ProbeStatus::FINISHED;
+            }
+            else
+            {
+                status = ProbeStatus::FINISHED;
+            }
+            break;
         case ProbeStatus::FINISHED:
             return OperatorStatus::HAS_OUTPUT;
         }
@@ -103,7 +134,7 @@ bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
     {
         auto partition_block = std::move(probe_partition_blocks.front());
         probe_partition_blocks.pop_front();
-        join->checkTypes(partition_block.block);
+        origin_join->checkTypes(partition_block.block);
         probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
         return true;
     }
@@ -118,17 +149,17 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
     {
         /// Even if spill is enabled, if spill is not triggered during build,
         /// there is no need to dispatch probe block
-        if (!join->isSpilled())
+        if (!probe_transform->isSpilled())
         {
-            join->checkTypes(block);
+            origin_join->checkTypes(block);
             probe_process_info.resetBlock(std::move(block), 0);
         }
         else
         {
             assert(probe_partition_blocks.empty());
-            join->dispatchProbeBlock(block, probe_partition_blocks, op_index);
+            probe_transform->dispatchBlock(block, probe_partition_blocks);
             auto fill_ret = fillProcessInfoFromPartitoinBlocks();
-            if (join->hasProbeSideMarkedSpillData(op_index))
+            if (probe_transform->hasMarkedSpillData())
                 return OperatorStatus::IO_OUT;
             if (!fill_ret)
                 return OperatorStatus::NEED_INPUT;
@@ -153,10 +184,10 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
     if likely (status == ProbeStatus::WAIT_PROBE_FINISH)
     {
-        if (join->isAllProbeFinished())
+        if (probe_transform->isAllProbeFinished())
         {
             status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
-            scan_hash_map_after_probe_stream->readPrefix();
+            probe_transform->startNonJoined();
             return OperatorStatus::HAS_OUTPUT;
         }
         else
@@ -169,10 +200,18 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
-    if likely (status == ProbeStatus::PROBE)
+    switch (status)
     {
-        join->flushProbeSideMarkedSpillData(op_index);
+    case ProbeStatus::PROBE:
+        probe_transform->flushMarkedSpillData();
+        return OperatorStatus::NEED_INPUT;
+    case ProbeStatus::PROBE_FINAL_SPILL:
+        probe_transform->flushMarkedSpillData(/*is_the_last=*/true);
+        probe_transform->finalizeProbe();
+        status = ProbeStatus::WAIT_PROBE_FINISH;
+        return OperatorStatus::HAS_OUTPUT;
+    default:
+        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
-    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB
