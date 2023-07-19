@@ -1920,10 +1920,10 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
 #endif
-        RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         auto partitions_to_be_spilled = hash_join_spill_context->getPartitionsToSpill();
         if (partitions_to_be_spilled.empty())
             return;
+        RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         target_partition_index = partitions_to_be_spilled[0];
 
         LOG_INFO(log, fmt::format("Join with restore round: {}, used {} bytes, will spill partition: {}.", restore_round, getTotalByteCount(), target_partition_index));

@@ -93,10 +93,10 @@ SpillConfig HashJoinSpillContext::createProbeSpillConfig(const String & spill_id
 std::vector<size_t> HashJoinSpillContext::getPartitionsToSpill()
 {
     std::vector<size_t> ret;
-    if (!in_spillable_stage)
+    if (!in_spillable_stage || isSpillEnabled())
         return ret;
     Int64 target_partition_index = -1;
-    if ((operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() <= static_cast<Int64>(operator_spill_threshold)))
+    if (operator_spill_threshold <= 0 || getTotalRevocableMemoryImpl() <= static_cast<Int64>(operator_spill_threshold))
     {
         return ret;
     }
