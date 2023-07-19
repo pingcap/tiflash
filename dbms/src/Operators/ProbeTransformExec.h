@@ -33,6 +33,7 @@ public:
         BlockInputStreamPtr scan_hash_map_after_probe_stream_,
         UInt64 max_block_size_);
 
+    // For NonJoined stage
     bool needScanHashMapAfterProbe() const { return scan_hash_map_after_probe_stream != nullptr; }
     void startNonJoined() { scan_hash_map_after_probe_stream->readPrefix(); }
     Block scanNonJoined() { return scan_hash_map_after_probe_stream->read(); }
@@ -42,6 +43,7 @@ public:
         join->finishOneNonJoin(op_index);
     }
 
+    // For probe stage
     void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
@@ -49,6 +51,9 @@ public:
     bool isAllProbeFinished() const { return join->isAllProbeFinished(); }
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData(bool is_the_last = false) { join->flushProbeSideMarkedSpillData(op_index, is_the_last); }
+
+    // For restore build stage
+    bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
     bool isSpilled() const { return join->isSpilled(); }
 

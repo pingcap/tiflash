@@ -251,14 +251,7 @@ Block HashJoinProbeExec::fetchScanHashMapData()
 bool HashJoinProbeExec::onScanHashMapAfterProbeFinish()
 {
     scan_hash_map_after_probe_stream->readSuffix();
-    if (!join->isEnableSpill())
-    {
-        return true;
-    }
-    else
-    {
-        join->finishOneNonJoin(stream_index);
-        return false;
-    }
+    join->finishOneNonJoin(stream_index);
+    return !join->isEnableSpill();
 }
 } // namespace DB

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/ProbeTransformExec.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Operators/ProbeTransformExec.h>
 
 namespace DB
 {

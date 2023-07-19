@@ -17,6 +17,7 @@
 
 #include <magic_enum.hpp>
 
+#include "Operators/Operator.h"
 #include "Operators/ProbeTransformExec.h"
 
 namespace DB
@@ -114,14 +115,20 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
             {
                 probe_transform = restore_exec;
-                // TODO
-                status = ProbeStatus::FINISHED;
+                status = ProbeStatus::RESTORE_BUILD;
             }
             else
             {
                 status = ProbeStatus::FINISHED;
             }
             break;
+        case ProbeStatus::RESTORE_BUILD:
+            if (probe_transform->isAllBuildFinished())
+            {
+                status = ProbeStatus::PROBE;
+                break;
+            }
+            return OperatorStatus::WAITING;
         case ProbeStatus::FINISHED:
             return OperatorStatus::HAS_OUTPUT;
         }
@@ -182,8 +189,9 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
-    if likely (status == ProbeStatus::WAIT_PROBE_FINISH)
+    switch (status)
     {
+    case ProbeStatus::WAIT_PROBE_FINISH:
         if (probe_transform->isAllProbeFinished())
         {
             status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
@@ -194,8 +202,19 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         {
             return OperatorStatus::WAITING;
         }
+    case ProbeStatus::RESTORE_BUILD:
+        if (probe_transform->isAllBuildFinished())
+        {
+            status = ProbeStatus::PROBE;
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        else
+        {
+            return OperatorStatus::WAITING;
+        }
+    default:
+        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
-    return OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()

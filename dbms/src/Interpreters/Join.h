@@ -273,6 +273,8 @@ public:
     void waitUntilAllProbeFinished() const;
     bool isAllProbeFinished() const;
 
+    bool isAllBuildFinished() const;
+
     void finishOneNonJoin(size_t partition_index);
 
     size_t getBuildConcurrency() const

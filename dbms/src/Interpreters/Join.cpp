@@ -1706,16 +1706,27 @@ bool Join::isAllProbeFinished() const
     return probe_finished || meet_error || skip_wait;
 }
 
+bool Join::isAllBuildFinished() const
+{
+    std::lock_guard lock(build_probe_mutex);
+    return build_finished || meet_error || skip_wait;
+}
 
 void Join::finishOneNonJoin(size_t partition_index)
 {
-    if likely (build_finished && probe_finished)
+    // When spill is enabled, the hash table is stored in multiple hash partitions,
+    // so when non-joined-scan ends, the corresponding join partition can be released.
+    // When spill is not enabled, the hash table exists on a hash partition, so the join partition cannot be released.
+    if (isEnableSpill())
     {
-        /// only clear hash table if not active build/probe threads
-        while (partition_index < build_concurrency)
+        if likely (build_finished && probe_finished)
         {
-            partitions[partition_index]->releasePartition();
-            partition_index += build_concurrency;
+            /// only clear hash table if not active build/probe threads
+            while (partition_index < build_concurrency)
+            {
+                partitions[partition_index]->releasePartition();
+                partition_index += build_concurrency;
+            }
         }
     }
 }
