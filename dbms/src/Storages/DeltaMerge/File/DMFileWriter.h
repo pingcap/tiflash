@@ -69,7 +69,6 @@ public:
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , marks(std::make_shared<MarksInCompressedFile>())
         {
             if (!dmfile->useMetaV2())
             {
@@ -83,6 +82,10 @@ public:
                                 .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
                                 .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
                                 .build();
+            }
+            else
+            {
+                marks = std::make_shared<MarksInCompressedFile>();
             }
         }
 

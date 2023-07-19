@@ -23,6 +23,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -116,7 +117,7 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, UInt64 small_file_size_threshold, UInt64 merged_file_max_size, DMFileFormat::Version version)
 {
-    // if small_file_size_threshold we should use DMFileFormat::V2
+    // if small_file_size_threshold == 0 we should use DMFileFormat::V2
     if (version == DMFileFormat::V3 and small_file_size_threshold == 0)
     {
         version = DMFileFormat::V2;
@@ -1059,49 +1060,19 @@ void DMFile::finalizeDirName()
     old_file.renameTo(new_path);
 }
 
-std::vector<std::pair<String, UInt64>> DMFile::listFilesForUpload()
+std::vector<String> DMFile::listFilesForUpload()
 {
     RUNTIME_CHECK(useMetaV2());
-    std::vector<std::pair<String, UInt64>> fnames;
-    fnames.emplace_back(metav2FileName(), /*file_size*/ 0); // We don't need the meta file's size currently.
-    for (const auto & merged_file : merged_files)
+    std::vector<String> fnames;
+    Poco::DirectoryIterator end;
+    for (Poco::DirectoryIterator itr(path()); itr != end; ++itr)
     {
-        fnames.emplace_back(mergedFilename(merged_file.number), merged_file.size);
-    }
-    auto col_fnames = listColumnFilesWithSize();
-    for (const auto & [fname, fsize] : col_fnames)
-    {
-        auto itr = merged_sub_file_infos.find(fname);
-        if (itr == merged_sub_file_infos.end())
+        if (itr.name() != "NGC")
         {
-            fnames.emplace_back(fname, fsize);
+            fnames.emplace_back(itr.name());
         }
     }
     return fnames;
-}
-
-std::vector<std::pair<String, UInt64>> DMFile::listColumnFilesWithSize()
-{
-    RUNTIME_CHECK(useMetaV2());
-    std::vector<std::pair<String, UInt64>> fnames;
-    for (const auto & [col_id, stat] : column_stats)
-    {
-        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
-            fnames.emplace_back(std::move(fname), fsize);
-        });
-    }
-    return fnames;
-}
-
-void DMFile::listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle)
-{
-    auto name_base = getFileNameBase(col_id, {});
-    handle(colDataFileName(name_base), stat.data_bytes);
-    if (stat.type->isNullable())
-    {
-        auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
-        handle(colDataFileName(null_name_base), stat.nullmap_data_bytes);
-    }
 }
 
 void DMFile::switchToRemote(const S3::DMFileOID & oid)
@@ -1236,10 +1207,6 @@ S3::S3RandomAccessFile::ReadFileInfo DMFile::getReadFileInfo(ColId col_id, const
 S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const
 {
     S3::S3RandomAccessFile::ReadFileInfo read_file_info;
-
-    read_file_info.merged_filename = mergedPath(file_info.number);
-    read_file_info.read_merged_offset = file_info.offset;
-    read_file_info.read_merged_size = file_info.size;
 
     // Get filesize of merged file.
     auto itr = std::find_if(

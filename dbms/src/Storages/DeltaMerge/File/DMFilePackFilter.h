@@ -251,7 +251,7 @@ private:
                     read_limiter);
                 return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
-            else if (dmfile->useMetaV2() and !DB::S3::ClientFactory::instance().isEnabled()) // v3
+            else if (dmfile->useMetaV2()) // v3
             {
                 auto info = dmfile->merged_sub_file_infos.find(dmfile->colIndexFileName(file_name_base));
                 if (info == dmfile->merged_sub_file_infos.end())
@@ -290,7 +290,7 @@ private:
                 return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
             }
             else
-            { // v2 or s3
+            { // v2
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),

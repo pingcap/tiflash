@@ -229,7 +229,7 @@ public:
 
     // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, UInt64 small_file_size_threshold = 16 * 1024, UInt64 merged_file_max_size = 16 * 1024 * 1024, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, UInt64 small_file_size_threshold = 128 * 1024, UInt64 merged_file_max_size = 16 * 1024 * 1024, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -336,7 +336,7 @@ public:
     }
 
     static String metav2FileName() { return "meta"; }
-    std::vector<std::pair<String, UInt64>> listFilesForUpload();
+    std::vector<String> listFilesForUpload();
     void switchToRemote(const S3::DMFileOID & oid);
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -348,7 +348,7 @@ public:
            UInt64 page_id_,
            String parent_path_,
            Status status_,
-           UInt64 small_file_size_threshold_ = 16 * 1024,
+           UInt64 small_file_size_threshold_ = 128 * 1024,
            UInt64 merged_file_max_size_ = 16 * 1024 * 1024,
            DMConfigurationOpt configuration_ = std::nullopt,
            DMFileFormat::Version version_ = STORAGE_FORMAT_CURRENT.dm_file)
@@ -467,9 +467,6 @@ public:
     void parsePackStat(std::string_view buffer);
     void finalizeDirName();
     bool useMetaV2() const { return version == DMFileFormat::V3; }
-
-    std::vector<std::pair<String, UInt64>> listColumnFilesWithSize();
-    static void listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle);
 
     UInt64 getFileSize(ColId col_id, const String & filename) const;
     S3::S3RandomAccessFile::ReadFileInfo getReadFileInfo(ColId col_id, const String & filename) const;

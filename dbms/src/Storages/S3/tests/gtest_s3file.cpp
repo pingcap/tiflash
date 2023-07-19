@@ -291,7 +291,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 16 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -303,19 +303,14 @@ try
 
     std::vector<String> uploaded_files;
     {
+        auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ false);
-        auto local_files_with_size = dmfile->listFilesForUpload();
         auto remote_files_with_size = listFiles(oid);
-        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
-        for (const auto & [fname, fsize] : local_files_with_size)
+        ASSERT_EQ(local_files.size(), remote_files_with_size.size());
+        for (const auto & fname : local_files)
         {
             auto itr = remote_files_with_size.find(fname);
             ASSERT_NE(itr, remote_files_with_size.end());
-            if (fname.find(".dat") != String::npos) // only .dat size contains header part
-            {
-                LOG_INFO(Logger::get("hyy"), "into compare");
-                ASSERT_EQ(itr->second, fsize);
-            }
             uploaded_files.push_back(fname);
         }
         LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
@@ -413,7 +408,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
-        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 16 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -427,18 +422,14 @@ try
     auto local_dir = dmfile->path();
     ASSERT_TRUE(std::filesystem::exists(local_dir));
     {
+        auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
-        auto local_files_with_size = dmfile->listFilesForUpload();
         auto remote_files_with_size = listFiles(oid);
-        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
-        for (const auto & [fname, fsize] : local_files_with_size)
+        ASSERT_EQ(local_files.size(), remote_files_with_size.size());
+        for (const auto & fname : local_files)
         {
             auto itr = remote_files_with_size.find(fname);
             ASSERT_NE(itr, remote_files_with_size.end());
-            if (fname != DMFile::metav2FileName())
-            {
-                ASSERT_EQ(itr->second, fsize) << fname;
-            }
             uploaded_files.push_back(fname);
         }
         LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);

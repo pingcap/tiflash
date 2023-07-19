@@ -102,7 +102,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
 
         // Write DMFile::V3
         {
-            dmfileV3 = DB::DM::DMFile::create(2, getTemporaryPath(), std::make_optional<DMChecksumConfig>(), 16 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+            dmfileV3 = DB::DM::DMFile::create(2, getTemporaryPath(), std::make_optional<DMChecksumConfig>(), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfileV3, *defines);
                 stream.writePrefix();

@@ -69,7 +69,7 @@ DMFileReader::Stream::Stream(
         auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
         if (reader.dmfile->configuration)
         {
-            if (reader.dmfile->useMetaV2() && !DB::S3::ClientFactory::instance().isEnabled()) // metav2 and not s3
+            if (reader.dmfile->useMetaV2()) // metav2
             { // v3
                 auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colMarkFileName(file_name_base));
                 if (info == reader.dmfile->merged_sub_file_infos.end())
@@ -107,7 +107,7 @@ DMFileReader::Stream::Stream(
                 buf->readBig(reinterpret_cast<char *>(res->data()), size);
             }
             else
-            { // v2 or s3
+            { // v2
                 auto buffer = createReadBufferFromFileBaseByFileProvider(
                     reader.file_provider,
                     reader.dmfile->colMarkPath(file_name_base),
@@ -136,6 +136,9 @@ DMFileReader::Stream::Stream(
     auto is_null_map = endsWith(file_name_base, ".null");
     size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
     size_t packs = reader.dmfile->getPacks();
+    if (packs == 0)
+        return;
+
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
@@ -200,7 +203,7 @@ DMFileReader::Stream::Stream(
                                                                            read_limiter,
                                                                            buffer_size);
     }
-    else if (reader.dmfile->useMetaV2() and !DB::S3::ClientFactory::instance().isEnabled()) // v3
+    else if (reader.dmfile->useMetaV2()) // v3
     {
         auto info = reader.dmfile->merged_sub_file_infos.find(reader.dmfile->colDataFileName(file_name_base));
         if (info == reader.dmfile->merged_sub_file_infos.end())
@@ -244,7 +247,7 @@ DMFileReader::Stream::Stream(
         }
     }
     else
-    { // v2 or s3
+    { // v2
         buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
