@@ -31,12 +31,9 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 static const ColId DEFAULT_COL_ID = 0;
 static const String DEFAULT_COL_NAME = "2020-09-26";
 
@@ -1496,17 +1493,74 @@ try
 
     auto minmax = std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
 
-    auto index = RSIndex(type, minmax);
-    auto col_id = 1;
-    param.indexes.emplace(col_id, index);
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
 
     // make a euqal filter, check equal with 1
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
-    ASSERT_EQ(filter->roughCheck(0, 1, param), RSResult::Some);
+    ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+TEST_F(DMMinMaxIndexTest, InOrNotInNULL)
+try
+{
+    RSCheckParam param;
+
+    auto type = std::make_shared<DataTypeInt64>();
+    auto data_type = makeNullable(type);
+
+    auto has_null_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    auto has_value_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    MutableColumnPtr minmaxes = data_type->createColumn();
+
+    auto column = data_type->createColumn();
+
+    column->insert(Field(static_cast<Int64>(1))); // insert value 1
+    column->insert(Field(static_cast<Int64>(2))); // insert value 2
+    column->insertDefault(); // insert null value
+
+    auto * col = column.get();
+    minmaxes->insertFrom(*col, 0); // insert min index
+    minmaxes->insertFrom(*col, 1); // insert max index
+
+    auto minmax = std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
+
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
+
+    {
+        // make a in filter, check in (NULL)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field()});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a in filter, check in (NULL, 1)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a in filter, check in (3)
+        auto filter = createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::None);
+    }
+    {
+        // make a not in filter, check not in (NULL)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field()});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a not in filter, check not in (NULL, 1)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(), Field(static_cast<Int64>(1))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::Some);
+    }
+    {
+        // make a not in filter, check not in (3)
+        auto filter = createNotIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
+        ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
+    }
+}
+CATCH
+
+} // namespace DB::DM::tests

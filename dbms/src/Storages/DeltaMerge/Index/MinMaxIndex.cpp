@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
+
 namespace DB::DM
 {
 
@@ -484,8 +485,6 @@ RSResults MinMaxIndex::checkEqual(size_t start_pack, size_t pack_count, const Fi
 RSResults MinMaxIndex::checkIn(size_t start_pack, size_t pack_count, const std::vector<Field> & values, const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
-
-    // todo: handle nulls
 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))

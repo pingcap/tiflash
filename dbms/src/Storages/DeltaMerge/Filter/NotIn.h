@@ -48,7 +48,7 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        RSResults res(pack_count, RSResult::None);
+        RSResults res(pack_count, RSResult::Some);
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_DIRECTLY(param, attr, rsindex, res);
         res = rsindex.minmax->checkIn(start_pack, pack_count, values, rsindex.type);
         std::transform(res.begin(), res.end(), res.begin(), [](RSResult result) { return !result; });
