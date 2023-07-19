@@ -56,24 +56,8 @@ public:
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
     // For restore probe stage
-    bool isProbeRestoreReady()
-    {
-        if (unlikely(is_probe_restore_done))
-            return true;
-        if (probe_restore_block)
-            return true;
-        return false;
-    }
-
-    Block popProbeRestoreBlock()
-    {
-        Block ret;
-        if (unlikely(is_probe_restore_done))
-            return ret;
-        assert(probe_restore_block);
-        std::swap(ret, probe_restore_block);
-        return ret;
-    }
+    bool isProbeRestoreReady();
+    Block popProbeRestoreBlock();
 
     bool isSpilled() const { return join->isSpilled(); }
 

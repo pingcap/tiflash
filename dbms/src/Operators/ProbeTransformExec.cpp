@@ -13,7 +13,12 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
 #include <Operators/ProbeTransformExec.h>
+#include <Operators/IOBlockInputStreamSourceOp.h>
+#include <memory>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Operators/HashJoinBuildSink.h>
 
 namespace DB
 {
@@ -52,7 +57,14 @@ ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
                 restore_info->scan_hash_map_stream,
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
-            // TODO start async restore build/probe tasks here.
+
+            // launch restore build/probe tasks.
+            // - build
+            PipelineExecGroupBuilder build_side_builder;
+            build_side_builder.addConcurrency(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, "", restore_info->build_stream));
+            build_side_builder.transform(std::make_unique<HashJoinBuildSink>(exec_context, "", restore_info->join, restore_info->stream_index));
+            // - probe
+
             return restore_probe_exec;
         }
         assert(join->hasPartitionSpilledWithLock() == false);
@@ -60,5 +72,24 @@ ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
 
     // current join has no more partition to restore, so check if previous join still has partition to restore
     return parent ? parent->tryGetRestoreExec() : ProbeTransformExecPtr{};
+}
+
+bool ProbeTransformExec::isProbeRestoreReady()
+{
+    if (unlikely(is_probe_restore_done))
+        return true;
+    if (probe_restore_block)
+        return true;
+    return false;
+}
+
+Block ProbeTransformExec::popProbeRestoreBlock()
+{
+    Block ret;
+    if (unlikely(is_probe_restore_done))
+        return ret;
+    assert(probe_restore_block);
+    std::swap(ret, probe_restore_block);
+    return ret;
 }
 } // namespace DB
