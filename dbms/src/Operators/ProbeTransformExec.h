@@ -94,6 +94,7 @@ private:
 
     ProbeTransformExecPtr parent;
 
+    // For restore probe.
     Block probe_restore_block;
     bool is_probe_restore_done = false;
 };

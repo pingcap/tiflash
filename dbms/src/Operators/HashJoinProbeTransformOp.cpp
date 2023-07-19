@@ -73,7 +73,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     }
                     probe_transform->finalizeProbe();
                 }
-                status = probe_transform->needScanHashMapAfterProbe() && !probe_transform->isSpilled()
+                status = probe_transform->needScanHashMapAfterProbe() || probe_transform->isSpilled()
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
                 break;

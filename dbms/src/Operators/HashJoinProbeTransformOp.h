@@ -65,6 +65,54 @@ private:
     size_t joined_rows = 0;
     size_t scan_hash_map_rows = 0;
 
+    /*
+     *   spill not enabled:
+     *                                        PROBE
+     *                                          |
+     *                                          ▼
+     *                                  -----------------
+     *        has scan_after_probe data |               | no scan_after_probe data
+     *                                  ▼               ▼
+     *                         WAIT_PROBE_FINISH     FINISHED
+     *                                  |
+     *                                  ▼
+     *                        READ_SCAN_HASH_MAP_DATA
+     *                                  |
+     *                                  ▼
+     *                               FINISHED
+     *
+     *   spill enabled:
+     *                  |------------------->  PROBE/RESTORE_PROBE
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     PROBE_FINAL_SPILL
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                     WAIT_PROBE_FINISH
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |has scan_hash_map data |             | no scan_hash_map data
+     *                  |                       ▼             |
+     *                  |           READ_SCAN_HASH_MAP_DATA   |
+     *                  |                       \             /
+     *                  |                        \           /
+     *                  |                         \         /
+     *                  |                          \       /
+     *                  |                           \     /
+     *                  |                            \   /
+     *                  |                             \ /
+     *                  |                              ▼
+     *                  |                       GET_RESTORE_JOIN
+     *                  |                              |
+     *                  |                              ▼
+     *                  |                       ---------------
+     *                  |     has restored join |             | no restored join
+     *                  |                       ▼             ▼
+     *                  |                 RESTORE_BUILD    FINISHED
+     *                  |                       |
+     *                  ------------------------|
+     */
     enum class ProbeStatus
     {
         PROBE, /// probe data
