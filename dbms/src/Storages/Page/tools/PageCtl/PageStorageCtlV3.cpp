@@ -468,42 +468,44 @@ private:
     {
         // region_id -> pair<min_raft_log_index, max_raft_log_index>
         std::unordered_map<UInt64, std::pair<UInt64, UInt64>> regions;
-        for (const auto & [page_id, versioned_entries] : mvcc_table_directory)
+        for (const auto & [page_id, _] : mvcc_table_directory)
         {
-            UNUSED(versioned_entries);
             auto maybe_region_id = RaftDataReader::tryParseRegionId(page_id);
-            if (maybe_region_id)
+            if (!maybe_region_id)
+                continue;
+
+            auto region_id = *maybe_region_id;
+            if (regions.find(region_id) == regions.end())
             {
-                auto region_id = *maybe_region_id;
-                if (regions.find(region_id) == regions.end())
-                {
-                    regions.emplace(region_id, std::make_pair(UINT64_MAX, 0));
-                }
-                auto maybe_raft_log_index = RaftDataReader::tryParseRaftLogIndex(page_id);
-                if (maybe_raft_log_index)
-                {
-                    auto raft_log_index = *maybe_raft_log_index;
-                    auto & [min_raft_log_index, max_raft_log_index] = regions[region_id];
-                    min_raft_log_index = std::min(min_raft_log_index, raft_log_index);
-                    max_raft_log_index = std::max(max_raft_log_index, raft_log_index);
-                }
+                regions.emplace(region_id, std::make_pair(UINT64_MAX, 0));
             }
+
+            auto maybe_raft_log_index = RaftDataReader::tryParseRaftLogIndex(page_id);
+            if (!maybe_raft_log_index)
+                continue;
+
+            auto raft_log_index = *maybe_raft_log_index;
+            auto & [min_raft_log_index, max_raft_log_index] = regions[region_id];
+            min_raft_log_index = std::min(min_raft_log_index, raft_log_index);
+            max_raft_log_index = std::max(max_raft_log_index, raft_log_index);
         }
-        // region_id, min_log_index, max_log_index, log_count
-        std::vector<std::tuple<UInt64, UInt64, UInt64, UInt64>> regions_vec;
-        regions_vec.reserve(regions.size());
+
+        // tuple<region_id, min_log_index, max_log_index, log_count>
+        std::vector<std::tuple<UInt64, UInt64, UInt64, UInt64>> region_infos_vec;
+        region_infos_vec.reserve(regions.size());
         for (const auto & [region_id, min_max] : regions)
         {
-            regions_vec.emplace_back(std::make_tuple(region_id, min_max.first, min_max.second, min_max.first > min_max.second ? 0 : min_max.second - min_max.first + 1));
+            region_infos_vec.emplace_back(std::make_tuple(region_id, min_max.first, min_max.second, min_max.first > min_max.second ? 0 : min_max.second - min_max.first + 1));
         }
-        sort(regions_vec.begin(), regions_vec.end(), [](const auto & lhs, const auto & rhs) {
+        // sort by raft log count
+        sort(region_infos_vec.begin(), region_infos_vec.end(), [](const auto & lhs, const auto & rhs) {
             return std::get<3>(lhs) > std::get<3>(rhs);
         });
         FmtBuffer all_region_info;
         all_region_info.append("  All regions: \n\n");
         all_region_info.joinStr(
-            regions_vec.begin(),
-            regions_vec.end(),
+            region_infos_vec.begin(),
+            region_infos_vec.end(),
             [](const auto arg, FmtBuffer & fb) {
                 fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
                              std::get<0>(arg),

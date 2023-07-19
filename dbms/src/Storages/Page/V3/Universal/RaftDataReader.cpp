@@ -15,10 +15,6 @@
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
-#include "Common/Exception.h"
-#include "Storages/Page/PageConstants.h"
-#include "Storages/Page/V3/Universal/UniversalPageId.h"
-
 namespace DB
 {
 // Proxy may try to scan data in range [start, end), and kv engine may specify an empty `end` which means infinite end.(Raft engine will always specify a non-empty `end` key)
@@ -79,7 +75,6 @@ std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPage
 
 std::optional<UInt64> RaftDataReader::tryParseRegionId(const UniversalPageId & page_id)
 {
-    // TODO: remove keyspace prefix
     auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
     if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
     {
@@ -96,13 +91,12 @@ std::optional<UInt64> RaftDataReader::tryParseRegionId(const UniversalPageId & p
 
 std::optional<UInt64> RaftDataReader::tryParseRaftLogIndex(const UniversalPageId & page_id)
 {
-    // TODO: remove keyspace prefix
     auto page_id_type = UniversalPageIdFormat::getUniversalPageIdType(page_id);
     if (page_id_type != StorageType::KVEngine && page_id_type != StorageType::RaftEngine)
     {
         return {};
     }
-    // 11 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
+    // 20 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
     if (page_id.size() < 20)
     {
         return {};
