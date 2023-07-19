@@ -144,7 +144,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
         parent.threads_data[thread_num].aggregate_columns,
         thread_num);
     if (data.need_spill)
-        parent.aggregator.spill(data, thread_num);
+        parent.aggregator.spill(data);
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -157,7 +157,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
         /// Flush data in the RAM to disk. So it's easier to unite them later.
         auto & data = *parent.many_data[thread_num];
         if (data.tryMarkNeedSpill())
-            parent.aggregator.spill(data, thread_num);
+            parent.aggregator.spill(data);
     }
 }
 
@@ -169,10 +169,10 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
     {
         /// It may happen that some data has not yet been flushed,
         ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
-        for (size_t i = 0; i < parent.many_data.size(); ++i)
+        for (auto & data : parent.many_data)
         {
-            if (parent.many_data[i]->tryMarkNeedSpill())
-                parent.aggregator.spill(*parent.many_data[i], i);
+            if (data->tryMarkNeedSpill())
+                parent.aggregator.spill(*data);
         }
     }
 }
@@ -255,7 +255,7 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].aggregate_columns,
             0);
         if (data.need_spill)
-            aggregator.spill(data, 0);
+            aggregator.spill(data);
     }
 }
 

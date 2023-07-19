@@ -1064,7 +1064,7 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void spill(AggregatedDataVariants & data_variants, size_t thread_num);
+    void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return agg_spill_context->hasSpilledData(); }

@@ -85,7 +85,6 @@ Block MergeSortingBlockInputStream::readImpl()
                     return this->isCancelled();
                 };
                 sort_spill_context->getSpiller()->spillBlocksUsingBlockInputStream(block_in, 0, is_cancelled_pred);
-                sort_spill_context->updateRevocableMemory(0);
                 blocks.clear();
                 if (is_cancelled)
                     break;

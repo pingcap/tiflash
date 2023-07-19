@@ -20,6 +20,7 @@ HashJoinSpillContext::HashJoinSpillContext(const SpillConfig & build_spill_confi
     : OperatorSpillContext(operator_spill_threshold, log)
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
+    , max_cached_bytes(std::max(build_spill_config.max_cached_data_bytes_in_spiller, probe_spill_config.max_cached_data_bytes_in_spiller))
 {}
 
 void HashJoinSpillContext::init(size_t partition_num)
@@ -72,7 +73,7 @@ bool HashJoinSpillContext::updatePartitionRevocableMemory(bool force_spill, size
     /// the new partition to spill is chosen in getPartitionsToSpill
     if ((*partition_spill_status)[partition_id] == SpillStatus::NOT_SPILL)
         return false;
-    if (force_spill || (*partition_revocable_memories)[partition_id] > static_cast<Int64>(build_spill_config.max_cached_data_bytes_in_spiller))
+    if (force_spill || (max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes))
     {
         (*partition_revocable_memories)[partition_id] = 0;
         return true;

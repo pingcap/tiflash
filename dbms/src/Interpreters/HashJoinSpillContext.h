@@ -30,6 +30,7 @@ private:
     SpillerPtr build_spiller;
     SpillConfig probe_spill_config;
     SpillerPtr probe_spiller;
+    Int64 max_cached_bytes;
 
 public:
     HashJoinSpillContext(const SpillConfig & build_spill_config_, const SpillConfig & probe_spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
