@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceivedMessageQueue.h>
 
 namespace DB
 {
@@ -25,22 +25,24 @@ struct LocalRequestHandler
         std::function<void(bool, const String &)> && notify_write_done_,
         std::function<void()> && notify_close_,
         std::function<void()> && add_local_conn_num_,
-        ReceiverChannelWriter && channel_writer_)
+        const std::string & req_info_,
+        ReceivedMessageQueue * msg_queue_)
         : notify_write_done(std::move(notify_write_done_))
         , notify_close(std::move(notify_close_))
         , add_local_conn_num(std::move(add_local_conn_num_))
-        , channel_writer(std::move(channel_writer_))
+        , req_info(req_info_)
+        , msg_queue(msg_queue_)
     {}
 
     template <bool is_force>
     bool write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
     {
-        return channel_writer.write<is_force>(source_index, tracked_packet);
+        return msg_queue->pushPacket<is_force>(source_index, req_info, tracked_packet, ReceiverMode::Local);
     }
 
     bool isWritable() const
     {
-        return channel_writer.isWritable();
+        return msg_queue->isWritable();
     }
 
     void writeDone(bool meet_error, const String & local_err_msg) const
@@ -76,7 +78,8 @@ struct LocalRequestHandler
     std::function<void(bool, const String &)> notify_write_done;
     std::function<void()> notify_close;
     std::function<void()> add_local_conn_num;
-    ReceiverChannelWriter channel_writer;
+    const std::string req_info;
+    ReceivedMessageQueue * msg_queue;
     UInt64 waiting_task_time = 0;
     Stopwatch watch;
 };

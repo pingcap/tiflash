@@ -703,4 +703,13 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
     compileExpr(input, ast);
 }
 
+void fillTaskMetaWithMPPInfo(mpp::TaskMeta & meta, const MPPInfo & mpp_info)
+{
+    meta.set_start_ts(mpp_info.start_ts);
+    meta.set_gather_id(mpp_info.gather_id);
+    meta.set_query_ts(mpp_info.query_ts);
+    meta.set_local_query_id(mpp_info.local_query_id);
+    meta.set_server_id(mpp_info.server_id);
+}
+
 } // namespace DB

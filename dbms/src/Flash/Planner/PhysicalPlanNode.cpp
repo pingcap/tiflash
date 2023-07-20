@@ -92,32 +92,32 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
 }
 
 void PhysicalPlanNode::buildPipelineExecGroup(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
     size_t concurrency)
 {
-    buildPipelineExecGroupImpl(exec_status, group_builder, context, concurrency);
+    buildPipelineExecGroupImpl(exec_context, group_builder, context, concurrency);
     if (is_tidb_operator)
         context.getDAGContext()->addOperatorProfileInfos(executor_id, group_builder.getCurProfileInfos());
 }
 
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorStatus & exec_status)
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context)
 {
     RUNTIME_CHECK(childrenSize() <= 1);
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder, context, exec_status);
+        children(0)->buildPipeline(builder, context, exec_context);
     builder.addPlanNode(shared_from_this());
 }
 
-EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorStatus & exec_status)
+EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorContext & exec_context)
 {
     if (getFineGrainedShuffle().enable())
         return nullptr;
-    return doSinkComplete(exec_status);
+    return doSinkComplete(exec_context);
 }
 
-EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorStatus & /*exec_status*/)
+EventPtr PhysicalPlanNode::doSinkComplete(PipelineExecutorContext & /*exec_status*/)
 {
     return nullptr;
 }

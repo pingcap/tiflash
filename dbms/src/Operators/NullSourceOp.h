@@ -22,10 +22,10 @@ class NullSourceOp : public SourceOp
 {
 public:
     NullSourceOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const Block & header_,
         const String & req_id)
-        : SourceOp(exec_status_, req_id)
+        : SourceOp(exec_context_, req_id)
     {
         setHeader(header_);
     }

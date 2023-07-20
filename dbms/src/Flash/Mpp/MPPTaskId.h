@@ -56,20 +56,34 @@ struct MPPQueryIdHash
 };
 
 /// A MPP query has one or more MPPGathers, each mpp gather has one or more MPPTasks. The mpp tasks in different mpp gathers are independent
-/// to each other, so theoretically speaking, the smallest cancel/retry unit of MPP query could be MPPGather. However, MPPGathers belong to
-/// the same MPP query could have dependence to each other(e.g. for query A join B, if the join is not supported in TiFlash, TiDB will generate
-/// two mpp gathers, one is reading from A and the other is reading from B, the probe side's mpp gather depends on the build side's mpp gather),
-/// so the smallest scheduling unit in TiFlash is still the MPP query
-/// Note currently, TiDB does not fill `gather_id` in mpp::TaskMeta, TiFlash hard coded 0 as the gather id for all MPPGatherId, so a mpp query now
-/// only has one MPPGather, and the schedule/cancel/retry unit in TiFlash is MPP query, we may implement mpp gather level's cancel/retry in the future.
+/// to each other, while MPPGathers belong to the same MPP query could have dependence to each other(e.g. for query A join B, if the join is
+/// not supported in TiFlash, TiDB will generate two mpp gathers, one is reading from A and the other is reading from B, the probe side's mpp
+/// gather depends on the build side's mpp gather), so the smallest scheduling unit in TiFlash is MPP query, but the smallest cancel/retry unit
+/// in TiFlash is MPP gather.
 struct MPPGatherId
 {
-    UInt64 gather_id;
+    Int64 gather_id;
     MPPQueryId query_id;
     MPPGatherId(Int64 gather_id_, const MPPQueryId & query_id_)
         : gather_id(gather_id_)
         , query_id(query_id_)
     {}
+    MPPGatherId(Int64 gather_id_, UInt64 query_ts, UInt64 local_query_id, UInt64 server_id, UInt64 start_ts)
+        : gather_id(gather_id_)
+        , query_id(query_ts, local_query_id, server_id, start_ts)
+    {}
+    explicit MPPGatherId(const mpp::TaskMeta & task_meta)
+        : gather_id(task_meta.gather_id())
+        , query_id(task_meta)
+    {}
+    String toString() const
+    {
+        return fmt::format("<gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}>", gather_id, query_id.query_ts, query_id.local_query_id, query_id.server_id, query_id.start_ts);
+    }
+    bool hasMeaningfulGatherId() const
+    {
+        return gather_id > 0;
+    }
     bool operator==(const MPPGatherId & rid) const;
 };
 
@@ -83,20 +97,20 @@ struct MPPTaskId
 {
     MPPTaskId()
         : task_id(unknown_task_id)
-        , query_id({0, 0, 0, 0}){};
+        , gather_id(0, 0, 0, 0, 0){};
 
-    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, UInt64 query_ts, UInt64 local_query_id)
+    MPPTaskId(UInt64 start_ts, Int64 task_id_, UInt64 server_id, Int64 gather_id, UInt64 query_ts, UInt64 local_query_id)
         : task_id(task_id_)
-        , query_id(query_ts, local_query_id, server_id, start_ts)
+        , gather_id(gather_id, query_ts, local_query_id, server_id, start_ts)
     {}
 
     explicit MPPTaskId(const mpp::TaskMeta & task_meta)
         : task_id(task_meta.task_id())
-        , query_id(task_meta)
+        , gather_id(task_meta)
     {}
 
     Int64 task_id;
-    MPPQueryId query_id;
+    MPPGatherId gather_id;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 
@@ -119,7 +133,7 @@ class hash<DB::MPPTaskId>
 public:
     size_t operator()(const DB::MPPTaskId & id) const
     {
-        return DB::MPPQueryIdHash()(id.query_id) ^ hash<Int64>()(id.task_id);
+        return DB::MPPGatherIdHash()(id.gather_id) ^ hash<Int64>()(id.task_id);
     }
 };
 } // namespace std

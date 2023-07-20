@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/IOPriorityQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -25,9 +26,9 @@ namespace
 class MockIOTask : public Task
 {
 public:
-    explicit MockIOTask(bool is_io_in)
+    MockIOTask(PipelineExecutorContext & exec_context_, bool is_io_in)
+        : Task(exec_context_, "", is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT)
     {
-        task_status = is_io_in ? ExecTaskStatus::IO_IN : ExecTaskStatus::IO_OUT;
     }
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
@@ -43,6 +44,13 @@ public:
 TEST_F(TestIOPriorityTaskQueue, base)
 try
 {
+    PipelineExecutorContext context;
+    // To avoid the active ref count being returned to 0 in advance.
+    context.incActiveRefCount();
+    SCOPE_EXIT({
+        context.decActiveRefCount();
+    });
+
     IOPriorityQueue queue;
 
     auto thread_manager = newThreadManager();
@@ -64,11 +72,11 @@ try
     thread_manager->schedule(false, "submit", [&]() {
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(true));
+            queue.submit(std::make_unique<MockIOTask>(context, true));
         }
         for (size_t i = 0; i < task_num_per_status; ++i)
         {
-            queue.submit(std::make_unique<MockIOTask>(false));
+            queue.submit(std::make_unique<MockIOTask>(context, false));
         }
         queue.finish();
     });
@@ -76,7 +84,7 @@ try
     thread_manager->wait();
 
     // No tasks can be submitted after the queue is finished.
-    queue.submit(std::make_unique<MockIOTask>(false));
+    queue.submit(std::make_unique<MockIOTask>(context, false));
     TaskPtr task;
     ASSERT_FALSE(queue.take(task));
 }
@@ -85,11 +93,18 @@ CATCH
 TEST_F(TestIOPriorityTaskQueue, priority)
 try
 {
+    PipelineExecutorContext context;
+    // To avoid the active ref count being returned to 0 in advance.
+    context.incActiveRefCount();
+    SCOPE_EXIT({
+        context.decActiveRefCount();
+    });
+
     // in 0 : out 0
     {
         IOPriorityQueue queue;
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -106,8 +121,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * IOPriorityQueue::ratio_of_out_to_in);
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -124,8 +139,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (1 + IOPriorityQueue::ratio_of_out_to_in));
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -142,8 +157,8 @@ try
         IOPriorityQueue queue;
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_IN, time_unit_ns);
         queue.updateStatistics(nullptr, ExecTaskStatus::IO_OUT, time_unit_ns * (IOPriorityQueue::ratio_of_out_to_in - 1));
-        queue.submit(std::make_unique<MockIOTask>(true));
-        queue.submit(std::make_unique<MockIOTask>(false));
+        queue.submit(std::make_unique<MockIOTask>(context, true));
+        queue.submit(std::make_unique<MockIOTask>(context, false));
         TaskPtr task;
         queue.take(task);
         ASSERT_TRUE(task);
@@ -152,6 +167,59 @@ try
         queue.take(task);
         ASSERT_TRUE(task);
         ASSERT_EQ(task->getStatus(), ExecTaskStatus::IO_IN);
+        FINALIZE_TASK(task);
+    }
+}
+CATCH
+
+TEST_F(TestIOPriorityTaskQueue, cancel)
+try
+{
+    PipelineExecutorContext context1("id1", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    context1.incActiveRefCount();
+    SCOPE_EXIT({
+        context1.decActiveRefCount();
+    });
+
+    PipelineExecutorContext context2("id2", "", nullptr);
+    // To avoid the active ref count being returned to 0 in advance.
+    context2.incActiveRefCount();
+    SCOPE_EXIT({
+        context2.decActiveRefCount();
+    });
+
+    // case1 submit first.
+    {
+        IOPriorityQueue queue;
+        queue.submit(std::make_unique<MockIOTask>(context1, false));
+        queue.submit(std::make_unique<MockIOTask>(context2, true));
+        queue.cancel("id2");
+        TaskPtr task;
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id2");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
+        FINALIZE_TASK(task);
+    }
+
+    // case2 cancel first.
+    {
+        IOPriorityQueue queue;
+        queue.cancel("id2");
+        queue.submit(std::make_unique<MockIOTask>(context1, false));
+        queue.submit(std::make_unique<MockIOTask>(context2, true));
+        TaskPtr task;
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id2");
+        FINALIZE_TASK(task);
+        ASSERT_TRUE(!queue.empty());
+        queue.take(task);
+        ASSERT_EQ(task->getQueryId(), "id1");
         FINALIZE_TASK(task);
     }
 }

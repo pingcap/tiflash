@@ -40,10 +40,10 @@ void JoinStatistics::collectExtraRuntimeDetail()
     if (it != join_execute_info_map.end())
     {
         const auto & join_execute_info = it->second;
-        peak_build_bytes_usage = join_execute_info.join_ptr->getPeakBuildBytesUsage();
+        peak_build_bytes_usage = join_execute_info.join_profile_info->peak_build_bytes_usage;
         build_side_child = join_execute_info.build_side_root_executor_id;
-        is_spill_enabled = join_execute_info.join_ptr->isEnableSpill();
-        is_spilled = join_execute_info.join_ptr->isSpilled();
+        is_spill_enabled = join_execute_info.join_profile_info->is_spill_enabled;
+        is_spilled = join_execute_info.join_profile_info->is_spilled;
         switch (dag_context.getExecutionMode())
         {
         case ExecutionMode::None:
