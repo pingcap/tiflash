@@ -133,7 +133,10 @@ BackgroundProcessingPool::~BackgroundProcessingPool()
 {
     try
     {
-        shutdown = true;
+        {
+            std::unique_lock lock(tasks_mutex);
+            shutdown = true;
+        }
         wake_event.notify_all();
         for (std::thread & thread : threads)
             thread.join();
