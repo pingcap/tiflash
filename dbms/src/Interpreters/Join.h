@@ -274,15 +274,15 @@ public:
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
     // std::unordered_map<partition_index, Blocks>
-    using MarkdeSpillData = std::unordered_map<size_t, Blocks>;
+    using MarkedSpillData = std::unordered_map<size_t, Blocks>;
 
-    MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index);
-    const MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index) const;
+    MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
     void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
-    MarkdeSpillData & getProbeSideMarkdeSpillData(size_t stream_index);
-    const MarkdeSpillData & getProbeSideMarkdeSpillData(size_t stream_index) const;
+    MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
+    const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
     bool hasProbeSideMarkedSpillData(size_t stream_index) const;
     void flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
 
@@ -412,8 +412,8 @@ private:
     size_t fine_grained_shuffle_count = 0;
 
     // the index of vector is the stream_index.
-    std::vector<MarkdeSpillData> build_side_marked_spilled_data;
-    std::vector<MarkdeSpillData> probe_side_marked_spilled_data;
+    std::vector<MarkedSpillData> build_side_marked_spilled_data;
+    std::vector<MarkedSpillData> probe_side_marked_spilled_data;
 
 private:
     /** Set information about structure of right hand of JOIN (joined data).

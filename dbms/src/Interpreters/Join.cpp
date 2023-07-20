@@ -377,13 +377,13 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_side_marked_spilled_data.resize(probe_concurrency);
 }
 
-Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_index)
+Join::MarkedSpillData & Join::getBuildSideMarkedSpillData(size_t stream_index)
 {
     assert(stream_index < build_side_marked_spilled_data.size());
     return build_side_marked_spilled_data[stream_index];
 }
 
-const Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_index) const
+const Join::MarkedSpillData & Join::getBuildSideMarkedSpillData(size_t stream_index) const
 {
     assert(stream_index < build_side_marked_spilled_data.size());
     return build_side_marked_spilled_data[stream_index];
@@ -392,13 +392,13 @@ const Join::MarkdeSpillData & Join::getBuildSideMarkdeSpillData(size_t stream_in
 bool Join::hasBuildSideMarkedSpillData(size_t stream_index) const
 {
     std::shared_lock lock(rwlock);
-    return !getBuildSideMarkdeSpillData(stream_index).empty();
+    return !getBuildSideMarkedSpillData(stream_index).empty();
 }
 
 void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
 {
     std::shared_lock lock(rwlock);
-    auto & data = getBuildSideMarkdeSpillData(stream_index);
+    auto & data = getBuildSideMarkedSpillData(stream_index);
     assert(!data.empty());
     for (auto & [part_id, blocks] : data)
         spillBuildSideBlocks(part_id, std::move(blocks));
@@ -407,13 +407,13 @@ void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
         build_spiller->finishSpill();
 }
 
-Join::MarkdeSpillData & Join::getProbeSideMarkdeSpillData(size_t stream_index)
+Join::MarkedSpillData & Join::getProbeSideMarkedSpillData(size_t stream_index)
 {
     assert(stream_index < probe_side_marked_spilled_data.size());
     return probe_side_marked_spilled_data[stream_index];
 }
 
-const Join::MarkdeSpillData & Join::getProbeSideMarkdeSpillData(size_t stream_index) const
+const Join::MarkedSpillData & Join::getProbeSideMarkedSpillData(size_t stream_index) const
 {
     assert(stream_index < probe_side_marked_spilled_data.size());
     return probe_side_marked_spilled_data[stream_index];
@@ -422,13 +422,13 @@ const Join::MarkdeSpillData & Join::getProbeSideMarkdeSpillData(size_t stream_in
 bool Join::hasProbeSideMarkedSpillData(size_t stream_index) const
 {
     std::shared_lock lock(rwlock);
-    return !getProbeSideMarkdeSpillData(stream_index).empty();
+    return !getProbeSideMarkedSpillData(stream_index).empty();
 }
 
 void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
 {
     std::shared_lock lock(rwlock);
-    auto & data = getProbeSideMarkdeSpillData(stream_index);
+    auto & data = getProbeSideMarkedSpillData(stream_index);
     assert(!data.empty());
     for (auto & [part_id, blocks] : data)
         spillProbeSideBlocks(part_id, std::move(blocks));
@@ -1571,7 +1571,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
                 partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller),
                 stream_index);
         // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
-        if (getBuildSideMarkdeSpillData(stream_index).empty())
+        if (getBuildSideMarkedSpillData(stream_index).empty())
             build_spiller->finishSpill();
         has_build_data_in_memory = std::any_of(
             partitions.cbegin(),
@@ -1665,7 +1665,7 @@ void Join::workAfterProbeFinish(size_t stream_index)
                 partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller),
                 stream_index);
         // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
-        if (getProbeSideMarkdeSpillData(stream_index).empty())
+        if (getProbeSideMarkedSpillData(stream_index).empty())
             probe_spiller->finishSpill();
     }
 
@@ -1895,7 +1895,7 @@ void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t strea
 {
     if (!blocks.empty())
     {
-        auto & data = getBuildSideMarkdeSpillData(stream_index);
+        auto & data = getBuildSideMarkedSpillData(stream_index);
         assert(data.find(part_id) == data.end());
         data[part_id] = std::move(blocks);
     }
@@ -1905,7 +1905,7 @@ void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t strea
 {
     if (!blocks.empty())
     {
-        auto & data = getProbeSideMarkdeSpillData(stream_index);
+        auto & data = getProbeSideMarkedSpillData(stream_index);
         assert(data.find(part_id) == data.end());
         data[part_id] = std::move(blocks);
     }
