@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MemoryTracker.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue.h>
@@ -26,17 +27,21 @@
 
 namespace DB
 {
-class PipelineExecutorStatus : private boost::noncopyable
+class PipelineExecutorContext : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    PipelineExecutorStatus()
+    // Only used for unit test.
+    PipelineExecutorContext()
         : log(Logger::get())
+        , mem_tracker(nullptr)
     {}
 
-    explicit PipelineExecutorStatus(const String & req_id)
-        : log(Logger::get(req_id))
+    PipelineExecutorContext(const String & query_id_, const String & req_id, const MemoryTrackerPtr & mem_tracker_)
+        : query_id(query_id_)
+        , log(Logger::get(req_id))
+        , mem_tracker(mem_tracker_)
     {}
 
     ExecutionResult toExecutionResult();
@@ -140,6 +145,16 @@ public:
         return query_profile_info;
     }
 
+    const String & getQueryId() const
+    {
+        return query_id;
+    }
+
+    const MemoryTrackerPtr & getMemoryTracker() const
+    {
+        return mem_tracker;
+    }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -149,7 +164,11 @@ private:
     ResultQueuePtr getConsumedResultQueue();
 
 private:
+    const String query_id;
+
     LoggerPtr log;
+
+    MemoryTrackerPtr mem_tracker;
 
     std::mutex mu;
     std::condition_variable cv;

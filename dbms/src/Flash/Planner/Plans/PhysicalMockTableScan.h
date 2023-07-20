@@ -63,7 +63,7 @@ private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
     void buildPipelineExecGroupImpl(
-        PipelineExecutorStatus &,
+        PipelineExecutorContext &,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t) override;

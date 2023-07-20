@@ -20,7 +20,7 @@
 namespace DB
 {
 void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & /*context*/,
     size_t /*concurrency*/)
@@ -29,14 +29,15 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
     // So only non fine grained shuffle is considered here.
     RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
+    assert(aggregate_context);
     if (aggregate_context->hasSpilledData())
     {
-        auto restorers = aggregate_context->buildSharedRestorer(exec_status);
+        auto restorers = aggregate_context->buildSharedRestorer(exec_context);
         for (auto & restorer : restorers)
         {
             group_builder.addConcurrency(
                 std::make_unique<AggregateRestoreSourceOp>(
-                    exec_status,
+                    exec_context,
                     aggregate_context,
                     std::move(restorer),
                     log->identifier()));
@@ -49,13 +50,15 @@ void PhysicalAggregationConvergent::buildPipelineExecGroupImpl(
         {
             group_builder.addConcurrency(
                 std::make_unique<AggregateConvergentSourceOp>(
-                    exec_status,
+                    exec_context,
                     aggregate_context,
                     index,
                     log->identifier()));
         }
     }
 
-    executeExpression(exec_status, group_builder, expr_after_agg, log);
+    executeExpression(exec_context, group_builder, expr_after_agg, log);
+
+    aggregate_context.reset();
 }
 } // namespace DB

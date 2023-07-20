@@ -37,7 +37,7 @@ using BlockOutputStreamPtr = std::shared_ptr<IBlockOutputStream>;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 
-class PipelineExecutorStatus;
+class PipelineExecutorContext;
 class PipelineExecGroupBuilder;
 
 class ASTCreateQuery;
@@ -149,7 +149,7 @@ public:
     }
 
     virtual void read(
-        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecutorContext & /*exec_status*/,
         PipelineExecGroupBuilder & /*group_builder*/,
         const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,

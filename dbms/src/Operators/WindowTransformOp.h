@@ -23,7 +23,7 @@ class WindowTransformOp : public TransformOp
 {
 public:
     WindowTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id_,
         const WindowDescription & window_description_);
 

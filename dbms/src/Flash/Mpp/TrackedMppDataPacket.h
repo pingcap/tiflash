@@ -30,7 +30,6 @@
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
-#include <Common/UnaryCallback.h>
 
 #include <memory>
 

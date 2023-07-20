@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageType.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
@@ -57,6 +58,9 @@ namespace PS::V3
 class S3LockLocalManager;
 using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
 } // namespace PS::V3
+using PS::V3::PageType;
+using PS::V3::PageTypeAndConfig;
+using PS::V3::PageTypeConfig;
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -115,7 +119,7 @@ public:
 
     size_t getNumberOfPages(const String & prefix) const;
 
-    void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
+    void write(UniversalWriteBatch && write_batch, PageType page_type = PageType::Normal, const WriteLimiterPtr & write_limiter = nullptr) const;
 
     Page read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
@@ -202,6 +206,11 @@ public:
          * file list for compaction.
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
+
+        /**
+         * Only upload the manifest file.
+         */
+        bool only_upload_manifest = false;
 
         UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
         UInt64 max_edit_records_per_part = 100000;
