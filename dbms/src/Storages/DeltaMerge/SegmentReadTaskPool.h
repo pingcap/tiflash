@@ -74,6 +74,8 @@ public:
         auto b = blk.bytes();
         pending_bytes.fetch_add(b, std::memory_order_relaxed);
         total_bytes.fetch_add(b, std::memory_order_relaxed);
+
+        total_rows.fetch_add(blk.rows(), std::memory_order_relaxed);
     }
 
     void pop(const Block & blk)
@@ -85,30 +87,37 @@ public:
         }
     }
 
-    int64_t pendingCount() const
+    Int64 pendingCount() const
     {
         return pending_count.load(std::memory_order_relaxed);
     }
 
-    int64_t pendingBytes() const
+    Int64 pendingBytes() const
     {
         return pending_bytes.load(std::memory_order_relaxed);
     }
 
-    int64_t totalCount() const
+    Int64 totalCount() const
     {
         return total_count.load(std::memory_order_relaxed);
     }
-    int64_t totalBytes() const
+
+    Int64 totalBytes() const
     {
         return total_bytes.load(std::memory_order_relaxed);
     }
 
+    Int64 totalRows() const
+    {
+        return total_rows.load(std::memory_order_relaxed);
+    }
+
 private:
-    std::atomic<int64_t> pending_count;
-    std::atomic<int64_t> pending_bytes;
-    std::atomic<int64_t> total_count;
-    std::atomic<int64_t> total_bytes;
+    std::atomic<Int64> pending_count;
+    std::atomic<Int64> pending_bytes;
+    std::atomic<Int64> total_count;
+    std::atomic<Int64> total_bytes;
+    std::atomic<Int64> total_rows;
 };
 
 enum class ReadMode
@@ -182,7 +191,11 @@ public:
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        LOG_DEBUG(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
+        auto total_rows = blk_stat.totalRows();
+        LOG_DEBUG(log,
+                  "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} "
+                  "max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB "
+                  "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
                   pool_id,
                   physical_table_id,
                   pop_times,
@@ -192,7 +205,10 @@ public:
                   blk_avg_bytes,
                   approximate_max_pending_block_bytes / 1024.0 / 1024.0,
                   total_count,
-                  total_bytes / 1024.0 / 1024.0);
+                  total_bytes / 1024.0 / 1024.0,
+                  total_rows,
+                  total_count > 0 ? total_rows / total_count : 0,
+                  total_rows > 0 ? total_bytes / total_rows : 0);
     }
 
     SegmentReadTaskPtr nextTask();
