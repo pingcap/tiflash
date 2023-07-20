@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Interpreters/Join.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <Interpreters/Join.h>
 
 namespace DB
 {
@@ -84,7 +84,7 @@ private:
     HashProbeTransformExecPtr parent;
 
     // For restore probe.
-    ResultQueuePtr probe_result_queue = std::make_shared<ResultQueue>(2);
+    ResultQueuePtr probe_result_queue;
     BlockInputStreamPtr probe_restore_stream;
     Block probe_restore_block;
     bool is_probe_restore_done = false;

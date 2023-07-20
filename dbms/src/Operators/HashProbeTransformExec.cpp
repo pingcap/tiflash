@@ -16,10 +16,11 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/SimplePipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>
-#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+
 #include <magic_enum.hpp>
 
 namespace DB
@@ -82,6 +83,8 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 void HashProbeTransformExec::startRestoreProbe()
 {
     assert(!is_probe_restore_done && probe_restore_stream);
+    // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
+    probe_result_queue = std::make_shared<ResultQueue>(1);
     TaskScheduler::instance->submit(std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
     probe_restore_stream.reset();
 }

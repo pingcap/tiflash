@@ -15,8 +15,8 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {

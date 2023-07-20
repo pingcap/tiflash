@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+
 #include <magic_enum.hpp>
 
 namespace DB
@@ -35,56 +36,55 @@ ALWAYS_INLINE ExecTaskStatus tryPushBlock(const ResultQueuePtr & result_queue, B
         throw Exception(fmt::format("Unexpect result: {}", magic_enum::enum_name(ret)));
     }
 }
+} // namespace
+
+StreamRestoreTask::StreamRestoreTask(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const BlockInputStreamPtr & stream_,
+    const ResultQueuePtr & result_queue_)
+    : Task(exec_context_, req_id, ExecTaskStatus::IO_IN)
+    , stream(stream_)
+    , result_queue(result_queue_)
+{
+    assert(stream);
+    stream->readPrefix();
+    assert(result_queue);
 }
 
-    StreamRestoreTask::StreamRestoreTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const BlockInputStreamPtr & stream_,
-        const ResultQueuePtr & result_queue_)
-        : Task(exec_context_, req_id, ExecTaskStatus::IO_IN)
-        , stream(stream_)
-        , result_queue(result_queue_)
-    {
-        assert(stream);
-        stream->readPrefix();
-        assert(result_queue);
-    }
+ExecTaskStatus StreamRestoreTask::executeImpl()
+{
+    return is_done ? ExecTaskStatus::FINISHED : ExecTaskStatus::IO_IN;
+}
 
-    ExecTaskStatus StreamRestoreTask::executeImpl()
-    {
-        return is_done ? ExecTaskStatus::FINISHED : ExecTaskStatus::IO_IN;
-    }
+ExecTaskStatus StreamRestoreTask::awaitImpl()
+{
+    if (unlikely(is_done))
+        return ExecTaskStatus::FINISHED;
+    if (unlikely(!block))
+        return ExecTaskStatus::IO_IN;
 
-    ExecTaskStatus StreamRestoreTask::awaitImpl()
+    return tryPushBlock(result_queue, block);
+}
+
+ExecTaskStatus StreamRestoreTask::executeIOImpl()
+{
+    if (!block)
     {
-        if (unlikely(is_done))
-            return ExecTaskStatus::FINISHED;
+        block = stream->read();
         if (unlikely(!block))
-            return ExecTaskStatus::IO_IN;
-
-        return tryPushBlock(result_queue, block);
-    }
-
-    ExecTaskStatus StreamRestoreTask::executeIOImpl()
-    {
-        if (!block)
         {
-            block = stream->read();
-            if (unlikely(!block))
-            {
-                is_done = true;
-                return ExecTaskStatus::FINISHED;
-            }
-                
+            is_done = true;
+            return ExecTaskStatus::FINISHED;
         }
-
-        return tryPushBlock(result_queue, block);
     }
 
-    void StreamRestoreTask::finalizeImpl()
-    {
-        stream->readSuffix();
-        result_queue->finish();
-    }
+    return tryPushBlock(result_queue, block);
+}
+
+void StreamRestoreTask::finalizeImpl()
+{
+    stream->readSuffix();
+    result_queue->finish();
+}
 } // namespace DB
