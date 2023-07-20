@@ -45,7 +45,9 @@ extern const char force_fail_in_flush_region_data[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
-    : region_persister(context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr : std::make_unique<RegionPersister>(context, region_manager))
+    : region_persister(context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                           ? nullptr
+                           : std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
     , region_compact_log_period(120)
@@ -172,7 +174,7 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     return true;
 }
 
-void KVStore::tryPersistRegion(RegionID region_id)
+void KVStore::tryPersistRegion(RegionID region_id) const
 {
     auto region = getRegion(region_id);
     if (region)
@@ -334,7 +336,7 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
         bytes);
 }
 
-void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
+void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller) const
 {
     RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     if (region_task_lock.has_value())
@@ -422,7 +424,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     return can_flush;
 }
 
-bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term) const
 {
     Stopwatch watch;
     if (index)
@@ -449,7 +451,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     UInt64 curr_region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TMTContext & tmt) const
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
@@ -494,12 +496,13 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     return EngineStoreApplyRes::None;
 }
 
-EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-                                                raft_cmdpb::AdminResponse && response,
-                                                UInt64 curr_region_id,
-                                                UInt64 index,
-                                                UInt64 term,
-                                                TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleAdminRaftCmd(
+    raft_cmdpb::AdminRequest && request,
+    raft_cmdpb::AdminResponse && response,
+    UInt64 curr_region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt)
 {
     Stopwatch watch;
     SCOPE_EXIT({
@@ -769,7 +772,7 @@ void WaitCheckRegionReady(
                  "{} regions need to fetch latest commit-index in next round, sleep for {:.3f}s",
                  remain_regions.size(),
                  wait_tick_time);
-        std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(wait_tick_time * 1000)));
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<Int64>(wait_tick_time * 1000)));
         wait_tick_time = std::min(max_wait_tick_time, wait_tick_time * 2);
     }
 
@@ -816,7 +819,7 @@ void WaitCheckRegionReady(
                  "{} regions need to apply to latest index, sleep for {:.3f}s",
                  regions_to_check.size(),
                  wait_tick_time);
-        std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(wait_tick_time * 1000)));
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<Int64>(wait_tick_time * 1000)));
         wait_tick_time = std::min(max_wait_tick_time, wait_tick_time * 2);
     } while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec
              && terminate_signals_counter.load(std::memory_order_relaxed) == 0);
