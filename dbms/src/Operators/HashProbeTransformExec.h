@@ -27,6 +27,7 @@ class HashProbeTransformExec : public std::enable_shared_from_this<HashProbeTran
 {
 public:
     HashProbeTransformExec(
+        const String & req_id,
         PipelineExecutorContext & exec_context_,
         size_t op_index_,
         const JoinPtr & join_,
@@ -66,6 +67,8 @@ public:
     HashProbeTransformExecPtr tryGetRestoreExec();
 
 private:
+    LoggerPtr log;
+
     PipelineExecutorContext & exec_context;
 
     size_t op_index;
@@ -83,6 +86,7 @@ private:
     bool is_build_restore_done = false;
 
     // For restore probe.
+    BlockInputStreamPtr probe_restore_stream;
     Block probe_restore_block;
     bool is_probe_restore_done = false;
 };

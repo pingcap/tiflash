@@ -36,7 +36,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
     if (needScanHashMapAfterProbe(origin_join->getKind()))
         scan_hash_map_after_probe_stream = origin_join->createScanHashMapAfterProbeStream(input_header, op_index_, origin_join->getProbeConcurrency(), max_block_size);
-    probe_transform = std::make_shared<HashProbeTransformExec>(exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
+    probe_transform = std::make_shared<HashProbeTransformExec>(req_id, exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
@@ -206,33 +206,36 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
-    switch (status)
+    while (true)
     {
-    case ProbeStatus::WAIT_PROBE_FINISH:
-        if (probe_transform->isAllProbeFinished())
+        switch (status)
         {
-            status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
-            probe_transform->startNonJoined();
-            return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::WAIT_PROBE_FINISH:
+            if (probe_transform->isAllProbeFinished())
+            {
+                status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                probe_transform->startNonJoined();
+                return OperatorStatus::HAS_OUTPUT;
+            }
+            else
+            {
+                return OperatorStatus::WAITING;
+            }
+        case ProbeStatus::RESTORE_BUILD:
+            if (probe_transform->isAllBuildFinished())
+            {
+                status = ProbeStatus::RESTORE_PROBE;
+                break;
+            }
+            else
+            {
+                return OperatorStatus::WAITING;
+            }
+        case ProbeStatus::RESTORE_PROBE:
+            return probe_transform->isProbeRestoreReady() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
+        default:
+            throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
         }
-        else
-        {
-            return OperatorStatus::WAITING;
-        }
-    case ProbeStatus::RESTORE_BUILD:
-        if (probe_transform->isAllBuildFinished())
-        {
-            status = ProbeStatus::PROBE;
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        else
-        {
-            return OperatorStatus::WAITING;
-        }
-    case ProbeStatus::RESTORE_PROBE:
-        return probe_transform->isProbeRestoreReady() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
-    default:
-        throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
 }
 

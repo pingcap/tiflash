@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
 
 namespace DB
 {

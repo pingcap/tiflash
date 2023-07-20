@@ -13,19 +13,18 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Pipeline/Exec/PipelineExecMappingTask.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/SimplePipelineTask.h>
 
 #include <magic_enum.hpp>
+#include <Flash/Pipeline/Exec/PipelineExecMappingTask.h>
 
 namespace DB
 {
-PipelineTask::PipelineTask(
+SimplePipelineTask::SimplePipelineTask(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
-    const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(exec_context_, req_id, event_, ExecTaskStatus::RUNNING)
+    : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
     , pipeline_exec_holder(std::move(pipeline_exec_))
     , pipeline_exec(pipeline_exec_holder.get())
 {
@@ -33,26 +32,17 @@ PipelineTask::PipelineTask(
     pipeline_exec->executePrefix();
 }
 
-void PipelineTask::doFinalizeImpl()
-{
-    assert(pipeline_exec);
-    pipeline_exec->executeSuffix();
-    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs() + getScheduleDuration());
-    pipeline_exec = nullptr;
-    pipeline_exec_holder.reset();
-}
-
-ExecTaskStatus PipelineTask::executeImpl()
+ExecTaskStatus SimplePipelineTask::executeImpl()
 {
     return PipelineExecMappingTask::execute(pipeline_exec);
 }
 
-ExecTaskStatus PipelineTask::executeIOImpl()
+ExecTaskStatus SimplePipelineTask::executeIOImpl()
 {
     return PipelineExecMappingTask::executeIO(pipeline_exec);
 }
 
-ExecTaskStatus PipelineTask::awaitImpl()
+ExecTaskStatus SimplePipelineTask::awaitImpl()
 {
     return PipelineExecMappingTask::await(pipeline_exec);
 }

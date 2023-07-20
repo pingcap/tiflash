@@ -13,18 +13,24 @@
 // limitations under the License.
 
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Pipeline/Schedule/Tasks/SimplePipelineTask.h>
+#include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
+#include <Operators/IOBlockInputStreamSourceOp.h>
 
 namespace DB
 {
 HashProbeTransformExec::HashProbeTransformExec(
+    const String & req_id,
     PipelineExecutorContext & exec_context_,
     size_t op_index_,
     const JoinPtr & join_,
     BlockInputStreamPtr scan_hash_map_after_probe_stream_,
     UInt64 max_block_size_)
-    : exec_context(exec_context_)
+    : log(Logger::get(req_id))
+    , exec_context(exec_context_)
     , op_index(op_index_)
     , join(join_)
     , scan_hash_map_after_probe_stream(scan_hash_map_after_probe_stream_)
@@ -47,17 +53,20 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             // restored join should always enable spill
             assert(restore_info->join && restore_info->join->isEnableSpill());
             auto restore_probe_exec = std::make_shared<HashProbeTransformExec>(
+                log->identifier(),
                 exec_context,
                 restore_info->stream_index,
                 restore_info->join,
                 restore_info->scan_hash_map_stream,
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
+            restore_probe_exec->probe_restore_stream = restore_info->probe_stream;
 
-            // launch build/probe restore tasks.
-            // - build
-            // - probe
-            
+            // launch build restore task.
+            PipelineExecBuilder build_builder;
+            build_builder.setSourceOp(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, log->identifier(), restore_info->build_stream));
+            build_builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), restore_info->join, restore_info->stream_index));
+            TaskScheduler::instance->submit(std::make_unique<SimplePipelineTask>(exec_context, log->identifier(), build_builder.build()));
 
             return restore_probe_exec;
         }
