@@ -125,12 +125,6 @@ namespace DB
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                                 \
         F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                                           \
         F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                               \
-    M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
-    M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \
-    M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                                        \
-        F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
-    M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                                        \
-        F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
     M(tiflash_syncing_data_freshness, "The freshness of tiflash data with tikv data", Histogram,                                                    \
         F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                                       \
@@ -152,7 +146,9 @@ namespace DB
         F(type_compact_log_segment_bg, {"type", "compact_log_segment_bg"}),                                                                         \
         F(type_compact_log_segment_fg, {"type", "compact_log_segment_fg"}),                                                                         \
         F(type_compact_log_region_bg, {"type", "compact_log_region_bg"}),                                                                           \
-        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}))                                                                           \
+        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}),                                                                           \
+        F(type_compact_log_segment_bg_breakdown_kvs, {"type", "compact_log_segment_bg_breakdown_kvs"}),                                             \
+        F(type_compact_log_segment_fg_breakdown_kvs, {"type", "compact_log_segment_fg_breakdown_kvs"}))                                             \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                                     \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                       \
@@ -263,20 +259,35 @@ namespace DB
         F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                  \
         F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                                  \
         F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                                        \
-    M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                          \
-        F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                             \
-    M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,                       \
+    M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs",                                  \
+        Histogram, /* like tiflash_raft_command_duration_seconds but are smaller tasks */                                                           \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                                                              \
         F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}),                                                                              \
         F(type_flush_region, {{"type", "flush_region"}}, ExpBuckets{0.0005, 2, 20}))                                                                \
+    M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                          \
+        F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                             \
     M(tiflash_raft_upstream_latency, "The latency that tikv sends raft log to tiflash.", Histogram,                                                 \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                               \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,                   \
-        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))             \
-    M(tiflash_raft_raft_log_lag_count, "Bucketed histogram of applying write command Raft logs", Histogram,                                         \
+        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}),                                                                            \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                              \
+    M(tiflash_raft_raft_log_lag_count, "Bucketed histogram raft index lag", Histogram,                                                              \
         F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
     M(tiflash_raft_raft_events_count, "Raft event counter", Counter,                                                                                \
-        F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}))                                                                                   \
+        F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}),                                                                                   \
+        F(type_flush_apply_snapshot, {{"type", "flush_apply_snapshot"}}),                                                                           \
+        F(type_flush_ingest_sst, {{"type", "flush_ingest_sst"}}),                                                                                   \
+        F(type_flush_useless_admin, {{"type", "flush_useless_admin"}}),                                                                             \
+        F(type_flush_useful_admin, {{"type", "flush_useful_admin"}}),                                                                               \
+        F(type_flush_passive, {{"type", "flush_passive"}}),                                                                                         \
+        F(type_flush_proactive, {{"type", "flush_proactive"}}),                                                                                     \
+        F(type_exec_compact, {{"type", "exec_compact"}}))                                                                                           \
+    M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                                    \
+    M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                                              \
+    M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                                        \
+        F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
+    M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                                        \
+        F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
     /* required by DBaaS */                                                                                                                         \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                                    \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                                \

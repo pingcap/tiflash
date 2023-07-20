@@ -87,7 +87,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
             old_region->setStateApplying();
             tmt.getRegionTable().tryWriteBlockByRegionAndFlush(old_region, false);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
-            persistRegion(*old_region, &region_lock, "save previous region before apply");
+            persistRegion(*old_region, &region_lock, PersistRegionReason::ApplySnapshotPrevRegion, "");
         }
     }
 
@@ -277,7 +277,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             manage_lock.index.add(new_region);
         }
 
-        persistRegion(*new_region, &region_lock, "save current region after apply");
+        persistRegion(*new_region, &region_lock, PersistRegionReason::ApplySnapshotCurRegion, "");
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
@@ -562,7 +562,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     {
         // We always try to flush dm cache and region if possible for every IngestSST,
         // in order to have the raft log truncated and sst deleted.
-        persistRegion(*region, &region_task_lock, __FUNCTION__);
+        persistRegion(*region, &region_task_lock, PersistRegionReason::IngestSst, "");
         return EngineStoreApplyRes::Persist;
     }
 }

@@ -186,7 +186,7 @@ void KVStore::tryPersistRegion(RegionID region_id)
     auto region = getRegion(region_id);
     if (region)
     {
-        persistRegion(*region, std::nullopt, "");
+        persistRegion(*region, std::nullopt, PersistRegionReason::Debug, "");
     }
 }
 
@@ -387,11 +387,13 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, U
         gap);
 }
 
-void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
+void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg)
 {
     RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     if (region_task_lock.has_value())
     {
+        auto reason_id = magic_enum::enum_underlying(reason);
+        std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
         LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
         region_persister->persist(region, *region_task_lock.value());
         LOG_DEBUG(log, "Persist {} done", region.toString(false));
@@ -401,6 +403,30 @@ void KVStore::persistRegion(const Region & region, std::optional<const RegionTas
         LOG_INFO(log, "Try to persist {}", region.toString(false));
         region_persister->persist(region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region.toString(false), region.dataSize());
+    }
+    switch (reason)
+    {
+    case PersistRegionReason::UselessAdminCommand:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useless_admin).Increment(1);
+        break;
+    case PersistRegionReason::AdminCommand:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_useful_admin).Increment(1);
+        break;
+    case PersistRegionReason::Flush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_passive).Increment(1);
+        break;
+    case PersistRegionReason::ProactiveFlush:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_proactive).Increment(1);
+        break;
+    case PersistRegionReason::ApplySnapshotPrevRegion:
+    case PersistRegionReason::ApplySnapshotCurRegion:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_apply_snapshot).Increment(1);
+        break;
+    case PersistRegionReason::IngestSst:
+        GET_METRIC(tiflash_raft_raft_events_count, type_flush_ingest_sst).Increment(1);
+        break;
+    default:
+        break;
     }
 }
 
@@ -474,6 +500,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 
     if (can_flush && flush_if_possible)
     {
+        GET_METRIC(tiflash_raft_raft_events_count, type_exec_compact).Increment(1);
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         LOG_INFO(log, "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap {}/{}", curr_region.toString(false), index, term, truncated_index, truncated_term, current_gap, gap_threshold);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
@@ -491,7 +518,7 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
     }
     if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
-        persistRegion(curr_region, &region_task_lock, "tryFlushRegionData");
+        persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
         GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
@@ -547,7 +574,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, &region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
+        persistRegion(curr_region, &region_task_lock, PersistRegionReason::UselessAdminCommand, fmt::format("{}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -630,7 +657,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, &region_task_lock, "admin raft cmd");
+            persistRegion(region, &region_task_lock, PersistRegionReason::AdminCommand, "");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
@@ -972,27 +999,23 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
 
 void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
 {
-    if (is_background)
-    {
-        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
-    }
-    else
-    {
-        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
-    }
-
     Stopwatch general_watch;
     UInt64 total_dm_flush_millis = 0;
     UInt64 total_kvs_flush_millis = 0;
+    UInt64 total_kvs_flush_count = 0;
     SCOPE_EXIT({
         if (is_background)
         {
+            GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
+            GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg_breakdown_kvs).Increment(total_kvs_flush_count);
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg).Observe(general_watch.elapsedSeconds());
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg_breakdown_dm).Observe(total_dm_flush_millis / 1000.0);
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg_breakdown_kvs).Observe(total_kvs_flush_millis / 1000.0);
         }
         else
         {
+            GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
+            GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg_breakdown_kvs).Increment(total_kvs_flush_count);
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(general_watch.elapsedSeconds());
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg_breakdown_dm).Observe(total_dm_flush_millis / 1000.0);
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg_breakdown_kvs).Observe(total_kvs_flush_millis / 1000.0);
@@ -1087,7 +1110,8 @@ void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRan
             {
                 Stopwatch watch2;
                 watch2.restart();
-                persistRegion(*region_ptr, std::make_optional(&region_task_lock), reason.c_str());
+                persistRegion(*region_ptr, std::make_optional(&region_task_lock), PersistRegionReason::ProactiveFlush, reason.c_str());
+                total_kvs_flush_count += 1;
                 total_kvs_flush_millis += watch2.elapsedMilliseconds();
             }
         }
@@ -1145,6 +1169,7 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
         // TODO Passive `CompactLog`flush will not update this field,
         // which make this not usable in `exec_compact_log`. Pending fix.
         // TODO flushed state is never persisted, check if it will lead to a problem.
+        // TODO Why don't we just use persisted applied_index in RegionPersister?
         region->setFlushedState(compact_index, compact_term);
         region->markCompactLog();
         region->cleanApproxMemCacheInfo();

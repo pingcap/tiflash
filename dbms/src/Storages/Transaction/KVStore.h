@@ -21,6 +21,8 @@
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
+#include <magic_enum.hpp>
+
 namespace TiDB
 {
 struct TableInfo;
@@ -78,6 +80,30 @@ class PathPool;
 class RegionPersister;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
+
+enum class PersistRegionReason
+{
+    Debug,
+    UselessAdminCommand,
+    AdminCommand,
+    Flush,
+    ProactiveFlush,
+    ApplySnapshotPrevRegion,
+    ApplySnapshotCurRegion,
+    IngestSst
+};
+
+constexpr const char * PersistRegionReasonMap[magic_enum::enum_count<PersistRegionReason>()] = {
+    "debug",
+    "admin cmd useless",
+    "admin raft cmd",
+    "tryFlushRegionData",
+    "ProactiveFlush",
+    "save previous region before apply",
+    "save current region after apply",
+    "ingestsst"};
+
+static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistRegionReasonMap) / sizeof(const char *));
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -263,7 +289,7 @@ private:
     bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term);
     bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
-    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller);
+    void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, PersistRegionReason reason, const char * extra_msg);
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
