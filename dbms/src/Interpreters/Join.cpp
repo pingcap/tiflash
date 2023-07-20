@@ -431,8 +431,8 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
     std::shared_lock lock(rwlock);
     auto & data = getProbeSideMarkdeSpillData(stream_index);
     assert(!data.empty());
-    for (auto & elem : data)
-        spillProbeSideBlocks(elem.first, std::move(elem.second));
+    for (auto & [part_id, blocks] : data)
+        spillProbeSideBlocks(part_id, std::move(blocks));
     data.clear();
     if (is_the_last)
         probe_spiller->finishSpill();
@@ -664,6 +664,14 @@ void Join::finalizeRuntimeFilter()
     for (const auto & rf : runtime_filter_list)
     {
         rf->finalize(log);
+    }
+}
+
+void Join::cancelRuntimeFilter(const String & reason)
+{
+    for (const auto & rf : runtime_filter_list)
+    {
+        rf->cancel(log, reason);
     }
 }
 
@@ -1544,11 +1552,19 @@ void Join::workAfterBuildFinish(size_t stream_index)
     if (isCrossJoin(kind))
         finalizeCrossJoinBuild();
 
-    // set rf is ready
-    finalizeRuntimeFilter();
-
     if (isEnableSpill())
     {
+        if (isSpilled())
+        {
+            // TODO support runtime filter with spill.
+            cancelRuntimeFilter("Currently runtime filter is not compatible with join spill, so cancel runtime filter here.");
+        }
+        else
+        {
+            // set rf is ready
+            finalizeRuntimeFilter();
+        }
+
         // flush cached blocks for spilled partition.
         for (auto spilled_partition_index : spilled_partition_indexes)
             markBuildSideSpillData(
@@ -1565,6 +1581,9 @@ void Join::workAfterBuildFinish(size_t stream_index)
     }
     else
     {
+        // set rf is ready
+        finalizeRuntimeFilter();
+
         has_build_data_in_memory = !original_blocks.empty();
     }
 }
@@ -1876,13 +1895,21 @@ void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && blocks)
 void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
 {
     if (!blocks.empty())
-        getBuildSideMarkdeSpillData(stream_index).emplace_back(part_id, std::move(blocks));
+    {
+        auto & data = getBuildSideMarkdeSpillData(stream_index);
+        assert(data.find(part_id) == data.end());
+        data[part_id] = std::move(blocks);
+    }
 }
 
 void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
 {
     if (!blocks.empty())
-        getProbeSideMarkdeSpillData(stream_index).emplace_back(part_id, std::move(blocks));
+    {
+        auto & data = getProbeSideMarkdeSpillData(stream_index);
+        assert(data.find(part_id) == data.end());
+        data[part_id] = std::move(blocks);
+    }
 }
 
 void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
@@ -2055,6 +2082,15 @@ void Join::releaseAllPartitions()
     {
         partition->releasePartition();
     }
+}
+
+void Join::wakeUpAllWaitingThreads()
+{
+    std::unique_lock lk(build_probe_mutex);
+    skip_wait = true;
+    probe_cv.notify_all();
+    build_cv.notify_all();
+    cancelRuntimeFilter("Join has been cancelled.");
 }
 
 } // namespace DB

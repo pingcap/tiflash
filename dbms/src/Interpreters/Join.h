@@ -34,8 +34,6 @@
 #include <memory>
 #include <shared_mutex>
 
-#include "Interpreters/Users.h"
-
 namespace DB
 {
 struct JoinProfileInfo
@@ -217,8 +215,6 @@ public:
 
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void finalizeRuntimeFilter();
-
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
@@ -250,17 +246,7 @@ public:
         active_probe_threads = probe_concurrency;
     }
 
-    void wakeUpAllWaitingThreads()
-    {
-        std::unique_lock lk(build_probe_mutex);
-        skip_wait = true;
-        probe_cv.notify_all();
-        build_cv.notify_all();
-        for (const auto & rf : runtime_filter_list)
-        {
-            rf->cancel(log, "Join has been cancelled.");
-        }
-    }
+    void wakeUpAllWaitingThreads();
 
     // Return true if it is the last build thread.
     bool finishOneBuild(size_t stream_index);
@@ -287,8 +273,8 @@ public:
     void meetError(const String & error_message);
     void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
-    // std::vector<partition_index, Blocks>
-    using MarkdeSpillData = std::vector<std::pair<size_t, Blocks>>;
+    // std::unordered_map<partition_index, Blocks>
+    using MarkdeSpillData = std::unordered_map<size_t, Blocks>;
 
     MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index);
     const MarkdeSpillData & getBuildSideMarkdeSpillData(size_t stream_index) const;
@@ -495,6 +481,8 @@ private:
     void workAfterProbeFinish(size_t stream_index);
 
     void generateRuntimeFilterValues(const Block & block);
+    void finalizeRuntimeFilter();
+    void cancelRuntimeFilter(const String & reason);
 
     void finalizeProfileInfo();
 
