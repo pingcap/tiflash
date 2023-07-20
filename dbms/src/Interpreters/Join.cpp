@@ -401,8 +401,8 @@ void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
     std::shared_lock lock(rwlock);
     auto & data = getBuildSideMarkdeSpillData(stream_index);
     assert(!data.empty());
-    for (auto & elem : data)
-        spillBuildSideBlocks(elem.first, std::move(elem.second));
+    for (auto & [part_id, blocks] : data)
+        spillBuildSideBlocks(part_id, std::move(blocks));
     data.clear();
     if (is_the_last)
         build_spiller->finishSpill();
