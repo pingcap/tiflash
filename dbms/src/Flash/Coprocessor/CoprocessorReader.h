@@ -82,12 +82,14 @@ public:
         std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
         int concurrency_,
-        const pingcap::kv::LabelFilter & tiflash_label_filter_)
+        const pingcap::kv::LabelFilter & tiflash_label_filter_,
+        bool enable_cop_stream_for_remote_read_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
         , concurrency(concurrency_)
+        , enable_cop_stream_for_remote_read(enable_cop_stream_for_remote_read_)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -95,7 +97,10 @@ public:
     // `open` will call the resp_iter's `open` to send coprocessor request.
     void open()
     {
-        resp_iter.open();
+        if (enable_cop_stream_for_remote_read)
+            resp_iter.open<true>();
+        else
+            resp_iter.open<false>();
         opened = true;
     }
 
@@ -212,5 +217,6 @@ public:
     bool collected = false;
     int concurrency;
     bool opened = false;
+    bool enable_cop_stream_for_remote_read;
 };
 } // namespace DB
