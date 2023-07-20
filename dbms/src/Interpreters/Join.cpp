@@ -1555,8 +1555,15 @@ void Join::workAfterBuildFinish(size_t stream_index)
     if (isEnableSpill())
     {
         if (isSpilled())
+        {
             // TODO support runtime filter with spill.
             cancelRuntimeFilter("Currently runtime filter is not compatible with join spill, so cancel runtime filter here.");
+        }
+        else
+        {
+            // set rf is ready
+            finalizeRuntimeFilter();
+        }
 
         // flush cached blocks for spilled partition.
         for (auto spilled_partition_index : spilled_partition_indexes)
