@@ -426,14 +426,18 @@ CATCH
 TEST_F(UniPageStorageRemoteReadTest, WriteReadWithFields)
 try
 {
-    auto blob_store = PS::V3::BlobStore<PS::V3::universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, PS::V3::BlobConfig{});
+    PageTypeAndConfig page_type_and_config{
+        {PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = 0.5}},
+        {PageType::RaftData, PageTypeConfig{.heavy_gc_valid_rate = 0.1}},
+    };
+    auto blob_store = PS::V3::BlobStore<PS::V3::universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, PS::V3::BlobConfig{}, page_type_and_config);
 
     auto edits = PS::V3::universal::PageEntriesEdit{};
     {
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
-        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb));
 
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "page_foo", .entry = blob_store_edits.getRecords()[0].entry});
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_REF, .page_id = "page_foo2", .ori_page_id = "page_foo"});

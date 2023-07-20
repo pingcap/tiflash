@@ -18,6 +18,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -104,7 +105,15 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
         return from_sz <= to_sz;
     }
 
-    /// For Date and DateTime, not supported
+    if (from->getTypeId() == TypeIndex::MyDateTime && to->getTypeId() == TypeIndex::MyDateTime)
+    {
+        const auto * const from_mydatetime = checkAndGetDataType<DataTypeMyDateTime>(from.get());
+        const auto * const to_mydatetime = checkAndGetDataType<DataTypeMyDateTime>(to.get());
+        // Enlarging the `fsp` of `mydatetime`/`timestamp`/`time` is a lossless change, TiFlash should detect and change the data type in place.
+        // Narrowing down the `fsp` is a lossy change, TiDB will add a temporary column and reorganize the column data as other lossy type change.
+        return (from_mydatetime->getFraction() < to_mydatetime->getFraction());
+    }
+    /// For other cases of Date and DateTime, not supported
     if (from->isDateOrDateTime() || to->isDateOrDateTime())
     {
         return false;

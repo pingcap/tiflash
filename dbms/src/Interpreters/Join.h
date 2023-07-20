@@ -31,10 +31,19 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <memory>
 #include <shared_mutex>
 
 namespace DB
 {
+struct JoinProfileInfo
+{
+    UInt64 peak_build_bytes_usage = 0;
+    bool is_spill_enabled = false;
+    bool is_spilled = false;
+};
+using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
+
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -277,6 +286,8 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
+    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
 
@@ -450,6 +461,8 @@ private:
     void workAfterProbeFinish();
 
     void generateRuntimeFilterValues(const Block & block);
+
+    void finalizeProfileInfo();
 };
 
 } // namespace DB
