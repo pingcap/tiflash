@@ -65,14 +65,15 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                 {
                     if (probe_transform->hasMarkedSpillData())
                     {
-                        status = ProbeStatus::PROBE_FINAL_SPILL;
+                        switchStatus(ProbeStatus::PROBE_FINAL_SPILL);
                         break;
                     }
                     probe_transform->finalizeProbe();
                 }
-                status = probe_transform->needScanHashMapAfterProbe() || probe_transform->isSpilled()
+                auto next_status = probe_transform->needScanHashMapAfterProbe() || probe_transform->isSpilled()
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
+                switchStatus(next_status);
                 break;
             }
             block = probe_transform->joinBlock(probe_process_info);
@@ -85,7 +86,8 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if unlikely (!block)
             {
                 probe_transform->endNonJoined();
-                status = probe_transform->isSpilled() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
+                auto next_status = probe_transform->isSpilled() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
+                switchStatus(next_status);
                 break;
             }
             scan_hash_map_rows += block.rows();
@@ -96,15 +98,15 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                 if (probe_transform->needScanHashMapAfterProbe())
                 {
                     probe_transform->startNonJoined();
-                    status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                    switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
                 }
                 else if (probe_transform->isSpilled())
                 {
-                    status = ProbeStatus::GET_RESTORE_JOIN;
+                    switchStatus(ProbeStatus::GET_RESTORE_JOIN);
                 }
                 else
                 {
-                    status = ProbeStatus::FINISHED;
+                    switchStatus(ProbeStatus::FINISHED);
                 }
                 break;
             }
@@ -113,18 +115,18 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
             {
                 probe_transform = restore_exec;
-                status = ProbeStatus::RESTORE_BUILD;
+                switchStatus(ProbeStatus::RESTORE_BUILD);
             }
             else
             {
-                status = ProbeStatus::FINISHED;
+                switchStatus(ProbeStatus::FINISHED);
             }
             break;
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
                 probe_transform->startRestoreProbe();
-                status = ProbeStatus::RESTORE_PROBE;
+                switchStatus(ProbeStatus::RESTORE_PROBE);
                 break;
             }
             return OperatorStatus::WAITING;
@@ -214,7 +216,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isAllProbeFinished())
             {
-                status = ProbeStatus::READ_SCAN_HASH_MAP_DATA;
+                switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
                 probe_transform->startNonJoined();
                 return OperatorStatus::HAS_OUTPUT;
             }
@@ -225,7 +227,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
-                status = ProbeStatus::RESTORE_PROBE;
+                switchStatus(ProbeStatus::RESTORE_PROBE);
                 break;
             }
             else
@@ -251,10 +253,16 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
     case ProbeStatus::PROBE_FINAL_SPILL:
         probe_transform->flushMarkedSpillData(/*is_the_last=*/true);
         probe_transform->finalizeProbe();
-        status = ProbeStatus::WAIT_PROBE_FINISH;
+        switchStatus(ProbeStatus::WAIT_PROBE_FINISH);
         return OperatorStatus::HAS_OUTPUT;
     default:
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
+}
+
+void HashJoinProbeTransformOp::switchStatus(ProbeStatus to)
+{
+    LOG_TRACE(log, fmt::format("{} -> {}", magic_enum::enum_name(status), magic_enum::enum_name(to)));
+    status = to;
 }
 } // namespace DB

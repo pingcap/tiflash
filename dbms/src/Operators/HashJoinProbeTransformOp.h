@@ -54,17 +54,6 @@ private:
 
     bool fillProcessInfoFromPartitoinBlocks();
 
-private:
-    JoinPtr origin_join;
-
-    HashProbeTransformExecPtr probe_transform;
-
-    ProbeProcessInfo probe_process_info;
-    PartitionBlocks probe_partition_blocks;
-
-    size_t joined_rows = 0;
-    size_t scan_hash_map_rows = 0;
-
     /*
      *   spill not enabled:
      *                                        PROBE
@@ -124,6 +113,19 @@ private:
         RESTORE_PROBE, /// probe for restore join
         FINISHED, /// the final state
     };
+    void switchStatus(ProbeStatus to);
+
+private:
+    JoinPtr origin_join;
+
+    HashProbeTransformExecPtr probe_transform;
+
+    ProbeProcessInfo probe_process_info;
+    PartitionBlocks probe_partition_blocks;
+
+    size_t joined_rows = 0;
+    size_t scan_hash_map_rows = 0;
+
     ProbeStatus status{ProbeStatus::PROBE};
 };
 } // namespace DB
