@@ -327,8 +327,10 @@ bool RegionData::OrphanKeysInfo::observeKeyFromNormalWrite(const TiKVKey & key)
     bool res = remained_keys.erase(key);
     if (res)
     {
+        // TODO since the check is temporarily disabled, we comment this to avoid extra memory cost.
         // If we erased something, log that.
-        removed_remained_keys.insert(TiKVKey::copyFromObj(key));
+        // So if we meet this key later due to some unknown replay mechanism, we can know it is a replayed orphan key.
+        // removed_remained_keys.insert(TiKVKey::copyFromObj(key));
     }
     return res;
 }
