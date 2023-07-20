@@ -650,7 +650,7 @@ using namespace DB::PS::V3;
 
 void pageStorageV3CtlEntry(int argc, char ** argv)
 {
-    bool enable_colors = isatty(STDERR_FILENO) || isatty(STDOUT_FILENO);
+    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
     DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     const auto & options = ControlOptions::parse(argc, argv);
     u128::PageStorageControlV3(options).run();
@@ -658,7 +658,7 @@ void pageStorageV3CtlEntry(int argc, char ** argv)
 
 void universalpageStorageCtlEntry(int argc, char ** argv)
 {
-    bool enable_colors = isatty(STDERR_FILENO) || isatty(STDOUT_FILENO);
+    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
     DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
     const auto & options = ControlOptions::parse(argc, argv);
     universal::PageStorageControlV3(options).run();
