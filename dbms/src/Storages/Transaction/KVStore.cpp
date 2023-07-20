@@ -480,7 +480,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
         // The advance of apply index aka `handleWriteRaftCmd` is executed in `fn_try_flush_data`.
         // If the attempt fails, Proxy will filter execution of this CompactLog, which means every CompactLog observed by TiFlash can ALWAYS succeed now.
-        // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
+        // ref. https://github.com/pingcap/tidb-engine-ext/blob/1253b471ae6204170fa3917e32e41bac1b4dc583/proxy_components/engine_store_ffi/src/core/forward_raft/command.rs#L162
         return EngineStoreApplyRes::Persist;
     }
 
