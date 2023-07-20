@@ -19,6 +19,8 @@
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>
+#include <Flash/Pipeline/Schedule/Tasks/StreamRestoreTask.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -77,13 +79,32 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
     return parent ? parent->tryGetRestoreExec() : HashProbeTransformExecPtr{};
 }
 
+void HashProbeTransformExec::startRestoreProbe()
+{
+    assert(!is_probe_restore_done && probe_restore_stream);
+    TaskScheduler::instance->submit(std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
+    probe_restore_stream.reset();
+}
+
 bool HashProbeTransformExec::isProbeRestoreReady()
 {
     if (unlikely(is_probe_restore_done))
         return true;
     if (probe_restore_block)
         return true;
-    return false;
+    auto ret = probe_result_queue->tryPop(probe_restore_block);
+    switch (ret)
+    {
+    case MPMCQueueResult::OK:
+        return true;
+    case MPMCQueueResult::EMPTY:
+        return false;
+    case MPMCQueueResult::FINISHED:
+        is_probe_restore_done = true;
+        return true;
+    default:
+        throw Exception(fmt::format("Unexpected result: {}", magic_enum::enum_name(ret)));
+    }
 }
 
 Block HashProbeTransformExec::popProbeRestoreBlock()

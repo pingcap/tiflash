@@ -123,6 +123,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
+                probe_transform->startRestoreProbe();
                 status = ProbeStatus::RESTORE_PROBE;
                 break;
             }

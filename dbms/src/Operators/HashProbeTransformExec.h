@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/Join.h>
+#include <Flash/Executor/ResultQueue.h>
 
 namespace DB
 {
@@ -59,6 +60,7 @@ public:
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
     // For restore probe stage
+    void startRestoreProbe();
     bool isProbeRestoreReady();
     Block popProbeRestoreBlock();
 
@@ -81,11 +83,8 @@ private:
 
     HashProbeTransformExecPtr parent;
 
-    // For restore build.
-    Block build_restore_block;
-    bool is_build_restore_done = false;
-
     // For restore probe.
+    ResultQueuePtr probe_result_queue = std::make_shared<ResultQueue>(2);
     BlockInputStreamPtr probe_restore_stream;
     Block probe_restore_block;
     bool is_probe_restore_done = false;
