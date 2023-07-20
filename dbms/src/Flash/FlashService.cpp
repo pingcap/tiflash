@@ -726,7 +726,7 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
-    LOG_DEBUG(
+    LOG_INFO(
         logger,
         "Handle EstablishDisaggTask request done, resp_err={}",
         response->has_error() ? response->error().ShortDebugString() : "(null)");
@@ -771,7 +771,7 @@ grpc::Status FlashService::FetchDisaggPages(
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
+    LOG_INFO(logger, "Fetching pages, keyspace={} table_id={} segment_id={} num_fetch={}", keyspace_id, request->table_id(), request->segment_id(), request->page_ids_size());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -796,7 +796,7 @@ grpc::Status FlashService::FetchDisaggPages(
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 
-        LOG_DEBUG(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
+        LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
