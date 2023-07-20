@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Flash/Pipeline/Exec/PipelineExecMappingTask.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
-
-#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -44,17 +41,17 @@ void PipelineTask::doFinalizeImpl()
 
 ExecTaskStatus PipelineTask::executeImpl()
 {
-    return PipelineExecMappingTask::execute(pipeline_exec);
+    MAPPING_TASK_EXECUTE(pipeline_exec);
 }
 
 ExecTaskStatus PipelineTask::executeIOImpl()
 {
-    return PipelineExecMappingTask::executeIO(pipeline_exec);
+    MAPPING_TASK_EXECUTE_IO(pipeline_exec);
 }
 
 ExecTaskStatus PipelineTask::awaitImpl()
 {
-    return PipelineExecMappingTask::await(pipeline_exec);
+    MAPPING_TASK_AWAIT(pipeline_exec);
 }
 
 } // namespace DB

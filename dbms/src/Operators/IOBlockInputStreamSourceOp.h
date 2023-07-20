@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Operators/Operator.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -56,7 +56,7 @@ protected:
             return OperatorStatus::HAS_OUTPUT;
         if (!ret)
             return OperatorStatus::IO_IN;
-        
+
         std::swap(ret, block);
         return OperatorStatus::HAS_OUTPUT;
     }
