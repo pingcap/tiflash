@@ -666,7 +666,8 @@ public:
                                                    const RowKeyRanges & read_ranges,
                                                    const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
-                                                   size_t expected_block_size);
+                                                   size_t build_bitmap_filter_block_rows,
+                                                   size_t read_data_block_rows);
 
     BlockInputStreamPtr getLateMaterializationStream(BitmapFilterPtr && bitmap_filter,
                                                      const DMContext & dm_context,
@@ -677,8 +678,21 @@ public:
                                                      UInt64 max_version,
                                                      size_t expected_block_size);
 
+    // clipBlockRows try to limit the block size not exceed settings.max_block_bytes.
+    size_t clipBlockRows(const Context & context,
+                         size_t expected_block_rows,
+                         const ColumnDefines & read_columns);
+    size_t clipBlockRows(size_t max_block_bytes,
+                         size_t pack_rows,
+                         size_t expected_block_rows,
+                         const ColumnDefines & read_columns);
 
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 
