@@ -31,6 +31,9 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <common/likely.h>
 
+#include <tuple>
+#include <variant>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -42,6 +45,10 @@ extern const int TABLE_IS_DROPPED;
 namespace FailPoints
 {
 extern const char force_fail_in_flush_region_data[];
+extern const char pause_proactive_flush_before_persist_region[];
+extern const char pause_passive_flush_before_persist_region[];
+extern const char proactive_flush_between_persist_cache_and_region[];
+extern const char proactive_flush_between_persist_regions[];
 } // namespace FailPoints
 
 KVStore::KVStore(Context & context)
@@ -51,6 +58,7 @@ KVStore::KVStore(Context & context)
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
+    , region_compact_log_gap(500)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
 }
@@ -102,6 +110,7 @@ RegionPtr KVStore::getRegion(RegionID region_id) const
         return it->second;
     return nullptr;
 }
+// TODO: may get regions not in segment?
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
     auto manage_lock = genRegionMgrReadLock();
@@ -238,12 +247,13 @@ RegionManager::RegionWriteLock KVStore::genRegionMgrWriteLock(const KVStoreTaskL
     return region_manager.genWriteLock();
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(
+EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     raft_cmdpb::RaftCmdRequest && request,
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt) const
+    TMTContext & tmt,
+    DM::WriteResult & write_result)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -276,30 +286,71 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
             throw Exception(fmt::format("Unsupport raft cmd {}", raft_cmdpb::CmdType_Name(type)), ErrorCodes::LOGICAL_ERROR);
         }
     }
-    return handleWriteRaftCmd(
+    return handleWriteRaftCmdInner(
         WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
         region_id,
         index,
         term,
-        tmt);
+        tmt,
+        write_result);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
+EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result)
 {
-    auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
-
-    const RegionPtr region = getRegion(region_id);
-    if (region == nullptr)
+    EngineStoreApplyRes res;
     {
-        return EngineStoreApplyRes::NotFound;
+        auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
+
+        const RegionPtr region = getRegion(region_id);
+        if (region == nullptr)
+        {
+            return EngineStoreApplyRes::NotFound;
+        }
+
+        auto && [r, w] = region->handleWriteRaftCmd(cmds, index, term, tmt);
+
+        if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+        {
+            region->orphanKeysInfo().advanceAppliedIndex(index);
+        }
+        write_result = std::move(w);
+        res = r;
     }
-
-    auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
-    if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
+    /// Safety:
+    /// This call is from Proxy's applying thread of this region, so:
+    /// 1. No other thread can write from raft to this region even if we unlocked here.
+    /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
+    if (write_result)
     {
-        region->orphanKeysInfo().advanceAppliedIndex(index);
+        auto & inner = write_result.value();
+        for (auto it = inner.pending_flush_ranges.begin(); it != inner.pending_flush_ranges.end(); it++)
+        {
+            proactiveFlushCacheAndRegion(tmt, *it, inner.keyspace_id, inner.table_id, false);
+        }
     }
     return res;
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt)
+{
+    DM::WriteResult write_result;
+    return handleWriteRaftCmdInner(std::move(request), region_id, index, term, tmt, write_result);
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    DM::WriteResult write_result;
+    return handleWriteRaftCmdInner(cmds, region_id, index, term, tmt, write_result);
+}
+
+EngineStoreApplyRes KVStore::handleWriteRaftCmdDebug(raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result)
+{
+    return handleWriteRaftCmdInner(std::move(request), region_id, index, term, tmt, write_result);
 }
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
@@ -320,18 +371,20 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
+void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 gap)
 {
     region_compact_log_period = sec;
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
+    region_compact_log_gap = gap;
 
     LOG_INFO(
         log,
-        "threshold config: period {}, rows {}, bytes {}",
+        "threshold config: period {}, rows {}, bytes {}, gap {}",
         sec,
         rows,
-        bytes);
+        bytes,
+        gap);
 }
 
 void KVStore::persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller)
@@ -356,13 +409,14 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
     // TODO Should handle when curr_region_ptr is null.
-    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0, 0, 0);
 }
 
-bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term, uint64_t truncated_index, uint64_t truncated_term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+
     if (curr_region_ptr == nullptr)
     {
         /// If we can't find region here, we return true so proxy can trigger a CompactLog.
@@ -372,6 +426,8 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
+
+    FAIL_POINT_PAUSE(FailPoints::pause_passive_flush_before_persist_region);
     if (force_persist)
     {
         auto & curr_region = *curr_region_ptr;
@@ -384,11 +440,11 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
     }
     else
     {
-        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term, truncated_index, truncated_term);
     }
 }
 
-bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term)
 {
     if (curr_region_ptr == nullptr)
     {
@@ -396,27 +452,30 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     auto & curr_region = *curr_region_ptr;
 
-    auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
-
-    LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
-
     bool can_flush = false;
+    auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
     if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
         || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
     {
         // if rows or bytes more than threshold, flush cache and persist mem data.
         can_flush = true;
     }
-    else
+    auto gap_threshold = region_compact_log_gap.load();
+    if (index > truncated_index + gap_threshold)
     {
-        // if there is little data in mem, wait until time interval reached threshold.
-        // use random period so that lots of regions will not be persisted at same time.
-        auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
-        can_flush = !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
+        can_flush = true;
     }
+
+    auto current_gap = index - truncated_index;
+
+    GET_METRIC(tiflash_raft_raft_events_count, type_pre_exec_compact).Increment(1);
+    GET_METRIC(tiflash_raft_raft_log_lag_count, type_compact_index).Observe(current_gap);
+    LOG_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}, gap {}/{}", curr_region.toString(false), rows, size_bytes, current_gap, gap_threshold);
+
     if (can_flush && flush_if_possible)
     {
-        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
+        LOG_INFO(log, "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {} gap {}/{}", curr_region.toString(false), index, term, truncated_index, truncated_term, current_gap, gap_threshold);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     return can_flush;
@@ -911,4 +970,197 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
     return region_persister->getFileUsageStatistics();
 }
 
+void KVStore::proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background)
+{
+    if (is_background)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
+    }
+
+    Stopwatch general_watch;
+    UInt64 total_dm_flush_millis = 0;
+    UInt64 total_kvs_flush_millis = 0;
+    SCOPE_EXIT({
+        if (is_background)
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg).Observe(general_watch.elapsedSeconds());
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg_breakdown_dm).Observe(total_dm_flush_millis / 1000.0);
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg_breakdown_kvs).Observe(total_kvs_flush_millis / 1000.0);
+        }
+        else
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(general_watch.elapsedSeconds());
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg_breakdown_dm).Observe(total_dm_flush_millis / 1000.0);
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg_breakdown_kvs).Observe(total_kvs_flush_millis / 1000.0);
+        }
+    });
+
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
+    if (unlikely(storage == nullptr))
+    {
+        LOG_WARNING(log,
+                    "proactiveFlushCacheAndRegion can not get table for table id {}, ignored",
+                    table_id);
+        return;
+    }
+    auto range = std::make_pair(TiKVRangeKey::makeTiKVRangeKey<true>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.start.toRegionKey(table_id))),
+                                TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
+    Stopwatch watch;
+
+    LOG_INFO(log, "Start proactive flush region range [{},{}] [table_id={}] [keyspace_id={}] [is_background={}]", range.first.toDebugString(), range.second.toDebugString(), table_id, keyspace_id, is_background);
+    /// It finds r1,r2,r3 in the following case.
+    ///     |------ range ------|
+    /// |--- r1 ---|--- r2 ---|--- r3 ---|
+    std::unordered_map<UInt64, std::tuple<UInt64, UInt64, DM::RowKeyRange, RegionPtr>> region_compact_indexes;
+    {
+        auto task_lock = genTaskLock();
+        auto maybe_region_map = [&]() {
+            auto manage_lock = genRegionMgrReadLock();
+            // Check if the region overlaps.
+            return manage_lock.index.findByRangeChecked(range);
+        }();
+
+        if (std::holds_alternative<RegionsRangeIndex::OverlapInfo>(maybe_region_map))
+        {
+            auto & info = std::get<RegionsRangeIndex::OverlapInfo>(maybe_region_map);
+            FmtBuffer buffer;
+            buffer.joinStr(
+                std::get<1>(info).begin(),
+                std::get<1>(info).end(),
+                [&](const auto & e, FmtBuffer & b) { b.fmtAppend("{}", e); },
+                " ");
+            std::string fmt_error = fmt::format("Find overlapped regions at {}, regions are {}, quit", std::get<0>(info).toDebugString(), buffer.toString());
+            LOG_ERROR(log, fmt_error);
+            throw Exception(fmt_error, ErrorCodes::LOGICAL_ERROR);
+        }
+
+        auto & region_map = std::get<RegionMap>(maybe_region_map);
+        for (const auto & overlapped_region : region_map)
+        {
+            auto region_rowkey_range = DM::RowKeyRange::fromRegionRange(
+                overlapped_region.second->getRange(),
+                table_id,
+                storage->isCommonHandle(),
+                storage->getRowKeyColumnSize());
+            region_compact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm(), region_rowkey_range, overlapped_region.second};
+        }
+    }
+    FAIL_POINT_PAUSE(FailPoints::pause_proactive_flush_before_persist_region);
+    // Flush all segments in the range of regions.
+    // TODO: combine adjacent range to do one flush.
+    std::string reason = fmt::format("proactiveFlush{}", is_background ? "Bg" : "Fg");
+    for (const auto & region : region_compact_indexes)
+    {
+        auto region_rowkey_range = std::get<2>(region.second);
+        auto region_id = region.first;
+        auto region_ptr = std::get<3>(region.second);
+        {
+            auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+            if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
+            {
+                // `region_rowkey_range` belongs to rowkey_range.
+                // E.g. [0,9223372036854775807] belongs to [-9223372036854775808,9223372036854775807].
+                // This segment has flushed. However, we still need to persist the region.
+                LOG_DEBUG(log, "segment of region {} flushed, [applied_index={}] [applied_term={}]", region.first, std::get<0>(region.second), std::get<1>(region.second));
+            }
+            else
+            {
+                LOG_DEBUG(log, "extra segment of region {} to flush, region range:[{},{}], flushed segment range:[{},{}]", region.first, region_rowkey_range.getStart().toDebugString(), region_rowkey_range.getEnd().toDebugString(), rowkey_range.getStart().toDebugString(), rowkey_range.getEnd().toDebugString());
+                // Both flushCache and persistRegion should be protected by region task lock.
+                // We can avoid flushCache with a region lock held, if we save some meta info before flushing cache.
+                // Merely store applied_index is not enough, considering some cmds leads to modification of other meta data.
+                // After flushCache, we will persist region and notify Proxy with the previously stored meta info.
+                // However, this solution still involves region task lock in this function.
+                // Meanwhile, other write/admin cmds may be executed, they requires we acquire lock here:
+                // For write cmds, we need to support replay from KVStore level, like enhancing duplicate key detection.
+                // For admin cmds, it can cause insertion/deletion of regions, so it can't be replayed currently.
+                Stopwatch watch2;
+                watch2.restart();
+                storage->flushCache(tmt.getContext(), std::get<2>(region.second));
+                total_dm_flush_millis += watch2.elapsedSecondsFromLastTime();
+            }
+            fiu_do_on(FailPoints::proactive_flush_between_persist_cache_and_region, return;);
+            {
+                Stopwatch watch2;
+                watch2.restart();
+                persistRegion(*region_ptr, std::make_optional(&region_task_lock), reason.c_str());
+                total_kvs_flush_millis += watch2.elapsedMilliseconds();
+            }
+        }
+    }
+    auto elapsed_coupled_flush = watch.elapsedMilliseconds();
+    watch.restart();
+
+    fiu_do_on(FailPoints::proactive_flush_between_persist_regions, return;);
+    // forbid regions being removed.
+    for (const auto & region : region_compact_indexes)
+    {
+        // Can truncated to flushed index, which is applied_index in this case.
+        // Region can be removed since we don't lock kvstore here.
+        notifyCompactLog(region.first, std::get<0>(region.second), std::get<1>(region.second), is_background, false);
+    }
+    auto elapsed_notify_proxy = watch.elapsedMilliseconds();
+
+    LOG_DEBUG(log, "Finished proactive flush region range [{},{}] of {} regions. [couple_flush={}] [notify_proxy={}] [table_id={}] [keyspace_id={}] [is_background={}]", range.first.toDebugString(), range.second.toDebugString(), region_compact_indexes.size(), elapsed_coupled_flush, elapsed_notify_proxy, table_id, keyspace_id, is_background);
+}
+
+/// The function will notify Proxy to schedule a CheckCompact task. When this task is handled,
+/// When handling, it will try to update `applied_index` and `truncated_state`, and then persist.
+/// The updated `truncated_state` will not exceed the recorded `max_compact_index`.
+/// `max_compact_index` is updated by CompactLog, whether it is filtered.
+/// Requirements:
+/// 1. The caller will guarantee that delta cache has been flushed.
+/// 1. Region cache being persisted before notifying.
+/// The truncated_index is mono-increase since:
+/// 1. Every non-filtered passive flush uses what is from the `CompactLog`,
+///    and `entry_storage::first_index`/`compact_raft_log` will guard that.
+/// 1. Every proactive flush uses the newest `applied_index`.
+void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held)
+{
+    auto region = getRegion(region_id);
+    if (!region)
+    {
+        LOG_INFO(log, "region {} has been removed, ignore", region_id);
+        return;
+    }
+    if (region->lastCompactLogTime() + Seconds{region_compact_log_period.load(std::memory_order_relaxed)} > Clock::now())
+    {
+        return;
+    }
+    if (is_background)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_bg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
+    }
+    auto f = [&]() {
+        // So proxy can get the current compact state of this region of TiFlash's side.
+
+        // TODO Passive `CompactLog`flush will not update this field,
+        // which make this not usable in `exec_compact_log`. Pending fix.
+        // TODO flushed state is never persisted, check if it will lead to a problem.
+        region->setFlushedState(compact_index, compact_term);
+        region->markCompactLog();
+        region->cleanApproxMemCacheInfo();
+        // We will notify even if `flush_state.applied_index` is greater than `compact_index`,
+        // since this greater `applied_index` may not trigger a compact log.
+        // We will maintain the biggest on Proxy's side.
+        getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term, compact_index);
+    };
+    if (lock_held)
+    {
+        f();
+    }
+    else
+    {
+        auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+        f();
+    }
+}
 } // namespace DB

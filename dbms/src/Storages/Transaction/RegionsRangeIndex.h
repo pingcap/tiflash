@@ -18,6 +18,7 @@
 #include <Storages/Transaction/Types.h>
 
 #include <map>
+#include <variant>
 
 namespace DB
 {
@@ -42,12 +43,16 @@ class RegionsRangeIndex : private boost::noncopyable
 {
 public:
     using RootMap = std::map<TiKVRangeKey, IndexNode, TiKVRangeKeyCmp>;
+    using OverlapInfo = std::tuple<TiKVRangeKey, std::vector<RegionID>>;
 
     void add(const RegionPtr & new_region);
 
     void remove(const RegionRange & range, RegionID region_id);
 
     RegionMap findByRangeOverlap(const RegionRange & range) const;
+
+    // Returns a region map of all regions of range, or the id of the first region that is checked overlapped with another region.
+    std::variant<RegionMap, OverlapInfo> findByRangeChecked(const RegionRange & range) const;
 
     RegionsRangeIndex();
 

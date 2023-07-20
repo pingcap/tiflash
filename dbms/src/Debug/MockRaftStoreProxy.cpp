@@ -20,8 +20,10 @@
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/RowCodec.h>
@@ -30,6 +32,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
+
 
 namespace DB
 {
@@ -136,6 +139,20 @@ KVGetStatus fn_get_region_local_state(RaftStoreProxyPtr ptr, uint64_t region_id,
         return KVGetStatus::NotFound;
 }
 
+void fn_notify_compact_log(RaftStoreProxyPtr ptr, uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index)
+{
+    // Update flushed applied_index and truncated state.
+    auto & x = as_ref(ptr);
+    auto region = x.getRegion(region_id);
+    ASSERT(region);
+    LOG_INFO(&Poco::Logger::get("!!!!!"), "!!!! fn_notify_compact_log {} commit index {} applied_index {} compact_index {} compact_term {}", region_id, region->getLatestCommitIndex(), applied_index, compact_index, compact_term);
+    // `applied_index` in proxy's disk can still be less than the `applied_index` here when fg flush.
+    if (region && region->getApply().truncated_state().index() < compact_index)
+    {
+        region->tryUpdateTruncatedState(compact_index, compact_term);
+    }
+}
+
 RaftstoreVer fn_get_cluster_raftstore_version(RaftStoreProxyPtr ptr,
                                               uint8_t,
                                               int64_t)
@@ -153,6 +170,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreP
     res.fn_make_async_waker = fn_make_async_waker;
     res.fn_handle_batch_read_index = fn_handle_batch_read_index;
     res.fn_get_region_local_state = fn_get_region_local_state;
+    res.fn_notify_compact_log = fn_notify_compact_log;
     res.fn_get_cluster_raftstore_version = fn_get_cluster_raftstore_version;
     {
         // make sure such function pointer will be set at most once.
@@ -181,19 +199,44 @@ void MockProxyRegion::updateAppliedIndex(uint64_t index)
     this->apply.set_applied_index(index);
 }
 
+void MockProxyRegion::persistAppliedIndex()
+{
+    // Assume persist after every advance for simplicity.
+    // So do nothing here.
+}
+
+uint64_t MockProxyRegion::getPersistedAppliedIndex()
+{
+    // Assume persist after every advance for simplicity.
+    auto _ = genLockGuard();
+    return this->apply.applied_index();
+}
+
 uint64_t MockProxyRegion::getLatestAppliedIndex()
 {
-    return this->getApply().applied_index();
+    auto _ = genLockGuard();
+    return this->apply.applied_index();
 }
 
 uint64_t MockProxyRegion::getLatestCommitTerm()
 {
-    return this->getApply().commit_term();
+    auto _ = genLockGuard();
+    return this->apply.commit_term();
 }
 
 uint64_t MockProxyRegion::getLatestCommitIndex()
 {
-    return this->getApply().commit_index();
+    auto _ = genLockGuard();
+    return this->apply.commit_index();
+}
+
+void MockProxyRegion::tryUpdateTruncatedState(uint64_t index, uint64_t term)
+{
+    if (index > this->apply.truncated_state().index())
+    {
+        this->apply.mutable_truncated_state()->set_index(index);
+        this->apply.mutable_truncated_state()->set_term(term);
+    }
 }
 
 void MockProxyRegion::updateCommitIndex(uint64_t index)
@@ -202,7 +245,7 @@ void MockProxyRegion::updateCommitIndex(uint64_t index)
     this->apply.set_commit_index(index);
 }
 
-void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
+void MockProxyRegion::setState(raft_serverpb::RegionLocalState s)
 {
     auto _ = genLockGuard();
     this->state = s;
@@ -426,6 +469,38 @@ void MockRaftStoreProxy::debugAddRegions(
     }
 }
 
+void MockRaftStoreProxy::loadRegionFromKVStore(
+    KVStore & kvs,
+    TMTContext & tmt,
+    UInt64 region_id)
+{
+    UNUSED(tmt);
+    auto kvr = kvs.getRegion(region_id);
+    auto ori_r = getRegion(region_id);
+    auto commit_index = RAFT_INIT_LOG_INDEX;
+    auto commit_term = RAFT_INIT_LOG_TERM;
+    if (!ori_r)
+    {
+        regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
+    }
+    else
+    {
+        commit_index = ori_r->getLatestCommitIndex();
+        commit_term = ori_r->getLatestCommitTerm();
+    }
+    MockProxyRegionPtr r = getRegion(region_id);
+    {
+        r->state = kvr->mutMeta().getRegionState().getBase();
+        r->apply = kvr->mutMeta().clonedApplyState();
+        if (r->apply.commit_index() == 0)
+        {
+            r->apply.set_commit_index(commit_index);
+            r->apply.set_commit_term(commit_term);
+        }
+    }
+    LOG_INFO(log, "loadRegionFromKVStore [region_id={}] region_state {} apply_state {}", region_id, r->state.DebugString(), r->apply.DebugString());
+}
+
 std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     UInt64 region_id,
     std::vector<HandleID> && keys,
@@ -628,7 +703,8 @@ void MockRaftStoreProxy::doApply(
     TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
-    uint64_t index)
+    uint64_t index,
+    std::optional<bool> check_proactive_flush)
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
@@ -677,15 +753,46 @@ void MockRaftStoreProxy::doApply(
     if (cmd.has_raw_write_request())
     {
         // TiFlash write
-        kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+        DB::DM::WriteResult write_task;
+        kvs.handleWriteRaftCmdDebug(std::move(request), region_id, index, term, tmt, write_task);
+        if (check_proactive_flush)
+        {
+            if (check_proactive_flush.value())
+            {
+                // fg flush
+                ASSERT(write_task.has_value());
+            }
+            else
+            {
+                // bg flush
+                ASSERT(!write_task.has_value());
+            }
+        }
     }
     if (cmd.has_admin_request())
     {
+        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog)
+        {
+            auto res = kvs.tryFlushRegionData(region_id, false, true, tmt, index, term, region->getApply().truncated_state().index(), region->getApply().truncated_state().term());
+            auto compact_index = cmd.admin().request.compact_log().compact_index();
+            auto compact_term = cmd.admin().request.compact_log().compact_term();
+            if (!res)
+            {
+                LOG_DEBUG(log, "mock pre exec reject");
+            }
+            else
+            {
+                region->tryUpdateTruncatedState(compact_index, compact_term);
+                LOG_DEBUG(log, "mock pre exec success, update to {},{}", compact_index, compact_term);
+            }
+        }
         kvs.handleAdminRaftCmd(std::move(cmd.admin().request), std::move(cmd.admin().response), region_id, index, term, tmt);
     }
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE)
     {
+        // We reset applied to old one.
+        // TODO persistRegion to cowork with restore.
         kvs.getRegion(region_id)->setApplied(old_applied, old_applied_term);
         return;
     }
@@ -698,12 +805,26 @@ void MockRaftStoreProxy::doApply(
             // TODO We should remove (0, index] here, it is enough to remove exactly index now.
             region->commands.erase(i);
         }
+        else if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::BatchSplit)
+        {
+            for (auto && sp : cmd.admin().response.splits().regions())
+            {
+                auto r = sp.id();
+                loadRegionFromKVStore(kvs, tmt, r);
+            }
+        }
     }
 
     // Proxy advance
+    // In raftstore v1, applied_index in ApplyFsm is advanced before forward to TiFlash.
+    // However, it is after persisted applied state that ApplyFsm will notify raft to advance.
+    // So keeping a in-memory applied_index is ambiguious here.
+    // We currently consider a flush for every command for simplify,
+    // so in-memory applied_index equals to persisted applied_index.
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE)
         return;
     region->updateAppliedIndex(index);
+    region->persistAppliedIndex();
 }
 
 void MockRaftStoreProxy::replay(

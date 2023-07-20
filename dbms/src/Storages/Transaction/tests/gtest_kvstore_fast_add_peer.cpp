@@ -177,7 +177,7 @@ void persistAfterWrite(Context & ctx, KVStore & kvs, std::unique_ptr<MockRaftSto
     page_storage->write(std::move(wb));
     // There shall be data to flush.
     ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
-    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), true);
+    ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0, 0, 0), true);
 }
 
 TEST_F(RegionKVStoreTestFAP, RestoreRaftState)

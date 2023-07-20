@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
@@ -111,11 +113,20 @@ public:
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt) const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const;
+        TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmdDebug(raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
+    EngineStoreApplyRes handleWriteRaftCmdInner(
+        raft_cmdpb::RaftCmdRequest && request,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt,
+        DM::WriteResult & write_result);
+    EngineStoreApplyRes handleWriteRaftCmdInner(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt, DM::WriteResult & write_result);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
-    bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
+    bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term, uint64_t truncated_index, uint64_t truncated_term);
 
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
@@ -137,7 +148,7 @@ public:
     void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
+    void setRegionCompactLogConfig(UInt64, UInt64, UInt64, UInt64);
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
@@ -178,6 +189,8 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
+    void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
+    void notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background, bool lock_held = true);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -247,7 +260,7 @@ private:
     /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
-    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
+    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term, UInt64 truncated_index, UInt64 truncated_term);
     bool forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
     void persistRegion(const Region & region, std::optional<const RegionTaskLock *> region_task_lock, const char * caller);
@@ -273,6 +286,7 @@ private:
     std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;
     std::atomic<UInt64> region_compact_log_min_bytes;
+    std::atomic<UInt64> region_compact_log_gap;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;

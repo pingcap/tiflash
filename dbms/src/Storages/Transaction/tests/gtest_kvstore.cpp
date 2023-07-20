@@ -37,7 +37,7 @@ try
         raft_cmdpb::AdminResponse response;
         auto region = kvs.getRegion(1);
         region->markCompactLog();
-        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000, 0);
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         // CompactLog always returns true now, even if we can't do a flush.
@@ -45,7 +45,7 @@ try
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0, 0, 0), false);
     }
 }
 CATCH
@@ -120,7 +120,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             auto tar = kvs.getRegion(tar_region_id);
             ASSERT_EQ(
-                tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()),
+                tar->handleWriteRaftCmd({}, 66, 6, ctx.getTMTContext()).first,
                 EngineStoreApplyRes::None);
         }
         {
@@ -153,6 +153,7 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 
         // Test read index
         // Note `batchReadIndex` always returns latest committed index in our mock class.
+        // See `RawMockReadIndexTask::poll`.
         kvs.asyncRunReadIndexWorkers();
         SCOPE_EXIT({
             kvs.stopReadIndexWorkers();
@@ -668,7 +669,7 @@ TEST_F(RegionKVStoreTest, Writes)
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE, region_id: 1, applied: 5");
+                ASSERT_EQ(e.message(), "Raw TiDB PK: 800000000000091D, Prewrite ts: 2333 can not found in default cf for key: 7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE: (region id 1, applied_index:5, applied_term:5, flushed_index:0, flushed_term:0)");
                 ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[write 1 lock 1 ]");
                 kvs.getRegion(1)->tryCompactionFilter(1000);
             }
@@ -1090,7 +1091,7 @@ try
 
             {
                 // A snapshot can set region to Tombstone.
-                proxy_instance->getRegion(22)->setSate(({
+                proxy_instance->getRegion(22)->setState(({
                     raft_serverpb::RegionLocalState s;
                     s.set_state(::raft_serverpb::PeerState::Tombstone);
                     s;
@@ -1194,6 +1195,8 @@ TEST_F(RegionKVStoreTest, RegionRange)
 
         auto res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
+        auto res2 = region_index.findByRangeChecked(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
+        ASSERT(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
 
         region_index.add(makeRegion(4, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 4)));
 
@@ -1206,6 +1209,9 @@ TEST_F(RegionKVStoreTest, RegionRange)
 
         res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 1), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
+        ASSERT_TRUE(res.find(1) != res.end());
+        ASSERT_TRUE(res.find(2) != res.end());
+        ASSERT_TRUE(res.find(4) != res.end());
 
         res = region_index.findByRangeOverlap(
             RegionRangeKeys::makeComparableKeys(RecordKVFormat::genKey(1, 2), RecordKVFormat::genKey(1, 5)));

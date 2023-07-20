@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -191,7 +193,7 @@ public:
 
     TableID getMappedTableID() const;
     KeyspaceID getKeyspaceID() const;
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    std::pair<EngineStoreApplyRes, DM::WriteResult> handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
@@ -200,6 +202,15 @@ public:
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
     void cleanApproxMemCacheInfo() const;
 
+    void setFlushedState(uint64_t flushed_index, uint64_t flushed_term)
+    {
+        flushed_state.applied_index = flushed_index;
+        flushed_state.applied_term = flushed_term;
+    }
+    FlushedState getFlushedState()
+    {
+        return flushed_state;
+    }
     RegionMeta & mutMeta() { return meta; }
 
     RaftstoreVer getClusterRaftstoreVer();
@@ -244,6 +255,7 @@ private:
     mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
+    FlushedState flushed_state{0, 0};
 };
 
 class RegionRaftCommandDelegate : public Region

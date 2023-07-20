@@ -30,12 +30,15 @@ struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
     raft_serverpb::RaftApplyState getApply();
+    void persistAppliedIndex();
     void updateAppliedIndex(uint64_t index);
+    uint64_t getPersistedAppliedIndex();
     uint64_t getLatestAppliedIndex();
     uint64_t getLatestCommitTerm();
     uint64_t getLatestCommitIndex();
     void updateCommitIndex(uint64_t index);
-    void setSate(raft_serverpb::RegionLocalState);
+    void tryUpdateTruncatedState(uint64_t index, uint64_t term);
+    void setState(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
     UniversalWriteBatch persistMeta();
     void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
@@ -209,6 +212,11 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<UInt64> region_ids,
         std::vector<std::pair<std::string, std::string>> && ranges);
 
+    void loadRegionFromKVStore(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id);
+
     /// We assume that we generate one command, and immediately commit.
     /// Normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
@@ -281,7 +289,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         const FailCond & cond,
         UInt64 region_id,
-        uint64_t index);
+        uint64_t index,
+        std::optional<bool> check_proactive_flush = std::nullopt);
 
     void replay(
         KVStore & kvs,

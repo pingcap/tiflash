@@ -15,6 +15,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -49,7 +50,20 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
 
 std::optional<RegionDataReadInfo> Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value, bool hard_error)
 {
-    return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex(), hard_error);
+    try
+    {
+        return data.readDataByWriteIt(write_it, need_value, id(), appliedIndex(), hard_error);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(region id {}, applied_index:{}, applied_term:{}, flushed_index:{}, flushed_term:{})",
+                                 meta.regionId(),
+                                 appliedIndex(),
+                                 appliedIndexTerm(),
+                                 flushed_state.applied_index,
+                                 flushed_state.applied_term));
+        throw;
+    }
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
@@ -195,7 +209,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
         if (new_region_index == -1)
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": region index not found", ErrorCodes::LOGICAL_ERROR);
 
-        RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
+        RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.clonedApplyState());
         new_meta.setApplied(index, term);
         meta.assignRegionMeta(std::move(new_meta));
     }
@@ -670,11 +684,11 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     }
 }
 
-EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
+std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
     {
-        return EngineStoreApplyRes::None;
+        return std::make_pair(EngineStoreApplyRes::None, std::nullopt);
     }
     auto & context = tmt.getContext();
     Stopwatch watch;
@@ -754,17 +768,25 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         approx_mem_cache_bytes += cache_written_size;
     };
 
+    DM::WriteResult write_result = std::nullopt;
     {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-
-        handle_write_cmd_func();
+        {
+            // RegionTable::writeBlockByRegion may lead to persistRegion when flush proactively.
+            // So we can't lock here.
+            // Safety: Mutations to a region come from raft applying and bg flushing of storage layer.
+            // 1. A raft applying process should acquire the region task lock.
+            // 2. While bg/fg flushing, applying raft logs should also be prevented with region task lock.
+            // So between here and RegionTable::writeBlockByRegion, there will be no new data applied.
+            std::unique_lock<std::shared_mutex> lock(mutex);
+            handle_write_cmd_func();
+        }
 
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            write_result = RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, true);
         }
 
         meta.setApplied(index, term);
@@ -772,7 +794,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
 
     meta.notifyAll();
 
-    return EngineStoreApplyRes::None;
+    return std::make_pair(EngineStoreApplyRes::None, std::move(write_result));
 }
 
 void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)

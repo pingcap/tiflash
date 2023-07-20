@@ -25,6 +25,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -198,6 +199,14 @@ public:
         BG_GC,
     };
 
+    enum class InputType
+    {
+        // We are not handling data from raft, maybe it's from a scheduled background service or a replicated dm snapshot.
+        NotRaft,
+        RaftLog,
+        RaftSSTAndSnap,
+    };
+
     enum TaskType
     {
         Split,
@@ -205,6 +214,7 @@ public:
         Compact,
         Flush,
         PlaceIndex,
+        NotifyCompactLog,
     };
 
     struct BackgroundTask
@@ -282,7 +292,7 @@ public:
 
     static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    void write(const Context & db_context, const DB::Settings & db_settings, Block & block);
+    DM::WriteResult write(const Context & db_context, const DB::Settings & db_settings, Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
@@ -516,16 +526,31 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
-    /**
-     * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
-     * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
-     * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
-     *
-     * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
-     * A `thread_type` should be specified indicating the type of the thread calling this function.
-     * Depend on the thread type, the "update" to do may be varied.
-     */
-    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
+    // Deferencing `Iter` can get a pointer to a Segment.
+    template <typename Iter>
+    DM::WriteResult checkSegmentsUpdateForKVStore(const DMContextPtr & context, Iter begin, Iter end, ThreadType thread_type, InputType input_type)
+    {
+        DM::WriteResult result = std::nullopt;
+        std::vector<RowKeyRange> ranges;
+        if (thread_type != ThreadType::Write)
+            return result;
+        for (Iter it = begin; it != end; it++)
+        {
+            if (checkSegmentUpdate(context, *it, thread_type, input_type))
+            {
+                ranges.push_back((*it)->getRowKeyRange());
+            }
+        }
+        // TODO We can try merge ranges here.
+        if (!ranges.empty())
+        {
+            result = RaftWriteResult{
+                std::move(ranges),
+                keyspace_id,
+                physical_table_id};
+        }
+        return result;
+    }
 
     enum class SegmentSplitReason
     {
@@ -688,6 +713,18 @@ private:
                                           const SegmentIdSet & read_segments = {},
                                           bool try_split_task = true);
 
+private:
+    /**
+     * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+     * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+     * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+     *
+     * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+     * A `thread_type` should be specified indicating the type of the thread calling this function.
+     * Depend on the thread type, the "update" to do may be varied.
+     */
+    bool checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type, InputType input_type);
+    void triggerCompactLog(const DMContextPtr & dm_context, const RowKeyRange & range, bool is_background) const;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

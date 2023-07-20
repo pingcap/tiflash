@@ -38,7 +38,6 @@ namespace DB
     M(exception_before_dmfile_remove_encryption)                  \
     M(exception_before_dmfile_remove_from_disk)                   \
     M(force_triggle_background_merge_delta)                       \
-    M(force_triggle_foreground_flush)                             \
     M(exception_before_mpp_make_non_root_mpp_task_active)         \
     M(exception_before_mpp_register_non_root_mpp_task)            \
     M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
@@ -100,6 +99,9 @@ namespace DB
     M(force_stop_background_checkpoint_upload)               \
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
+    M(proactive_flush_force_set_type)                        \
+    M(proactive_flush_between_persist_cache_and_region)      \
+    M(proactive_flush_between_persist_regions)               \
     M(exception_when_fetch_disagg_pages)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -114,13 +116,15 @@ namespace DB
     M(pause_before_register_non_root_mpp_task) \
     M(pause_before_make_non_root_mpp_task_active)
 
-#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
-    M(pause_when_reading_from_dt_stream)  \
-    M(pause_when_writing_to_dt_store)     \
-    M(pause_when_ingesting_to_dt_store)   \
-    M(pause_when_altering_dt_store)       \
-    M(pause_after_copr_streams_acquired)  \
-    M(pause_query_init)
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M)          \
+    M(pause_when_reading_from_dt_stream)           \
+    M(pause_when_writing_to_dt_store)              \
+    M(pause_when_ingesting_to_dt_store)            \
+    M(pause_when_altering_dt_store)                \
+    M(pause_after_copr_streams_acquired)           \
+    M(pause_query_init)                            \
+    M(pause_proactive_flush_before_persist_region) \
+    M(pause_passive_flush_before_persist_region)
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \

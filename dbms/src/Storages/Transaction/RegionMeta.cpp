@@ -78,7 +78,7 @@ void RegionMeta::setPeer(metapb::Peer && p)
     peer = p;
 }
 
-raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
+raft_serverpb::RaftApplyState RegionMeta::clonedApplyState() const
 {
     std::lock_guard lock(mutex);
     return apply_state;

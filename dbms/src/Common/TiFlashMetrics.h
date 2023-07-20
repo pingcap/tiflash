@@ -148,7 +148,11 @@ namespace DB
         F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                             \
         F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                                     \
         F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                                       \
-        F(type_place_index_update, {"type", "place_index_update"}))                                                                                 \
+        F(type_place_index_update, {"type", "place_index_update"}),                                                                                 \
+        F(type_compact_log_segment_bg, {"type", "compact_log_segment_bg"}),                                                                         \
+        F(type_compact_log_segment_fg, {"type", "compact_log_segment_fg"}),                                                                         \
+        F(type_compact_log_region_bg, {"type", "compact_log_region_bg"}),                                                                           \
+        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}))                                                                           \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                                     \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                       \
@@ -160,7 +164,13 @@ namespace DB
         F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                                         \
         F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                                     \
+        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}),                                                     \
+        F(type_compact_log_bg, {{"type", "compact_log_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_compact_log_fg, {{"type", "compact_log_fg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_compact_log_fg_breakdown_kvs, {{"type", "compact_log_fg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
+        F(type_compact_log_fg_breakdown_dm, {{"type", "compact_log_fg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}),                                   \
+        F(type_compact_log_bg_breakdown_kvs, {{"type", "compact_log_bg_breakdown_kvs"}}, ExpBuckets{0.001, 2, 20}),                                 \
+        F(type_compact_log_bg_breakdown_dm, {{"type", "compact_log_bg_breakdown_dm"}}, ExpBuckets{0.001, 2, 20}))                                   \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                              \
         F(type_write, {"type", "write"}),                                                                         /**/                              \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                              \
@@ -263,6 +273,10 @@ namespace DB
         F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                               \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,                   \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))             \
+    M(tiflash_raft_raft_log_lag_count, "Bucketed histogram of applying write command Raft logs", Histogram,                                         \
+        F(type_compact_index, {{"type", "compact_index"}}, EqualWidthBuckets{0, 200, 5}))                                                           \
+    M(tiflash_raft_raft_events_count, "Raft event counter", Counter,                                                                                \
+        F(type_pre_exec_compact, {{"type", "pre_exec_compact"}}))                                                                                   \
     /* required by DBaaS */                                                                                                                         \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                                    \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                                \

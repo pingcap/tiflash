@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
@@ -176,11 +177,11 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context,
-                                   const RegionPtrWithBlock & region,
-                                   RegionDataReadInfoList & data_list_to_remove,
-                                   const LoggerPtr & log,
-                                   bool lock_region = true);
+    static DM::WriteResult writeBlockByRegion(Context & context,
+                                              const RegionPtrWithBlock & region,
+                                              RegionDataReadInfoList & data_list_to_remove,
+                                              const LoggerPtr & log,
+                                              bool lock_region = true);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.

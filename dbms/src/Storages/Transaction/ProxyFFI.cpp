@@ -145,12 +145,12 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
     }
 }
 
-uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term)
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term, uint64_t truncated_index, uint64_t truncated_term)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term);
+        return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term, truncated_index, truncated_term);
     }
     catch (...)
     {
@@ -855,6 +855,11 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
+void TiFlashRaftProxyHelper::notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term, uint64_t applied_index) const
+{
+    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, applied_index);
+}
+
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
 {
     try
@@ -869,10 +874,18 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     }
 }
 
-
 std::string_view buffToStrView(const BaseBuffView & buf)
 {
     return std::string_view{buf.data, buf.len};
+}
+
+FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id, uint8_t acquire_lock)
+{
+    // TODO
+    UNUSED(acquire_lock);
+    auto & kvstore = server->tmt->getKVStore();
+    auto region_ptr = kvstore->getRegion(region_id);
+    return region_ptr->getFlushedState();
 }
 
 } // namespace DB
