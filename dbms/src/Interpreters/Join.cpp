@@ -18,7 +18,6 @@
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/ScanHashMapAfterProbeBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -2021,16 +2020,12 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
             restore_join->setInitActiveBuildThreads();
             restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
-            for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-            {
-                restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
-            }
             BlockInputStreams restore_scan_hash_map_streams;
             restore_scan_hash_map_streams.resize(restore_join_build_concurrency, nullptr);
             if (needScanHashMapAfterProbe(kind))
             {
                 auto header = restore_probe_streams.back()->getHeader();
-                for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+                for (Int64 i = 0; i < restore_join_build_concurrency; ++i)
                     restore_scan_hash_map_streams[i] = restore_join->createScanHashMapAfterProbeStream(header, i, restore_join_build_concurrency, max_block_size_);
             }
             for (Int64 i = 0; i < restore_join_build_concurrency; ++i)

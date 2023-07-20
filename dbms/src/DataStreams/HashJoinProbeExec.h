@@ -30,6 +30,7 @@ class HashJoinProbeExec : public std::enable_shared_from_this<HashJoinProbeExec>
 {
 public:
     static HashJoinProbeExecPtr build(
+        const String & req_id,
         const JoinPtr & join,
         size_t stream_index,
         const BlockInputStreamPtr & probe_stream,
@@ -38,6 +39,7 @@ public:
     using CancellationHook = std::function<bool()>;
 
     HashJoinProbeExec(
+        const String & req_id,
         const JoinPtr & join_,
         size_t stream_index_,
         const BlockInputStreamPtr & restore_build_stream_,
@@ -83,6 +85,8 @@ private:
     HashJoinProbeExecPtr doTryGetRestoreExec();
 
 private:
+    const LoggerPtr log;
+
     const JoinPtr join;
 
     const size_t stream_index;

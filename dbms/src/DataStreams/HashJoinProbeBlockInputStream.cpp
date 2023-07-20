@@ -34,7 +34,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
-    probe_exec.set(HashJoinProbeExec::build(original_join, stream_index, input, max_block_size_));
+    probe_exec.set(HashJoinProbeExec::build(req_id, original_join, stream_index, input, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 
     ProbeProcessInfo header_probe_process_info(0);
