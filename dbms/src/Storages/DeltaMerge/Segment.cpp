@@ -2911,8 +2911,8 @@ size_t Segment::clipBlockRows(const Context & context, size_t expected_block_row
 
 size_t Segment::clipBlockRows(size_t max_block_bytes, size_t pack_rows, size_t expected_block_rows, const ColumnDefines & read_columns)
 {
-    // For StorageDisaggregated, stable of compute nodes is null and unable to estimate the size of read columnsd.
-    // Or If max_block_bytes <= 0, disable block bytes limit.
+    // For StorageDisaggregated, stable of compute nodes is null and unable to estimate the size of read columns.
+    // Or if max_block_bytes <= 0, disable block bytes limit.
     if (stable == nullptr || unlikely(max_block_bytes <= 0))
     {
         return expected_block_rows;
