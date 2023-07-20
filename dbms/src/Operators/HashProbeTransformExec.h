@@ -18,15 +18,15 @@
 
 namespace DB
 {
-class ProbeTransformExec;
-using ProbeTransformExecPtr = std::shared_ptr<ProbeTransformExec>;
+class HashProbeTransformExec;
+using HashProbeTransformExecPtr = std::shared_ptr<HashProbeTransformExec>;
 
 class PipelineExecutorContext;
 
-class ProbeTransformExec : public std::enable_shared_from_this<ProbeTransformExec>
+class HashProbeTransformExec : public std::enable_shared_from_this<HashProbeTransformExec>
 {
 public:
-    ProbeTransformExec(
+    HashProbeTransformExec(
         PipelineExecutorContext & exec_context_,
         size_t op_index_,
         const JoinPtr & join_,
@@ -53,6 +53,8 @@ public:
     void flushMarkedSpillData(bool is_the_last = false) { join->flushProbeSideMarkedSpillData(op_index, is_the_last); }
 
     // For restore build stage
+    bool isBuildRestoreReady();
+    Block popBuildRestoreBlock();
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
     // For restore probe stage
@@ -61,7 +63,7 @@ public:
 
     bool isSpilled() const { return join->isSpilled(); }
 
-    ProbeTransformExecPtr tryGetRestoreExec();
+    HashProbeTransformExecPtr tryGetRestoreExec();
 
 private:
     PipelineExecutorContext & exec_context;
@@ -74,7 +76,11 @@ private:
 
     const UInt64 max_block_size;
 
-    ProbeTransformExecPtr parent;
+    HashProbeTransformExecPtr parent;
+
+    // For restore build.
+    Block build_restore_block;
+    bool is_build_restore_done = false;
 
     // For restore probe.
     Block probe_restore_block;

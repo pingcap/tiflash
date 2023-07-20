@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Interpreters/Join.h>
+#include <Operators/HashProbeTransformExec.h>
 #include <Operators/Operator.h>
-#include <Operators/ProbeTransformExec.h>
 
 namespace DB
 {
@@ -57,7 +57,7 @@ private:
 private:
     JoinPtr origin_join;
 
-    ProbeTransformExecPtr probe_transform;
+    HashProbeTransformExecPtr probe_transform;
 
     ProbeProcessInfo probe_process_info;
     PartitionBlocks probe_partition_blocks;

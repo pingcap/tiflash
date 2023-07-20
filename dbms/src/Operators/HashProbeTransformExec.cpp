@@ -14,15 +14,11 @@
 
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
-#include <Operators/ProbeTransformExec.h>
-#include <Operators/IOBlockInputStreamSourceOp.h>
-#include <memory>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Operators/HashJoinBuildSink.h>
+#include <Operators/HashProbeTransformExec.h>
 
 namespace DB
 {
-ProbeTransformExec::ProbeTransformExec(
+HashProbeTransformExec::HashProbeTransformExec(
     PipelineExecutorContext & exec_context_,
     size_t op_index_,
     const JoinPtr & join_,
@@ -36,7 +32,7 @@ ProbeTransformExec::ProbeTransformExec(
 {
 }
 
-ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
+HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 {
     if unlikely (exec_context.isCancelled())
         return {};
@@ -50,7 +46,7 @@ ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
         {
             // restored join should always enable spill
             assert(restore_info->join && restore_info->join->isEnableSpill());
-            auto restore_probe_exec = std::make_shared<ProbeTransformExec>(
+            auto restore_probe_exec = std::make_shared<HashProbeTransformExec>(
                 exec_context,
                 restore_info->stream_index,
                 restore_info->join,
@@ -58,11 +54,8 @@ ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
 
-            // launch restore build/probe tasks.
+            // launch build/probe restore tasks.
             // - build
-            PipelineExecGroupBuilder build_side_builder;
-            build_side_builder.addConcurrency(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, "", restore_info->build_stream));
-            build_side_builder.transform(std::make_unique<HashJoinBuildSink>(exec_context, "", restore_info->join, restore_info->stream_index));
             // - probe
 
             return restore_probe_exec;
@@ -71,10 +64,10 @@ ProbeTransformExecPtr ProbeTransformExec::tryGetRestoreExec()
     }
 
     // current join has no more partition to restore, so check if previous join still has partition to restore
-    return parent ? parent->tryGetRestoreExec() : ProbeTransformExecPtr{};
+    return parent ? parent->tryGetRestoreExec() : HashProbeTransformExecPtr{};
 }
 
-bool ProbeTransformExec::isProbeRestoreReady()
+bool HashProbeTransformExec::isProbeRestoreReady()
 {
     if (unlikely(is_probe_restore_done))
         return true;
@@ -83,7 +76,7 @@ bool ProbeTransformExec::isProbeRestoreReady()
     return false;
 }
 
-Block ProbeTransformExec::popProbeRestoreBlock()
+Block HashProbeTransformExec::popProbeRestoreBlock()
 {
     Block ret;
     if (unlikely(is_probe_restore_done))

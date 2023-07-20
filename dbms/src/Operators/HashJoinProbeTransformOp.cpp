@@ -36,7 +36,7 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
     if (needScanHashMapAfterProbe(origin_join->getKind()))
         scan_hash_map_after_probe_stream = origin_join->createScanHashMapAfterProbeStream(input_header, op_index_, origin_join->getProbeConcurrency(), max_block_size);
-    probe_transform = std::make_shared<ProbeTransformExec>(exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
+    probe_transform = std::make_shared<HashProbeTransformExec>(exec_context_, op_index_, origin_join, scan_hash_map_after_probe_stream, max_block_size);
 }
 
 void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
