@@ -53,17 +53,46 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     ExpressionActionsPtrVec expression_actions_ptr_vec;
 
     // pre-detect the nullability change action in the first projection level and generate the pre-actions.
+    // for rollup, it's level projections may show like below:
+    // Says child schema is: [unrelated grouping cols projection..., col1, col2, col3]
+    // Rollup(col1, col2, col3): schema should be same for every level projection: [unrelated grouping cols projection..., col1, col2, col3, gid]
+    //
+    // Algorithm:                                1: ----+------+------+----> 2:
+    //     [unrelated grouping cols projection...] null,| null,| null,| gid-4
+    //     [unrelated grouping cols projection...] col1,v null,| null,| gid-3
+    //     [unrelated grouping cols projection...] col1,  col2,v null,| gid-2
+    //     [unrelated grouping cols projection...] col1,  col2,  col3,v gid-1
+    //
+    // we should detect every grouping set column-ref (means col1, col2, col3 if any) which may has nullability change after expand OP.
+    // since level projection order is not always fixed, leading the last level projection always has the most grouping column ref as above,
+    // 1: we will traverse horizontally to locate a column which is with not-null from child schema while Expand specified them as nullable in field type.
+    // 2: then traverse down vertically to find a specific column-ref [should skip literal null vertically], then generating CONVERT_TO_NULLABLE action for it.
     assert(!expand.proj_exprs().empty());
     auto first_proj_level = expand.proj_exprs().Get(0);
-    ExpressionActionsPtr header_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-    for (auto i = 0; i < first_proj_level.exprs().size(); i++)
+    auto horizontal_size = first_proj_level.exprs().size();
+    auto vertical_size = expand.proj_exprs().size();
+    ExpressionActionsPtr header_actions = PhysicalPlanHelper::newActions(child->getSchema());
+    for (auto i = 0; i < horizontal_size; i++)
     {
+        // horizontally search nullability change column.
         auto expr = first_proj_level.exprs().Get(i);
         // record the ref-col nullable attributes for header.
         if (static_cast<size_t>(i) < input_col_size
             && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0)
             && !child->getSchema()[i].type->isNullable())
-            analyzer.addNullableActionForColumnRef(expr, header_actions);
+        {
+            // vertically search column-ref rather than literal null.
+            for (auto j = 0; j < vertical_size; j++)
+            {
+                // relocate expr.
+                expr = expand.proj_exprs().Get(j).exprs().Get(i);
+                if (isColumnExpr(expr))
+                {
+                    analyzer.addNullableActionForColumnRef(expr, header_actions);
+                    break;
+                }
+            }
+        }
     }
     NamesAndTypes new_source_cols;
     for (const auto & origin_col : header_actions->getSampleBlock().getNamesAndTypesList())
