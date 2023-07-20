@@ -201,29 +201,29 @@ try
 
     constexpr size_t pack_rows = 512;
 
-    auto clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 1023, *tableColumns());
+    auto clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 1023, *tableColumns(), segment->stable);
     ASSERT_EQ(clipped_block_rows, 1023);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 102400, *tableColumns());
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1024, pack_rows, /*max_block_rows*/ 102400, *tableColumns(), segment->stable);
     ASSERT_EQ(clipped_block_rows, 1024);
 
     segment = segment->mergeDelta(dmContext(), tableColumns());
     row_bytes = segment->stable->avgRowBytes(*tableColumns());
     ASSERT_EQ(row_bytes, 17);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, *tableColumns());
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, *tableColumns(), segment->stable);
     ASSERT_EQ(clipped_block_rows, pack_rows);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, *tableColumns());
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, *tableColumns(), segment->stable);
     ASSERT_EQ(clipped_block_rows, 1024);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 4096, pack_rows, /*max_block_rows*/ 3000, *tableColumns());
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 4096, pack_rows, /*max_block_rows*/ 3000, *tableColumns(), segment->stable);
     ASSERT_EQ(clipped_block_rows, pack_rows);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, {});
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 1023, pack_rows, /*max_block_rows*/ 1024, {}, segment->stable);
     ASSERT_EQ(clipped_block_rows, pack_rows);
 
-    clipped_block_rows = segment->clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, {});
+    clipped_block_rows = Segment::clipBlockRows(/*max_block_bytes*/ 102400, pack_rows, /*max_block_rows*/ 1024, {}, segment->stable);
     ASSERT_EQ(clipped_block_rows, 1024);
 }
 CATCH
