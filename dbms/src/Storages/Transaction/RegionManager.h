@@ -26,6 +26,7 @@ class RegionTaskLock;
 
 struct RegionTaskCtrl : MutexLockWrap
 {
+    // TODO This lock may be changed back to simple mutex.
     typedef std::recursive_mutex Mut;
     /// The life time of each RegionTaskElement element should be as long as RegionManager, just return const ref.
     struct RegionTaskElement : private boost::noncopyable
