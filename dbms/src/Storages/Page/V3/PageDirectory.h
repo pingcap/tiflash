@@ -490,6 +490,10 @@ public:
     std::pair<GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
+    using PageTypeAndBlobIds = std::map<PageType, std::vector<BlobFileId>>;
+    using PageTypeAndGcInfo = std::vector<std::tuple<PageType, GcEntriesMap, PageSize>>;
+    PageTypeAndGcInfo getEntriesByBlobIdsForDifferentPageTypes(const PageTypeAndBlobIds & page_type_and_blob_ids) const;
+
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr, bool force = false);

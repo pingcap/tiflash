@@ -113,9 +113,7 @@ void PipelineExecutor::cancel()
 String PipelineExecutor::toString() const
 {
     assert(root_pipeline);
-    FmtBuffer buffer;
-    root_pipeline->toTreeString(buffer);
-    return buffer.toString();
+    return root_pipeline->toTreeString();
 }
 
 int PipelineExecutor::estimateNewThreadCount()
