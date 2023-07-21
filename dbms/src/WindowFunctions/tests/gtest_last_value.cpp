@@ -21,6 +21,7 @@
 #include <optional>
 #include <utility>
 
+// TODO support unsigned int.
 namespace DB::tests
 {
 class LastValue : public DB::tests::WindowTest

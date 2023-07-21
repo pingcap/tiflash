@@ -220,8 +220,7 @@ void setAuxiliaryColumnInfoImpl(
         // Set auxiliary columns' types
         const auto & col_and_name = tmp_block.getByName(aux_col_name);
         auto data_type = col_and_name.type;
-        if (data_type->isNullable())
-            throw Exception("Get an unexpected nullable column when the frame type is range");
+        RUNTIME_CHECK_MSG(!data_type->isNullable(), "Get an unexpected nullable column when the frame type is range");
         aux_col_type = data_type->getTypeId();
     }
 }
@@ -246,7 +245,7 @@ void setAuxiliaryColumnInfo(
     setAuxiliaryColumnInfoImpl(window_desc, end_aux_col_name, tmp_block, false);
 }
 
-void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
+void setOrderByColumnTypeAndDirectionForRangeFrame(WindowDescription & window_desc, const ExpressionActionsPtr & actions, const tipb::Window & window)
 {
     // Execute this function only when the frame type is Range
     if (window.frame().type() != tipb::WindowFrameType::Ranges)
@@ -254,6 +253,7 @@ void setOrderByColumnTypeAndDirection(WindowDescription & window_desc, const Exp
 
     if (!window_desc.order_by.empty())
     {
+        RUNTIME_CHECK_MSG(window_desc.order_by.size() == 1, "Number of order by should not be larger than 1 in range frame");
         const Block & sample_block = actions->getSampleBlock();
         const String & order_by_col_name = window_desc.order_by[0].column_name;
         const ColumnWithTypeAndName & order_by_col_type_and_name = sample_block.getByName(order_by_col_name);
@@ -317,7 +317,7 @@ void initBeforeWindow(
             step.required_output.push_back(argument_name);
     }
 
-    window_desc.before_window = chain.getLastActions();
+    window_desc.before_window = step.actions;
     setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
 
     // We should not call finalize here as some useful columns will be unexpected removed
@@ -340,7 +340,7 @@ void initAfterWindow(
     chain.clear();
 }
 
-ExpressionActionsChain::Step & createStepForBuildingWindowDescription(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
+ExpressionActionsChain::Step & createStep(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
 {
     analyzer->initChain(chain);
     ExpressionActionsChain::Step & step = chain.getLastStep();
@@ -782,11 +782,11 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
     ExpressionActionsChain chain;
-    ExpressionActionsChain::Step & step = createStepForBuildingWindowDescription(this, chain);
+    ExpressionActionsChain::Step & step = createStep(this, chain);
     size_t source_size = getCurrentInputColumns().size();
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
-    setOrderByColumnTypeAndDirection(window_description, step.actions, window);
+    setOrderByColumnTypeAndDirectionForRangeFrame(window_description, step.actions, window);
     initBeforeWindow(this, window_description, chain, window, step);
     initAfterWindow(this, window_description, chain, window, source_size);
 
