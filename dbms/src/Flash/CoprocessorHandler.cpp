@@ -135,7 +135,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
 
             std::string msg;
             if constexpr (is_stream)
-                msg = "CoprocessorHandler(stream";
+                msg = "CoprocessorHandler(stream)";
             else
                 msg = "CoprocessorHandler";
             DAGContext dag_context(
