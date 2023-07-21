@@ -72,7 +72,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     auto horizontal_size = first_proj_level.exprs().size();
     auto vertical_size = expand.proj_exprs().size();
     ExpressionActionsPtr header_actions = PhysicalPlanHelper::newActions(child->getSchema());
-    for (auto i = 0; i < horizontal_size; i++)
+    for (auto i = 0; i < horizontal_size; ++i)
     {
         // horizontally search nullability change column.
         auto expr = first_proj_level.exprs().Get(i);
