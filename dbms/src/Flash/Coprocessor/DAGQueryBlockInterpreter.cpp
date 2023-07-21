@@ -582,7 +582,7 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
             && !dag_analyzer.getCurrentInputColumns()[i].type->isNullable())
         {
             // vertically search column-ref rather than literal null.
-            for (auto j = 0; j < vertical_size; j++)
+            for (auto j = 0; j < vertical_size; ++j)
             {
                 // relocate expr.
                 expr = expand2.proj_exprs().Get(j).exprs().Get(i);
