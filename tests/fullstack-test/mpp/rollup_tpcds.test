@@ -1,0 +1,59 @@
+# Copyright 2023 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# preparation.
+mysql> source fullstack-test/tpcds_util/tpcds_clean.sql
+mysql> source fullstack-test/tpcds_util/tpcds.sql
+
+# wait
+func> wait_table test dbgen_version
+func> wait_table test customer_address
+func> wait_table test customer_demographics
+func> wait_table test date_dim
+func> wait_table test warehouse
+func> wait_table test ship_mode
+func> wait_table test time_dim
+func> wait_table test reason
+func> wait_table test income_band
+func> wait_table test item
+func> wait_table test store
+func> wait_table test call_center
+func> wait_table test customer
+func> wait_table test web_site
+func> wait_table test store_returns
+func> wait_table test household_demographics
+func> wait_table test web_page
+func> wait_table test promotion
+func> wait_table test catalog_page
+func> wait_table test inventory
+func> wait_table test catalog_returns
+func> wait_table test web_returns
+func> wait_table test web_sales
+func> wait_table test catalog_sales
+func> wait_table test store_sales
+
+# query sql.
+# empty
+mysql> source fullstack-test/tpcds_util/tpcds_q5.sql
+# empty
+mysql> source fullstack-test/tpcds_util/tpcds_q18.sql
+# empty
+mysql> source fullstack-test/tpcds_util/tpcds_q27.sql
+# empty
+mysql> source fullstack-test/tpcds_util/tpcds_q67.sql
+# empty
+mysql> source fullstack-test/tpcds_util/tpcds_q80.sql
+
+# clean.
+mysql> source fullstack-test/tpcds_util/tpcds_clean.sql;
