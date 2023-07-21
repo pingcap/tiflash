@@ -36,7 +36,7 @@ using TimePoint = std::atomic<std::chrono::time_point<std::chrono::steady_clock>
 
 struct KeyspaceGCInfo
 {
-    DB::Timestamp ks_gc_sp;
+    DB::Timestamp ks_gc_sp{};
     TimePoint ks_gc_sp_update_time;
 
     KeyspaceGCInfo()
@@ -79,7 +79,7 @@ struct PDClientHelper
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
             auto gc_safe_point = getGCSafePointV2WithRetry(pd_client, keyspace_id, ignore_cache, safe_point_update_interval_seconds);
-            LOG_DEBUG(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
+            LOG_TRACE(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
             return gc_safe_point;
         }
 
@@ -100,7 +100,7 @@ struct PDClientHelper
             {
                 auto safe_point = pd_client->getGCSafePoint();
                 cached_gc_safe_point = safe_point;
-                LOG_DEBUG(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
+                LOG_TRACE(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
                 safe_point_last_update_time = std::chrono::steady_clock::now();
                 return safe_point;
             }
@@ -124,7 +124,7 @@ struct PDClientHelper
 
             auto ks_gc_info = get_ks_gc_sp(keyspace_id);
             const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
-            const auto min_interval = std::max(Int64(1), safe_point_update_interval_seconds); // at least one second
+            const auto min_interval = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
             {
                 return ks_gc_info.ks_gc_sp;
