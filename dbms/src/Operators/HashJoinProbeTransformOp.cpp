@@ -124,9 +124,8 @@ bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
         probe_partition_blocks.pop_front();
         origin_join->checkTypes(partition_block.block);
         probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
-        return true;
     }
-    return false;
+    return probe_process_info.all_rows_joined_finish;
 }
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
@@ -172,10 +171,19 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
                 return OperatorStatus::WAITING;
             if (auto restore_ret = probe_transform->popProbeRestoreBlock(); (likely(restore_ret)))
             {
-                assert(probe_partition_blocks.empty());
-                probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
-                if (probe_transform->hasMarkedSpillData())
-                    return OperatorStatus::IO_OUT;
+                if (!probe_transform->isSpilled())
+                {
+                    origin_join->checkTypes(restore_ret);
+                    probe_process_info.resetBlock(std::move(restore_ret), 0);
+                    break;
+                }
+                else
+                {
+                    assert(probe_partition_blocks.empty());
+                    probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
+                    if (probe_transform->hasMarkedSpillData())
+                        return OperatorStatus::IO_OUT;
+                }
             }
             else
             {
