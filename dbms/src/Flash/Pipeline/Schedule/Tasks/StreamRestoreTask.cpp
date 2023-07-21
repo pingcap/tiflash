@@ -84,7 +84,7 @@ ExecTaskStatus StreamRestoreTask::executeIOImpl()
 
 void StreamRestoreTask::finalizeImpl()
 {
-    stream->readSuffix();
     result_queue->finish();
+    stream->readSuffix();
 }
 } // namespace DB
