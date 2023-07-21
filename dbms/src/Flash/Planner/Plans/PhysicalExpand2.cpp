@@ -82,7 +82,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
             && !child->getSchema()[i].type->isNullable())
         {
             // vertically search column-ref rather than literal null.
-            for (auto j = 0; j < vertical_size; j++)
+            for (auto j = 0; j < vertical_size; ++j)
             {
                 // relocate expr.
                 expr = expand.proj_exprs().Get(j).exprs().Get(i);
