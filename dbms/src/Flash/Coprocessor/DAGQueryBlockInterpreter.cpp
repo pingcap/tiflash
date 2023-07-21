@@ -569,7 +569,7 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
     auto first_proj_level = expand2.proj_exprs().Get(0);
     auto horizontal_size = first_proj_level.exprs().size();
     auto vertical_size = expand2.proj_exprs().size();
-    for (auto i = 0; i < horizontal_size; i++)
+    for (auto i = 0; i < horizontal_size; ++i)
     {
         // horizontally search nullability change column.
         auto expr = first_proj_level.exprs().Get(i);
