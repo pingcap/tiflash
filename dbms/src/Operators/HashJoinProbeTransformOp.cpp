@@ -61,6 +61,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::RESTORE_PROBE:
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
+                assert(probe_partition_blocks.empty());
                 if (probe_transform->finishOneProbe())
                 {
                     if (probe_transform->hasMarkedSpillData())
