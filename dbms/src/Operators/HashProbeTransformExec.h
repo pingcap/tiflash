@@ -37,10 +37,19 @@ public:
 
     // For NonJoined stage
     bool needScanHashMapAfterProbe() const { return scan_hash_map_after_probe_stream != nullptr; }
-    void startNonJoined() { scan_hash_map_after_probe_stream->readPrefix(); }
-    Block scanNonJoined() { return scan_hash_map_after_probe_stream->read(); }
+    void startNonJoined()
+    {
+        assert(scan_hash_map_after_probe_stream);
+        scan_hash_map_after_probe_stream->readPrefix();
+    }
+    Block scanNonJoined()
+    {
+        assert(scan_hash_map_after_probe_stream);
+        return scan_hash_map_after_probe_stream->read();
+    }
     void endNonJoined()
     {
+        assert(scan_hash_map_after_probe_stream);
         scan_hash_map_after_probe_stream->readSuffix();
         join->finishOneNonJoin(op_index);
     }

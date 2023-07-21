@@ -95,38 +95,17 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isAllProbeFinished())
             {
-                if (probe_transform->needScanHashMapAfterProbe())
-                {
-                    probe_transform->startNonJoined();
-                    switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
-                }
-                else if (probe_transform->isSpilled())
-                {
-                    switchStatus(ProbeStatus::GET_RESTORE_JOIN);
-                }
-                else
-                {
-                    switchStatus(ProbeStatus::FINISHED);
-                }
+                onProbeFinish();
                 break;
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::GET_RESTORE_JOIN:
-            if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
-            {
-                probe_transform = restore_exec;
-                switchStatus(ProbeStatus::RESTORE_BUILD);
-            }
-            else
-            {
-                switchStatus(ProbeStatus::FINISHED);
-            }
+            onGetRestoreJoin();
             break;
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
-                probe_transform->startRestoreProbe();
-                switchStatus(ProbeStatus::RESTORE_PROBE);
+                onRestoreBuildFinish();
                 break;
             }
             return OperatorStatus::WAITING;
@@ -150,15 +129,6 @@ bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
     return false;
 }
 
-#define DISPATCH_BLOCK(disptach_block)                                      \
-    assert(probe_partition_blocks.empty());                                 \
-    probe_transform->dispatchBlock(disptach_block, probe_partition_blocks); \
-    auto fill_ret = fillProcessInfoFromPartitoinBlocks();                   \
-    if (probe_transform->hasMarkedSpillData())                              \
-        return OperatorStatus::IO_OUT;                                      \
-    if (!fill_ret)                                                          \
-        return OperatorStatus::NEED_INPUT;
-
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
@@ -174,7 +144,13 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
         }
         else
         {
-            DISPATCH_BLOCK(block);
+            assert(probe_partition_blocks.empty());
+            probe_transform->dispatchBlock(block, probe_partition_blocks);
+            block.clear();
+            if (probe_transform->hasMarkedSpillData())
+                return OperatorStatus::IO_OUT;
+            if (!fillProcessInfoFromPartitoinBlocks())
+                return OperatorStatus::NEED_INPUT;
         }
     }
 
@@ -190,14 +166,20 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
     }
     else if (status == ProbeStatus::RESTORE_PROBE && probe_process_info.all_rows_joined_finish)
     {
-        if (!fillProcessInfoFromPartitoinBlocks())
+        while (!fillProcessInfoFromPartitoinBlocks())
         {
             if (!probe_transform->isProbeRestoreReady())
                 return OperatorStatus::WAITING;
-            auto restore_ret = probe_transform->popProbeRestoreBlock();
-            if (likely(restore_ret))
+            if (auto restore_ret = probe_transform->popProbeRestoreBlock(); (likely(restore_ret)))
             {
-                DISPATCH_BLOCK(restore_ret);
+                assert(probe_partition_blocks.empty());
+                probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
+                if (probe_transform->hasMarkedSpillData())
+                    return OperatorStatus::IO_OUT;
+            }
+            else
+            {
+                break;
             }
         }
     }
@@ -205,7 +187,41 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
     return onOutput(block);
 }
 
-#undef DISPATCH_BLOCK
+void HashJoinProbeTransformOp::onProbeFinish()
+{
+    if (probe_transform->needScanHashMapAfterProbe())
+    {
+        probe_transform->startNonJoined();
+        switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
+    }
+    else if (probe_transform->isSpilled())
+    {
+        switchStatus(ProbeStatus::GET_RESTORE_JOIN);
+    }
+    else
+    {
+        switchStatus(ProbeStatus::FINISHED);
+    }
+}
+
+void HashJoinProbeTransformOp::onRestoreBuildFinish()
+{
+    probe_transform->startRestoreProbe();
+    switchStatus(ProbeStatus::RESTORE_PROBE);
+}
+
+void HashJoinProbeTransformOp::onGetRestoreJoin()
+{
+    if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
+    {
+        probe_transform = restore_exec;
+        switchStatus(ProbeStatus::RESTORE_BUILD);
+    }
+    else
+    {
+        switchStatus(ProbeStatus::FINISHED);
+    }
+}
 
 OperatorStatus HashJoinProbeTransformOp::awaitImpl()
 {
@@ -216,26 +232,25 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isAllProbeFinished())
             {
-                switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
-                probe_transform->startNonJoined();
-                return OperatorStatus::HAS_OUTPUT;
+                onProbeFinish();
+                break;
             }
-            else
-            {
-                return OperatorStatus::WAITING;
-            }
+            return OperatorStatus::WAITING;
+        case ProbeStatus::GET_RESTORE_JOIN:
+            onGetRestoreJoin();
+            break;
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
-                switchStatus(ProbeStatus::RESTORE_PROBE);
+                onRestoreBuildFinish();
                 break;
             }
-            else
-            {
-                return OperatorStatus::WAITING;
-            }
+            return OperatorStatus::WAITING;
         case ProbeStatus::RESTORE_PROBE:
             return probe_transform->isProbeRestoreReady() ? OperatorStatus::HAS_OUTPUT : OperatorStatus::WAITING;
+        case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
+        case ProbeStatus::FINISHED:
+            return OperatorStatus::HAS_OUTPUT;
         default:
             throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
         }

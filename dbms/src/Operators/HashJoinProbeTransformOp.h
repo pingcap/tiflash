@@ -54,6 +54,12 @@ private:
 
     bool fillProcessInfoFromPartitoinBlocks();
 
+    inline void onProbeFinish();
+
+    inline void onRestoreBuildFinish();
+
+    inline void onGetRestoreJoin();
+
     /*
      *   spill not enabled:
      *                                        PROBE
