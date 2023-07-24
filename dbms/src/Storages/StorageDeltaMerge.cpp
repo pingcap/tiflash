@@ -1401,7 +1401,7 @@ try
                     // check that lossy changes is forbidden
                     // check that changing the UNSIGNED attribute is forbidden
                     throw Exception(
-                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {}({}) from {} to {}",
+                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {} (column_id={}) from {} to {}",
                                     getName(),
                                     command.column_name,
                                     command.column_id,

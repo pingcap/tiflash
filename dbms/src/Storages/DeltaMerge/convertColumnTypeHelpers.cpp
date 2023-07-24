@@ -24,6 +24,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -307,6 +308,18 @@ bool castNonNullNumericColumn(const DataTypePtr & disk_type_not_null_,
     else if (checkDataType<DataTypeFloat32>(disk_type_not_null) && checkDataType<DataTypeFloat64>(read_type_not_null))
     {
         insertRangeFromWithNumericTypeCast<Float32, Float64>(
+            disk_col_not_null,
+            null_map,
+            read_define,
+            memory_col_not_null,
+            rows_offset,
+            rows_limit);
+        return true;
+    }
+    else if (checkDataType<DataTypeMyDateTime>(disk_type_not_null) && checkDataType<DataTypeMyDateTime>(read_type_not_null))
+    {
+        static_assert(std::is_same_v<DataTypeMyDateTime::FieldType, UInt64>, "Ensure the MyDateTime/MyTime is stored as UInt64");
+        insertRangeFromWithNumericTypeCast<UInt64, UInt64>(
             disk_col_not_null,
             null_map,
             read_define,
