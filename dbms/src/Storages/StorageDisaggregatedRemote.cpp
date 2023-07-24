@@ -238,7 +238,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     rpc.setClientContext(client_context, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
     auto status = rpc.call(&client_context, *req, &resp);
     if (!status.ok())
-        return;
+        throw Exception(rpc.errMsg(status));
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
