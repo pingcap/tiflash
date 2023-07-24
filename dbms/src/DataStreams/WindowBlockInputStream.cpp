@@ -64,16 +64,7 @@ struct ActualCmpDataType
 template <typename T>
 typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t idx)
 {
-    if constexpr (checkIfSimpleNumericType<T>())
-    {
-        return (*col_ptr)[idx].get<T>();
-    }
-    else if (IsDecimal<T>)
-    {
-        return (*col_ptr)[idx].get<DecimalField<T>>();
-    }
-    else
-        throw Exception("Unexpected column type!");
+    return (*col_ptr)[idx].get<typename ActualCmpDataType<T>::Type>();
 }
 
 template <typename T, bool is_start, bool is_desc>
