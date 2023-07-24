@@ -1,3 +1,4 @@
+set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash';
 with ssr as
          (select s_store_id,
                  sum(sales_price) as sales,

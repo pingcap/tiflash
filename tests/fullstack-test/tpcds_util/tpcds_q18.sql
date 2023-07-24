@@ -1,3 +1,4 @@
+set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash';
 select i_item_id,
     ca_country,
     ca_state,

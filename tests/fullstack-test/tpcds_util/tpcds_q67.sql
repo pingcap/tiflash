@@ -1,5 +1,6 @@
 -- use test is useful for window here.
 use test;
+set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash';
 select *
 from (select i_category
            ,i_class

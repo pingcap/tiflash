@@ -1,3 +1,4 @@
+set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash';
 select i_item_id,
     s_state, grouping(s_state) g_state,
     avg(ss_quantity) agg1,
