@@ -48,37 +48,17 @@ consteval bool checkIfSimpleNumericType()
 }
 
 template <typename T>
-struct DecimalWithScale
+consteval bool checkIfDecimalFieldType()
 {
-    DecimalWithScale(T decimal_, Int64 scale_)
-        : decimal(decimal_)
-        , scale(scale_)
-    {
-        if constexpr (!IsDecimal<T>)
-            throw Exception("DecimalWithScale only accepts Decimal type.");
-    }
-
-    T decimal; // This T should be decimal type
-    Int64 scale;
-};
-
-using DecimalWithScale32 = DecimalWithScale<Decimal32>;
-using DecimalWithScale64 = DecimalWithScale<Decimal64>;
-using DecimalWithScale128 = DecimalWithScale<Decimal128>;
-using DecimalWithScale256 = DecimalWithScale<Decimal256>;
-
-template <typename T>
-consteval bool checkIfDecimalWithScaleType()
-{
-    return std::is_same_v<T, DecimalWithScale32> || std::is_same_v<T, DecimalWithScale64> || std::is_same_v<T, DecimalWithScale128> || std::is_same_v<T, DecimalWithScale256>;
+    return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>> || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
 }
 
-// When T is Decimal, we should convert it to DecimalWithScale type
+// When T is Decimal, we should convert it to DecimalField type
 // as we need scale value when executing the comparison operation.
 template <typename T>
 struct ActualCmpDataType
 {
-    using Type = std::conditional_t<checkIfSimpleNumericType<T>(), T, DecimalWithScale<T>>;
+    using Type = std::conditional_t<checkIfSimpleNumericType<T>(), T, DecimalField<T>>;
 };
 
 // ColumnConst should not appear at here as MySQL does not allow the order by column is const, so we do not handle it.
@@ -87,18 +67,11 @@ typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t i
 {
     if constexpr (checkIfSimpleNumericType<T>())
     {
-        const auto * col = static_cast<const ColumnVector<T> *>(&(*col_ptr));
-        const typename ColumnVector<T>::Container & data = col->getData();
-        return data[idx];
+        return (*col_ptr)[idx].get<T>();
     }
     else if (IsDecimal<T>)
     {
-        const auto * col = static_cast<const ColumnDecimal<T> *>(&(*col_ptr));
-        const typename ColumnDecimal<T>::Container & data = col->getData();
-
-        // This is a Decimal type.
-        // T(...) is equal to Decimal<U>(xxx)
-        return typename ActualCmpDataType<T>::Type(T(data[idx]), data.getScale());
+        return (*col_ptr)[idx].get<DecimalField<T>>();
     }
     else
         throw Exception("Unexpected column type!");
@@ -125,13 +98,13 @@ bool isInRangeNotIntImpl(AuxColType current_row_aux_value, OrderByColType cursor
     Float64 current_row_aux_value_float64;
     Float64 cursor_value_float64;
 
-    if constexpr (checkIfDecimalWithScaleType<AuxColType>())
-        current_row_aux_value_float64 = current_row_aux_value.decimal.template toFloat<Float64>(current_row_aux_value.scale);
+    if constexpr (checkIfDecimalFieldType<AuxColType>())
+        current_row_aux_value_float64 = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
     else
         current_row_aux_value_float64 = static_cast<Float64>(current_row_aux_value);
 
-    if constexpr (checkIfDecimalWithScaleType<OrderByColType>())
-        cursor_value_float64 = cursor_value.decimal.template toFloat<Float64>(cursor_value.scale);
+    if constexpr (checkIfDecimalFieldType<OrderByColType>())
+        cursor_value_float64 = cursor_value.getValue().template toFloat<Float64>(cursor_value.getScale());
     else
         cursor_value_float64 = static_cast<Float64>(cursor_value);
 

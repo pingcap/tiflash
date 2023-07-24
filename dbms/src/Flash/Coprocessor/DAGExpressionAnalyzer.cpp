@@ -318,10 +318,14 @@ void initBeforeWindow(
     }
 
     window_desc.before_window = step.actions;
-    setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
+    if (!aux_col_names.first.empty())
+        step.required_output.push_back(aux_col_names.first);
+    if (!aux_col_names.second.empty())
+        step.required_output.push_back(aux_col_names.second);
 
-    // We should not call finalize here as some useful columns will be unexpected removed
+    chain.finalize();
     chain.clear();
+    setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
 }
 
 void initAfterWindow(
