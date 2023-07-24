@@ -344,14 +344,6 @@ void initAfterWindow(
     chain.finalize();
     chain.clear();
 }
-
-ExpressionActionsChain::Step & createStep(DAGExpressionAnalyzer * const analyzer, ExpressionActionsChain & chain)
-{
-    analyzer->initChain(chain);
-    ExpressionActionsChain::Step & step = chain.getLastStep();
-    analyzer->appendSourceColumnsToRequireOutput(step);
-    return step;
-}
 } // namespace
 
 ExpressionActionsChain::Step & DAGExpressionAnalyzer::initAndGetLastStep(ExpressionActionsChain & chain) const
@@ -787,7 +779,11 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
     ExpressionActionsChain chain;
-    ExpressionActionsChain::Step & step = createStep(this, chain);
+    initChain(chain);
+
+    ExpressionActionsChain::Step & step = chain.getLastStep();
+    appendSourceColumnsToRequireOutput(step);
+
     size_t source_size = getCurrentInputColumns().size();
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
