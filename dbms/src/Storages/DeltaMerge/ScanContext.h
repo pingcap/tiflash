@@ -49,6 +49,7 @@ public:
     std::atomic<uint64_t> total_local_region_num{0};
 
     std::atomic<uint64_t> total_user_read_bytes{0};
+    std::atomic<uint64_t> total_wait_index_ns{0};
 
     ScanContext() = default;
 
