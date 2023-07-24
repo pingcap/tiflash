@@ -146,7 +146,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
             {
                 /// Even if spill is enabled, if spill is not triggered during build,
                 /// there is no need to dispatch probe block
-                if (!isSpilled())
+                if (!join->isSpilled())
                 {
                     join->checkTypes(restore_ret);
                     probe_process_info.resetBlock(std::move(restore_ret), 0);
@@ -197,7 +197,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProce
     {
         /// Even if spill is enabled, if spill is not triggered during build,
         /// there is no need to dispatch probe block
-        if (!isSpilled())
+        if (!join->isSpilled())
         {
             join->checkTypes(input);
             probe_process_info.resetBlock(std::move(input), 0);

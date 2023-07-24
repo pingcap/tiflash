@@ -70,7 +70,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     }
                     probe_transform->finalizeProbe();
                 }
-                auto next_status = probe_transform->needScanHashMapAfterProbe() || probe_transform->isEnableSpill()
+                auto next_status = probe_transform->needScanHashMapAfterProbe() || probe_transform->shouldRestore()
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
                 switchStatus(next_status);
@@ -86,7 +86,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if unlikely (!block)
             {
                 probe_transform->endNonJoined();
-                auto next_status = probe_transform->isEnableSpill() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
+                auto next_status = probe_transform->shouldRestore() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
                 switchStatus(next_status);
                 break;
             }
@@ -148,7 +148,7 @@ void HashJoinProbeTransformOp::onProbeFinish()
         probe_transform->startNonJoined();
         switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
     }
-    else if (probe_transform->isEnableSpill())
+    else if (probe_transform->shouldRestore())
     {
         switchStatus(ProbeStatus::GET_RESTORE_JOIN);
     }

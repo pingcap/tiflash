@@ -72,8 +72,7 @@ public:
     void startRestoreProbe();
     bool isProbeRestoreReady();
 
-    bool isSpilled() const { return join->isSpilled(); }
-    bool isEnableSpill() const { return join->isEnableSpill(); }
+    bool shouldRestore() const { return join->isEnableSpill() && (join->isSpilled() || join->isRestoreJoin()); }
 
     HashProbeTransformExecPtr tryGetRestoreExec();
 
