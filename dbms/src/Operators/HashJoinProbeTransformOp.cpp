@@ -221,7 +221,7 @@ void HashJoinProbeTransformOp::onRestoreBuildFinish()
 
 void HashJoinProbeTransformOp::onGetRestoreJoin()
 {
-    if (auto restore_exec = probe_transform->tryGetRestoreExec(); probe_transform)
+    if (auto restore_exec = probe_transform->tryGetRestoreExec(); restore_exec)
     {
         probe_transform = restore_exec;
         switchStatus(ProbeStatus::RESTORE_BUILD);
