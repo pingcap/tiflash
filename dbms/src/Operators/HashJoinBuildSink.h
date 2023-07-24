@@ -28,10 +28,10 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_ptr_,
-        size_t concurrency_build_index_)
+        size_t op_index_)
         : SinkOp(exec_context_, req_id)
         , join_ptr(join_ptr_)
-        , concurrency_build_index(concurrency_build_index_)
+        , op_index(op_index_)
     {
     }
 
@@ -45,6 +45,6 @@ protected:
 
 private:
     JoinPtr join_ptr;
-    size_t concurrency_build_index;
+    size_t op_index;
 };
 } // namespace DB
