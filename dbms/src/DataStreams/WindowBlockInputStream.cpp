@@ -61,7 +61,6 @@ struct ActualCmpDataType
     using Type = std::conditional_t<checkIfSimpleNumericType<T>(), T, DecimalField<T>>;
 };
 
-// ColumnConst should not appear at here as MySQL does not allow the order by column is const, so we do not handle it.
 template <typename T>
 typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t idx)
 {
