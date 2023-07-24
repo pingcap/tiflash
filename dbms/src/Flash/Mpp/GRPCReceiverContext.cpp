@@ -108,24 +108,24 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
         assert(cq != nullptr);
     }
 
-    void init(UnaryCallback<bool> * callback) override
+    void init(GRPCKickTag * tag) override
     {
         reader = cluster->rpc_client->sendStreamRequestAsync(
             request.req->sender_meta().address(),
             &client_context,
             call,
             *cq,
-            callback);
+            tag);
     }
 
-    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, GRPCKickTag * tag) override
     {
-        packet->read(reader, callback);
+        packet->read(reader, tag);
     }
 
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    void finish(::grpc::Status & status, GRPCKickTag * tag) override
     {
-        reader->Finish(&status, callback);
+        reader->Finish(&status, tag);
     }
 
     grpc::ClientContext * getClientContext() override
@@ -407,10 +407,10 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRe
 AsyncExchangePacketReaderPtr GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
     grpc::CompletionQueue * cq,
-    UnaryCallback<bool> * callback) const
+    GRPCKickTag * tag) const
 {
     auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(cluster, cq, request);
-    reader->init(callback);
+    reader->init(tag);
     return reader;
 }
 

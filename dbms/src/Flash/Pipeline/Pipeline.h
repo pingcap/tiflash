@@ -65,7 +65,7 @@ public:
 
     void addChild(const PipelinePtr & child);
 
-    void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
+    const String & toTreeString() const;
 
     // used for getting the result blocks.
     void addGetResultSink(const ResultQueuePtr & result_queue);
@@ -93,6 +93,7 @@ public:
     String getFinalPlanExecId() const;
 
 private:
+    void toTreeStringImpl(FmtBuffer & buffer, size_t level) const;
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
     PipelineEvents toSelfEvents(PipelineExecutorContext & exec_context, Context & context, size_t concurrency);
@@ -108,5 +109,7 @@ private:
     std::deque<PhysicalPlanNodePtr> plan_nodes;
 
     std::vector<PipelinePtr> children;
+
+    mutable String tree_string;
 };
 } // namespace DB

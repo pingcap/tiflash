@@ -150,14 +150,25 @@ void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
         " -> ");
 }
 
-void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
+const String & Pipeline::toTreeString() const
+{
+    if (!tree_string.empty())
+        return tree_string;
+
+    FmtBuffer buffer;
+    toTreeStringImpl(buffer, 0);
+    tree_string = buffer.toString();
+    return tree_string;
+}
+
+void Pipeline::toTreeStringImpl(FmtBuffer & buffer, size_t level) const
 {
     toSelfString(buffer, level);
     if (!children.empty())
         buffer.append("\n");
     ++level;
     for (const auto & child : children)
-        child->toTreeString(buffer, level);
+        child->toTreeStringImpl(buffer, level);
 }
 
 void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)

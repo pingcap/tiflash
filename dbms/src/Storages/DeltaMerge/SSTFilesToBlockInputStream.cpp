@@ -147,6 +147,7 @@ Block SSTFilesToBlockInputStream::read()
 
         if (process_keys.write_cf % expected_size == 0)
         {
+            // If we should form a new block.
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
             loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
@@ -200,7 +201,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             reader->next();
             (*p_process_keys) += 1;
         }
-        LOG_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
+        LOG_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] [region_id={}]", CFToName(cf), (*p_process_keys), process_keys.write_cf, region->id());
         return;
     }
 
@@ -213,12 +214,13 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         {
             LOG_DEBUG(
                 log,
-                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
+                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}] [region_id={}]",
                 CFToName(cf),
                 (*p_process_keys),
                 process_keys.write_cf,
                 Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
-                (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"));
+                (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"),
+                region->id());
             break;
         }
 
