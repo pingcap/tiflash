@@ -1067,7 +1067,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 void DeltaMergeStore::read(
-    PipelineExecutorStatus & exec_status,
+    PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     const DB::Settings & db_settings,
@@ -1076,6 +1076,8 @@ void DeltaMergeStore::read(
     size_t num_streams,
     UInt64 max_version,
     const PushDownFilterPtr & filter,
+    const RuntimeFilteList & runtime_filter_list,
+    const int rf_max_wait_time_ms,
     const String & tracing_id,
     bool keep_order,
     bool is_fast_scan,
@@ -1132,11 +1134,13 @@ void DeltaMergeStore::read(
         {
             group_builder.addConcurrency(
                 std::make_unique<UnorderedSourceOp>(
-                    exec_status,
+                    exec_context,
                     read_task_pool,
                     columns_to_read,
                     extra_table_id_index,
-                    log_tracing_id));
+                    log_tracing_id,
+                    runtime_filter_list,
+                    rf_max_wait_time_ms));
         }
     }
     else
@@ -1144,7 +1148,7 @@ void DeltaMergeStore::read(
         for (size_t i = 0; i < final_num_stream; ++i)
         {
             group_builder.addConcurrency(std::make_unique<DMSegmentThreadSourceOp>(
-                exec_status,
+                exec_context,
                 dm_context,
                 read_task_pool,
                 after_segment_read,
@@ -1157,7 +1161,7 @@ void DeltaMergeStore::read(
         }
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<AddExtraTableIDColumnTransformOp>(
-                exec_status,
+                exec_context,
                 log_tracing_id,
                 columns_to_read,
                 extra_table_id_index,
@@ -1812,7 +1816,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-    LOG_DEBUG(
+    LOG_INFO(
         tracing_logger,
         "Segment read tasks build done, cost={}ms sorted_ranges={} n_tasks_before_split={} n_tasks_final={} n_ranges_final={}",
         watch.elapsedMilliseconds(),

@@ -91,6 +91,13 @@ void PipelineExecGroupBuilder::addConcurrency(SourceOpPtr && source)
     cur_group.back().setSourceOp(std::move(source));
 }
 
+void PipelineExecGroupBuilder::addConcurrency(PipelineExecBuilder && exec_builder)
+{
+    RUNTIME_CHECK(exec_builder.source_op);
+    auto & cur_group = getCurGroup();
+    cur_group.push_back(std::move(exec_builder));
+}
+
 void PipelineExecGroupBuilder::reset()
 {
     groups.clear();

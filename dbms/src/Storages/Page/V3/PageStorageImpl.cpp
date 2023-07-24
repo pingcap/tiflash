@@ -51,7 +51,12 @@ PageStorageImpl::PageStorageImpl(
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , log(Logger::get(name))
-    , blob_store(name, file_provider_, delegator, BlobConfig::from(config_))
+    , blob_store(
+          name,
+          file_provider_,
+          delegator,
+          BlobConfig::from(config_),
+          PageTypeAndConfig{{PageType::Normal, PageTypeConfig{.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate}}})
 {
     LOG_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
 }
@@ -135,7 +140,7 @@ void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimite
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
 
     // Persist Page data to BlobStore
-    auto edit = blob_store.write(std::move(write_batch), write_limiter);
+    auto edit = blob_store.write(std::move(write_batch), PageType::Normal, write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
 

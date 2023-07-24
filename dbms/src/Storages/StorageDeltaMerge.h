@@ -72,7 +72,7 @@ public:
         unsigned num_streams) override;
 
     void read(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         PipelineExecGroupBuilder & group_builder,
         const Names & column_names,
         const SelectQueryInfo & query_info,
@@ -259,7 +259,7 @@ private:
                                         const String & req_id,
                                         const LoggerPtr & tracing_logger);
 
-    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context);
+    RuntimeFilteList parseRuntimeFilterList(const SelectQueryInfo & query_info, const Context & db_context) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

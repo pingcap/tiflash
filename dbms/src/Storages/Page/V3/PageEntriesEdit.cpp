@@ -28,11 +28,14 @@ CheckpointProto::EditRecord PageEntriesEdit<UniversalPageId>::EditRecord::toProt
     proto_edit.set_version_epoch(version.epoch);
     if (type == EditRecordType::VAR_ENTRY)
     {
-        RUNTIME_CHECK(entry.checkpoint_info.has_value());
         proto_edit.set_entry_size(entry.size);
         proto_edit.set_entry_tag(entry.tag);
         proto_edit.set_entry_checksum(entry.checksum);
-        proto_edit.mutable_entry_location()->CopyFrom(entry.checkpoint_info.data_location.toProto());
+        // uploading page data may be disabled
+        if (entry.checkpoint_info.has_value())
+        {
+            proto_edit.mutable_entry_location()->CopyFrom(entry.checkpoint_info.data_location.toProto());
+        }
         for (const auto & [offset, checksum] : entry.field_offsets)
         {
             proto_edit.add_entry_fields_offset(offset);
@@ -61,11 +64,16 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     rec.being_ref_count = 1;
     if (rec.type == EditRecordType::VAR_ENTRY)
     {
-        rec.entry.checkpoint_info = OptionalCheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
-            .is_valid = true,
-            .is_local_data_reclaimed = true,
-        };
+        // uploading page data may be disabled
+        auto checkpoint_loc = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map);
+        if (checkpoint_loc.isValid())
+        {
+            rec.entry.checkpoint_info = OptionalCheckpointInfo{
+                .data_location = std::move(checkpoint_loc),
+                .is_valid = true,
+                .is_local_data_reclaimed = true,
+            };
+        }
         rec.entry.size = proto_edit.entry_size();
         rec.entry.checksum = proto_edit.entry_checksum();
         rec.entry.tag = proto_edit.entry_tag();

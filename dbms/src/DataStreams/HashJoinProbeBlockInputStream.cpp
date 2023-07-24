@@ -23,7 +23,7 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
-    size_t scan_hash_map_after_probe_stream_index,
+    size_t stream_index,
     const String & req_id,
     UInt64 max_block_size_)
     : log(Logger::get(req_id))
@@ -34,7 +34,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
-    probe_exec.set(HashJoinProbeExec::build(original_join, input, scan_hash_map_after_probe_stream_index, max_block_size_));
+    probe_exec.set(HashJoinProbeExec::build(original_join, stream_index, input, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 
     ProbeProcessInfo header_probe_process_info(0);

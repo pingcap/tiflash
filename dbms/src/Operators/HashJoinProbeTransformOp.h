@@ -23,10 +23,10 @@ class HashJoinProbeTransformOp : public TransformOp
 {
 public:
     HashJoinProbeTransformOp(
-        PipelineExecutorStatus & exec_status_,
+        PipelineExecutorContext & exec_context_,
         const String & req_id,
         const JoinPtr & join_,
-        size_t scan_hash_map_after_probe_stream_index_,
+        size_t op_index_,
         size_t max_block_size,
         const Block & input_header);
 
@@ -47,20 +47,15 @@ protected:
     void operateSuffixImpl() override;
 
 private:
-    void probeOnTransform(Block & block);
-
-    OperatorStatus scanHashMapData(Block & block);
-
-    OperatorStatus onProbeFinish(Block & block);
-
-    OperatorStatus handleProbedBlock(Block & block);
+    OperatorStatus onOutput(Block & block);
 
 private:
     JoinPtr join;
 
     ProbeProcessInfo probe_process_info;
 
-    size_t scan_hash_map_after_probe_stream_index;
+    size_t op_index;
+
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
 
     size_t joined_rows = 0;

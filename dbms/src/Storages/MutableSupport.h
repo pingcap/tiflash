@@ -44,14 +44,6 @@ public:
         return empty;
     }
 
-    void eraseHiddenColumns(Block & block, const String & table_type_name)
-    {
-        const OrderedNameSet & names = hiddenColumns(table_type_name);
-        for (auto & it : names)
-            if (block.has(it))
-                block.erase(it);
-    }
-
     static const String mmt_storage_name;
     static const String txn_storage_name;
     static const String delta_tree_storage_name;
@@ -68,25 +60,6 @@ public:
     static const DataTypePtr extra_table_id_column_type;
 
     /// mark that ColumnId of those columns are defined in dbms/src/Storages/Transaction/Types.h
-
-    enum DeduperType
-    {
-        DeduperOriginStreams = 0,
-        DeduperOriginUnity = 1,
-        DeduperReplacingUnity = 2,
-        DeduperReplacingPartitioning = 3,
-        DeduperDedupPartitioning = 4,
-        DeduperReplacingPartitioningOpt = 5,
-    };
-
-    static DeduperType toDeduperType(UInt64 type)
-    {
-        if (type > 5)
-        {
-            throw Exception("illegal DeduperType: " + toString(type));
-        }
-        return (DeduperType)type;
-    }
 
     // TODO: detail doc about these delete marks
     struct DelMark
