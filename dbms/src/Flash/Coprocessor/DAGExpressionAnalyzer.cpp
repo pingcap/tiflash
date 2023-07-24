@@ -303,29 +303,30 @@ void initBeforeWindow(
     DAGExpressionAnalyzer * analyzer,
     WindowDescription & window_desc,
     ExpressionActionsChain & chain,
-    const tipb::Window & window,
-    ExpressionActionsChain::Step & step)
+    const tipb::Window & window)
 {
-    // Prepare auxiliary function for range frame type
-    auto aux_col_names = addRangeFrameAuxiliaryFunctionAction(analyzer, step.actions, window);
+    auto actions = chain.getLastActions();
 
-    analyzer->appendWindowColumns(window_desc, window, step.actions);
+    // Prepare auxiliary function for range frame type
+    auto aux_col_names = addRangeFrameAuxiliaryFunctionAction(analyzer, actions, window);
+
+    analyzer->appendWindowColumns(window_desc, window, actions);
     // set required output for window funcs's arguments.
     for (const auto & window_function_description : window_desc.window_functions_descriptions)
     {
         for (const auto & argument_name : window_function_description.argument_names)
-            step.required_output.push_back(argument_name);
+            chain.getLastStep().required_output.push_back(argument_name);
     }
 
-    window_desc.before_window = step.actions;
+    window_desc.before_window = actions;
     if (!aux_col_names.first.empty())
-        step.required_output.push_back(aux_col_names.first);
+        chain.getLastStep().required_output.push_back(aux_col_names.first);
     if (!aux_col_names.second.empty())
-        step.required_output.push_back(aux_col_names.second);
+        chain.getLastStep().required_output.push_back(aux_col_names.second);
 
     chain.finalize();
     chain.clear();
-    setAuxiliaryColumnInfo(step.actions, window_desc, aux_col_names.first, aux_col_names.second, window);
+    setAuxiliaryColumnInfo(actions, window_desc, aux_col_names.first, aux_col_names.second, window);
 }
 
 void initAfterWindow(
@@ -791,7 +792,7 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
 
     WindowDescription window_description = createAndInitWindowDesc(this, window);
     setOrderByColumnTypeAndDirectionForRangeFrame(window_description, step.actions, window);
-    initBeforeWindow(this, window_description, chain, window, step);
+    initBeforeWindow(this, window_description, chain, window);
     initAfterWindow(this, window_description, chain, window, source_size);
 
     return window_description;
