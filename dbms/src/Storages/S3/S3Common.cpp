@@ -248,10 +248,7 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 disaggregated::GetDisaggConfigResponse resp;
                 auto status = rpc.call(&client_context, req, &resp);
                 if (!status.ok())
-                {
                     throw Exception(rpc.errMsg(status));
-                    continue;
-                }
 
                 RUNTIME_CHECK(resp.has_s3_config(), resp.ShortDebugString());
 
