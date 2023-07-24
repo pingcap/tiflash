@@ -30,6 +30,7 @@ OperatorStatus HashJoinBuildSink::writeImpl(Block && block)
         }
         return OperatorStatus::FINISHED;
     }
+    LOG_ERROR(log, "insert block: {}", block.rows());
     join_ptr->insertFromBlock(block, op_index);
     block.clear();
     return join_ptr->hasBuildSideMarkedSpillData(op_index)

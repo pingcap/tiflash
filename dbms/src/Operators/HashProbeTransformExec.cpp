@@ -20,9 +20,9 @@
 #include <Operators/HashJoinBuildSink.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/IOBlockInputStreamSourceOp.h>
+#include <Operators/Operator.h>
 
 #include <magic_enum.hpp>
-#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -113,9 +113,10 @@ bool HashProbeTransformExec::isProbeRestoreReady()
 
 Block HashProbeTransformExec::popProbeRestoreBlock()
 {
-    Block ret;
     if (unlikely(is_probe_restore_done))
-        return ret;
+        return {};
+
+    Block ret;
     assert(probe_restore_block);
     std::swap(ret, probe_restore_block);
     return ret;
@@ -123,7 +124,7 @@ Block HashProbeTransformExec::popProbeRestoreBlock()
 
 OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info)
 {
-    while(true)
+    while (true)
     {
         assert(probe_process_info.all_rows_joined_finish);
         if (!probe_partition_blocks.empty())
@@ -168,7 +169,7 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
 
 OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info)
 {
-    while(true)
+    while (true)
     {
         assert(probe_process_info.all_rows_joined_finish);
         if (!probe_partition_blocks.empty())

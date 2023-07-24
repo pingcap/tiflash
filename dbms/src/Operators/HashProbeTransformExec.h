@@ -16,6 +16,7 @@
 
 #include <Flash/Executor/ResultQueue.h>
 #include <Interpreters/Join.h>
+
 #include "Operators/Operator.h"
 
 namespace DB
@@ -65,16 +66,14 @@ public:
     void flushMarkedSpillData(bool is_the_last = false) { join->flushProbeSideMarkedSpillData(op_index, is_the_last); }
 
     // For restore build stage
-    bool isBuildRestoreReady();
-    Block popBuildRestoreBlock();
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
 
     // For restore probe stage
     void startRestoreProbe();
     bool isProbeRestoreReady();
-    Block popProbeRestoreBlock();
 
     bool isSpilled() const { return join->isSpilled(); }
+    bool isEnableSpill() const { return join->isEnableSpill(); }
 
     HashProbeTransformExecPtr tryGetRestoreExec();
 
@@ -82,6 +81,10 @@ public:
 
     OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info);
     OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input);
+
+private:
+    // For restore probe stage
+    Block popProbeRestoreBlock();
 
 private:
     LoggerPtr log;

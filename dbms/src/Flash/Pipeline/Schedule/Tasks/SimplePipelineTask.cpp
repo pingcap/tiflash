@@ -44,4 +44,13 @@ ExecTaskStatus SimplePipelineTask::awaitImpl()
     MAPPING_TASK_AWAIT(pipeline_exec);
 }
 
+void SimplePipelineTask::finalizeImpl()
+{
+    assert(pipeline_exec);
+    pipeline_exec->executeSuffix();
+    pipeline_exec->finalizeProfileInfo(profile_info.getCPUPendingTimeNs() + profile_info.getIOPendingTimeNs());
+    pipeline_exec = nullptr;
+    pipeline_exec_holder.reset();
+}
+
 } // namespace DB

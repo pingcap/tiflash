@@ -22,6 +22,7 @@ namespace
 {
 ALWAYS_INLINE ExecTaskStatus tryPushBlock(const ResultQueuePtr & result_queue, Block & block)
 {
+    assert(block);
     auto ret = result_queue->tryPush(std::move(block));
     switch (ret)
     {
