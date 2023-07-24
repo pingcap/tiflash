@@ -18,11 +18,18 @@
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteBufferFromFileBase.h>
+#include <IO/WriteBufferFromWritableFile.h>
 
 #include <string>
 
 namespace DB
 {
+std::unique_ptr<WriteBufferFromFileBase>
+createWriteBufferFromFileBaseByWriterBuffer(
+    std::unique_ptr<WriteBufferFromWritableFile> & writer_buffer,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size);
+
 /** Create an object to write data to a file.
   * estimated_size - number of bytes to write
   * aio_threshold - the minimum number of bytes for asynchronous writes

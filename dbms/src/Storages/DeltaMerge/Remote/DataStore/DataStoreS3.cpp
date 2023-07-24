@@ -37,7 +37,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 
     const auto local_dir = local_dmfile->path();
     const auto local_files = local_dmfile->listFilesForUpload();
-    auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_with_size) { return file_with_size.first == DMFile::metav2FileName(); });
+    auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_name) { return file_name == DMFile::metav2FileName(); });
     RUNTIME_CHECK(itr_meta != local_files.cend());
 
     const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
@@ -46,9 +46,8 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     std::vector<std::future<void>> upload_results;
-    for (const auto & [fname, fsize] : local_files)
+    for (const auto & fname : local_files)
     {
-        UNUSED(fsize);
         if (fname == DMFile::metav2FileName())
         {
             // meta file will be upload at last.
