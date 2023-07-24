@@ -1037,6 +1037,8 @@ enum SegmentTestMode
     V1_BlockOnly,
     V2_BlockOnly,
     V2_FileOnly,
+    V3_BlockOnly,
+    V3_FileOnly,
 };
 
 String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
@@ -1050,6 +1052,10 @@ String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
         return "V2_BlockOnly";
     case SegmentTestMode::V2_FileOnly:
         return "V2_FileOnly";
+    case SegmentTestMode::V3_BlockOnly:
+        return "V3_BlockOnly";
+    case SegmentTestMode::V3_FileOnly:
+        return "V3_FileOnly";
     default:
         return "Unknown";
     }
@@ -1073,6 +1079,10 @@ public:
         case SegmentTestMode::V2_BlockOnly:
         case SegmentTestMode::V2_FileOnly:
             setStorageFormat(2);
+            break;
+        case SegmentTestMode::V3_BlockOnly:
+        case SegmentTestMode::V3_FileOnly:
+            setStorageFormat(3);
             break;
         }
 
@@ -1115,9 +1125,11 @@ try
             {
             case SegmentTestMode::V1_BlockOnly:
             case SegmentTestMode::V2_BlockOnly:
+            case SegmentTestMode::V3_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
             case SegmentTestMode::V2_FileOnly:
+            case SegmentTestMode::V3_FileOnly:
             {
                 auto delegate = dmContext().path_pool->getStableDiskDelegator();
                 auto file_provider = dmContext().db_context.getFileProvider();
@@ -1210,7 +1222,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(SegmentTestMode, //
                         SegmentTest2,
-                        testing::Values(SegmentTestMode::V1_BlockOnly, SegmentTestMode::V2_BlockOnly, SegmentTestMode::V2_FileOnly),
+                        testing::Values(SegmentTestMode::V1_BlockOnly, SegmentTestMode::V2_BlockOnly, SegmentTestMode::V2_FileOnly, SegmentTestMode::V3_BlockOnly, SegmentTestMode::V3_FileOnly),
                         testModeToString);
 
 enum class SegmentWriteType

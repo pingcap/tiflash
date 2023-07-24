@@ -101,7 +101,6 @@ int main(int argc, char ** argv)
         .secret_access_key = secret_access_key,
         .root = s3_root,
     };
-    s3config.enable(/*check_requirements*/ false, DB::Logger::get());
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
     DB::tests::TiFlashTestEnv::setIsMockedS3Client(mock_s3 == "true");
     DB::S3::ClientFactory::instance().init(s3config, mock_s3 == "true");
