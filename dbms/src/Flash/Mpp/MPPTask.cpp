@@ -603,14 +603,14 @@ void MPPTask::reportStatus(const String & err_msg)
 
     try
     {
-        std::shared_ptr<mpp::ReportTaskStatusRequest> req = std::make_shared<mpp::ReportTaskStatusRequest>();
-        mpp::TaskMeta * req_meta = req->mutable_meta();
+        mpp::ReportTaskStatusRequest req;
+        mpp::TaskMeta * req_meta = req.mutable_meta();
         req_meta->CopyFrom(meta);
 
         if (report_execution_summary)
         {
             tipb::TiFlashExecutionInfo execution_info = mpp_task_statistics.genTiFlashExecutionInfo();
-            if unlikely (!execution_info.SerializeToString(req->mutable_data()))
+            if unlikely (!execution_info.SerializeToString(req.mutable_data()))
             {
                 LOG_ERROR(log, "Failed to serialize TiFlash execution info");
                 return;
@@ -619,18 +619,24 @@ void MPPTask::reportStatus(const String & err_msg)
 
         if (!err_msg.empty())
         {
-            mpp::Error * err = req->mutable_error();
+            mpp::Error * err = req.mutable_error();
             err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
             err->set_msg(err_msg);
         }
 
-        pingcap::kv::RpcCall<mpp::ReportTaskStatusRequest> rpc_call(req);
         auto * cluster = context->getTMTContext().getKVCluster();
-        cluster->rpc_client->sendRequest(meta.coordinator_address(), rpc_call, /*timeout=*/3);
-        const auto & resp = rpc_call.getResp();
-        if (resp->has_error())
+        pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(ReportMPPTaskStatus)> rpc(cluster->rpc_client, meta.coordinator_address());
+        grpc::ClientContext client_context;
+        rpc.setClientContext(client_context, /*timeout=*/3);
+        mpp::ReportTaskStatusResponse resp;
+        auto rpc_status = rpc.call(&client_context, req, &resp);
+        if (!rpc_status.ok())
         {
-            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp->error().msg());
+            throw Exception(rpc.errMsg(rpc_status));
+        }
+        if (resp.has_error())
+        {
+            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
         }
     }
     catch (...)
