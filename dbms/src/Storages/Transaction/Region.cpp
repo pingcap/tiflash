@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -466,17 +467,19 @@ std::string Region::dataInfo() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
-    std::stringstream ss;
-    auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
-    ss << "[";
+    FmtBuffer buff;
+    buff.append("[");
+    auto write_size = data.writeCF().getSize();
+    auto lock_size = data.lockCF().getSize();
+    auto default_size = data.defaultCF().getSize();
     if (write_size)
-        ss << "write " << write_size << " ";
+        buff.fmtAppend("write {} ", write_size);
     if (lock_size)
-        ss << "lock " << lock_size << " ";
+        buff.fmtAppend("lock {} ", lock_size);
     if (default_size)
-        ss << "default " << default_size << " ";
-    ss << "]";
-    return ss.str();
+        buff.fmtAppend("default {} ", default_size);
+    buff.append("]");
+    return buff.toString();
 }
 
 void Region::markCompactLog() const
@@ -664,7 +667,7 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     if (del_write)
     {
         LOG_INFO(log,
-                 "delete {} records in write cf for region {}",
+                 "delete {} records in write cf for region_id={}",
                  del_write,
                  meta.regionId());
     }
