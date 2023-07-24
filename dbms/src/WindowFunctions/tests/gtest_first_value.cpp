@@ -25,9 +25,9 @@
 #include <memory>
 #include <optional>
 
-// TODO support unsigned int.
 namespace DB::tests
 {
+// TODO support unsigned int as the test framework not supports unsigned int so far.
 class FirstValue : public DB::tests::WindowTest
 {
 public:
@@ -358,7 +358,6 @@ try
         }
     }
 
-    // TODO support unsigned int.
     testInt<Int8>();
     testInt<Int16>();
     testInt<Int32>();
