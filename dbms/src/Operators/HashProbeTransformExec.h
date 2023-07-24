@@ -16,6 +16,7 @@
 
 #include <Flash/Executor/ResultQueue.h>
 #include <Interpreters/Join.h>
+#include "Operators/Operator.h"
 
 namespace DB
 {
@@ -55,8 +56,8 @@ public:
     }
 
     // For probe stage
-    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
+    void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isAllProbeFinished() const { return join->isAllProbeFinished(); }
@@ -77,6 +78,11 @@ public:
 
     HashProbeTransformExecPtr tryGetRestoreExec();
 
+    OperatorStatus tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info);
+
+    OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info);
+    OperatorStatus tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input);
+
 private:
     LoggerPtr log;
 
@@ -87,6 +93,8 @@ private:
     JoinPtr join;
 
     BlockInputStreamPtr scan_hash_map_after_probe_stream;
+
+    PartitionBlocks probe_partition_blocks;
 
     const UInt64 max_block_size;
 

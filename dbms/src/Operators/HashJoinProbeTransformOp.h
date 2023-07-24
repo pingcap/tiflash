@@ -127,7 +127,6 @@ private:
     HashProbeTransformExecPtr probe_transform;
 
     ProbeProcessInfo probe_process_info;
-    PartitionBlocks probe_partition_blocks;
 
     size_t joined_rows = 0;
     size_t scan_hash_map_rows = 0;

@@ -22,6 +22,7 @@
 #include <Operators/IOBlockInputStreamSourceOp.h>
 
 #include <magic_enum.hpp>
+#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -118,5 +119,101 @@ Block HashProbeTransformExec::popProbeRestoreBlock()
     assert(probe_restore_block);
     std::swap(ret, probe_restore_block);
     return ret;
+}
+
+OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info)
+{
+    while(true)
+    {
+        assert(probe_process_info.all_rows_joined_finish);
+        if (!probe_partition_blocks.empty())
+        {
+            auto partition_block = std::move(probe_partition_blocks.front());
+            probe_partition_blocks.pop_front();
+            if (!partition_block.block || partition_block.block.rows() == 0)
+                continue;
+            join->checkTypes(partition_block.block);
+            probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        else
+        {
+            if (!isProbeRestoreReady())
+                return OperatorStatus::WAITING;
+            auto restore_ret = popProbeRestoreBlock();
+            if (likely(restore_ret))
+            {
+                /// Even if spill is enabled, if spill is not triggered during build,
+                /// there is no need to dispatch probe block
+                if (!isSpilled())
+                {
+                    join->checkTypes(restore_ret);
+                    probe_process_info.resetBlock(std::move(restore_ret), 0);
+                    return OperatorStatus::HAS_OUTPUT;
+                }
+                else
+                {
+                    join->dispatchProbeBlock(restore_ret, probe_partition_blocks, op_index);
+                    if (hasMarkedSpillData())
+                        return OperatorStatus::IO_OUT;
+                }
+            }
+            else
+            {
+                return OperatorStatus::HAS_OUTPUT;
+            }
+        }
+    }
+}
+
+OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info)
+{
+    while(true)
+    {
+        assert(probe_process_info.all_rows_joined_finish);
+        if (!probe_partition_blocks.empty())
+        {
+            auto partition_block = std::move(probe_partition_blocks.front());
+            probe_partition_blocks.pop_front();
+            if (!partition_block.block || partition_block.block.rows() == 0)
+                continue;
+            join->checkTypes(partition_block.block);
+            probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        else
+        {
+            return OperatorStatus::NEED_INPUT;
+        }
+    }
+}
+
+OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input)
+{
+    assert(probe_process_info.all_rows_joined_finish);
+    assert(probe_partition_blocks.empty());
+    if (likely(input))
+    {
+        /// Even if spill is enabled, if spill is not triggered during build,
+        /// there is no need to dispatch probe block
+        if (!isSpilled())
+        {
+            join->checkTypes(input);
+            probe_process_info.resetBlock(std::move(input), 0);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        else
+        {
+            join->dispatchProbeBlock(input, probe_partition_blocks, op_index);
+            input.clear();
+            if (hasMarkedSpillData())
+                return OperatorStatus::IO_OUT;
+            return tryFillProcessInfoInProbeStage(probe_process_info);
+        }
+    }
+    else
+    {
+        return OperatorStatus::HAS_OUTPUT;
+    }
 }
 } // namespace DB

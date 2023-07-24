@@ -61,7 +61,6 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::RESTORE_PROBE:
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
-                assert(probe_partition_blocks.empty());
                 if (probe_transform->finishOneProbe())
                 {
                     if (probe_transform->hasMarkedSpillData())
@@ -116,43 +115,12 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
     }
 }
 
-bool HashJoinProbeTransformOp::fillProcessInfoFromPartitoinBlocks()
-{
-    assert(probe_process_info.all_rows_joined_finish);
-    if (!probe_partition_blocks.empty())
-    {
-        auto partition_block = std::move(probe_partition_blocks.front());
-        probe_partition_blocks.pop_front();
-        origin_join->checkTypes(partition_block.block);
-        probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
-    }
-    return probe_process_info.all_rows_joined_finish;
-}
-
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
-    if likely (block)
-    {
-        /// Even if spill is enabled, if spill is not triggered during build,
-        /// there is no need to dispatch probe block
-        if (!probe_transform->isSpilled())
-        {
-            origin_join->checkTypes(block);
-            probe_process_info.resetBlock(std::move(block), 0);
-        }
-        else
-        {
-            assert(probe_partition_blocks.empty());
-            probe_transform->dispatchBlock(block, probe_partition_blocks);
-            block.clear();
-            if (probe_transform->hasMarkedSpillData())
-                return OperatorStatus::IO_OUT;
-            if (!fillProcessInfoFromPartitoinBlocks())
-                return OperatorStatus::NEED_INPUT;
-        }
-    }
+    if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block); ret != OperatorStatus::HAS_OUTPUT)
+        return ret;
 
     return onOutput(block);
 }
@@ -161,36 +129,13 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
-        if (!fillProcessInfoFromPartitoinBlocks())
-            return OperatorStatus::NEED_INPUT;
+        if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
+            return ret;
     }
     else if (status == ProbeStatus::RESTORE_PROBE && probe_process_info.all_rows_joined_finish)
     {
-        while (!fillProcessInfoFromPartitoinBlocks())
-        {
-            if (!probe_transform->isProbeRestoreReady())
-                return OperatorStatus::WAITING;
-            if (auto restore_ret = probe_transform->popProbeRestoreBlock(); (likely(restore_ret)))
-            {
-                if (!probe_transform->isSpilled())
-                {
-                    origin_join->checkTypes(restore_ret);
-                    probe_process_info.resetBlock(std::move(restore_ret), 0);
-                    break;
-                }
-                else
-                {
-                    assert(probe_partition_blocks.empty());
-                    probe_transform->dispatchBlock(restore_ret, probe_partition_blocks);
-                    if (probe_transform->hasMarkedSpillData())
-                        return OperatorStatus::IO_OUT;
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+        if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
+            return ret;
     }
 
     return onOutput(block);
