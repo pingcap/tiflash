@@ -243,7 +243,7 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(GetDisaggConfig)> rpc(kv_cluster->rpc_client, send_address);
 
                 grpc::ClientContext client_context;
-                rpc.setClientContext(client_context, 2);
+                rpc.setClientContext(client_context, /*timeout=*/2);
                 disaggregated::GetDisaggConfigRequest req;
                 disaggregated::GetDisaggConfigResponse resp;
                 auto status = rpc.call(&client_context, req, &resp);
