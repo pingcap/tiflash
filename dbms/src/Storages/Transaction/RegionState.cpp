@@ -143,7 +143,7 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     if (!computeMappedTableID(*raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR,
-                        "Illegal region range, should not happen, start key={} end key={}",
+                        "Illegal region range, should not happen, start_key={} end_key={}",
                         ori.first.key.toDebugString(),
                         ori.second.key.toDebugString());
     }

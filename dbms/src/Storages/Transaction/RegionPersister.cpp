@@ -62,7 +62,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     {
         LOG_WARNING(
             Logger::get(),
-            "Persisting big region={} with data info: {}, serialized size {}",
+            "Persisting big region={} with data info: {}, serialized_size={}",
             region.toString(true),
             region.dataInfo(),
             region_size);

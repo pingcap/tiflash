@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <fmt/core.h>
-
-#include "Common/FmtUtils.h"
 
 
 #pragma GCC diagnostic push
@@ -150,7 +149,7 @@ std::string RegionMeta::toString(bool dump_status) const
             term = applied_term;
             index = apply_state.applied_index();
         }
-        buf.fmtAppend(" term={} index={}", term, index);
+        buf.fmtAppend(" applied_term={} applied_index={}", term, index);
     }
     return buf.fmtAppend("]").toString();
 }

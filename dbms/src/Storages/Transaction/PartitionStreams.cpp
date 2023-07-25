@@ -148,7 +148,7 @@ static void writeRegionDataToStorage(
             break;
         }
         default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown StorageEngine: {}", magic_enum::enum_name(storage->engineType()));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown StorageEngine: {}", static_cast<Int32>(storage->engineType()));
         }
 
         write_part_cost = watch.elapsedMilliseconds();

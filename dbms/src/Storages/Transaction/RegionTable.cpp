@@ -205,7 +205,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     // Remove from table map.
     tables.erase(it);
 
-    LOG_INFO(log, "remove table_id={} in RegionTable success", table_id);
+    LOG_INFO(log, "remove table from RegionTable success, table_id={}", table_id);
 }
 
 void RegionTable::updateRegion(const Region & region)
