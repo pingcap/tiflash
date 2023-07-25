@@ -354,7 +354,6 @@ private:
     SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;
     bool is_spilled = false;
-    bool disable_spill = false;
     std::atomic<size_t> peak_build_bytes_usage{0};
 
     SpillerPtr build_spiller;

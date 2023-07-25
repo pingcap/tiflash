@@ -1923,14 +1923,14 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
         // for join spill to disk gtest
         if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
+
 #endif
-        if (!disable_spill && restore_round >= 4)
+        if (restore_round >= 4)
         {
             LOG_INFO(log, fmt::format("restore round reach to 4, spilling will be disabled."));
-            disable_spill = true;
             return;
         }
-        if ((max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join) || disable_spill)
+        if (max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join)
         {
             return;
         }
