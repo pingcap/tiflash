@@ -36,19 +36,19 @@ public:
         BlockInputStreamPtr scan_hash_map_after_probe_stream_,
         UInt64 max_block_size_);
 
-    // For NonJoined stage
+    // For ScanHashMapAfterProbe stage
     bool needScanHashMapAfterProbe() const { return scan_hash_map_after_probe_stream != nullptr; }
-    void startNonJoined()
+    void startScanHashMapAfterProbe()
     {
         assert(scan_hash_map_after_probe_stream);
         scan_hash_map_after_probe_stream->readPrefix();
     }
-    Block scanNonJoined()
+    Block scanHashMapAfterProbe()
     {
         assert(scan_hash_map_after_probe_stream);
         return scan_hash_map_after_probe_stream->read();
     }
-    void endNonJoined()
+    void endScanHashMapAfterProbe()
     {
         assert(scan_hash_map_after_probe_stream);
         scan_hash_map_after_probe_stream->readSuffix();

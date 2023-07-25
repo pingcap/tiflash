@@ -82,10 +82,10 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::PROBE_FINAL_SPILL:
             return OperatorStatus::IO_OUT;
         case ProbeStatus::READ_SCAN_HASH_MAP_DATA:
-            block = probe_transform->scanNonJoined();
+            block = probe_transform->scanHashMapAfterProbe();
             if unlikely (!block)
             {
-                probe_transform->endNonJoined();
+                probe_transform->endScanHashMapAfterProbe();
                 auto next_status = probe_transform->shouldRestore() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
                 switchStatus(next_status);
                 break;
@@ -145,7 +145,7 @@ void HashJoinProbeTransformOp::onProbeFinish()
 {
     if (probe_transform->needScanHashMapAfterProbe())
     {
-        probe_transform->startNonJoined();
+        probe_transform->startScanHashMapAfterProbe();
         switchStatus(ProbeStatus::READ_SCAN_HASH_MAP_DATA);
     }
     else if (probe_transform->shouldRestore())
