@@ -16,8 +16,7 @@
 
 #include <Flash/Executor/ResultQueue.h>
 #include <Interpreters/Join.h>
-
-#include "Operators/Operator.h"
+#include <Operators/Operator.h>
 
 namespace DB
 {
