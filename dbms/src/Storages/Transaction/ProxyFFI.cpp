@@ -879,13 +879,4 @@ std::string_view buffToStrView(const BaseBuffView & buf)
     return std::string_view{buf.data, buf.len};
 }
 
-FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id, uint8_t acquire_lock)
-{
-    // TODO
-    UNUSED(acquire_lock);
-    auto & kvstore = server->tmt->getKVStore();
-    auto region_ptr = kvstore->getRegion(region_id);
-    return region_ptr->getFlushedState();
-}
-
 } // namespace DB

@@ -1166,11 +1166,6 @@ void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 
     auto f = [&]() {
         // So proxy can get the current compact state of this region of TiFlash's side.
 
-        // TODO Passive `CompactLog`flush will not update this field,
-        // which make this not usable in `exec_compact_log`. Pending fix.
-        // TODO flushed state is never persisted, check if it will lead to a problem.
-        // TODO Why don't we just use persisted applied_index in RegionPersister?
-        region->setFlushedState(compact_index, compact_term);
         region->markCompactLog();
         region->cleanApproxMemCacheInfo();
         // We will notify even if `flush_state.applied_index` is greater than `compact_index`,
