@@ -105,12 +105,12 @@ try
 
             {
                 context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-                ASSERT_THROW(executeStreams(request), Exception);
+                ASSERT_THROW(executeStreams(request), Exception) << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j;
                 auto concurrences = {2, 5, 10};
                 for (auto concurrency : concurrences)
                 {
                     ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency))
-                        << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j;
+                        << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j << ", concurrency = " << concurrency;
                 }
             }
         }
