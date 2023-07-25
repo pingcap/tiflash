@@ -224,19 +224,23 @@ inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname,
     }
 }
 
-inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fname, std::optional<UInt64> filesize)
+inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fname, std::optional<UInt64> filesize, std::optional<DM::ScanContextPtr> scan_context)
 {
     auto file = tryOpenCachedFile(remote_fname, filesize);
     if (file != nullptr)
     {
+        if (scan_context.has_value())
+            scan_context.value()->total_cache_read_dmfile_size += filesize.value();
         return file;
     }
+    if (scan_context.has_value())
+        scan_context.value()->total_s3_read_dmfile_size += filesize.value();
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }
 
 RandomAccessFilePtr S3RandomAccessFile::create(const String & remote_fname)
 {
-    return createFromNormalFile(remote_fname, read_file_info ? std::optional<UInt64>(read_file_info->size) : std::nullopt);
+    return createFromNormalFile(remote_fname, read_file_info ? std::optional<UInt64>(read_file_info->size) : std::nullopt, read_file_info ? std::optional<DM::ScanContextPtr>(read_file_info->scan_context) : std::nullopt);
 }
 } // namespace DB::S3

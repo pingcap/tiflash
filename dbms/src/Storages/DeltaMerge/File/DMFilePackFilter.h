@@ -231,7 +231,8 @@ private:
                           const MinMaxIndexCachePtr & index_cache,
                           bool set_cache_if_miss,
                           ColId col_id,
-                          const ReadLimiterPtr & read_limiter)
+                          const ReadLimiterPtr & read_limiter,
+                          const ScanContextPtr & scan_context)
     {
         const auto & type = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
@@ -240,7 +241,7 @@ private:
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
-            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
+            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({dmfile->getReadFileSize(col_id, dmfile->colIndexFileName(file_name_base)), scan_context});
             if (!dmfile->configuration) // v1
             {
                 auto index_buf = ReadBufferFromFileProvider(
@@ -329,7 +330,7 @@ private:
             return;
 
         Stopwatch watch;
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 
         scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
     }

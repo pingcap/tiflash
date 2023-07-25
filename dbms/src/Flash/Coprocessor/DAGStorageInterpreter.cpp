@@ -58,6 +58,7 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
+
 #include "Common/Stopwatch.h"
 
 namespace DB
@@ -393,10 +394,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     auto & dag_context = dagContext();
 
-    auto scan_context = std::make_shared<DM::ScanContext>();
-    dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-    mvcc_query_info->scan_context = scan_context;
-
     if (!mvcc_query_info->regions_query_info.empty())
     {
         buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
@@ -408,7 +405,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
     // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
     // retry those regions or there will be data lost.
-    auto remote_requests = buildRemoteRequests(scan_context);
+    auto remote_requests = buildRemoteRequests(mvcc_query_info->scan_context);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
