@@ -1030,11 +1030,11 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     if (unlikely(range.none()))
     {
-        LOG_INFO(log, "Meet empty ingest range from store {} for region {}. Ignore it.", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+        LOG_INFO(log, "Meet empty ingest range from store_id={} region_id={}. Ignore it.", checkpoint_info->remote_store_id, checkpoint_info->region_id);
         return;
     }
 
-    LOG_INFO(log, "Ingest checkpoint from store {} for region {}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+    LOG_INFO(log, "Ingest checkpoint from remote, store_id={} region_id={}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
     auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
@@ -1055,7 +1055,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     wbs.writeLogAndData();
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    LOG_INFO(log, "Ingest checkpoint from store {} for region {} done", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+    LOG_INFO(log, "Ingest checkpoint from remote done, store_id={} region_id={}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
 
     for (auto & segment : restored_segments)
     {

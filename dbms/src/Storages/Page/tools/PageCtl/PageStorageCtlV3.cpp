@@ -504,7 +504,7 @@ private:
             region_infos_vec.begin(),
             region_infos_vec.end(),
             [](const auto arg, FmtBuffer & fb) {
-                fb.fmtAppend("   region id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
+                fb.fmtAppend("   region_id: {} min_raft_log_index: {} max_raft_log_index: {} log count: {}\n",
                              std::get<0>(arg),
                              std::get<1>(arg),
                              std::get<2>(arg),
