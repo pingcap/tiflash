@@ -117,6 +117,8 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
+#include <Storages/DeltaMerge/Remote/RNWorkers.h>
+
 #if USE_MIMALLOC
 #include <Poco/JSON/Parser.h>
 #include <mimalloc.h>
@@ -1470,6 +1472,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
           *  table engines could use Context on destroy.
           */
         LOG_INFO(log, "Shutting down storages.");
+        DB::DM::Remote::RNWorkers::stopSharedWorkers();
         // `SegmentReader` threads may hold a segment and its delta-index for read.
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.

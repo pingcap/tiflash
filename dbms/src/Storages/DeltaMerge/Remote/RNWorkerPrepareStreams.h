@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/ThreadedWorker.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>

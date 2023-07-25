@@ -36,12 +36,10 @@ public:
 public:
     void startInBackground();
 
-    void wait();
-
     ~RNWorkers()
     {
         prepared_tasks->finish();
-        wait();
+        stopWorkers(worker_fetch_pages);
     }
 
     MPMCQueueResult getReadyTask(RNReadSegmentTaskPtr & task)
@@ -74,6 +72,11 @@ public:
         return context.getSettingsRef().dt_use_shared_rn_workers ? std::make_shared<RNWorkers>(context, read_task) : std::make_shared<RNWorkers>(context, read_task, num_streams);
     }
 
+    static void stopSharedWorkers()
+    {
+        stopWorkers(shared_worker_fetch_pages);
+    }
+
 private:
     static void addTasks(const RNReadTaskPtr & read_task, const ChannelPtr & q)
     {
@@ -85,6 +88,15 @@ private:
     }
 
     static void initSharedWorkers(const Context & context);
+
+    static void stopWorkers(RNWorkerFetchPagesPtr & fetch_pages)
+    {
+        if (fetch_pages != nullptr)
+        {
+            fetch_pages->source_queue->finish();
+            fetch_pages.reset();
+        }
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

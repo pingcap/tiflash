@@ -84,7 +84,9 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
     auto context = DMTestEnv::getContext();
     context->getSettingsRef().set("dt_use_shared_rn_workers", use_shared_rn_workers ? "true" : "false");
     auto [read_task, task_addrs] = mockRNReadTask(task_count);
+    std::cout << __LINE__ << std::endl;
     auto rn_workers = RNWorkers::create(*context, read_task, 8);
+    std::cout << __LINE__ << std::endl;
     RUNTIME_CHECK(rn_workers->prepared_tasks != nullptr);
     RUNTIME_CHECK(read_task->segment_read_tasks.front()->param->prepared_tasks != nullptr);
     RUNTIME_CHECK(read_task->segment_read_tasks.front()->param->prepared_tasks.get() == rn_workers->prepared_tasks.get());
@@ -93,7 +95,7 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
     {
         static std::once_flag mock_flag;
         std::call_once(mock_flag, []() {
-            RNWorkers::shared_worker_fetch_pages->source_queue->cancel(); // Stop all worker in the same pipeline.
+            RNWorkers::stopSharedWorkers();
 
             const Int64 max_queue_size = 16384;
 
@@ -106,14 +108,25 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
                 RNWorkers::shared_worker_fetch_pages->result_queue,
                 std::thread::hardware_concurrency());
 
-            RNWorkers::shared_worker_fetch_pages->startInBackground();
+            RNWorkers::shared_worker_fetch_pages->start();
             RNWorkers::shared_worker_prepare_streams->start();
         });
     }
     else
     {
-        rn_workers->worker_fetch_pages = std::make_shared<MockRNWorkerFetchPages>(rn_workers->worker_fetch_pages);
-        rn_workers->worker_prepare_streams = std::make_shared<MockRNWorkerPrepareStreams>(rn_workers->worker_prepare_streams);
+        RNWorkers::ChannelPtr source_queue;
+        rn_workers->worker_fetch_pages->source_queue.swap(source_queue);
+        RNWorkers::ChannelPtr result_queue;
+        rn_workers->worker_fetch_pages->result_queue.swap(result_queue);
+
+        rn_workers->worker_fetch_pages = std::make_shared<MockRNWorkerFetchPages>(
+            source_queue,
+            result_queue,
+            rn_workers->worker_fetch_pages->concurrency);
+
+        rn_workers->worker_prepare_streams = std::make_shared<MockRNWorkerPrepareStreams>(
+            result_queue,
+            rn_workers->worker_prepare_streams->concurrency);
     }
     return {rn_workers, task_addrs};
 }
@@ -188,6 +201,7 @@ TEST(RNWorkersTest, NotSharedRNWorkers)
 try
 {
     concurrentPipelineTest(false, 10, test_max_task_count);
+    // pipelineTest(1, false, 10);
 }
 CATCH
 

@@ -91,7 +91,7 @@ disaggregated::FetchDisaggPagesRequest buildFetchPagesRequest(
     return req;
 }
 
-RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task)
+RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg_task) noexcept
 {
     try
     {

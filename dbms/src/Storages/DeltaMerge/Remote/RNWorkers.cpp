@@ -48,7 +48,7 @@ void RNWorkers::initSharedWorkers(const Context & context)
         prepare_streams_concurrency);
 
 
-    shared_worker_fetch_pages->startInBackground();
+    shared_worker_fetch_pages->start();
     shared_worker_prepare_streams->start();
     LOG_INFO(DB::Logger::get(), "initSharedWorkers cost {}ms", sw.elapsedMilliseconds());
 }
@@ -98,7 +98,7 @@ void RNWorkers::startInBackground()
     if (worker_fetch_pages != nullptr && worker_prepare_streams != nullptr)
     {
         RUNTIME_CHECK(pending_read_task == nullptr);
-        worker_fetch_pages->startInBackground();
+        worker_fetch_pages->start();
         worker_prepare_streams->start();
     }
     else
@@ -106,15 +106,6 @@ void RNWorkers::startInBackground()
         RUNTIME_CHECK(pending_read_task != nullptr);
         addTasks(pending_read_task, shared_worker_fetch_pages->source_queue);
         pending_read_task.reset();
-    }
-}
-
-void RNWorkers::wait()
-{
-    if (worker_fetch_pages != nullptr && worker_prepare_streams != nullptr)
-    {
-        worker_fetch_pages->wait();
-        //worker_prepare_streams->wait();
     }
 }
 

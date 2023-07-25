@@ -48,7 +48,13 @@ public:
     {
         try
         {
+            if (result_queue != nullptr)
+            {
+                result_queue->finish(); // TODO: cancel?
+            }
+            std::cout << fmt::format("{} wait\n", getName());
             thread_manager->wait();
+            std::cout << fmt::format("{} finish\n", getName());
         }
         catch (...)
         {
@@ -71,8 +77,8 @@ public:
         });
     }
 
-    const std::shared_ptr<MPMCQueue<Source>> source_queue;
-    const std::shared_ptr<MPMCQueue<Result>> result_queue;
+    std::shared_ptr<MPMCQueue<Source>> source_queue;
+    std::shared_ptr<MPMCQueue<Result>> result_queue;
     const size_t concurrency;
 
 protected:

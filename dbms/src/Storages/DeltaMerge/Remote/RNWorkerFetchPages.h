@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Common/ThreadedWorker.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
-#include <pingcap/kv/Cluster.h>
+#include <Storages/DeltaMerge/Remote/StorageThreadWorker.h>
+#include <kvproto/disaggregated.pb.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -28,33 +28,10 @@ using RNWorkerFetchPagesPtr = std::shared_ptr<RNWorkerFetchPages>;
 
 /// This worker fetch page data from Write Node, and then write page data into the local cache.
 class RNWorkerFetchPages
-    : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    : public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , private boost::noncopyable
 {
-protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
-
-    String getName() const noexcept override { return "FetchPages"; }
-
-private:
-    static void doFetchPages(
-        const RNReadSegmentTaskPtr & seg_task,
-        const disaggregated::FetchDisaggPagesRequest & request);
-
-    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
-
 public:
-    RNWorkerFetchPages(
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
-        const size_t concurrency)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            source_queue,
-            result_queue,
-            DB::Logger::get(getName()),
-            concurrency)
-    {}
-
     static RNWorkerFetchPagesPtr create(
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
@@ -63,7 +40,30 @@ public:
         return std::make_shared<RNWorkerFetchPages>(source_queue, result_queue, concurrency);
     }
 
-    ~RNWorkerFetchPages() override { wait(); }
+    RNWorkerFetchPages(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
+        const size_t concurrency)
+        : StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
+            "FetchPages",
+            source_queue,
+            result_queue,
+            concurrency)
+        , log(DB::Logger::get(getName()))
+    {}
+
+protected:
+    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
+
+private:
+    static void doFetchPages(
+        const RNReadSegmentTaskPtr & seg_task,
+        const disaggregated::FetchDisaggPagesRequest & request);
+
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
+
+private:
+    DB::LoggerPtr log;
 };
 
 } // namespace DB::DM::Remote
