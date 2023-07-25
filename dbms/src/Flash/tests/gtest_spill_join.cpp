@@ -14,6 +14,8 @@
 
 #include <Flash/tests/gtest_join.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace tests
@@ -96,8 +98,9 @@ try
         for (size_t j = 0; j < simple_test_num; ++j)
         {
             const auto & [l, r, k] = join_cases[j];
+            auto join_type = join_types[i];
             auto request = context.scan("simple_test", l)
-                               .join(context.scan("simple_test", r), join_types[i], {col(k)})
+                               .join(context.scan("simple_test", r), join_type, {col(k)})
                                .build(context);
 
             {
@@ -106,7 +109,8 @@ try
                 auto concurrences = {2, 5, 10};
                 for (auto concurrency : concurrences)
                 {
-                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
+                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency))
+                        << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j;
                 }
             }
         }
