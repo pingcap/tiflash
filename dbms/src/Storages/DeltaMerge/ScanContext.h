@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fmt/format.h>
 #include <sys/types.h>
@@ -22,7 +21,6 @@
 
 #include <atomic>
 
-#include "Common/Logger.h"
 
 namespace DB::DM
 {
