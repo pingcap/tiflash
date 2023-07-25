@@ -501,11 +501,12 @@ DM::Remote::RNWorkersPtr StorageDisaggregated::buildRNWorkers(const DM::Remote::
 {
     LOG_DEBUG(
         log,
-        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={}",
+        "Building segment input streams, read_mode={} is_fast_scan={} keep_order={} segments={} num_streams={}",
         magic_enum::enum_name(param->read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
-        read_task->segment_read_tasks.size());
+        read_task->segment_read_tasks.size(),
+        num_streams);
     return DM::Remote::RNWorkers::create(context, read_task, num_streams);
 }
 

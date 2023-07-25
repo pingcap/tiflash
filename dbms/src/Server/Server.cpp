@@ -77,6 +77,7 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -116,8 +117,6 @@
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
 #endif
-
-#include <Storages/DeltaMerge/Remote/RNWorkers.h>
 
 #if USE_MIMALLOC
 #include <Poco/JSON/Parser.h>
