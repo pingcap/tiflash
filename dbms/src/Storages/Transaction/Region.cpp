@@ -680,6 +680,8 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
+    auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
+
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -691,7 +693,15 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             auto tikv_value = TiKVValue(cmds.vals[i].data, cmds.vals[i].len);
             try
             {
-                doInsert(cf, std::move(tikv_key), std::move(tikv_value));
+                if (is_v2)
+                {
+                    // There may be orphan default key in a snapshot.
+                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
+                }
+                else
+                {
+                    doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
+                }
             }
             catch (Exception & e)
             {
