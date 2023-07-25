@@ -16,7 +16,6 @@
 
 #include <Common/MPMCQueue.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/Remote/RNWorkerDispatchSegmentReadTasks.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerFetchPages.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
@@ -102,7 +101,6 @@ public:
     inline static std::once_flag init_flag;
     inline static RNWorkerFetchPagesPtr shared_worker_fetch_pages;
     inline static RNWorkerPrepareStreamsPtr shared_worker_prepare_streams;
-    inline static RNWorkerDispatchSegmentReadTasksPtr shared_worker_dispatch_tasks;
 };
 
 } // namespace DB::DM::Remote

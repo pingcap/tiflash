@@ -40,6 +40,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
+        std::cout << fmt::format("{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -47,10 +48,10 @@ class MockRNWorkerPrepareStreams : public RNWorkerPrepareStreams
 {
 public:
     explicit MockRNWorkerPrepareStreams(const RNWorkerPrepareStreamsPtr & w)
-        : RNWorkerPrepareStreams(w->source_queue, w->result_queue, w->concurrency)
+        : RNWorkerPrepareStreams(w->source_queue, w->concurrency)
     {}
-    MockRNWorkerPrepareStreams(const RNWorkers::ChannelPtr & source_queue, const RNWorkers::ChannelPtr & result_queue, size_t concurrency)
-        : RNWorkerPrepareStreams(source_queue, result_queue, concurrency)
+    MockRNWorkerPrepareStreams(const RNWorkers::ChannelPtr & source_queue, size_t concurrency)
+        : RNWorkerPrepareStreams(source_queue, concurrency)
     {}
 
     inline static std::atomic<bool> always_throw_exception{false};
@@ -59,6 +60,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
+        std::cout << fmt::format("{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -102,16 +104,10 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
 
             RNWorkers::shared_worker_prepare_streams = std::make_shared<MockRNWorkerPrepareStreams>(
                 RNWorkers::shared_worker_fetch_pages->result_queue,
-                std::make_shared<RNWorkers::Channel>(max_queue_size),
                 std::thread::hardware_concurrency());
 
-            RNWorkers::shared_worker_dispatch_tasks = RNWorkerDispatchSegmentReadTasks::create(
-                RNWorkers::shared_worker_prepare_streams->result_queue,
-                1);
-
             RNWorkers::shared_worker_fetch_pages->startInBackground();
-            RNWorkers::shared_worker_prepare_streams->startInBackground();
-            RNWorkers::shared_worker_dispatch_tasks->start();
+            RNWorkers::shared_worker_prepare_streams->start();
         });
     }
     else
@@ -184,6 +180,7 @@ TEST(RNWorkersTest, SharedRNWorkers)
 try
 {
     concurrentPipelineTest(true, 10, test_max_task_count);
+    // pipelineTest(1, true, 10);
 }
 CATCH
 

@@ -19,13 +19,14 @@
 namespace DB::DM::Remote
 {
 
-RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & seg_task)
+RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr & seg_task) noexcept
 {
     try
     {
         if (seg_task->param->prepared_tasks->getStatus() == MPMCQueueStatus::NORMAL)
         {
             doWorkImpl(seg_task);
+            seg_task->param->prepared_tasks->push(seg_task);
         }
     }
     catch (...)
@@ -34,7 +35,6 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
         seg_task->param->prepared_tasks->cancelWith(error);
     }
     return seg_task;
-    ;
 }
 
 void RNWorkerPrepareStreams::doWorkImpl(const RNReadSegmentTaskPtr & task)

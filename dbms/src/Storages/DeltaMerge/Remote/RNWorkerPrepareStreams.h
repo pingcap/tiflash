@@ -16,7 +16,9 @@
 
 #include <Common/ThreadedWorker.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
+#include <Storages/DeltaMerge/Remote/StorageThreadWorker.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <pingcap/kv/Cluster.h>
 
@@ -28,42 +30,32 @@ namespace DB::DM::Remote
 class RNWorkerPrepareStreams;
 using RNWorkerPrepareStreamsPtr = std::shared_ptr<RNWorkerPrepareStreams>;
 
-/// This worker prepare data streams for reading.
-/// For example, when S3 files of the stable layer does not exist locally,
-/// they will be downloaded.
-class RNWorkerPrepareStreams
-    : private boost::noncopyable
-    , public ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+class RNWorkerPrepareStreams : public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
+    , private boost::noncopyable
 {
-protected:
-    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) override;
-
-    String getName() const noexcept override { return "PrepareStreams"; }
-
-private:
-    virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
-
 public:
     static RNWorkerPrepareStreamsPtr create(
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
-        const size_t concurrency)
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue_,
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & /*result_queue_*/,
+        const size_t concurrency_)
     {
-        return std::make_shared<RNWorkerPrepareStreams>(source_queue, result_queue, concurrency);
+        return std::make_shared<RNWorkerPrepareStreams>(source_queue_, concurrency_);
     }
 
-    explicit RNWorkerPrepareStreams(
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue,
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & result_queue,
-        const size_t concurrency)
-        : ThreadedWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>(
-            source_queue,
-            result_queue,
-            DB::Logger::get(getName()),
-            concurrency)
+    RNWorkerPrepareStreams(
+        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue_,
+        const size_t concurrency_)
+        : StorageThreadWorker("PrepareStreams", source_queue_, nullptr, concurrency_)
+        , log(DB::Logger::get(getName()))
     {}
 
-    ~RNWorkerPrepareStreams() override { wait(); }
+protected:
+    RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
+
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
+
+private:
+    DB::LoggerPtr log;
 };
 
 } // namespace DB::DM::Remote

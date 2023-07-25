@@ -44,16 +44,12 @@ void RNWorkers::initSharedWorkers(const Context & context)
 
     shared_worker_prepare_streams = RNWorkerPrepareStreams::create(
         shared_worker_fetch_pages->result_queue,
-        std::make_shared<Channel>(max_queue_size),
+        nullptr,
         prepare_streams_concurrency);
 
-    shared_worker_dispatch_tasks = RNWorkerDispatchSegmentReadTasks::create(
-        shared_worker_prepare_streams->result_queue,
-        dispatch_tasks_concurrency);
 
     shared_worker_fetch_pages->startInBackground();
-    shared_worker_prepare_streams->startInBackground();
-    shared_worker_dispatch_tasks->start();
+    shared_worker_prepare_streams->start();
     LOG_INFO(DB::Logger::get(), "initSharedWorkers cost {}ms", sw.elapsedMilliseconds());
 }
 
@@ -103,7 +99,7 @@ void RNWorkers::startInBackground()
     {
         RUNTIME_CHECK(pending_read_task == nullptr);
         worker_fetch_pages->startInBackground();
-        worker_prepare_streams->startInBackground();
+        worker_prepare_streams->start();
     }
     else
     {
@@ -118,7 +114,7 @@ void RNWorkers::wait()
     if (worker_fetch_pages != nullptr && worker_prepare_streams != nullptr)
     {
         worker_fetch_pages->wait();
-        worker_prepare_streams->wait();
+        //worker_prepare_streams->wait();
     }
 }
 

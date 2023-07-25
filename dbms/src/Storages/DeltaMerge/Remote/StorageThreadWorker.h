@@ -1,0 +1,113 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
+#include <Common/ThreadManager.h>
+#include <common/logger_useful.h>
+
+#include <ext/scope_guard.h>
+#include <magic_enum.hpp>
+#include <mutex>
+
+namespace DB::DM::Remote
+{
+
+template <typename Source, typename Result>
+class StorageThreadWorker
+{
+public:
+    StorageThreadWorker(
+        const String & name_,
+        const std::shared_ptr<MPMCQueue<Source>> & source_queue_,
+        const std::shared_ptr<MPMCQueue<Result>> & result_queue_,
+        const size_t concurrency_)
+        : source_queue(source_queue_)
+        , result_queue(result_queue_)
+        , concurrency(concurrency_)
+        , name(name_)
+        , thread_manager(newThreadManager())
+        , log(DB::Logger::get(name))
+    {}
+
+    virtual ~StorageThreadWorker()
+    {
+        try
+        {
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            // This should not occur, as we should have caught all exceptions in workerLoop.
+            auto error = getCurrentExceptionMessage(false);
+            LOG_WARNING(log, "{} meet unexepcted error: {}", getName(), error);
+        }
+    }
+
+    String getName() const noexcept { return name; }
+
+    void start() noexcept
+    {
+        std::call_once(start_flag, [this] {
+            LOG_DEBUG(log, "Starting {} workers, concurrency={}", getName(), concurrency);
+            for (size_t index = 0; index < concurrency; ++index)
+            {
+                thread_manager->schedule(true, getName(), [this, index] { workerLoop(index); });
+            }
+        });
+    }
+
+    const std::shared_ptr<MPMCQueue<Source>> source_queue;
+    const std::shared_ptr<MPMCQueue<Result>> result_queue;
+    const size_t concurrency;
+
+protected:
+    virtual Result doWork(const Source & task) noexcept = 0;
+
+private:
+    void workerLoop(size_t thread_idx) noexcept
+    {
+        while (true)
+        {
+            Source task;
+            auto pop_result = source_queue->pop(task);
+            if (pop_result != MPMCQueueResult::OK)
+            {
+                LOG_INFO(log, "{}#{} pop MPMCQueueResult: {}", getName(), thread_idx, magic_enum::enum_name(pop_result));
+                break;
+            }
+            auto task_result = doWork(task);
+            if (result_queue != nullptr)
+            {
+                auto res = result_queue->push(task_result);
+                if (res != MPMCQueueResult::OK)
+                {
+                    LOG_INFO(log, "{}#{} push MPMCQueueResult: {}", getName(), thread_idx, magic_enum::enum_name(res));
+                    break;
+                }
+            }
+        }
+    }
+
+private:
+    String name;
+    std::once_flag start_flag;
+    std::shared_ptr<ThreadManager> thread_manager;
+    DB::LoggerPtr log;
+};
+
+} // namespace DB::DM::Remote
