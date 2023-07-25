@@ -18,6 +18,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
@@ -179,7 +180,7 @@ public:
      *
      * This function also returns pages not in the cache.
      */
-    OccupySpaceResult occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes);
+    OccupySpaceResult occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes, ScanContextPtr scan_context = nullptr);
 
     /**
      * Put a page into the cache.

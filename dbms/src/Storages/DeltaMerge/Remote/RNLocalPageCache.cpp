@@ -274,7 +274,7 @@ void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64
     cv.notify_all();
 }
 
-RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
+RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes, ScanContextPtr scan_context)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -376,8 +376,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vec
         // Pages may be occupied but not written yet, so we always return missing pages according
         // to the storage.
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
+        {
+            scan_context->total_disagg_read_cache_hit_size += page_sizes[i];
             continue;
+        }
         missing_ids.push_back(pages[i]);
+        scan_context->total_disagg_read_cache_miss_size += page_sizes[i];
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());

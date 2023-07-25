@@ -50,9 +50,9 @@ public:
     std::atomic<uint64_t> total_local_region_num{0};
 
     std::atomic<uint64_t> total_user_read_bytes{0};
-    std::atomic<uint64_t> total_wait_index_ns{0};
-    std::atomic<uint64_t> total_cache_read_dmfile_size{0};
-    std::atomic<uint64_t> total_s3_read_dmfile_size{0};
+    std::atomic<uint64_t> total_learner_read_ns{0};
+    std::atomic<uint64_t> total_disagg_read_cache_hit_size{0};
+    std::atomic<uint64_t> total_disagg_read_cache_miss_size{0};
 
 
     ScanContext() = default;
@@ -69,9 +69,9 @@ public:
         total_remote_region_num = tiflash_scan_context_pb.total_remote_region_num();
         total_local_region_num = tiflash_scan_context_pb.total_local_region_num();
         total_user_read_bytes = tiflash_scan_context_pb.total_user_read_bytes();
-        total_wait_index_ns = tiflash_scan_context_pb.total_wait_index_ms() * 1000000;
-        total_cache_read_dmfile_size = tiflash_scan_context_pb.total_cache_read_dmfile_size();
-        total_s3_read_dmfile_size = tiflash_scan_context_pb.total_s3_read_dmfile_size();
+        total_learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
+        total_disagg_read_cache_hit_size = tiflash_scan_context_pb.total_disagg_read_cache_hit_size();
+        total_disagg_read_cache_miss_size = tiflash_scan_context_pb.total_disagg_read_cache_miss_size();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -87,9 +87,9 @@ public:
         tiflash_scan_context_pb.set_total_remote_region_num(total_remote_region_num);
         tiflash_scan_context_pb.set_total_local_region_num(total_local_region_num);
         tiflash_scan_context_pb.set_total_user_read_bytes(total_user_read_bytes);
-        tiflash_scan_context_pb.set_total_wait_index_ms(total_wait_index_ns / 1000000);
-        tiflash_scan_context_pb.set_total_cache_read_dmfile_size(total_cache_read_dmfile_size);
-        tiflash_scan_context_pb.set_total_s3_read_dmfile_size(total_s3_read_dmfile_size);
+        tiflash_scan_context_pb.set_total_learner_read_ms(total_learner_read_ns / 1000000);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_hit_size(total_disagg_read_cache_hit_size);
+        tiflash_scan_context_pb.set_total_disagg_read_cache_miss_size(total_disagg_read_cache_miss_size);
 
         return tiflash_scan_context_pb;
     }
@@ -106,9 +106,9 @@ public:
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
         total_user_read_bytes += other.total_user_read_bytes;
-        total_wait_index_ns += other.total_wait_index_ns;
-        total_cache_read_dmfile_size += other.total_cache_read_dmfile_size;
-        total_s3_read_dmfile_size += other.total_s3_read_dmfile_size;
+        total_learner_read_ns += other.total_learner_read_ns;
+        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size;
+        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -123,9 +123,9 @@ public:
         total_local_region_num += other.total_local_region_num();
         total_remote_region_num += other.total_remote_region_num();
         total_user_read_bytes += other.total_user_read_bytes();
-        total_wait_index_ns += other.total_wait_index_ms() * 1000000;
-        total_cache_read_dmfile_size += other.total_cache_read_dmfile_size();
-        total_s3_read_dmfile_size += other.total_s3_read_dmfile_size();
+        total_learner_read_ns += other.total_learner_read_ms() * 1000000;
+        total_disagg_read_cache_hit_size += other.total_disagg_read_cache_hit_size();
+        total_disagg_read_cache_miss_size += other.total_disagg_read_cache_miss_size();
     }
 
     // Reference: https://docs.pingcap.com/tidb/dev/tidb-resource-control

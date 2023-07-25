@@ -551,7 +551,7 @@ void DAGStorageInterpreter::prepare()
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
-    scan_context->total_wait_index_ns += watch.elapsed();
+    scan_context->total_learner_read_ns += watch.elapsed();
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
     storages_with_structure_lock = getAndLockStorages(context.getSettingsRef().schema_version);
