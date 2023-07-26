@@ -158,7 +158,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
         return false;
     }
 
-    auto dt_file = DMFile::create(file_id, parent_path, storage->createChecksumConfig());
+    auto dt_file = DMFile::create(file_id, parent_path, storage->createChecksumConfig(), context.getGlobalContext().getSettingsRef().dt_small_file_size_threshold, context.getGlobalContext().getSettingsRef().dt_merged_file_max_size);
     dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines));
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);

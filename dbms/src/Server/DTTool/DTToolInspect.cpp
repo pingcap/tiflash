@@ -86,7 +86,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         file.list(sub);
         for (auto & i : sub)
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || endsWith(i, ".merged") || i == "pack" || i == "meta")
             {
                 auto full_path = fmt::format("{}/{}", prefix, i);
                 LOG_INFO(logger, "checking full_path is {}: ", full_path);

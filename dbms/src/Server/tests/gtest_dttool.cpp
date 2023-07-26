@@ -46,6 +46,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args);
 struct DTToolTest : public DB::base::TiFlashStorageTestBasic
 {
     DB::DM::DMFilePtr dmfile = nullptr;
+    DB::DM::DMFilePtr dmfileV3 = nullptr;
     static constexpr size_t column = 64;
     static constexpr size_t size = 128;
     static constexpr size_t field = 512;
@@ -87,9 +88,23 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             db_context->getSettingsRef());
         // Write
         {
-            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), std::nullopt);
+            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), std::nullopt, 0, 0, DMFileFormat::V0);
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
+                stream.writePrefix();
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    stream.write(blocks[j], properties[j]);
+                }
+                stream.writeSuffix();
+            }
+        }
+
+        // Write DMFile::V3
+        {
+            dmfileV3 = DB::DM::DMFile::create(2, getTemporaryPath(), std::make_optional<DMChecksumConfig>(), 128 * 1024, 16 * 1024 * 1024, DMFileFormat::V3);
+            {
+                auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfileV3, *defines);
                 stream.writePrefix();
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
@@ -109,6 +124,12 @@ TEST_F(DTToolTest, MigrationAllFileRecognizableOnDefault)
     for (auto & i : sub_files)
     {
         EXPECT_TRUE(DTTool::Migrate::isRecognizable(*dmfile, i)) << " file: " << i;
+    }
+
+    Poco::File(dmfileV3->path()).list(sub_files);
+    for (auto & i : sub_files)
+    {
+        EXPECT_TRUE(DTTool::Migrate::isRecognizable(*dmfileV3, i)) << " file: " << i;
     }
 }
 
@@ -138,6 +159,32 @@ TEST_F(DTToolTest, MigrationSuccess)
     }
 }
 
+
+TEST_F(DTToolTest, MigrationV3toV2Success)
+{
+    {
+        auto args = DTTool::Migrate::MigrateArgs{
+            .no_keep = false,
+            .dry_mode = false,
+            .file_id = 2,
+            .version = 2,
+            .frame = DBMS_DEFAULT_BUFFER_SIZE,
+            .algorithm = DB::ChecksumAlgo::XXH3,
+            .workdir = getTemporaryPath(),
+            .compression_method = DB::CompressionMethod::LZ4,
+            .compression_level = DB::CompressionSettings::getDefaultLevel(DB::CompressionMethod::LZ4),
+        };
+
+        EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
+    }
+    {
+        auto args = DTTool::Inspect::InspectArgs{
+            .check = true,
+            .file_id = 2,
+            .workdir = getTemporaryPath()};
+        EXPECT_EQ(DTTool::Inspect::inspectServiceMain(*db_context, args), 0);
+    }
+}
 
 void getHash(std::unordered_map<std::string, std::string> & records, const std::string & path)
 {

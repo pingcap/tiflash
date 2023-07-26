@@ -232,29 +232,33 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     auto req = buildEstablishDisaggTaskReq(db_context, batch_cop_task);
 
     auto * cluster = context.getTMTContext().getKVCluster();
-    auto call = pingcap::kv::RpcCall<disaggregated::EstablishDisaggTaskRequest>(req);
-    cluster->rpc_client->sendRequest(req->address(), call, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
-    const auto resp = call.getResp();
+    pingcap::kv::RpcCall<pingcap::kv::RPC_NAME(EstablishDisaggTask)> rpc(cluster->rpc_client, req->address());
+    disaggregated::EstablishDisaggTaskResponse resp;
+    grpc::ClientContext client_context;
+    rpc.setClientContext(client_context, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
+    auto status = rpc.call(&client_context, *req, &resp);
+    if (!status.ok())
+        throw Exception(rpc.errMsg(status));
 
-    const DM::DisaggTaskId snapshot_id(resp->snapshot_id());
+    const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
         log,
         "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
-        resp->has_error(),
-        resp->store_id(),
+        resp.has_error(),
+        resp.store_id(),
         snapshot_id,
         batch_cop_task.store_addr,
-        resp->tables_size());
+        resp.tables_size());
 
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
     watch.restart();
 
-    if (resp->has_error())
+    if (resp.has_error())
     {
         // We meet error in the EstablishDisaggTask response.
-        if (resp->error().has_error_region())
+        if (resp.error().has_error_region())
         {
-            const auto & error = resp->error().error_region();
+            const auto & error = resp.error().error_region();
             // Refresh region cache and throw an exception for retrying.
             // Note: retry_region's region epoch is not set. We need to recover from the request.
 
@@ -275,11 +279,11 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 error.msg(),
                 ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
-        else if (resp->error().has_error_locked())
+        else if (resp.error().has_error_locked())
         {
             using namespace pingcap;
 
-            const auto & error = resp->error().error_locked();
+            const auto & error = resp.error().error_locked();
 
             LOG_INFO(
                 log,
@@ -308,7 +312,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         }
         else
         {
-            const auto & error = resp->error().error_other();
+            const auto & error = resp.error().error_other();
 
             LOG_WARNING(
                 log,
@@ -329,7 +333,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
     auto thread_manager = newThreadManager();
-    for (const auto & serialized_physical_table : resp->tables())
+    for (const auto & serialized_physical_table : resp.tables())
     {
         thread_manager->schedule(
             true,
@@ -339,7 +343,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                     db_context,
                     scan_context,
                     snapshot_id,
-                    resp->store_id(),
+                    resp.store_id(),
                     req->address(),
                     serialized_physical_table,
                     output_lock,
