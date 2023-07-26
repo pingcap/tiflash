@@ -15,11 +15,13 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -30,6 +32,8 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
+#include "Flash/Coprocessor/DAGCodec.h"
 
 namespace DB::DM::tests
 {
@@ -1560,6 +1564,69 @@ try
         auto filter = createNotIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))});
         ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::All);
     }
+}
+CATCH
+
+TEST_F(DMMinMaxIndexTest, TestParseIn)
+try
+{
+    // a in (1, 2)
+    tipb::Expr expr;
+    expr.set_sig(tipb::ScalarFuncSig::InInt);
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    {
+        tipb::Expr * col = expr.add_children();
+        col->set_tp(tipb::ExprType::ColumnRef);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(1, ss);
+            col->set_val(ss.releaseStr());
+        }
+        auto * field_type = col->mutable_field_type();
+        field_type->set_tp(tipb::ExprType::Int64);
+        field_type->set_flag(0);
+    }
+    {
+        tipb::Expr * lit = expr.add_children();
+        lit->set_tp(tipb::ExprType::Int64);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(1, ss);
+            lit->set_val(ss.releaseStr());
+        }
+    }
+    {
+        tipb::Expr * lit = expr.add_children();
+        lit->set_tp(tipb::ExprType::Int64);
+        {
+            WriteBufferFromOwnString ss;
+            encodeDAGInt64(2, ss);
+            lit->set_val(ss.releaseStr());
+        }
+    }
+
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    filters.Add()->CopyFrom(expr);
+    const ColumnDefines columns_to_read = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()}, ColumnDefine{2, "b", std::make_shared<DataTypeInt64>()}};
+    auto dag_query = std::make_unique<DAGQueryInfo>(
+        filters,
+        pushed_down_filters, // Not care now
+        std::vector<TiDB::ColumnInfo>{}, // Not care now
+        std::vector<int>{},
+        0,
+        context->getTimezoneInfo());
+    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> Attr {
+        auto iter = std::find_if(
+            columns_to_read.begin(),
+            columns_to_read.end(),
+            [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+        if (iter != columns_to_read.end())
+            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+    const auto op = DB::DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, create_attr_by_column_id, Logger::get());
+    ASSERT_EQ(op->toDebugString(), "{\"op\":\"in\",\"col\":\"b\",\"value\":\"[\"1\",\"2\"]}");
 }
 CATCH
 
