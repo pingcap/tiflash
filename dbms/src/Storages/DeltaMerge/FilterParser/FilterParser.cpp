@@ -119,13 +119,13 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const TimezoneInfo & timezone_info,
     const LoggerPtr & /*log*/)
 {
-    if (unlikely(expr.children_size() != 2))
+    if (unlikely(expr.children_size() != 2 && filter_type != FilterParser::RSFilterType::In && filter_type != FilterParser::RSFilterType::NotIn))
         return createUnsupported(expr.ShortDebugString(),
                                  tipb::ScalarFuncSig_Name(expr.sig()) + " with " + DB::toString(expr.children_size())
                                      + " children is not supported",
                                  false);
 
-    /// Only support `column` `op` `literal` now.
+    /// Only support `column` `op` `literal`, and `column` in (literal1, literal2, ...) now.
 
     Attr attr;
     std::vector<Field> values;

@@ -194,10 +194,7 @@ private:
             }
 
             const auto check_results = filter->roughCheck(0, pack_count, param);
-            for (size_t i = 0; i < pack_count; ++i)
-            {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (check_results[i] != None);
-            }
+            std::transform(use_packs.begin(), use_packs.end(), check_results.begin(), use_packs.begin(), [](UInt8 a, RSResult b) { return (static_cast<bool>(a)) && (b != None); });
         }
 
         for (auto u : use_packs)
