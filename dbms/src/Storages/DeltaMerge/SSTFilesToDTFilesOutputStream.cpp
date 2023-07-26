@@ -26,6 +26,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -168,8 +169,8 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
 
     LOG_DEBUG(
         log,
-        "Create new DTFile for snapshot data, region={} file_idx={} file={}",
-        child->getRegion()->toString(true),
+        "Create new DTFile for snapshot data, region_id={} file_idx={} file={}",
+        child->getRegion()->id(),
         ingest_files.size() - 1,
         dt_file->path());
 
