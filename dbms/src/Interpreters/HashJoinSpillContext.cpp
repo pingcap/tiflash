@@ -57,13 +57,14 @@ void HashJoinSpillContext::markPartitionSpill(size_t partition_index)
     (*partition_spill_status)[partition_index] = SpillStatus::SPILL;
 }
 
-bool HashJoinSpillContext::updatePartitionRevocableMemory(bool force_spill, size_t partition_id, Int64 new_value)
+bool HashJoinSpillContext::updatePartitionRevocableMemory(size_t partition_id, Int64 new_value)
 {
     (*partition_revocable_memories)[partition_id] = new_value;
     /// this function only trigger spill if current partition is already chosen to spill
     /// the new partition to spill is chosen in getPartitionsToSpill
     if ((*partition_spill_status)[partition_id] == SpillStatus::NOT_SPILL)
         return false;
+    auto force_spill = operator_spill_threshold > 0 && getTotalRevocableMemoryImpl() > static_cast<Int64>(operator_spill_threshold);
     if (force_spill || (max_cached_bytes > 0 && (*partition_revocable_memories)[partition_id] > max_cached_bytes))
     {
         (*partition_revocable_memories)[partition_id] = 0;

@@ -40,7 +40,7 @@ public:
     SpillerPtr & getProbeSpiller() { return probe_spiller; }
     bool isPartitionSpilled(size_t partition_index) const { return (*partition_spill_status)[partition_index] != SpillStatus::NOT_SPILL; }
     void markPartitionSpill(size_t partition_index);
-    bool updatePartitionRevocableMemory(bool force_spill, size_t partition_id, Int64 new_value);
+    bool updatePartitionRevocableMemory(size_t partition_id, Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override;
     SpillConfig createBuildSpillConfig(const String & spill_id) const;
     SpillConfig createProbeSpillConfig(const String & spill_id) const;
