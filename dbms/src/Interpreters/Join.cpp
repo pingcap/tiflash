@@ -465,12 +465,13 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     else
     {
         Blocks dispatch_blocks;
-        size_t dispatched_block_size = build_concurrency;
+        size_t block_size_to_be_inserted = build_concurrency;
         if (enable_fine_grained_shuffle)
         {
+            /// fine grain shuffle does not need dispatch
             dispatch_blocks.resize(build_concurrency, {});
             dispatch_blocks[stream_index] = block;
-            dispatched_block_size = 1;
+            block_size_to_be_inserted = 1;
         }
         else
         {
@@ -479,7 +480,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         assert(dispatch_blocks.size() == build_concurrency);
 
         /// first insert block to join partition
-        for (size_t j = stream_index; j < dispatched_block_size + stream_index; ++j)
+        for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
         {
             size_t i = j % build_concurrency;
             if (!dispatch_blocks[i].rows())
@@ -502,7 +503,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             }
         }
         /// second check spill
-        for (size_t j = stream_index; j < dispatched_block_size + stream_index; ++j)
+        for (size_t j = stream_index; j < block_size_to_be_inserted + stream_index; ++j)
         {
             size_t i = j % build_concurrency;
             Blocks blocks_to_spill;
