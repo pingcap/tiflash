@@ -64,7 +64,8 @@ extern const int DDL_GUARD_IS_ACTIVE;
 namespace FailPoints
 {
 extern const char exception_between_create_database_meta_and_directory[];
-}
+extern const char pause_create_table[];
+} // namespace FailPoints
 
 
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_)
@@ -462,6 +463,7 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
+    LOG_INFO(Logger::get("hyy"), "into createTable");
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();
 
@@ -586,13 +588,13 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                                              create.attach,
                                              false);
 
+        res->startup();
+
         if (create.is_temporary)
             context.getSessionContext().addExternalTable(table_name, res, query_ptr);
         else
             database->createTable(context, table_name, res, query_ptr);
     }
-
-    res->startup();
 
     /// If the query is a CREATE SELECT, insert the data into the table.
     if (create.select && !create.attach && !create.is_view && (!create.is_materialized_view || create.is_populate))
