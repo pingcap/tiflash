@@ -567,8 +567,11 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
     auto header_step = dag_analyzer.initAndGetLastStep(chain);
     assert(!expand2.proj_exprs().empty());
     auto first_proj_level = expand2.proj_exprs().Get(0);
-    for (auto i = 0; i < first_proj_level.exprs().size(); i++)
+    auto horizontal_size = first_proj_level.exprs().size();
+    auto vertical_size = expand2.proj_exprs().size();
+    for (auto i = 0; i < horizontal_size; ++i)
     {
+        // horizontally search nullability change column.
         auto expr = first_proj_level.exprs().Get(i);
         /// record the ref-col nullable attributes for header.
         /// case1: origin col is a normal col, if it's not-null, make it nullable if expr specified.
@@ -577,7 +580,20 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
         if (static_cast<size_t>(i) < input_col_size
             && (expr.has_field_type() && (expr.field_type().flag() & TiDB::ColumnFlagNotNull) == 0)
             && !dag_analyzer.getCurrentInputColumns()[i].type->isNullable())
-            dag_analyzer.addNullableActionForColumnRef(expr, header_step.actions);
+        {
+            // vertically search column-ref rather than literal null.
+            for (auto j = 0; j < vertical_size; ++j)
+            {
+                // relocate expr.
+                expr = expand2.proj_exprs().Get(j).exprs().Get(i);
+                if (isColumnExpr(expr))
+                {
+                    auto col = getColumnNameAndTypeForColumnExpr(expr, dag_analyzer.getCurrentInputColumns());
+                    header_step.actions->add(ExpressionAction::convertToNullable(col.name));
+                    break;
+                }
+            }
+        }
     }
     NamesAndTypes new_source_cols;
     for (const auto & origin_col : header_step.actions->getSampleBlock().getNamesAndTypesList())
