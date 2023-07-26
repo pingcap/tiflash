@@ -85,15 +85,13 @@ std::pair<RNReadTaskPtr, std::set<UInt64>> mockRNReadTask(size_t n)
     return {RNReadTask::create(segment_read_tasks), task_addrs};
 }
 
-//constexpr Int64 test_max_fetch_page_queue_size = 16384;
-//constexpr Int64 test_max_prepare_stream_queue_size = 16384;
 constexpr size_t test_max_task_count = 100;
-constexpr Int64 max_queue_size = 16384;
 
 std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool use_shared_rn_workers)
 {
     auto context = DMTestEnv::getContext();
     context->getSettingsRef().set("dt_use_shared_rn_workers", use_shared_rn_workers ? "true" : "false");
+    Int64 max_queue_size = context->getSettingsRef().dt_shared_max_queue_size;
     auto [read_task, task_addrs] = mockRNReadTask(task_count);
     auto rn_workers = RNWorkers::create(*context, read_task, 8);
     RUNTIME_CHECK(rn_workers->prepared_tasks != nullptr);

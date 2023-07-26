@@ -32,7 +32,6 @@ class RNWorkerPrepareStreams
 public:
     static RNWorkerPrepareStreamsPtr create(
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue_,
-        const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & /*result_queue_*/,
         const size_t concurrency_)
     {
         return std::make_shared<RNWorkerPrepareStreams>(source_queue_, concurrency_);

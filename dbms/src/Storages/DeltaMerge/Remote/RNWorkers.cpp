@@ -16,8 +16,6 @@
 #include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 
-#include "Common/Stopwatch.h"
-#include "common/types.h"
 namespace DB::DM::Remote
 {
 
@@ -28,15 +26,15 @@ void RNWorkers::initSharedWorkers(const Context & context)
     const auto & settings = context.getSettingsRef();
     const size_t fetch_pages_concurrency = std::ceil(settings.dt_fetch_page_concurrency_scale * logical_cores);
     const size_t prepare_streams_concurrency = std::ceil(settings.dt_prepare_stream_concurrency_scale * logical_cores);
-    const size_t dispatch_tasks_concurrency = 1; // TODO: remote dispatch worker and make prepare streams worker dispatching task to different queries.
-    const Int64 max_queue_size = 16384;
+    const Int64 max_queue_size = settings.dt_shared_max_queue_size;
     LOG_INFO(
         DB::Logger::get(),
-        "logical_cores={}, fetch_pages_concurrency={} prepare_streams_concurrency={} dispatch_tasks_concurrency={}",
+        "logical_cores={}, fetch_pages_concurrency={} prepare_streams_concurrency={} max_queue_size={}",
         logical_cores,
         fetch_pages_concurrency,
         prepare_streams_concurrency,
-        dispatch_tasks_concurrency);
+        max_queue_size);
+
     shared_worker_fetch_pages = RNWorkerFetchPages::create(
         std::make_shared<Channel>(max_queue_size),
         std::make_shared<Channel>(max_queue_size),
@@ -44,9 +42,7 @@ void RNWorkers::initSharedWorkers(const Context & context)
 
     shared_worker_prepare_streams = RNWorkerPrepareStreams::create(
         shared_worker_fetch_pages->result_queue,
-        nullptr,
         prepare_streams_concurrency);
-
 
     shared_worker_fetch_pages->start();
     shared_worker_prepare_streams->start();
@@ -85,7 +81,6 @@ RNWorkers::RNWorkers(const Context & context, const RNReadTaskPtr & read_task, s
 
     worker_prepare_streams = RNWorkerPrepareStreams::create(
         worker_fetch_pages->result_queue,
-        prepared_tasks,
         prepare_streams_concurrency);
 
     // TODO: Can we push the task that all delta/stable data hit local cache first?

@@ -82,7 +82,8 @@ private:
     {
         for (auto const & seg_task : read_task->segment_read_tasks)
         {
-            auto push_result = q->push(seg_task);
+            auto push_result = q->tryPush(seg_task);
+            RUNTIME_CHECK_MSG(push_result != MPMCQueueResult::FULL, "Too many task in processing: {}", q->size());
             RUNTIME_CHECK(push_result == MPMCQueueResult::OK, magic_enum::enum_name(push_result));
         }
     }
