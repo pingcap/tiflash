@@ -58,6 +58,7 @@ public:
     void SetUp() override
     {
         tmp_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("FileCacheTest");
+        DB::tests::TiFlashTestEnv::enableS3Config();
         log = Logger::get("FileCacheTest");
         std::filesystem::remove_all(std::filesystem::path(tmp_dir));
         s3_client = ::DB::S3::ClientFactory::instance().sharedTiFlashClient();
@@ -66,6 +67,11 @@ public:
         rng = std::mt19937{dev()};
         next_id = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         capacity_metrics = TiFlashTestEnv::getContext()->getPathCapacity();
+    }
+
+    void TearDown() override
+    {
+        DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
 protected:
