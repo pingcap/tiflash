@@ -28,8 +28,8 @@ using RNWorkerFetchPagesPtr = std::shared_ptr<RNWorkerFetchPages>;
 
 /// This worker fetch page data from Write Node, and then write page data into the local cache.
 class RNWorkerFetchPages
-    : public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
-    , private boost::noncopyable
+    : private boost::noncopyable
+    , public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
 {
 public:
     static RNWorkerFetchPagesPtr create(
@@ -53,13 +53,12 @@ public:
 
 protected:
     RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
+    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
 
 private:
     static void doFetchPages(
         const RNReadSegmentTaskPtr & seg_task,
         const disaggregated::FetchDisaggPagesRequest & request);
-
-    virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
 };
 
 } // namespace DB::DM::Remote

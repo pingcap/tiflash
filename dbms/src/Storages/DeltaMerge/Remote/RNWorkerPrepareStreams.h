@@ -14,12 +14,8 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNReadTask_fwd.h>
 #include <Storages/DeltaMerge/Remote/StorageThreadWorker.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <pingcap/kv/Cluster.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -29,8 +25,9 @@ namespace DB::DM::Remote
 class RNWorkerPrepareStreams;
 using RNWorkerPrepareStreamsPtr = std::shared_ptr<RNWorkerPrepareStreams>;
 
-class RNWorkerPrepareStreams : public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
-    , private boost::noncopyable
+class RNWorkerPrepareStreams
+    : private boost::noncopyable
+    , public StorageThreadWorker<RNReadSegmentTaskPtr, RNReadSegmentTaskPtr>
 {
 public:
     static RNWorkerPrepareStreamsPtr create(
@@ -49,7 +46,6 @@ public:
 
 protected:
     RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
-
     virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
 };
 

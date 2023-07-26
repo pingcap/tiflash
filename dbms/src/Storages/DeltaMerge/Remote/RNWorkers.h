@@ -16,9 +16,9 @@
 
 #include <Common/MPMCQueue.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Remote/RNReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerFetchPages.h>
 #include <Storages/DeltaMerge/Remote/RNWorkerPrepareStreams.h>
-#include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
