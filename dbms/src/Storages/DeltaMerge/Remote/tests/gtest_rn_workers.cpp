@@ -46,7 +46,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
-        LOG_TRACE(log, "{}: {}\n", getName(), fmt::ptr(task.get()));
+        LOG_TRACE(log, "Mock_{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -66,7 +66,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
-        LOG_TRACE(log, "{}: {}\n", getName(), fmt::ptr(task.get()));
+        LOG_TRACE(log, "Mock_{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -86,6 +86,7 @@ std::pair<RNReadTaskPtr, std::set<UInt64>> mockRNReadTask(size_t n)
 }
 
 constexpr size_t test_max_task_count = 100;
+constexpr size_t test_worker_concurrency = 32;
 
 std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool use_shared_rn_workers)
 {
@@ -101,17 +102,17 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
     if (use_shared_rn_workers)
     {
         static std::once_flag mock_flag;
-        std::call_once(mock_flag, []() {
+        std::call_once(mock_flag, [max_queue_size]() {
             RNWorkers::stopSharedWorkers();
 
             RNWorkers::shared_worker_fetch_pages = std::make_shared<MockRNWorkerFetchPages>(
                 std::make_shared<RNWorkers::Channel>(max_queue_size),
                 std::make_shared<RNWorkers::Channel>(max_queue_size),
-                std::thread::hardware_concurrency());
+                test_worker_concurrency);
 
             RNWorkers::shared_worker_prepare_streams = std::make_shared<MockRNWorkerPrepareStreams>(
                 RNWorkers::shared_worker_fetch_pages->result_queue,
-                std::thread::hardware_concurrency());
+                test_worker_concurrency);
 
             RNWorkers::shared_worker_fetch_pages->start();
             RNWorkers::shared_worker_prepare_streams->start();
@@ -262,6 +263,36 @@ try
     }
     ASSERT_EQ(prepare_streams->source_queue->size(), 0);
     ASSERT_EQ(prepared_tasks->size(), 0);
+}
+CATCH
+
+TEST(RNWorkersTest, QueueFull)
+try
+{
+    auto context = DMTestEnv::getContext();
+    auto max_queue_size = context->getSettingsRef().dt_shared_max_queue_size;
+    auto task_count = max_queue_size + test_worker_concurrency + 1;
+    auto [rn_workers, task_addrs] = mockRNWorkers(task_count, true);
+    ASSERT_EQ(task_addrs.size(), task_count);
+
+    fiu_init(0); // init failpoint
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::pause_when_fetch_page);
+    auto disable_fail_point_once = []() {
+        static std::once_flag flag;
+        std::call_once(flag, []() { DB::FailPointHelper::disableFailPoint(DB::FailPoints::pause_when_fetch_page); });
+    };
+    SCOPE_EXIT({ disable_fail_point_once(); });
+
+    try
+    {
+        rn_workers->startInBackground();
+        FAIL() << "Should not come here";
+    }
+    catch (const DB::Exception & e)
+    {
+        auto errmsg = fmt::format("Check push_result != MPMCQueueResult::FULL failed: Too many task in processing: {}", max_queue_size);
+        ASSERT_EQ(e.message(), errmsg);
+    }
 }
 CATCH
 

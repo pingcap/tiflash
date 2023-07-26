@@ -44,14 +44,12 @@ public:
         , thread_manager(newThreadManager())
     {}
 
-    virtual ~StorageThreadWorker()
+    virtual ~StorageThreadWorker() = default;
+
+    void wait()
     {
         try
         {
-            if (result_queue != nullptr)
-            {
-                result_queue->finish();
-            }
             thread_manager->wait();
         }
         catch (...)
@@ -68,9 +66,13 @@ public:
     {
         std::call_once(start_flag, [this] {
             LOG_DEBUG(log, "Starting {} workers, concurrency={}", getName(), concurrency);
+            active_worker = concurrency;
             for (size_t index = 0; index < concurrency; ++index)
             {
-                thread_manager->schedule(true, getName(), [this, index] { workerLoop(index); });
+                thread_manager->schedule(true, getName(), [this, index] {
+                    workerLoop(index);
+                    workerExist();
+                });
             }
         });
     }
@@ -109,10 +111,29 @@ private:
         }
     }
 
+    void workerExist()
+    {
+        if (--active_worker <= 0)
+        {
+            if (result_queue != nullptr)
+            {
+                if (source_queue->getStatus() == MPMCQueueStatus::FINISHED)
+                {
+                    result_queue->finish();
+                }
+                else
+                {
+                    result_queue->cancel();
+                }
+            }
+        }
+    }
+
 private:
     String name;
     std::once_flag start_flag;
     std::shared_ptr<ThreadManager> thread_manager;
+    std::atomic<Int64> active_worker{0};
 };
 
 } // namespace DB::DM::Remote

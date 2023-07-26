@@ -39,7 +39,14 @@ public:
     ~RNWorkers()
     {
         prepared_tasks->finish();
-        stopWorkers(worker_fetch_pages);
+        if (worker_fetch_pages != nullptr)
+        {
+            worker_fetch_pages->wait();
+        }
+        if (worker_prepare_streams != nullptr)
+        {
+            worker_prepare_streams->wait();
+        }
     }
 
     MPMCQueueResult getReadyTask(RNReadSegmentTaskPtr & task)
@@ -74,7 +81,15 @@ public:
 
     static void stopSharedWorkers()
     {
-        stopWorkers(shared_worker_fetch_pages);
+        if (shared_worker_fetch_pages != nullptr)
+        {
+            shared_worker_fetch_pages->source_queue->cancel();
+            shared_worker_fetch_pages->wait();
+        }
+        if (shared_worker_prepare_streams != nullptr)
+        {
+            shared_worker_prepare_streams->wait();
+        }
     }
 
 private:
@@ -90,15 +105,6 @@ private:
 
     static void initSharedWorkers(const Context & context);
 
-    static void stopWorkers(RNWorkerFetchPagesPtr & fetch_pages)
-    {
-        if (fetch_pages != nullptr)
-        {
-            fetch_pages->source_queue->finish();
-            fetch_pages.reset();
-        }
-    }
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -109,7 +115,7 @@ public:
     RNReadTaskPtr pending_read_task;
     ChannelPtr prepared_tasks;
     size_t task_count;
-    size_t ready_task_count = 0;
+    std::atomic<size_t> ready_task_count = 0;
 
     inline static std::once_flag init_flag;
     inline static RNWorkerFetchPagesPtr shared_worker_fetch_pages;
