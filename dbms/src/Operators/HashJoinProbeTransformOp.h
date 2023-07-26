@@ -52,9 +52,7 @@ protected:
 private:
     OperatorStatus onOutput(Block & block);
 
-    bool fillProcessInfoFromPartitoinBlocks();
-
-    inline void onProbeFinish();
+    inline void onWaitProbeFinishDone();
 
     inline void onRestoreBuildFinish();
 

@@ -122,6 +122,11 @@ Block HashProbeTransformExec::popProbeRestoreBlock()
     return ret;
 }
 
+#define CONTINUE                             \
+    if unlikely (exec_context.isCancelled()) \
+        return OperatorStatus::CANCELLED;    \
+    continue;
+
 OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(ProbeProcessInfo & probe_process_info)
 {
     while (true)
@@ -132,7 +137,9 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
             auto partition_block = std::move(probe_partition_blocks.front());
             probe_partition_blocks.pop_front();
             if (!partition_block.block || partition_block.block.rows() == 0)
-                continue;
+            {
+                CONTINUE;
+            }
             join->checkTypes(partition_block.block);
             probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
             return OperatorStatus::HAS_OUTPUT;
@@ -144,6 +151,10 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
             auto restore_ret = popProbeRestoreBlock();
             if (likely(restore_ret))
             {
+                if (restore_ret.rows() == 0)
+                {
+                    CONTINUE;
+                }
                 /// Even if spill is enabled, if spill is not triggered during build,
                 /// there is no need to dispatch probe block
                 if (!join->isSpilled())
@@ -177,7 +188,9 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProce
             auto partition_block = std::move(probe_partition_blocks.front());
             probe_partition_blocks.pop_front();
             if (!partition_block.block || partition_block.block.rows() == 0)
-                continue;
+            {
+                CONTINUE;
+            }
             join->checkTypes(partition_block.block);
             probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
             return OperatorStatus::HAS_OUTPUT;
@@ -189,12 +202,16 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProce
     }
 }
 
+#undef CONTINUE
+
 OperatorStatus HashProbeTransformExec::tryFillProcessInfoInProbeStage(ProbeProcessInfo & probe_process_info, Block & input)
 {
     assert(probe_process_info.all_rows_joined_finish);
     assert(probe_partition_blocks.empty());
     if (likely(input))
     {
+        if (input.rows() == 0)
+            return OperatorStatus::NEED_INPUT;
         /// Even if spill is enabled, if spill is not triggered during build,
         /// there is no need to dispatch probe block
         if (!join->isSpilled())

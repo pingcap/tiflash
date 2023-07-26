@@ -19,6 +19,11 @@
 
 namespace DB
 {
+#define BREAK                                \
+    if unlikely (exec_context.isCancelled()) \
+        return OperatorStatus::CANCELLED;    \
+    break
+
 HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
@@ -57,8 +62,17 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
     {
         switch (status)
         {
-        case ProbeStatus::PROBE:
         case ProbeStatus::RESTORE_PROBE:
+            // fill probe_process_info for restore probe stage.
+            // The subsequent logic is the same as the probe stage.
+            if (probe_process_info.all_rows_joined_finish)
+            {
+                if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
+                    return ret;
+            }
+        case ProbeStatus::PROBE:
+            // For the probe/restore_probe phase, probe_process_info has been filled,
+            // if all_rows_joined_finish is still true here, it means that there is no input block.
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
                 if (probe_transform->finishOneProbe())
@@ -66,7 +80,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     if (probe_transform->hasMarkedSpillData())
                     {
                         switchStatus(ProbeStatus::PROBE_FINAL_SPILL);
-                        break;
+                        BREAK;
                     }
                     probe_transform->finalizeProbe();
                 }
@@ -74,7 +88,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                     ? ProbeStatus::WAIT_PROBE_FINISH
                     : ProbeStatus::FINISHED;
                 switchStatus(next_status);
-                break;
+                BREAK;
             }
             block = probe_transform->joinBlock(probe_process_info);
             joined_rows += block.rows();
@@ -88,20 +102,20 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
                 probe_transform->endScanHashMapAfterProbe();
                 auto next_status = probe_transform->shouldRestore() ? ProbeStatus::GET_RESTORE_JOIN : ProbeStatus::FINISHED;
                 switchStatus(next_status);
-                break;
+                BREAK;
             }
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isAllProbeFinished())
             {
-                onProbeFinish();
-                break;
+                onWaitProbeFinishDone();
+                BREAK;
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
-            break;
+            BREAK;
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
@@ -132,16 +146,11 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
         if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
             return ret;
     }
-    else if (status == ProbeStatus::RESTORE_PROBE && probe_process_info.all_rows_joined_finish)
-    {
-        if (auto ret = probe_transform->tryFillProcessInfoInRestoreProbeStage(probe_process_info); ret != OperatorStatus::HAS_OUTPUT)
-            return ret;
-    }
 
     return onOutput(block);
 }
 
-void HashJoinProbeTransformOp::onProbeFinish()
+void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 {
     if (probe_transform->needScanHashMapAfterProbe())
     {
@@ -186,13 +195,13 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isAllProbeFinished())
             {
-                onProbeFinish();
-                break;
+                onWaitProbeFinishDone();
+                BREAK;
             }
             return OperatorStatus::WAITING;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
-            break;
+            BREAK;
         case ProbeStatus::RESTORE_BUILD:
             if (probe_transform->isAllBuildFinished())
             {
@@ -228,6 +237,8 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
         throw Exception(fmt::format("Unexpected status: {}", magic_enum::enum_name(status)));
     }
 }
+
+#undef BREAK
 
 void HashJoinProbeTransformOp::switchStatus(ProbeStatus to)
 {
