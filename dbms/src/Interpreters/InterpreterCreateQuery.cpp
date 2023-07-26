@@ -64,7 +64,6 @@ extern const int DDL_GUARD_IS_ACTIVE;
 namespace FailPoints
 {
 extern const char exception_between_create_database_meta_and_directory[];
-extern const char pause_create_table[];
 } // namespace FailPoints
 
 
@@ -463,7 +462,6 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
-    LOG_INFO(Logger::get("hyy"), "into createTable");
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();
 
