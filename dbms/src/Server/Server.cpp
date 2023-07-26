@@ -1514,12 +1514,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool is_prod = !global_context->isTest();
     if (is_prod)
     {
-        auto get_pool_size = [](const auto & setting, size_t default_value) {
-            return setting == 0 ? default_value : static_cast<size_t>(setting);
+        auto get_pool_size = [](const auto & setting) {
+            return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
         TaskSchedulerConfig config{
-            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size, getNumberOfLogicalCPUCores()), settings.pipeline_cpu_task_thread_pool_queue_type},
-            {get_pool_size(settings.pipeline_io_task_thread_pool_size, 2 * getNumberOfLogicalCPUCores()), settings.pipeline_io_task_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_cpu_task_thread_pool_size), settings.pipeline_cpu_task_thread_pool_queue_type},
+            {get_pool_size(settings.pipeline_io_task_thread_pool_size), settings.pipeline_io_task_thread_pool_queue_type},
         };
         RUNTIME_CHECK(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
