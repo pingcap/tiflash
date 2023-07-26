@@ -68,9 +68,10 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 
             // launch build restore task.
             PipelineExecBuilder build_builder;
-            build_builder.setSourceOp(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, log->identifier(), restore_info->build_stream));
-            build_builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, log->identifier(), restore_info->join, restore_info->stream_index));
-            TaskScheduler::instance->submit(std::make_unique<SimplePipelineTask>(exec_context, log->identifier(), build_builder.build()));
+            auto req_id = fmt::format("{} restore_build_{}", log->identifier(), restore_info->stream_index);
+            build_builder.setSourceOp(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
+            build_builder.setSinkOp(std::make_unique<HashJoinBuildSink>(exec_context, req_id, restore_info->join, restore_info->stream_index));
+            TaskScheduler::instance->submit(std::make_unique<SimplePipelineTask>(exec_context, req_id, build_builder.build()));
 
             return restore_probe_exec;
         }

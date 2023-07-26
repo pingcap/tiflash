@@ -60,12 +60,12 @@ public:
     void dispatchBlock(Block & block, PartitionBlocks & partition_blocks_list) { join->dispatchProbeBlock(block, partition_blocks_list, op_index); }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
-    bool isAllProbeFinished() const { return join->isAllProbeFinished(); }
+    bool quickCheckProbeFinished() const { return join->quickCheckProbeFinished(); }
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 
     // For restore build stage
-    bool isAllBuildFinished() const { return join->isAllBuildFinished(); }
+    bool quickCheckBuildFinished() const { return join->quickCheckBuildFinished(); }
 
     // For restore probe stage
     void startRestoreProbe();

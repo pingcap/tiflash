@@ -1715,16 +1715,14 @@ void Join::waitUntilAllProbeFinished() const
         throw Exception(error_message);
 }
 
-bool Join::isAllProbeFinished() const
+bool Join::quickCheckProbeFinished() const
 {
-    std::lock_guard lock(build_probe_mutex);
-    return probe_finished || meet_error || skip_wait;
+    return probe_finished;
 }
 
-bool Join::isAllBuildFinished() const
+bool Join::quickCheckBuildFinished() const
 {
-    std::lock_guard lock(build_probe_mutex);
-    return build_finished || meet_error || skip_wait;
+    return build_finished;
 }
 
 void Join::finishOneNonJoin(size_t partition_index)

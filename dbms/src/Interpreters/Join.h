@@ -257,9 +257,9 @@ public:
     bool finishOneProbe(size_t stream_index);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
-    bool isAllProbeFinished() const;
+    bool quickCheckProbeFinished() const;
 
-    bool isAllBuildFinished() const;
+    bool quickCheckBuildFinished() const;
 
     void finishOneNonJoin(size_t partition_index);
 
