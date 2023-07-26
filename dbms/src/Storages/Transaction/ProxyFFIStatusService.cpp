@@ -39,7 +39,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     TableID table_id = 0;
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
-        auto * log = &Poco::Logger::get("HandleHttpRequestSyncStatus");
+        auto log = Logger::get("HandleHttpRequestSyncStatus");
         LOG_TRACE(log, "handling sync status request, path: {}, api_name: {}", path, api_name);
 
         // Try to handle sync status request with old schema.
@@ -117,7 +117,13 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     });
     FmtBuffer buf;
     buf.fmtAppend("{}\n", ready_region_count);
-    buf.joinStr(region_list.begin(), region_list.end(), " ");
+    buf.joinStr(
+        region_list.begin(),
+        region_list.end(),
+        [](const RegionID & region_id, FmtBuffer & fmt_buf) {
+            fmt_buf.fmtAppend("{}", region_id);
+        },
+        " ");
     buf.append("\n");
 
     auto * s = RawCppString::New(buf.toString());
@@ -142,6 +148,7 @@ HttpRequestRes HandleHttpRequestStoreStatus(
             .view = BaseBuffView{name->data(), name->size()}}};
 }
 
+/// set a flag for upload all PageData to remote store from local UniPS
 HttpRequestRes HandleHttpRequestRemoteStoreSync(
     EngineStoreServerWrap * server,
     std::string_view,
