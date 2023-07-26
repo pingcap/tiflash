@@ -588,7 +588,8 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
                 expr = expand2.proj_exprs().Get(j).exprs().Get(i);
                 if (isColumnExpr(expr))
                 {
-                    dag_analyzer.addNullableActionForColumnRef(expr, header_step.actions);
+                    auto col = getColumnNameAndTypeForColumnExpr(expr, dag_analyzer.getCurrentInputColumns());
+                    header_step.actions->add(ExpressionAction::convertToNullable(col.name));
                     break;
                 }
             }

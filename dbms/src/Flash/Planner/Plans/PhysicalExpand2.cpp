@@ -52,6 +52,25 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     NamesWithAliasesVec project_cols_vec;
     ExpressionActionsPtrVec expression_actions_ptr_vec;
 
+    // By now, tidb projection has only two situation:
+    //     1: agg/join + shuffler + projection
+    //     2: tidb_reader + shuffler + projection
+    // in the exchanger sender of the shuffler, we can always add the alias change via 'buildFinalProjection'.
+    // rootProjection services as substituting the user-level alias name.
+    // nonRootProjection services as adding prefix alias name for distinguishing between fragments.
+    //
+    // but Expand + Projection is an exception.
+    // let's say we have a projection with two col-ref: [col2, col1]. while the source columns are [col1, col2].
+    // the projection actions will be nil, since all the column can be found in current analyzer, while the column
+    // position is switched in the nonRootProjection of exchangeSender, accompanied by adding prefix alias name.
+    //
+    // while for case in {Expand + Projection} here, there is no shuffler between Expand OP and Projection here.
+    // which will causing the child schema columns that Expand can see is different from child's sample block it saw.
+    // so adding column positions switching and fetching logic here in expand-pre-actions.
+    ExpressionActionsPtr header_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
+    auto final_project_aliases = analyzer.genNonRootFinalProjectAliases("");
+    header_actions->add(ExpressionAction::project(final_project_aliases));
+
     // pre-detect the nullability change action in the first projection level and generate the pre-actions.
     // for rollup, it's level projections may show like below:
     // Says child schema is: [unrelated grouping cols projection..., col1, col2, col3]
@@ -71,7 +90,6 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     auto first_proj_level = expand.proj_exprs().Get(0);
     auto horizontal_size = first_proj_level.exprs().size();
     auto vertical_size = expand.proj_exprs().size();
-    ExpressionActionsPtr header_actions = PhysicalPlanHelper::newActions(child->getSchema());
     for (auto i = 0; i < horizontal_size; ++i)
     {
         // horizontally search nullability change column.
@@ -88,7 +106,8 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
                 expr = expand.proj_exprs().Get(j).exprs().Get(i);
                 if (isColumnExpr(expr))
                 {
-                    analyzer.addNullableActionForColumnRef(expr, header_actions);
+                    auto col = getColumnNameAndTypeForColumnExpr(expr, analyzer.getCurrentInputColumns());
+                    header_actions->add(ExpressionAction::convertToNullable(col.name));
                     break;
                 }
             }
@@ -113,7 +132,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
             const auto & col = one_level_expand_actions->getSampleBlock().getByName(expr_name);
 
             // link the current projected block column name with unified output column name.
-            auto output_name = static_cast<size_t>(j) < input_col_size ? child->getSchema()[j].name : expand.generated_output_names().Get(j - input_col_size);
+            auto output_name = static_cast<size_t>(j) < input_col_size ? analyzer.getCurrentInputColumns()[j].name : expand.generated_output_names().Get(j - input_col_size);
             project_cols.emplace_back(col.name, output_name);
             // for N level projection, collecting the first level's projected col's type is enough.
             if (i == 0)
