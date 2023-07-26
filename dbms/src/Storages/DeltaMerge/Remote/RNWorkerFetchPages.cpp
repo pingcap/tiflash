@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -34,6 +35,11 @@
 #include <magic_enum.hpp>
 
 using namespace std::chrono_literals;
+
+namespace DB::FailPoints
+{
+extern const char pause_when_fetch_page[];
+} // namespace DB::FailPoints
 
 namespace DB::DM::Remote
 {
@@ -95,9 +101,11 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
 {
     try
     {
+        FAIL_POINT_PAUSE(FailPoints::pause_when_fetch_page);
         if (seg_task->param->prepared_tasks->getStatus() == MPMCQueueStatus::NORMAL)
         {
             doWorkImpl(seg_task);
+            return seg_task; // Go to next pipeline stage.
         }
     }
     catch (...)
@@ -105,7 +113,7 @@ RNReadSegmentTaskPtr RNWorkerFetchPages::doWork(const RNReadSegmentTaskPtr & seg
         auto error = getCurrentExceptionMessage(false);
         seg_task->param->prepared_tasks->cancelWith(error);
     }
-    return seg_task;
+    return nullptr; // Status of `prepared_tasks` is innormal, query would fail, ignore this task.
 }
 
 void RNWorkerFetchPages::doWorkImpl(const RNReadSegmentTaskPtr & seg_task)

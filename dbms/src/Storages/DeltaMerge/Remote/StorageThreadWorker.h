@@ -39,9 +39,9 @@ public:
         : source_queue(source_queue_)
         , result_queue(result_queue_)
         , concurrency(concurrency_)
+        , log(DB::Logger::get(name_))
         , name(name_)
         , thread_manager(newThreadManager())
-        , log(DB::Logger::get(name))
     {}
 
     virtual ~StorageThreadWorker()
@@ -50,11 +50,9 @@ public:
         {
             if (result_queue != nullptr)
             {
-                result_queue->finish(); // TODO: cancel?
+                result_queue->finish();
             }
-            std::cout << fmt::format("{} wait\n", getName());
             thread_manager->wait();
-            std::cout << fmt::format("{} finish\n", getName());
         }
         catch (...)
         {
@@ -84,6 +82,8 @@ public:
 protected:
     virtual Result doWork(const Source & task) noexcept = 0;
 
+    DB::LoggerPtr log;
+
 private:
     void workerLoop(size_t thread_idx) noexcept
     {
@@ -97,7 +97,7 @@ private:
                 break;
             }
             auto task_result = doWork(task);
-            if (result_queue != nullptr)
+            if (result_queue != nullptr && task_result != nullptr)
             {
                 auto res = result_queue->push(task_result);
                 if (res != MPMCQueueResult::OK)
@@ -113,7 +113,6 @@ private:
     String name;
     std::once_flag start_flag;
     std::shared_ptr<ThreadManager> thread_manager;
-    DB::LoggerPtr log;
 };
 
 } // namespace DB::DM::Remote

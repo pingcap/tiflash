@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 
 using namespace DB::DM::tests;
 using namespace DB::DM::Remote;
+
+namespace DB::FailPoints
+{
+extern const char pause_when_fetch_page[];
+} // namespace DB::FailPoints
 
 namespace DB::DM::Remote::tests
 {
@@ -40,7 +46,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
-        std::cout << fmt::format("{}: {}\n", getName(), fmt::ptr(task.get()));
+        LOG_TRACE(log, "{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -60,7 +66,7 @@ protected:
     void doWorkImpl([[maybe_unused]] const RNReadSegmentTaskPtr & task) override
     {
         RUNTIME_CHECK(!always_throw_exception, getName());
-        std::cout << fmt::format("{}: {}\n", getName(), fmt::ptr(task.get()));
+        LOG_TRACE(log, "{}: {}\n", getName(), fmt::ptr(task.get()));
     }
 };
 
@@ -79,14 +85,17 @@ std::pair<RNReadTaskPtr, std::set<UInt64>> mockRNReadTask(size_t n)
     return {RNReadTask::create(segment_read_tasks), task_addrs};
 }
 
+//constexpr Int64 test_max_fetch_page_queue_size = 16384;
+//constexpr Int64 test_max_prepare_stream_queue_size = 16384;
+constexpr size_t test_max_task_count = 100;
+constexpr Int64 max_queue_size = 16384;
+
 std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool use_shared_rn_workers)
 {
     auto context = DMTestEnv::getContext();
     context->getSettingsRef().set("dt_use_shared_rn_workers", use_shared_rn_workers ? "true" : "false");
     auto [read_task, task_addrs] = mockRNReadTask(task_count);
-    std::cout << __LINE__ << std::endl;
     auto rn_workers = RNWorkers::create(*context, read_task, 8);
-    std::cout << __LINE__ << std::endl;
     RUNTIME_CHECK(rn_workers->prepared_tasks != nullptr);
     RUNTIME_CHECK(read_task->segment_read_tasks.front()->param->prepared_tasks != nullptr);
     RUNTIME_CHECK(read_task->segment_read_tasks.front()->param->prepared_tasks.get() == rn_workers->prepared_tasks.get());
@@ -96,8 +105,6 @@ std::pair<RNWorkersPtr, std::set<UInt64>> mockRNWorkers(size_t task_count, bool 
         static std::once_flag mock_flag;
         std::call_once(mock_flag, []() {
             RNWorkers::stopSharedWorkers();
-
-            const Int64 max_queue_size = 16384;
 
             RNWorkers::shared_worker_fetch_pages = std::make_shared<MockRNWorkerFetchPages>(
                 std::make_shared<RNWorkers::Channel>(max_queue_size),
@@ -187,8 +194,6 @@ void pipelineExceptionTest(bool use_shared_rn_workers, size_t task_count, const 
     ASSERT_NE(reason.find(cancel_reason_keyword), std::string::npos) << reason << ", " << cancel_reason_keyword;
 }
 
-constexpr size_t test_max_task_count = 100;
-
 TEST(RNWorkersTest, SharedRNWorkers)
 try
 {
@@ -205,7 +210,7 @@ try
 }
 CATCH
 
-TEST(RNWorkersTest, FetchPageException)
+TEST(RNWorkersTest, PipelineException)
 try
 {
     MockRNWorkerFetchPages::always_throw_exception.store(true);
@@ -216,6 +221,49 @@ try
 
     MockRNWorkerFetchPages::always_throw_exception.store(false);
     pipelineExceptionTest(true, 10, "getName() = PrepareStreams");
+}
+CATCH
+
+TEST(RNWorkersTest, QueryAbort)
+try
+{
+    constexpr Int64 task_count = 1000;
+    auto [rn_workers, task_addrs] = mockRNWorkers(task_count, true);
+    ASSERT_EQ(task_addrs.size(), task_count);
+
+    fiu_init(0); // init failpoint
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::pause_when_fetch_page);
+
+    auto disable_fail_point_once = []() {
+        static std::once_flag flag;
+        std::call_once(flag, []() { DB::FailPointHelper::disableFailPoint(DB::FailPoints::pause_when_fetch_page); });
+    };
+    SCOPE_EXIT({ disable_fail_point_once(); });
+
+    rn_workers->startInBackground();
+
+    auto & fetch_pages = RNWorkers::shared_worker_fetch_pages;
+    auto & prepare_streams = RNWorkers::shared_worker_prepare_streams;
+    ASSERT_GE(fetch_pages->source_queue->size(), task_count - fetch_pages->concurrency);
+    ASSERT_EQ(prepare_streams->source_queue->size(), 0);
+
+    auto prepared_tasks = rn_workers->prepared_tasks;
+    ASSERT_EQ(prepared_tasks->getStatus(), MPMCQueueStatus::NORMAL);
+    ASSERT_EQ(prepared_tasks->size(), 0);
+
+    rn_workers.reset(); // Query abort.
+
+    ASSERT_EQ(MPMCQueueStatus::FINISHED, prepared_tasks->getStatus());
+    disable_fail_point_once();
+
+    while (fetch_pages->source_queue->size() > 0)
+    {
+        ASSERT_EQ(prepare_streams->source_queue->size(), 0);
+        ASSERT_EQ(prepared_tasks->size(), 0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_EQ(prepare_streams->source_queue->size(), 0);
+    ASSERT_EQ(prepared_tasks->size(), 0);
 }
 CATCH
 

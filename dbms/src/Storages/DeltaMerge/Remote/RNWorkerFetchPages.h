@@ -49,7 +49,6 @@ public:
             source_queue,
             result_queue,
             concurrency)
-        , log(DB::Logger::get(getName()))
     {}
 
 protected:
@@ -61,9 +60,6 @@ private:
         const disaggregated::FetchDisaggPagesRequest & request);
 
     virtual void doWorkImpl(const RNReadSegmentTaskPtr & seg_task);
-
-private:
-    DB::LoggerPtr log;
 };
 
 } // namespace DB::DM::Remote

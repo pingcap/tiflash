@@ -45,16 +45,12 @@ public:
         const std::shared_ptr<MPMCQueue<RNReadSegmentTaskPtr>> & source_queue_,
         const size_t concurrency_)
         : StorageThreadWorker("PrepareStreams", source_queue_, nullptr, concurrency_)
-        , log(DB::Logger::get(getName()))
     {}
 
 protected:
     RNReadSegmentTaskPtr doWork(const RNReadSegmentTaskPtr & task) noexcept override;
 
     virtual void doWorkImpl(const RNReadSegmentTaskPtr & task);
-
-private:
-    DB::LoggerPtr log;
 };
 
 } // namespace DB::DM::Remote
