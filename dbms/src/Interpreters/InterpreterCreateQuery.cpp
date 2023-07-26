@@ -64,7 +64,7 @@ extern const int DDL_GUARD_IS_ACTIVE;
 namespace FailPoints
 {
 extern const char exception_between_create_database_meta_and_directory[];
-} // namespace FailPoints
+}
 
 
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_)
