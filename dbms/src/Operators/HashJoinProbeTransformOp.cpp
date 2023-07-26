@@ -229,7 +229,7 @@ OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
         probe_transform->flushMarkedSpillData();
         return OperatorStatus::NEED_INPUT;
     case ProbeStatus::PROBE_FINAL_SPILL:
-        probe_transform->flushMarkedSpillData(/*is_the_last=*/true);
+        probe_transform->flushMarkedSpillData();
         probe_transform->finalizeProbe();
         switchStatus(ProbeStatus::WAIT_PROBE_FINISH);
         return OperatorStatus::WAITING;

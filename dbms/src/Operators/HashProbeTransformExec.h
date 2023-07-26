@@ -62,7 +62,7 @@ public:
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isAllProbeFinished() const { return join->isAllProbeFinished(); }
     void finalizeProbe() { join->finalizeProbe(); }
-    void flushMarkedSpillData(bool is_the_last = false) { join->flushProbeSideMarkedSpillData(op_index, is_the_last); }
+    void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 
     // For restore build stage
     bool isAllBuildFinished() const { return join->isAllBuildFinished(); }

@@ -395,7 +395,7 @@ bool Join::hasBuildSideMarkedSpillData(size_t stream_index) const
     return !getBuildSideMarkedSpillData(stream_index).empty();
 }
 
-void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
+void Join::flushBuildSideMarkedSpillData(size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     auto & data = getBuildSideMarkedSpillData(stream_index);
@@ -403,8 +403,6 @@ void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
     for (auto & [part_id, blocks] : data)
         spillBuildSideBlocks(part_id, std::move(blocks));
     data.clear();
-    if (is_the_last)
-        build_spiller->finishSpill();
 }
 
 Join::MarkedSpillData & Join::getProbeSideMarkedSpillData(size_t stream_index)
@@ -425,7 +423,7 @@ bool Join::hasProbeSideMarkedSpillData(size_t stream_index) const
     return !getProbeSideMarkedSpillData(stream_index).empty();
 }
 
-void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
+void Join::flushProbeSideMarkedSpillData(size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     auto & data = getProbeSideMarkedSpillData(stream_index);
@@ -433,8 +431,6 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
     for (auto & [part_id, blocks] : data)
         spillProbeSideBlocks(part_id, std::move(blocks));
     data.clear();
-    if (is_the_last)
-        probe_spiller->finishSpill();
 }
 
 /// the block should be valid.
@@ -1538,6 +1534,8 @@ bool Join::finishOneBuild(size_t stream_index)
 void Join::finalizeBuild()
 {
     std::unique_lock lock(build_probe_mutex);
+    if (build_spiller)
+        build_spiller->finishSpill();
     assert(active_build_threads == 0);
     build_finished = true;
     build_cv.notify_all();
@@ -1664,9 +1662,6 @@ void Join::workAfterProbeFinish(size_t stream_index)
                 spilled_partition_index,
                 partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller),
                 stream_index);
-        // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
-        if (getProbeSideMarkedSpillData(stream_index).empty())
-            probe_spiller->finishSpill();
     }
 
     // If it is no longer to scan non-matched-data from the hash table, the hash table can be released.
@@ -1703,6 +1698,8 @@ bool Join::finishOneProbe(size_t stream_index)
 void Join::finalizeProbe()
 {
     std::unique_lock lock(build_probe_mutex);
+    if (probe_spiller)
+        probe_spiller->finishSpill();
     assert(active_probe_threads == 0);
     probe_finished = true;
     probe_cv.notify_all();

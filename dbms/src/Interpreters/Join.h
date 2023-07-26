@@ -279,12 +279,12 @@ public:
     MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index);
     const MarkedSpillData & getBuildSideMarkedSpillData(size_t stream_index) const;
     bool hasBuildSideMarkedSpillData(size_t stream_index) const;
-    void flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+    void flushBuildSideMarkedSpillData(size_t stream_index);
 
     MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index);
     const MarkedSpillData & getProbeSideMarkedSpillData(size_t stream_index) const;
     bool hasProbeSideMarkedSpillData(size_t stream_index) const;
-    void flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last = false);
+    void flushProbeSideMarkedSpillData(size_t stream_index);
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
