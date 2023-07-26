@@ -457,8 +457,8 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks);
-    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks);
+    void spillBuildSideBlocks(UInt64 part_id, Blocks && blocks) const;
+    void spillProbeSideBlocks(UInt64 part_id, Blocks && blocks) const;
 
     void markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
     void markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index);
