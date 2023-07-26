@@ -20,7 +20,7 @@
 
 namespace DB
 {
-class HashJoinSpillContext : public OperatorSpillContext
+class HashJoinSpillContext final : public OperatorSpillContext
 {
 private:
     std::unique_ptr<std::vector<std::atomic<SpillStatus>>> partition_spill_status;

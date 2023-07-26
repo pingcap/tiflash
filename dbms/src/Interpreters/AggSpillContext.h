@@ -20,7 +20,7 @@
 
 namespace DB
 {
-class AggSpillContext : public OperatorSpillContext
+class AggSpillContext final : public OperatorSpillContext
 {
 private:
     std::vector<std::atomic<Int64>> per_thread_revocable_memories;

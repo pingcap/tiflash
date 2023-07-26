@@ -20,7 +20,7 @@
 
 namespace DB
 {
-class SortSpillContext : public OperatorSpillContext
+class SortSpillContext final : public OperatorSpillContext
 {
 private:
     std::atomic<Int64> revocable_memory;
