@@ -23,7 +23,6 @@ namespace DB
 class HashJoinSpillContext : public OperatorSpillContext
 {
 private:
-    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
     std::unique_ptr<std::vector<std::atomic<SpillStatus>>> partition_spill_status;
     std::unique_ptr<std::vector<std::atomic<Int64>>> partition_revocable_memories;
     SpillConfig build_spill_config;
@@ -39,9 +38,7 @@ public:
     void buildProbeSpiller(const Block & input_schema);
     SpillerPtr & getBuildSpiller() { return build_spiller; }
     SpillerPtr & getProbeSpiller() { return probe_spiller; }
-    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
     bool isPartitionSpilled(size_t partition_index) const { return (*partition_spill_status)[partition_index] != SpillStatus::NOT_SPILL; }
-    void markSpill();
     void markPartitionSpill(size_t partition_index);
     bool updatePartitionRevocableMemory(bool force_spill, size_t partition_id, Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override;

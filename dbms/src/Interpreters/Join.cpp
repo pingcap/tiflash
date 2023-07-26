@@ -402,8 +402,8 @@ void Join::flushBuildSideMarkedSpillData(size_t stream_index, bool is_the_last)
     std::shared_lock lock(rwlock);
     auto & data = getBuildSideMarkedSpillData(stream_index);
     assert(!data.empty());
-    for (auto & [part_id, blocks] : data)
-        spillBuildSideBlocks(part_id, std::move(blocks));
+    for (auto & [part_id, blocks_to_spill] : data)
+        spillBuildSideBlocks(part_id, std::move(blocks_to_spill));
     data.clear();
     if (is_the_last)
         hash_join_spill_context->getBuildSpiller()->finishSpill();
@@ -432,8 +432,8 @@ void Join::flushProbeSideMarkedSpillData(size_t stream_index, bool is_the_last)
     std::shared_lock lock(rwlock);
     auto & data = getProbeSideMarkedSpillData(stream_index);
     assert(!data.empty());
-    for (auto & [part_id, blocks] : data)
-        spillProbeSideBlocks(part_id, std::move(blocks));
+    for (auto & [part_id, blocks_to_spill] : data)
+        spillProbeSideBlocks(part_id, std::move(blocks_to_spill));
     data.clear();
     if (is_the_last)
         hash_join_spill_context->getProbeSpiller()->finishSpill();
@@ -522,8 +522,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     {
                         join_partition->addMemoryUsage(byte_after_insert - byte_before_insert);
                     }
+                    /// Currently, a partition spill only triggered by `spillMostMemoryUsedPartitionIfNeed`, so if a partition is not spilled,
+                    /// `updatePartitionRevocableMemory` must return false.
                     auto ret = hash_join_spill_context->updatePartitionRevocableMemory(force_spill_partition_blocks, i, join_partition->revocableBytes());
-                    /// todo remove this after query level memory control
+                    // todo remove this after query level memory control
                     RUNTIME_CHECK_MSG(ret != true, "Join spill should not triggered here");
                     continue;
                 }
@@ -1577,7 +1579,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
         for (auto spilled_partition_index : spilled_partition_indexes)
             markBuildSideSpillData(
                 spilled_partition_index,
-                partitions[spilled_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller),
+                partitions[spilled_partition_index]->trySpillBuildPartition(),
                 stream_index);
         // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
         if (getBuildSideMarkedSpillData(stream_index).empty())
@@ -1671,7 +1673,7 @@ void Join::workAfterProbeFinish(size_t stream_index)
         for (auto spilled_partition_index : spilled_partition_indexes)
             markProbeSideSpillData(
                 spilled_partition_index,
-                partitions[spilled_partition_index]->trySpillProbePartition(true, probe_spill_config.max_cached_data_bytes_in_spiller),
+                partitions[spilled_partition_index]->trySpillProbePartition(),
                 stream_index);
         // If there is unflushed marked spill data here, finishSpill will not be called. Instead, it will be called after the flush.
         if (getProbeSideMarkedSpillData(stream_index).empty())
@@ -1879,33 +1881,33 @@ IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, c
     return hashToSelector(hash);
 }
 
-void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
+void Join::spillBuildSideBlocks(UInt64 part_id, Blocks && spill_blocks)
 {
     hash_join_spill_context->getBuildSpiller()->spillBlocks(std::move(spill_blocks), part_id);
 }
 
-void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && spill_blocks) const
+void Join::spillProbeSideBlocks(UInt64 part_id, Blocks && spill_blocks)
 {
     hash_join_spill_context->getProbeSpiller()->spillBlocks(std::move(spill_blocks), part_id);
 }
 
-void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
+void Join::markBuildSideSpillData(UInt64 part_id, Blocks && blocks_to_spill, size_t stream_index)
 {
-    if (!blocks.empty())
+    if (!blocks_to_spill.empty())
     {
         auto & data = getBuildSideMarkedSpillData(stream_index);
         assert(data.find(part_id) == data.end());
-        data[part_id] = std::move(blocks);
+        data[part_id] = std::move(blocks_to_spill);
     }
 }
 
-void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks, size_t stream_index)
+void Join::markProbeSideSpillData(UInt64 part_id, Blocks && blocks_to_spill, size_t stream_index)
 {
-    if (!blocks.empty())
+    if (!blocks_to_spill.empty())
     {
         auto & data = getProbeSideMarkedSpillData(stream_index);
         assert(data.find(part_id) == data.end());
-        data[part_id] = std::move(blocks);
+        data[part_id] = std::move(blocks_to_spill);
     }
 }
 
@@ -1913,8 +1915,6 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
 {
     if (!hash_join_spill_context->isSpillEnabled())
         return;
-    std::unordered_map<UInt64, Blocks> blocks_to_spill;
-
     {
         std::unique_lock lk(build_probe_mutex);
 #ifdef DBMS_PUBLIC_GTEST
@@ -1930,12 +1930,11 @@ void Join::spillMostMemoryUsedPartitionIfNeed(size_t stream_index)
             std::unique_lock partition_lock = partitions[partition_to_be_spilled]->lockPartition();
             hash_join_spill_context->markPartitionSpill(partition_to_be_spilled);
             partitions[partition_to_be_spilled]->releasePartitionPoolAndHashMap(partition_lock);
-            assert(blocks_to_spill.find(partition_to_be_spilled) == blocks_to_spill.end());
-            blocks_to_spill[partition_to_be_spilled] = partitions[partition_to_be_spilled]->trySpillBuildPartition(partition_lock);
+            auto blocks_to_spill = partitions[partition_to_be_spilled]->trySpillBuildPartition(partition_lock);
             spilled_partition_indexes.push_back(partition_to_be_spilled);
+            markBuildSideSpillData(partition_to_be_spilled, std::move(blocks_to_spill), stream_index);
         }
     }
-    markBuildSideSpillData(target_partition_index, std::move(blocks_to_spill), stream_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill: {}", getTotalByteCount()));
 }
 

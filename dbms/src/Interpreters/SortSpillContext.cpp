@@ -17,22 +17,13 @@
 namespace DB
 {
 SortSpillContext::SortSpillContext(const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log)
-    : OperatorSpillContext(operator_spill_threshold_, log)
+    : OperatorSpillContext(operator_spill_threshold_, "sort", log)
     , spill_config(spill_config_)
 {}
 
 void SortSpillContext::buildSpiller(const Block & input_schema)
 {
     spiller = std::make_unique<Spiller>(spill_config, true, 1, input_schema, log);
-}
-
-void SortSpillContext::markSpill()
-{
-    SpillStatus init_value = SpillStatus::NOT_SPILL;
-    if (spill_status.compare_exchange_strong(init_value, SpillStatus::SPILL, std::memory_order_relaxed))
-    {
-        LOG_INFO(log, "Begin spill in sort");
-    }
 }
 
 bool SortSpillContext::updateRevocableMemory(Int64 new_value)

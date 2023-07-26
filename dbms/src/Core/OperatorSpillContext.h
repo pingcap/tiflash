@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/SpillConfig.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -30,14 +31,17 @@ class OperatorSpillContext
 protected:
     UInt64 operator_spill_threshold;
     std::atomic<bool> in_spillable_stage{true};
+    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
     bool enable_spill = true;
+    String op_name;
     LoggerPtr log;
 
     virtual Int64 getTotalRevocableMemoryImpl() = 0;
 
 public:
-    OperatorSpillContext(UInt64 operator_spill_threshold_, const LoggerPtr & log_)
+    OperatorSpillContext(UInt64 operator_spill_threshold_, const String op_name_, const LoggerPtr & log_)
         : operator_spill_threshold(operator_spill_threshold_)
+        , op_name(op_name_)
         , log(log_)
     {}
     virtual ~OperatorSpillContext() = default;
@@ -52,5 +56,14 @@ public:
             return 0;
     }
     UInt64 getOperatorSpillThreshold() const { return operator_spill_threshold; }
+    void markSpill()
+    {
+        SpillStatus init_value = SpillStatus::NOT_SPILL;
+        if (spill_status.compare_exchange_strong(init_value, SpillStatus::SPILL, std::memory_order_relaxed))
+        {
+            LOG_INFO(log, "Begin spill in {}", op_name);
+        }
+    }
+    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
 };
 } // namespace DB

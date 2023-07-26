@@ -17,7 +17,7 @@
 namespace DB
 {
 HashJoinSpillContext::HashJoinSpillContext(const SpillConfig & build_spill_config_, const SpillConfig & probe_spill_config_, UInt64 operator_spill_threshold, const LoggerPtr & log)
-    : OperatorSpillContext(operator_spill_threshold, log)
+    : OperatorSpillContext(operator_spill_threshold, "join", log)
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , max_cached_bytes(std::max(build_spill_config.max_cached_data_bytes_in_spiller, probe_spill_config.max_cached_data_bytes_in_spiller))
@@ -49,15 +49,6 @@ void HashJoinSpillContext::buildBuildSpiller(const Block & input_schema)
 void HashJoinSpillContext::buildProbeSpiller(const Block & input_schema)
 {
     probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, (*partition_revocable_memories).size(), input_schema, log);
-}
-
-void HashJoinSpillContext::markSpill()
-{
-    SpillStatus init_value = SpillStatus::NOT_SPILL;
-    if (spill_status.compare_exchange_strong(init_value, SpillStatus::SPILL, std::memory_order_relaxed))
-    {
-        LOG_INFO(log, "Begin spill in join");
-    }
 }
 
 void HashJoinSpillContext::markPartitionSpill(size_t partition_index)

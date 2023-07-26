@@ -23,7 +23,6 @@ namespace DB
 class SortSpillContext : public OperatorSpillContext
 {
 private:
-    std::atomic<SpillStatus> spill_status{SpillStatus::NOT_SPILL};
     std::atomic<Int64> revocable_memory;
     SpillConfig spill_config;
     SpillerPtr spiller;
@@ -32,9 +31,7 @@ public:
     SortSpillContext(const SpillConfig & spill_config_, UInt64 operator_spill_threshold_, const LoggerPtr & log);
     void buildSpiller(const Block & input_schema);
     SpillerPtr & getSpiller() { return spiller; }
-    bool isSpilled() const { return spill_status != SpillStatus::NOT_SPILL; }
     bool hasSpilledData() const { return spill_status != SpillStatus::NOT_SPILL && spiller->hasSpilledData(); }
-    void markSpill();
     bool updateRevocableMemory(Int64 new_value);
     Int64 getTotalRevocableMemoryImpl() override { return revocable_memory; };
 };
