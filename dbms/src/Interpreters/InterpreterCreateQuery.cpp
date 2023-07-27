@@ -586,6 +586,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                                              create.attach,
                                              false);
 
+        // start up before adding to `database`, or the storage can not be retrieved from `ManagedStorages::get`
         res->startup();
 
         if (create.is_temporary)
