@@ -131,7 +131,7 @@ public:
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist);
+    RegionDataReadInfoList tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region);
 
     void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
@@ -183,7 +183,7 @@ private:
     // Try write the committed kvs into cache of columnar DeltaMergeStore.
     // Flush the cache if try_persist is set to true.
     // The original name for this method is flushRegion.
-    RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const;
+    RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region) const;
 
 private:
     TableMap tables;

@@ -102,32 +102,16 @@ void RegionTable::shrinkRegionRange(const Region & region)
     internal_region.cache_bytes = region.dataSize();
 }
 
-RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::writeBlockByRegionAndFlush(const RegionPtrWithBlock & region) const
 {
-    auto & tmt = context->getTMTContext();
-
     LOG_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
 
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
-    {
-        writeBlockByRegion(*context, region, data_list_to_remove, log);
-    }
+    writeBlockByRegion(*context, region, data_list_to_remove, log);
 
-    {
-        size_t cache_size = region->dataSize();
-
-        if (cache_size == 0)
-        {
-            if (try_persist)
-            {
-                KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
-                tmt.getKVStore()->tryPersistRegion(region->id());
-            }
-        }
-
-        LOG_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
-    }
+    size_t cache_size = region->dataSize();
+    LOG_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
 
     return data_list_to_remove;
 }
@@ -267,7 +251,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPtrWithBlock & region)
 {
     RegionID region_id = region->id();
 
@@ -302,7 +286,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = writeBlockByRegionAndFlush(region, try_persist);
+        data_list_to_remove = writeBlockByRegionAndFlush(region);
     }
     catch (const Exception & e)
     {
