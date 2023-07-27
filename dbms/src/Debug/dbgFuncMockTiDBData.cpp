@@ -30,20 +30,6 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 }
 
-void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: bytes, seconds", ErrorCodes::BAD_ARGUMENTS);
-
-    auto bytes = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    auto seconds = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-
-    TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
-
-    output(fmt::format("set flush threshold to ({} bytes, {} seconds)", bytes, seconds));
-}
-
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 4)
