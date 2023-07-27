@@ -21,7 +21,7 @@ mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 # Disable flushing.
->> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
 
 # Insert a record and Read once (not necessary).
 mysql> insert into test.t values (1);
