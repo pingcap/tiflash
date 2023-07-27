@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
@@ -32,8 +33,6 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
-
-#include "Flash/Coprocessor/DAGCodec.h"
 
 namespace DB::DM::tests
 {
