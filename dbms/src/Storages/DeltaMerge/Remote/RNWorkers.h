@@ -112,7 +112,10 @@ public:
 #endif
     RNWorkerFetchPagesPtr worker_fetch_pages;
     RNWorkerPrepareStreamsPtr worker_prepare_streams;
+
+    std::once_flag add_tasks_flags;
     RNReadTaskPtr pending_read_task;
+
     ChannelPtr prepared_tasks;
     size_t task_count;
     std::atomic<size_t> ready_task_count = 0;

@@ -98,9 +98,11 @@ void RNWorkers::startInBackground()
     }
     else
     {
-        RUNTIME_CHECK(pending_read_task != nullptr);
-        addTasks(pending_read_task, shared_worker_fetch_pages->source_queue);
-        pending_read_task.reset();
+        std::call_once(add_tasks_flags, [&]() {
+            RUNTIME_CHECK(pending_read_task != nullptr);
+            addTasks(pending_read_task, shared_worker_fetch_pages->source_queue);
+            pending_read_task.reset();
+        });
     }
 }
 
