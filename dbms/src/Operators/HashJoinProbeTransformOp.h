@@ -117,7 +117,7 @@ private:
         RESTORE_PROBE, /// probe for restore join
         FINISHED, /// the final state
     };
-    void switchStatus(ProbeStatus to);
+    inline void switchStatus(ProbeStatus to);
 
 private:
     JoinPtr origin_join;
