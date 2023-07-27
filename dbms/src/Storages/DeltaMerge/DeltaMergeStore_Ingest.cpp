@@ -561,10 +561,12 @@ void DeltaMergeStore::ingestFiles(
             {
                 RUNTIME_CHECK_MSG(
                     compare(range.getStart(), ext_file.range.getStart()) <= 0 && compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
-                    "Detected illegal region boundary: range={} file_range={} . "
+                    "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
                     "set profiles.default.dt_enable_ingest_check=false .",
+                    keyspace_id,
+                    physical_table_id,
                     range.toDebugString(),
                     ext_file.range.toDebugString());
             }
