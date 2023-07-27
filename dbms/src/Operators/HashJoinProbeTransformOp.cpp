@@ -107,7 +107,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->isAllProbeFinished())
+            if (probe_transform->quickCheckProbeFinished())
             {
                 onWaitProbeFinishDone();
                 BREAK;
@@ -193,7 +193,7 @@ OperatorStatus HashJoinProbeTransformOp::awaitImpl()
         switch (status)
         {
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->isAllProbeFinished())
+            if (probe_transform->quickCheckProbeFinished())
             {
                 onWaitProbeFinishDone();
                 BREAK;
