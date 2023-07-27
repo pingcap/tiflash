@@ -163,7 +163,9 @@ LogReaderPtr WALStoreReader::createLogReader(
 {
     const auto log_num = filename.log_num;
     const auto fullname = filename.fullname(filename.stage);
-    LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
+    Poco::File f(fullname);
+    const auto file_size = f.getSize();
+    LOG_DEBUG(logger, "Open log file for reading, file={} size={}", fullname, file_size);
 
     auto read_buf = createReadBufferFromFileBaseByFileProvider(
         provider,
