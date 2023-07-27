@@ -586,13 +586,14 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                                              create.attach,
                                              false);
 
+        // start up before adding to `database`, or the storage can not be retrieved from `ManagedStorages::get`
+        res->startup();
+
         if (create.is_temporary)
             context.getSessionContext().addExternalTable(table_name, res, query_ptr);
         else
             database->createTable(context, table_name, res, query_ptr);
     }
-
-    res->startup();
 
     /// If the query is a CREATE SELECT, insert the data into the table.
     if (create.select && !create.attach && !create.is_view && (!create.is_materialized_view || create.is_populate))

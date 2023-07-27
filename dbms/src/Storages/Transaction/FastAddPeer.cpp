@@ -242,11 +242,11 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         auto candidate_store_ids = getCandidateStoreIDsForRegion(*(server->tmt), region_id, current_store_id);
         if (candidate_store_ids.empty())
         {
-            LOG_DEBUG(log, "No suitable candidate peer for region {}", region_id);
+            LOG_DEBUG(log, "No suitable candidate peer for region_id={}", region_id);
             return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
         }
         bool success = false;
-        LOG_DEBUG(log, "Begin to select checkpoint for region {}", region_id);
+        LOG_DEBUG(log, "Begin to select checkpoint for region_id={}", region_id);
         while (!success)
         {
             for (const auto store_id : candidate_store_ids)
@@ -290,7 +290,7 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         UniversalWriteBatch wb;
         RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
         raft_data_reader.traverseRemoteRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(log, "Write raft log size {} for region {} with index {}", size, region_id, UniversalPageIdFormat::getU64ID(page_id));
+            LOG_DEBUG(log, "Write raft log size {}, region_id={} index={}", size, region_id, UniversalPageIdFormat::getU64ID(page_id));
             wb.putRemotePage(page_id, 0, size, location, {});
         });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
