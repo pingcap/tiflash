@@ -119,8 +119,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
     }
 
     {
-        auto table_id = new_region->getMappedTableID();
         auto keyspace_id = new_region->getKeyspaceID();
+        auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             switch (storage->engineType())
@@ -594,8 +594,8 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     // ignore the step of calling `ingestFiles`
     if (!external_files.empty())
     {
-        auto table_id = region->getMappedTableID();
         auto keyspace_id = region->getKeyspaceID();
+        auto table_id = region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             // Ingest DTFiles into DeltaMerge storage
