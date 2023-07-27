@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringRefUtils.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
@@ -203,6 +204,7 @@ TEST_F(SyncStatusTest, TestLagRegion)
 try
 {
     TableID table_id = createDBAndTable("db_1", "t_1");
+    // create 20 region for the table_id, but 10 regions are lagged
     createRegions(20, table_id);
     makeRegionsLag(10);
     EngineStoreServerWrap store_server_wrap{};
@@ -211,9 +213,24 @@ try
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
     auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});
     EXPECT_EQ(res.status, HttpRequestStatus::Ok);
-    // normal region count is 10.
-    EXPECT_EQ(res.res.view.data[0], '1');
-    EXPECT_EQ(res.res.view.data[1], '0');
+    {
+        // normal region count is 10.
+        StringRef sr(res.res.view.data, res.res.view.len);
+        EXPECT_TRUE(startsWith(sr, "10\n"));
+        EXPECT_EQ(res.res.view.len, 33);
+        sr = removePrefix(sr, 3);
+        // parse the region_ids
+        std::stringstream ss(sr.toString());
+        std::set<RegionID> region_ids;
+        RegionID region_id;
+        while (ss >> region_id)
+        {
+            ASSERT_GE(region_id, 10);
+            ASSERT_LT(region_id, 20);
+            region_ids.insert(region_id);
+        }
+        ASSERT_EQ(region_ids.size(), 10) << fmt::format("{} ", region_ids);
+    }
     delete (static_cast<RawCppString *>(res.res.inner.ptr));
     dropDataBase("db_1");
 }
@@ -230,9 +247,24 @@ try
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
     auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});
     EXPECT_EQ(res.status, HttpRequestStatus::Ok);
-    // normal region count is 20.
-    EXPECT_EQ(res.res.view.data[0], '2');
-    EXPECT_EQ(res.res.view.data[1], '0');
+    {
+        // normal region count is 20.
+        StringRef sr(res.res.view.data, res.res.view.len);
+        EXPECT_TRUE(startsWith(sr, "20\n"));
+        EXPECT_EQ(res.res.view.len, 53);
+        sr = removePrefix(sr, 3);
+        // parse the region_ids
+        std::stringstream ss(sr.toString());
+        std::set<RegionID> region_ids;
+        RegionID region_id;
+        while (ss >> region_id)
+        {
+            ASSERT_GE(region_id, 0);
+            ASSERT_LT(region_id, 20);
+            region_ids.insert(region_id);
+        }
+        ASSERT_EQ(region_ids.size(), 20) << fmt::format("{} ", region_ids);
+    }
     delete (static_cast<RawCppString *>(res.res.inner.ptr));
     dropDataBase("db_1");
 }
