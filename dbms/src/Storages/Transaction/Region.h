@@ -149,7 +149,7 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markCompactLog();
+    void markCompactLog(UInt64 index);
     Timepoint lastCompactLogTime() const;
     UInt64 lastCompactLogApplied() const;
     UInt64 lastRestartLogApplied() const;
@@ -157,6 +157,10 @@ public:
     void setLastRestartLogApplied(UInt64 new_value) const;
     // Must hold region lock.
     void updateLastCompactLogApplied() const;
+
+    // Return <first_index, applied_index> of this Region
+    std::pair<UInt64, UInt64> getRaftLogRange() const;
+    void updateRaftLogFirstIndex(UInt64 new_first_index);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -256,6 +260,9 @@ private:
     mutable std::shared_mutex mutex;
     RegionData data;
     RegionMeta meta;
+    // A non-persisted truncated index that is used for eager removing
+    // RaftLog in UniPS
+    UInt64 transient_truncated_index;
 
     LoggerPtr log;
 

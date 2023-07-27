@@ -510,9 +510,25 @@ std::string Region::dataInfo() const
     return buff.toString();
 }
 
-void Region::markCompactLog()
+void Region::markCompactLog(UInt64 index)
 {
     last_compact_log_time = Clock::now();
+
+    if (index > transient_truncated_index)
+        transient_truncated_index = index;
+}
+
+std::pair<UInt64, UInt64> Region::getRaftLogRange() const
+{
+    std::unique_lock lock(mutex);
+    auto applied_index = appliedIndex();
+    return {transient_truncated_index, applied_index};
+}
+
+void Region::updateRaftLogFirstIndex(UInt64 new_first_index)
+{
+    std::unique_lock lock(mutex);
+    transient_truncated_index = new_first_index;
 }
 
 Timepoint Region::lastCompactLogTime() const
@@ -687,6 +703,7 @@ void Region::assignRegion(Region && new_region)
     data.assignRegionData(std::move(new_region.data));
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
+    transient_truncated_index = meta.getApplyState().truncated_state().index();
 }
 
 /// try to clean illegal data because of feature `compaction filter`
@@ -932,6 +949,7 @@ Region::Region(RegionMeta && meta_)
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
+    , transient_truncated_index(meta.getApplyState().truncated_state().index())
     , log(Logger::get())
     , keyspace_id(meta.getRange()->getKeyspaceID())
     , mapped_table_id(meta.getRange()->getMappedTableID())

@@ -19,6 +19,7 @@
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -30,8 +31,10 @@
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <common/likely.h>
 
+#include <mutex>
 #include <tuple>
 #include <variant>
 
@@ -60,8 +63,10 @@ KVStore::KVStore(Context & context)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
     , region_compact_log_gap(200)
+    , region_raft_log_eager_gc_threshold(256)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
+    // default config about RaftLog eager gc: rows 256
     LOG_INFO(log, "KVStore inited");
 }
 
@@ -267,7 +272,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
     TMTContext & tmt,
     DM::WriteResult & write_result)
 {
-    EngineStoreApplyRes res;
+    EngineStoreApplyRes apply_res;
     {
         auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -277,21 +282,48 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmdInner(
             return EngineStoreApplyRes::NotFound;
         }
 
-        auto && [r, w] = region->handleWriteRaftCmd(cmds, index, term, tmt);
+        std::tie(apply_res, write_result) = region->handleWriteRaftCmd(cmds, index, term, tmt);
 
         if (region->getClusterRaftstoreVer() == RaftstoreVer::V2)
         {
             region->orphanKeysInfo().advanceAppliedIndex(index);
         }
-        write_result = std::move(w);
-        res = r;
+
+        auto [first_index, applied_index] = region->getRaftLogRange();
+        if (bool need_persist
+            = raft_log_gc_hints
+                  .updateHint(region_id, first_index, applied_index, region_raft_log_eager_gc_threshold.load());
+            need_persist)
+        {
+            // Persist RegionMeta on the storage engine
+            tryFlushRegionCacheInStorage(tmt, *region, Logger::get());
+            persistRegion(*region, &region_persist_lock, "Eager RaftLog GC after normal write");
+            // return "Persist" to proxy for persisting the RegionMeta
+            apply_res = EngineStoreApplyRes::Persist;
+        }
     }
     /// Safety:
     /// This call is from Proxy's applying thread of this region, so:
     /// 1. No other thread can write from raft to this region even if we unlocked here.
     /// 2. If `proactiveFlushCacheAndRegion` causes a write stall, it will be forwarded to raft layer.
     // TODO(proactive flush)
-    return res;
+    return apply_res;
+}
+
+RaftLogEagerGcTasks::Hints KVStore::getRaftLogGcHints()
+{
+    return raft_log_gc_hints.getAndClearHints();
+}
+
+void KVStore::applyRaftLogTaskRes(const RaftLogRemoveTaskRes & res) const
+{
+    for (const auto & [region_id, log_index] : res)
+    {
+        auto region = getRegion(region_id);
+        if (!region)
+            continue;
+        region->updateRaftLogFirstIndex(log_index);
+    }
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
@@ -334,6 +366,7 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, U
     region_compact_log_min_rows = rows;
     region_compact_log_min_bytes = bytes;
     region_compact_log_gap = gap;
+    region_raft_log_eager_gc_threshold = gap;
 
     LOG_INFO(log, "threshold config: period {}, rows {}, bytes {}, gap {}", sec, rows, bytes, gap);
 }
@@ -571,7 +604,7 @@ bool KVStore::forceFlushRegionDataImpl(
 
     // flush cache in storage level is done, persist the region info
     persistRegion(curr_region, &region_task_lock, PersistRegionReason::Flush, "");
-    curr_region.markCompactLog();
+    curr_region.markCompactLog(index);
     curr_region.cleanApproxMemCacheInfo();
     GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
     return true;

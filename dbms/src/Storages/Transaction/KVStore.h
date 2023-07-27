@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Transaction/RaftLogManager.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
@@ -179,7 +180,10 @@ public:
     void abortPreHandleSnapshot(uint64_t region_id, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogConfig(UInt64, UInt64, UInt64, UInt64);
+
+    void setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes, UInt64 eager_gc_rows);
+    UInt64 getRaftLogEagerGCRows() const { return region_raft_log_eager_gc_threshold.load(); }
+
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
@@ -228,6 +232,10 @@ public:
         UInt64 compact_term,
         bool is_background,
         bool lock_held = true);
+
+    RaftLogEagerGcTasks::Hints getRaftLogGcHints();
+    void applyRaftLogTaskRes(const RaftLogRemoveTaskRes & res) const;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -392,6 +400,7 @@ private:
     std::atomic<UInt64> region_compact_log_min_rows;
     std::atomic<UInt64> region_compact_log_min_bytes;
     std::atomic<UInt64> region_compact_log_gap;
+    std::atomic<UInt64> region_raft_log_eager_gc_threshold;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
@@ -407,6 +416,8 @@ private:
     PreHandlingTrace prehandling_trace;
 
     StoreMeta store;
+
+    RaftLogEagerGcTasks raft_log_gc_hints;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

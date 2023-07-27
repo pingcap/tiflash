@@ -146,6 +146,19 @@ public:
         return buff.releaseStr();
     }
 
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX log_index
+    static String toRaftLogKey(RegionID region_id, UInt64 log_index)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(RAFT_PREFIX, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        encodeUInt64(log_index, buff);
+        return buff.releaseStr();
+    }
+
     // Store ident //
 
     // KV_PREFIX LOCAL_PREFIX STORE_IDENT_KEY
