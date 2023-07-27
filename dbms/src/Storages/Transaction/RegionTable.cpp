@@ -100,8 +100,6 @@ void RegionTable::shrinkRegionRange(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.cache_bytes = region.dataSize();
-    if (internal_region.cache_bytes)
-        dirty_regions.insert(internal_region.region_id);
 }
 
 bool RegionTable::shouldFlush(const InternalRegion & region) const
@@ -213,8 +211,6 @@ void RegionTable::updateRegion(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
-    if (internal_region.cache_bytes)
-        dirty_regions.insert(internal_region.region_id);
 }
 
 namespace
@@ -371,10 +367,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
         internal_region.cache_bytes = region->dataSize();
-        if (internal_region.cache_bytes)
-            dirty_regions.insert(region_id);
-        else
-            dirty_regions.erase(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -384,43 +376,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
         std::rethrow_exception(first_exception);
 
     return data_list_to_remove;
-}
-
-RegionID RegionTable::pickRegionToFlush()
-{
-    std::lock_guard lock(mutex);
-
-    for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
-    {
-        auto region_id = *dirty_it;
-        if (auto it = regions.find(region_id); it != regions.end())
-        {
-            if (shouldFlush(doGetInternalRegion(it->second, region_id)))
-            {
-                // The dirty flag should only be removed after data is flush successfully.
-                return region_id;
-            }
-
-            dirty_it++;
-        }
-        else
-        {
-            // Region{region_id} is removed, remove its dirty flag
-            dirty_it = dirty_regions.erase(dirty_it);
-        }
-    }
-    return InvalidRegionID;
-}
-
-bool RegionTable::tryFlushRegions()
-{
-    if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
-    {
-        tryWriteBlockByRegionAndFlush(region_to_flush, true);
-        return true;
-    }
-
-    return false;
 }
 
 void RegionTable::handleInternalRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id, std::function<void(const InternalRegions &)> && callback) const

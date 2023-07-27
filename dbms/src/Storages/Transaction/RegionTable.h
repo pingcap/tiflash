@@ -116,7 +116,6 @@ public:
     using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
     using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
-    using DirtyRegions = std::unordered_set<RegionID>;
     using TableToOptimize = std::unordered_set<TableID>;
 
     struct FlushThresholds
@@ -158,10 +157,6 @@ public:
     void shrinkRegionRange(const Region & region);
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
-
-    // Find all regions with data, call writeBlockByRegionAndFlush with try_persist = true.
-    // This function is only for debug.
-    bool tryFlushRegions();
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
@@ -221,13 +216,11 @@ private:
     // The original name for this method is flushRegion.
     RegionDataReadInfoList writeBlockByRegionAndFlush(const RegionPtrWithBlock & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
-    RegionID pickRegionToFlush();
 
 private:
     TableMap tables;
     RegionInfoMap regions;
     SafeTsMap safe_ts_map;
-    DirtyRegions dirty_regions;
 
     FlushThresholds flush_thresholds;
 

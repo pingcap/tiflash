@@ -21,7 +21,6 @@ mysql> alter table test.t add column b year not null;
 
 func> wait_table test t
 
->> DBGInvoke __try_flush()
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+------+
 | a    | b    |
