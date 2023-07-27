@@ -21,6 +21,13 @@
 
 namespace DB
 {
+/// Map the execution result of PipelineExec to Task
+/// As follows
+/// - OperatorStatus::FINISHED/CANCELLED       ==>     ExecTaskStatus::FINISHED/CANCELLED
+/// - OperatorStatus::IO_IN/IO_OUT             ==>     ExecTaskStatus::IO_IN/IO_OUT
+/// - OperatorStatus::WAITING                  ==>     ExecTaskStatus::WAITING
+/// - OperatorStatus::NEED_INPUT/HAS_OUTPUT    ==>     ExecTaskStatus::RUNNING
+
 #define MAP_NOT_RUNNING_TASK_STATUS       \
     case OperatorStatus::FINISHED:        \
     {                                     \

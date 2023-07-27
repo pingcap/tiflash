@@ -20,6 +20,7 @@
 
 namespace DB
 {
+// Used to read block from io-based block input stream, like `SpilledFilesInputStream`.
 class IOBlockInputStreamSourceOp : public SourceOp
 {
 public:

@@ -69,7 +69,7 @@ public:
 
     // For restore probe stage
     void startRestoreProbe();
-    bool isProbeRestoreReady();
+    bool prepareProbeRestoredBlock();
 
     bool shouldRestore() const { return join->isEnableSpill() && (join->isSpilled() || join->isRestoreJoin()); }
 
@@ -82,7 +82,7 @@ public:
 
 private:
     // For restore probe stage
-    Block popProbeRestoreBlock();
+    Block popProbeRestoredBlock();
 
 private:
     LoggerPtr log;
@@ -104,7 +104,7 @@ private:
     // For restore probe.
     ResultQueuePtr probe_result_queue;
     BlockInputStreamPtr probe_restore_stream;
-    Block probe_restore_block;
+    Block probe_restored_block;
     bool is_probe_restore_done = false;
 };
 } // namespace DB

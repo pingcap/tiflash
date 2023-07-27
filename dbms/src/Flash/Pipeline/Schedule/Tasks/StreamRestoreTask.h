@@ -20,6 +20,9 @@
 
 namespace DB
 {
+/// Used to read block from io-based block input stream like `SpilledFilesInputStream` and write block to result queue.
+///
+/// io_stream (read in io_thread_pool) --> result_queue --> caller.
 class StreamRestoreTask : public Task
 {
 public:

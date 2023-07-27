@@ -66,7 +66,16 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->probe_restore_stream = restore_info->probe_stream;
 
-            // launch build restore task.
+            /// Trigger build side restore task to restore and rebuild hash partition.
+            /// The probe side operator just waits for the build hash partition to complete.
+            ///
+            /// SimplePipelineTask [IOStreamSource->HashJoinBuildSink]
+            ///                       | (build hash partition)
+            ///                       ▼
+            ///               Interpreters::Join
+            ///                       | (check build finished)
+            ///                       ▼
+            ///             HashProbeTransformExec
             PipelineExecBuilder build_builder;
             auto req_id = fmt::format("{} restore_build_{}", log->identifier(), restore_info->stream_index);
             build_builder.setSourceOp(std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
@@ -84,20 +93,31 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 
 void HashProbeTransformExec::startRestoreProbe()
 {
+    /// Trigger probe side restore task to get the block from probe_restore_stream.
+    ///
+    /// StreamRestoreTask [probe_restore_stream]
+    ///                       | read and push
+    ///                       ▼
+    ///               probe_result_queue
+    ///                       | pop and probe
+    ///                       ▼
+    ///             HashProbeTransformExec (probe restored hash partition)
     assert(!is_probe_restore_done && probe_restore_stream);
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
+    assert(!probe_result_queue);
     probe_result_queue = std::make_shared<ResultQueue>(1);
     TaskScheduler::instance->submit(std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_result_queue));
     probe_restore_stream.reset();
 }
 
-bool HashProbeTransformExec::isProbeRestoreReady()
+bool HashProbeTransformExec::prepareProbeRestoredBlock()
 {
     if (unlikely(is_probe_restore_done))
         return true;
-    if (probe_restore_block)
+    if (probe_restored_block)
         return true;
-    auto ret = probe_result_queue->tryPop(probe_restore_block);
+    assert(probe_result_queue);
+    auto ret = probe_result_queue->tryPop(probe_restored_block);
     switch (ret)
     {
     case MPMCQueueResult::OK:
@@ -112,14 +132,17 @@ bool HashProbeTransformExec::isProbeRestoreReady()
     }
 }
 
-Block HashProbeTransformExec::popProbeRestoreBlock()
+Block HashProbeTransformExec::popProbeRestoredBlock()
 {
     if (unlikely(is_probe_restore_done))
         return {};
 
+    // `prepareProbeRestoredBlock` must have been called and return true before,
+    // so `probe_restored_block` must not be empty here.
     Block ret;
-    assert(probe_restore_block);
-    std::swap(ret, probe_restore_block);
+    assert(probe_restored_block);
+    std::swap(ret, probe_restored_block);
+    assert(!probe_restored_block);
     return ret;
 }
 
@@ -147,9 +170,9 @@ OperatorStatus HashProbeTransformExec::tryFillProcessInfoInRestoreProbeStage(Pro
         }
         else
         {
-            if (!isProbeRestoreReady())
+            if (!prepareProbeRestoredBlock())
                 return OperatorStatus::WAITING;
-            auto restore_ret = popProbeRestoreBlock();
+            auto restore_ret = popProbeRestoredBlock();
             if (likely(restore_ret))
             {
                 if (restore_ret.rows() == 0)
