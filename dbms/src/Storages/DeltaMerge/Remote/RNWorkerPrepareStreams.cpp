@@ -26,7 +26,7 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
         if (seg_task->param->prepared_tasks->getStatus() == MPMCQueueStatus::NORMAL)
         {
             doWorkImpl(seg_task);
-            seg_task->param->prepared_tasks->push(seg_task);
+            seg_task->param->prepared_tasks->push(seg_task);  // Last pipeline stage, dispatch task to `prepared_tasks` of each query.
         }
     }
     catch (...)
@@ -34,7 +34,7 @@ RNReadSegmentTaskPtr RNWorkerPrepareStreams::doWork(const RNReadSegmentTaskPtr &
         auto error = getCurrentExceptionMessage(false);
         seg_task->param->prepared_tasks->cancelWith(error);
     }
-    return seg_task;
+    return nullptr;
 }
 
 void RNWorkerPrepareStreams::doWorkImpl(const RNReadSegmentTaskPtr & task)
