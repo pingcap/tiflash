@@ -505,6 +505,8 @@ RowNumber WindowTransformAction::stepToFrameStartForRange()
     case TypeIndex::UInt32:
         return stepToFrameStartForRangeImpl<UInt32, is_desc>();
     case TypeIndex::UInt64:
+    case TypeIndex::MyDate:
+    case TypeIndex::MyDateTime:
         return stepToFrameStartForRangeImpl<UInt64, is_desc>();
     case TypeIndex::Int8:
         return stepToFrameStartForRangeImpl<Int8, is_desc>();
@@ -513,6 +515,7 @@ RowNumber WindowTransformAction::stepToFrameStartForRange()
     case TypeIndex::Int32:
         return stepToFrameStartForRangeImpl<Int32, is_desc>();
     case TypeIndex::Int64:
+    case TypeIndex::MyTime:
         return stepToFrameStartForRangeImpl<Int64, is_desc>();
     case TypeIndex::Float32:
         return stepToFrameStartForRangeImpl<Float32, is_desc>();
@@ -549,6 +552,8 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
     case TypeIndex::UInt32:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt32, is_desc>(), true);
     case TypeIndex::UInt64:
+    case TypeIndex::MyDate:
+    case TypeIndex::MyDateTime:
         return std::make_tuple(stepToFrameEndForRangeImpl<UInt64, is_desc>(), true);
     case TypeIndex::Int8:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int8, is_desc>(), true);
@@ -557,6 +562,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
     case TypeIndex::Int32:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int32, is_desc>(), true);
     case TypeIndex::Int64:
+    case TypeIndex::MyTime:
         return std::make_tuple(stepToFrameEndForRangeImpl<Int64, is_desc>(), true);
     case TypeIndex::Float32:
         return std::make_tuple(stepToFrameEndForRangeImpl<Float32, is_desc>(), true);
@@ -620,6 +626,8 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameBoundary(RowNumber cursor
     case TypeIndex::UInt32:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::UInt64:
+    case TypeIndex::MyDate:
+    case TypeIndex::MyDateTime:
         return moveCursorAndFindFrameBoundary<AuxColType, UInt64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int8:
         return moveCursorAndFindFrameBoundary<AuxColType, Int8, is_begin, is_desc>(cursor, current_row_aux_value);
@@ -628,6 +636,7 @@ RowNumber WindowTransformAction::moveCursorAndFindFrameBoundary(RowNumber cursor
     case TypeIndex::Int32:
         return moveCursorAndFindFrameBoundary<AuxColType, Int32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int64:
+    case TypeIndex::MyTime:
         return moveCursorAndFindFrameBoundary<AuxColType, Int64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Float32:
         return moveCursorAndFindFrameBoundary<AuxColType, Float32, is_begin, is_desc>(cursor, current_row_aux_value);
