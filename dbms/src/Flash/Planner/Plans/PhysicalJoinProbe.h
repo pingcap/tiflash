@@ -41,7 +41,7 @@ private:
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         Context & context,
-        size_t /*concurrency*/) override;
+        size_t concurrency) override;
 
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
 

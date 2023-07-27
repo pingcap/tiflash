@@ -1983,7 +1983,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
     {
         while (true)
         {
-            LOG_TRACE(log, "restore_infos {}", restore_infos.size());
+            LOG_TRACE(log, "restore_infos size =  {}", restore_infos.size());
             if (!restore_infos.empty())
             {
                 auto restore_info = std::move(restore_infos.back());
@@ -2002,11 +2002,18 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
             // build new restore infos.
             auto spilled_partition_index = spilled_partition_indexes.front();
             RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
+
             if (restore_join_build_concurrency <= 0)
                 restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
-            /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
-            assert(restore_join_build_concurrency >= 2);
+            /// for restore join we make sure that the restore_join_build_concurrency is at least 2, so it can be spill again.
+            /// And restore_join_build_concurrency should not be greater than probe_concurrency, Otherwise some restore_stream will never be executed.
+            RUNTIME_CHECK_MSG(
+                2 <= restore_join_build_concurrency && restore_join_build_concurrency <= static_cast<Int64>(probe_concurrency),
+                "restore_join_build_concurrency must in [2, {}], but the current value is {}",
+                probe_concurrency,
+                restore_join_build_concurrency);
             LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, restore round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
+
             auto restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
             RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
             auto restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
