@@ -170,20 +170,20 @@ private:
     void stepToFrameEndWithOffsetBoundary();
 
     // Used for calculating the frame start for rows frame type
-    RowNumber stepToFrameStartForRows();
+    RowNumber stepToFrameStartForRowsFrame();
     // Used for calculating the frame end for rows frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRows();
+    std::tuple<RowNumber, bool> stepToFrameEndForRowsFrame();
 
     // Used for calculating the frame start for range frame type
-    RowNumber stepToFrameStartForRange();
+    RowNumber stepToFrameStartForRangeFrame();
     // Used for calculating the frame end for range frame type
-    std::tuple<RowNumber, bool> stepToFrameEndForRange();
+    std::tuple<RowNumber, bool> stepToFrameEndForRangeFrame();
 
     template <bool is_desc>
-    RowNumber stepToFrameStartForRange();
+    RowNumber stepToFrameStartForRangeFrameOrderCase();
 
     template <bool is_desc>
-    std::tuple<RowNumber, bool> stepToFrameEndForRange();
+    std::tuple<RowNumber, bool> stepToFrameEndForRangeFrameOrderCase();
 
     template <typename T, bool is_desc>
     RowNumber stepToFrameStartForRangeImpl();
@@ -198,10 +198,10 @@ private:
     UInt64 distance(RowNumber left, RowNumber right);
 
     template <typename AuxColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
 
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
-    RowNumber moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
+    RowNumber moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value);
 
     template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindFrameBoundaryImpl(RowNumber cursor, AuxColType current_row_aux_value);

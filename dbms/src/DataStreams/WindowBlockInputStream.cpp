@@ -67,8 +67,8 @@ typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t i
     return (*col_ptr)[idx].get<typename ActualCmpDataType<T>::Type>();
 }
 
-template <typename T, bool is_start, bool is_desc>
-bool isInRangeCommonImpl(T current_row_aux_value, T cursor_value)
+template <typename T, typename U, bool is_start, bool is_desc>
+bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
 {
     if constexpr ((is_start && is_desc) || (!is_start && !is_desc))
         return cursor_value <= current_row_aux_value;
@@ -76,15 +76,18 @@ bool isInRangeCommonImpl(T current_row_aux_value, T cursor_value)
         return cursor_value >= current_row_aux_value;
 }
 
-template <bool is_start, bool is_desc>
-bool isInRangeIntImpl(Int64 current_row_aux_value, Int64 cursor_value)
+template <typename T, typename U, bool is_start, bool is_desc>
+bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
 {
-    return isInRangeCommonImpl<Int64, is_start, is_desc>(current_row_aux_value, cursor_value);
+    return isInRangeCommonImpl<T, U, is_start, is_desc>(current_row_aux_value, cursor_value);
 }
 
 template <typename AuxColType, typename OrderByColType, bool is_start, bool is_desc>
 bool isInRangeNotIntImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
 {
+    if constexpr (checkIfDecimalFieldType<AuxColType>() && checkIfDecimalFieldType<OrderByColType>())
+        return isInRangeCommonImpl<AuxColType, OrderByColType, is_start, is_desc>(current_row_aux_value, cursor_value);
+
     Float64 current_row_aux_value_float64;
     Float64 cursor_value_float64;
 
@@ -98,7 +101,7 @@ bool isInRangeNotIntImpl(AuxColType current_row_aux_value, OrderByColType cursor
     else
         cursor_value_float64 = static_cast<Float64>(cursor_value);
 
-    return isInRangeCommonImpl<Float64, is_start, is_desc>(current_row_aux_value_float64, cursor_value_float64);
+    return isInRangeCommonImpl<Float64, Float64, is_start, is_desc>(current_row_aux_value_float64, cursor_value_float64);
 }
 
 template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_start, bool is_desc>
@@ -108,7 +111,11 @@ bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
     {
         // Two operand must be integer
         if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
-            return isInRangeIntImpl<is_start, is_desc>(current_row_aux_value, cursor_value);
+        {
+            if constexpr (std::is_unsigned_v<OrderByColType> && std::is_unsigned_v<AuxColType>)
+                return isInRangeIntImpl<UInt64, UInt64, is_start, is_desc>(current_row_aux_value, cursor_value);
+            return isInRangeIntImpl<Int64, Int64, is_start, is_desc>(current_row_aux_value, cursor_value);
+        }
         throw Exception("Unexpected Data Type!");
     }
     else if (CmpDataType == tipb::RangeCmpDataType::Float)
@@ -371,7 +378,7 @@ Int64 WindowTransformAction::getPartitionEndRow(size_t block_rows)
     return left;
 }
 
-RowNumber WindowTransformAction::stepToFrameStartForRows()
+RowNumber WindowTransformAction::stepToFrameStartForRowsFrame()
 {
     auto step_num = window_description.frame.begin_offset;
     auto dist = distance(current_row, partition_start);
@@ -407,7 +414,7 @@ RowNumber WindowTransformAction::stepToFrameStartForRows()
     return result_row;
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRows()
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRowsFrame()
 {
     auto step_num = window_description.frame.end_offset;
     if (!partition_ended)
@@ -464,37 +471,37 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRows()
 void WindowTransformAction::stepToFrameStartWithOffsetBoundry()
 {
     if (window_description.frame.type == WindowFrame::FrameType::Rows)
-        frame_start = stepToFrameStartForRows();
+        frame_start = stepToFrameStartForRowsFrame();
     else
-        frame_start = stepToFrameStartForRange();
+        frame_start = stepToFrameStartForRangeFrame();
 }
 
 void WindowTransformAction::stepToFrameEndWithOffsetBoundary()
 {
     if (window_description.frame.type == WindowFrame::FrameType::Rows)
-        std::tie(frame_end, frame_ended) = stepToFrameEndForRows();
+        std::tie(frame_end, frame_ended) = stepToFrameEndForRowsFrame();
     else
-        std::tie(frame_end, frame_ended) = stepToFrameEndForRange();
+        std::tie(frame_end, frame_ended) = stepToFrameEndForRangeFrame();
 }
 
-RowNumber WindowTransformAction::stepToFrameStartForRange()
+RowNumber WindowTransformAction::stepToFrameStartForRangeFrame()
 {
     if (window_description.is_desc)
-        return stepToFrameStartForRange<true>();
+        return stepToFrameStartForRangeFrameOrderCase<true>();
     else
-        return stepToFrameStartForRange<false>();
+        return stepToFrameStartForRangeFrameOrderCase<false>();
 }
 
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRangeFrame()
 {
     if (window_description.is_desc)
-        return stepToFrameEndForRange<true>();
+        return stepToFrameEndForRangeFrameOrderCase<true>();
     else
-        return stepToFrameEndForRange<false>();
+        return stepToFrameEndForRangeFrameOrderCase<false>();
 }
 
 template <bool is_desc>
-RowNumber WindowTransformAction::stepToFrameStartForRange()
+RowNumber WindowTransformAction::stepToFrameStartForRangeFrameOrderCase()
 {
     switch (window_description.begin_aux_col_type)
     {
@@ -535,7 +542,7 @@ RowNumber WindowTransformAction::stepToFrameStartForRange()
 }
 
 template <bool is_desc>
-std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRange()
+std::tuple<RowNumber, bool> WindowTransformAction::stepToFrameEndForRangeFrameOrderCase()
 {
     if (!partition_ended)
         // If we find the frame end and the partition_ended is false.
@@ -611,52 +618,52 @@ RowNumber WindowTransformAction::stepToFrameForRangeImpl()
 
     ColumnPtr cur_row_aux_column = inputAt(current_row)[cur_row_aux_col_idx];
     typename ActualCmpDataType<T>::Type current_row_aux_value = getValue<T>(cur_row_aux_column, current_row.row);
-    return moveCursorAndFindFrameBoundary<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
+    return moveCursorAndFindRangeFrameBoundary<typename ActualCmpDataType<T>::Type, is_begin, is_desc>(cursor, current_row_aux_value);
 }
 
 template <typename AuxColType, bool is_begin, bool is_desc>
-RowNumber WindowTransformAction::moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value)
+RowNumber WindowTransformAction::moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value)
 {
     switch (window_description.order_by_col_type)
     {
     case TypeIndex::UInt8:
-        return moveCursorAndFindFrameBoundary<AuxColType, UInt8, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, UInt8, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::UInt16:
-        return moveCursorAndFindFrameBoundary<AuxColType, UInt16, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, UInt16, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::UInt32:
-        return moveCursorAndFindFrameBoundary<AuxColType, UInt32, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, UInt32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::UInt64:
     case TypeIndex::MyDate:
     case TypeIndex::MyDateTime:
-        return moveCursorAndFindFrameBoundary<AuxColType, UInt64, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, UInt64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int8:
-        return moveCursorAndFindFrameBoundary<AuxColType, Int8, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Int8, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int16:
-        return moveCursorAndFindFrameBoundary<AuxColType, Int16, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Int16, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int32:
-        return moveCursorAndFindFrameBoundary<AuxColType, Int32, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Int32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Int64:
     case TypeIndex::MyTime:
-        return moveCursorAndFindFrameBoundary<AuxColType, Int64, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Int64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Float32:
-        return moveCursorAndFindFrameBoundary<AuxColType, Float32, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Float32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Float64:
-        return moveCursorAndFindFrameBoundary<AuxColType, Float64, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Float64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Decimal32:
-        return moveCursorAndFindFrameBoundary<AuxColType, Decimal32, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Decimal32, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Decimal64:
-        return moveCursorAndFindFrameBoundary<AuxColType, Decimal64, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Decimal64, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Decimal128:
-        return moveCursorAndFindFrameBoundary<AuxColType, Decimal128, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Decimal128, is_begin, is_desc>(cursor, current_row_aux_value);
     case TypeIndex::Decimal256:
-        return moveCursorAndFindFrameBoundary<AuxColType, Decimal256, is_begin, is_desc>(cursor, current_row_aux_value);
+        return moveCursorAndFindRangeFrameBoundary<AuxColType, Decimal256, is_begin, is_desc>(cursor, current_row_aux_value);
     default:
         throw Exception("Unexpected column type!");
     }
 }
 
 template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
-RowNumber WindowTransformAction::moveCursorAndFindFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value)
+RowNumber WindowTransformAction::moveCursorAndFindRangeFrameBoundary(RowNumber cursor, AuxColType current_row_aux_value)
 {
     tipb::RangeCmpDataType cmp_data_type;
     if constexpr (is_begin)

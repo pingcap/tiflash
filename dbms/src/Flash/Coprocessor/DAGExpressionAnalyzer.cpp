@@ -779,9 +779,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
 {
     ExpressionActionsChain chain;
-    initChain(chain);
-
-    ExpressionActionsChain::Step & step = chain.getLastStep();
+    ExpressionActionsChain::Step & step = initAndGetLastStep(chain);
     appendSourceColumnsToRequireOutput(step);
 
     size_t source_size = getCurrentInputColumns().size();
